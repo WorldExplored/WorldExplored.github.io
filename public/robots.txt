@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://worldexplored.github.io/sitemap.xml

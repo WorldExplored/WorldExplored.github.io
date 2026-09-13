@@ -1,0 +1,174 @@
+[
+  {
+    "height": 844,
+    "landmarks": [
+      {
+        "rect": {
+          "height": 69,
+          "width": 171,
+          "x": 20,
+          "y": 579.6484375
+        },
+        "text": "01Open-source workGPU Observatory"
+      },
+      {
+        "rect": {
+          "height": 69,
+          "width": 171,
+          "x": 199,
+          "y": 579.6484375
+        },
+        "text": "02ResearchResearch Lagoon"
+      },
+      {
+        "rect": {
+          "height": 69,
+          "width": 171,
+          "x": 20,
+          "y": 656.6484375
+        },
+        "text": "03PurduePurdue Pavilion"
+      },
+      {
+        "rect": {
+          "height": 69,
+          "width": 171,
+          "x": 199,
+          "y": 656.6484375
+        },
+        "text": "04BuildingDistant Signal"
+      }
+    ],
+    "scrollWidth": 390,
+    "width": 390
+  },
+  {
+    "height": 1024,
+    "landmarks": [
+      {
+        "rect": {
+          "height": 69,
+          "width": 355,
+          "x": 24,
+          "y": 735.890625
+        },
+        "text": "01Open-source workGPU Observatory"
+      },
+      {
+        "rect": {
+          "height": 69,
+          "width": 355,
+          "x": 389,
+          "y": 735.890625
+        },
+        "text": "02ResearchResearch Lagoon"
+      },
+      {
+        "rect": {
+          "height": 69,
+          "width": 355,
+          "x": 24,
+          "y": 814.890625
+        },
+        "text": "03PurduePurdue Pavilion"
+      },
+      {
+        "rect": {
+          "height": 69,
+          "width": 355,
+          "x": 389,
+          "y": 814.890625
+        },
+        "text": "04BuildingDistant Signal"
+      }
+    ],
+    "scrollWidth": 768,
+    "width": 768
+  },
+  {
+    "height": 768,
+    "landmarks": [
+      {
+        "rect": {
+          "height": 59.5,
+          "width": 211.6328125,
+          "x": 88.73828125,
+          "y": 461.1953125
+        },
+        "text": "01Open-source workGPU Observatory"
+      },
+      {
+        "rect": {
+          "height": 59.5,
+          "width": 166.4765625,
+          "x": 449.234375,
+          "y": 584.953125
+        },
+        "text": "02ResearchResearch Lagoon"
+      },
+      {
+        "rect": {
+          "height": 59.5,
+          "width": 161.171875,
+          "x": 687.4140625,
+          "y": 483.0390625
+        },
+        "text": "03PurduePurdue Pavilion"
+      },
+      {
+        "rect": {
+          "height": 55,
+          "width": 108.046875,
+          "x": 857.3359375,
+          "y": 328.3984375
+        },
+        "text": "04BuildingDistant Signal"
+      }
+    ],
+    "scrollWidth": 1024,
+    "width": 1024
+  },
+  {
+    "height": 900,
+    "landmarks": [
+      {
+        "rect": {
+          "height": 59.5,
+          "width": 211.6328125,
+          "x": 196.58203125,
+          "y": 514
+        },
+        "text": "01Open-source workGPU Observatory"
+      },
+      {
+        "rect": {
+          "height": 59.5,
+          "width": 166.4765625,
+          "x": 665.5546875,
+          "y": 677.3984375
+        },
+        "text": "02ResearchResearch Lagoon"
+      },
+      {
+        "rect": {
+          "height": 59.5,
+          "width": 161.171875,
+          "x": 1028.2109375,
+          "y": 539.796875
+        },
+        "text": "03PurduePurdue Pavilion"
+      },
+      {
+        "rect": {
+          "height": 55,
+          "width": 108.046875,
+          "x": 1256.375,
+          "y": 385.1953125
+        },
+        "text": "04BuildingDistant Signal"
+      }
+    ],
+    "scrollWidth": 1440,
+    "width": 1440
+  }
+]

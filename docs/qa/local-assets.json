@@ -1,0 +1,76 @@
+{
+  "base": "http://127.0.0.1:3000/",
+  "assets": [
+    {
+      "path": "/_next/static/chunks/0_i_z5y45w3ww.js",
+      "status": 200,
+      "bytes": 177481
+    },
+    {
+      "path": "/_next/static/chunks/0cz1d0mv5g_q7.js",
+      "status": 200,
+      "bytes": 112594
+    },
+    {
+      "path": "/_next/static/chunks/12aruqaur5huj.js",
+      "status": 200,
+      "bytes": 22139
+    },
+    {
+      "path": "/_next/static/chunks/3ax21d4qvm0at.js",
+      "status": 200,
+      "bytes": 39513
+    },
+    {
+      "path": "/_next/static/chunks/3fntmmi971322.js",
+      "status": 200,
+      "bytes": 14377
+    },
+    {
+      "path": "/_next/static/chunks/3kmozkq6tgqnz.js",
+      "status": 200,
+      "bytes": 228922
+    },
+    {
+      "path": "/_next/static/chunks/3wbnmp3q--zjw.css",
+      "status": 200,
+      "bytes": 38874
+    },
+    {
+      "path": "/_next/static/chunks/turbopack-1wht7guprj7_0.js",
+      "status": 200,
+      "bytes": 9688
+    },
+    {
+      "path": "/apple-touch-icon.png",
+      "status": 200,
+      "bytes": 19268
+    },
+    {
+      "path": "/favicon.svg",
+      "status": 200,
+      "bytes": 606
+    },
+    {
+      "path": "/images/habitat.webp",
+      "status": 200,
+      "bytes": 367530
+    },
+    {
+      "path": "/og-image.jpg",
+      "status": 200,
+      "bytes": 58149
+    },
+    {
+      "path": "/robots.txt",
+      "status": 200,
+      "bytes": 76
+    },
+    {
+      "path": "/sitemap.xml",
+      "status": 200,
+      "bytes": 162
+    }
+  ],
+  "result": "PASS"
+}
