@@ -1,0 +1,31 @@
+{
+  "verifiedAt": "2026-09-14T20:24:22Z",
+  "track": "Firefly",
+  "creator": "Scott Buckley",
+  "license": "CC BY 4.0",
+  "licenseEvidence": "https://www.scottbuckley.com.au/library/firefly/",
+  "source": "https://www.youtube.com/watch?v=PiPyx9sBCi8",
+  "oEmbed": {
+    "url": "https://www.youtube.com/oembed?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DPiPyx9sBCi8&format=json",
+    "httpStatus": 200,
+    "title": "Scott Buckley - 'Firefly' [Uplifting Corporate CC-BY]",
+    "author_name": "Scott Buckley",
+    "author_url": "https://www.youtube.com/@ScottBuckley"
+  },
+  "embedPages": [
+    {
+      "url": "https://www.youtube.com/embed/PiPyx9sBCi8",
+      "httpStatus": 200,
+      "videoFlags": { "playableInEmbed": true },
+      "previewPlayabilityStatus": { "status": "OK", "playableInEmbed": true }
+    },
+    {
+      "url": "https://www.youtube-nocookie.com/embed/PiPyx9sBCi8",
+      "httpStatus": 200,
+      "videoFlags": { "playableInEmbed": true },
+      "previewPlayabilityStatus": { "status": "OK", "playableInEmbed": true }
+    }
+  ],
+  "browserPlaybackVerified": false,
+  "mediaDownloaded": false
+}
