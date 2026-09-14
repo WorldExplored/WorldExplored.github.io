@@ -2,13 +2,17 @@ import type { SectionId } from './profile';
 
 export type Vec3 = [number, number, number];
 export type QualityTier = 'high' | 'medium' | 'low';
-export type LandmarkId = 'work' | 'research' | 'purdue' | 'building';
+export type LandmarkId = SectionId;
 export interface CameraPose { position: Vec3; target: Vec3 }
 export interface LandmarkConfig { id: LandmarkId; position: Vec3; label: Vec3; camera: CameraPose; color: string }
 export interface SceneRuntime {
   elapsed: number;
   scroll: number;
   pointer: [number, number];
+  pointerActive: boolean;
+  pointerWorld: Vec3;
+  cloudInteraction: number;
+  plantInteraction: number;
   moving: boolean;
   hovered: LandmarkId | null;
   ripple: { x: number; z: number; time: number; serial: number };
@@ -52,11 +56,12 @@ export const world = {
     medium: { dpr: 1.35, grass: 1100, clouds: 16, bubbles: 18, particles: 40, segments: 32, shadows: true, waterDetail: 0.65 },
     low: { dpr: 1, grass: 450, clouds: 10, bubbles: 10, particles: 18, segments: 24, shadows: false, waterDetail: 0.35 },
   },
+  lighting: { skyTop: '#006bd6', horizon: '#87dbe9', sunPosition: [-12, 24, 12] as Vec3, sunIntensity: 2.05, sunColor: '#fff3ce', ambientSky: '#c4eaff', ambientGround: '#568b28', ambientIntensity: 1.0, fogColor: '#87dbe9', fogNear: 70, fogFar: 155, water: '#00b9d0', deepWater: '#006fa4', windowIllumination: 0.3, lampIntensity: 0.7, lampEnabled: true, cloudColor: '#ffffff' },
   environment: { sun: [-12, 24, 12] as Vec3, fogNear: 38, fogFar: 105, cloudSpeed: 0.12, windSpeed: 0.7, waterSpeed: 0.55, bubbleBounds: { min: [-17, 1.4, 4] as Vec3, max: [17, 8.5, 17] as Vec3 }, tactileBubbles: 6 },
 };
 
 export function createSceneRuntime(): SceneRuntime {
-  return { elapsed: 0, scroll: 0, pointer: [0, 0], moving: false, hovered: null, ripple: { x: 0, z: 0, time: -100, serial: 0 }, dragCount: 0, dragging: false, frames: 0 };
+  return { elapsed: 0, scroll: 0, pointer: [0, 0], pointerActive: false, pointerWorld: [0, 0, 0], cloudInteraction: 0, plantInteraction: 0, moving: false, hovered: null, ripple: { x: 0, z: 0, time: -100, serial: 0 }, dragCount: 0, dragging: false, frames: 0 };
 }
 
 export function motionPolicy(reduced: boolean, saveData: boolean, forcedColors: boolean, manualStatic: boolean) {

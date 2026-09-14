@@ -34,11 +34,11 @@
   --color-muted-foreground: var(--muted-foreground);
   --color-border: var(--border);
   --color-ring: var(--ring);
-  --font-sans: "Segoe UI", "Trebuchet MS", Arial, sans-serif;
+  --font-sans: var(--font-humanist), "Segoe UI", "Trebuchet MS", sans-serif;
 }
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; scroll-padding-top: 28px; }
-body { margin: 0; color: var(--ink); background: var(--paper); font-family: "Segoe UI", "Trebuchet MS", Arial, sans-serif; font-size: 16px; line-height: 1.6; }
+body { margin: 0; color: var(--ink); background: var(--paper); font-family: var(--font-humanist), "Segoe UI", "Trebuchet MS", sans-serif; font-size: 16px; line-height: 1.6; }
 body.panel-open { overflow: hidden; }
 button, a, summary { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
 button, summary { cursor: pointer; }

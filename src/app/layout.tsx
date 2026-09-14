@@ -1,6 +1,9 @@
 import type { Metadata } from 'next';
+import localFont from 'next/font/local';
 import { profile } from '@/content/profile';
 import './globals.css';
+
+const humanist = localFont({ src: './fonts/SourceSans3-Upright.woff2', variable: '--font-humanist', weight: '200 900', display: 'swap' });
 
 export const metadata: Metadata = {
   metadataBase: new URL(profile.siteUrl),
@@ -18,5 +21,5 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en"><body>{children}</body></html>;
+  return <html lang="en" className={humanist.variable}><body>{children}</body></html>;
 }
