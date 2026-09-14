@@ -163,7 +163,7 @@ export const featured: FeaturedContribution[] = [
     "status": "Open",
     "heading": "Expanding ldmatrix for Marlin W4A8",
     "problem": "Low-bit weights need an efficient path into integer matrix operations.",
-    "contribution": "Added a CUDA 13.4+ expanding-load path for eligible Marlin W4A8 kernels, with layout probes and existing fallbacks preserved.",
+    "contribution": "Added a CUDA 13.4+ expanding-load path for eligible Marlin W4A8 kernels, while preserving existing fallbacks.",
     "tags": [
       "CUDA",
       "PTX",
