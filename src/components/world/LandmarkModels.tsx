@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, type MutableRefObject } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { BoxGeometry, BufferGeometry, CatmullRomCurve3, CylinderGeometry, DoubleSide, ExtrudeGeometry, Float32BufferAttribute, Group, MathUtils, Mesh, MeshPhysicalMaterial, Shape, SphereGeometry, TorusGeometry, TubeGeometry, Vector3 } from 'three';
+import { BoxGeometry, BufferGeometry, CatmullRomCurve3, CylinderGeometry, DoubleSide, ExtrudeGeometry, Float32BufferAttribute, Group, MathUtils, Mesh, MeshPhysicalMaterial, Shape, SphereGeometry, TorusGeometry, TorusKnotGeometry, TubeGeometry, Vector3 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { world, type LandmarkId, type QualityTier, type SceneRuntime } from '@/content/world';
 
@@ -55,14 +55,15 @@ function useResources<T extends Record<string, BufferGeometry>>(create: () => T,
 
 function usePalette({ active, paused, runtime }: ModelProps, id: LandmarkId) {
   const materials = useMemo(() => ({
-    porcelain: new MeshPhysicalMaterial({ color: world.colors.porcelain, roughness: 0.24, metalness: 0.12, clearcoat: 1, clearcoatRoughness: 0.16 }),
-    silver: new MeshPhysicalMaterial({ color: '#d9f9f3', roughness: 0.2, metalness: 0.72, clearcoat: 1 }),
-    gold: new MeshPhysicalMaterial({ color: world.colors.gold, roughness: 0.27, metalness: 0.7, clearcoat: 1 }),
-    glass: new MeshPhysicalMaterial({ color: world.colors.glass, roughness: 0.1, metalness: 0.18, clearcoat: 1, transparent: true, opacity: 0.23, depthWrite: false, side: DoubleSide }),
-    cyan: new MeshPhysicalMaterial({ color: world.colors.cyan, emissive: world.colors.cyan, emissiveIntensity: 0.28, roughness: 0.18, metalness: 0.24, clearcoat: 1 }),
+    porcelain: new MeshPhysicalMaterial({ color: world.colors.porcelain, roughness: 0.18, metalness: 0.04, clearcoat: 1, clearcoatRoughness: 0.08, envMapIntensity: 1.15 }),
+    silver: new MeshPhysicalMaterial({ color: '#d5edff', roughness: 0.12, metalness: 0.78, clearcoat: 1, envMapIntensity: 1.4 }),
+    gold: new MeshPhysicalMaterial({ color: world.colors.gold, roughness: 0.23, metalness: 0.52, clearcoat: 1, envMapIntensity: 1.2 }),
+    glass: new MeshPhysicalMaterial({ color: world.colors.glass, roughness: 0.055, metalness: 0.22, clearcoat: 1, envMapIntensity: 1.45, transparent: true, opacity: 0.29, depthWrite: false, side: DoubleSide }),
+    cyan: new MeshPhysicalMaterial({ color: world.colors.cyan, emissive: world.colors.cyan, emissiveIntensity: id === 'building' ? world.lighting.lampEnabled ? world.lighting.lampIntensity * 0.35 : 0 : world.lighting.windowIllumination, roughness: 0.13, metalness: 0.18, clearcoat: 1, envMapIntensity: 1.25 }),
     lime: new MeshPhysicalMaterial({ color: LIME, emissive: LIME, emissiveIntensity: 0.09, roughness: 0.21, metalness: 0.18, clearcoat: 1 }),
-    ink: new MeshPhysicalMaterial({ color: '#087c88', roughness: 0.28, metalness: 0.44, clearcoat: 1 }),
-  }), []);
+    ink: new MeshPhysicalMaterial({ color: '#086da9', roughness: 0.2, metalness: 0.32, clearcoat: 1 }),
+    blue: new MeshPhysicalMaterial({ color: '#147de5', roughness: 0.14, metalness: 0.28, clearcoat: 1, clearcoatRoughness: 0.07, envMapIntensity: 1.35 }),
+  }), [id]);
   const animated = useRef<typeof materials | null>(null);
   useEffect(() => {
     animated.current = materials;
@@ -75,8 +76,11 @@ function usePalette({ active, paused, runtime }: ModelProps, id: LandmarkId) {
     if (paused || !animated.current) return;
     const palette = animated.current;
     const highlighted = active || runtime.current.hovered === id;
-    palette.cyan.emissiveIntensity = MathUtils.damp(palette.cyan.emissiveIntensity, highlighted ? 0.95 : 0.28, 16, delta);
-    palette.lime.emissiveIntensity = MathUtils.damp(palette.lime.emissiveIntensity, highlighted ? 0.42 : 0.09, 16, delta);
+    const illumination = id === 'building' ? world.lighting.lampEnabled ? world.lighting.lampIntensity * 0.35 : 0 : world.lighting.windowIllumination;
+    const pulse = id === 'building' && highlighted && world.lighting.lampEnabled ? 0.07 * (1 + Math.sin(runtime.current.elapsed * 3)) : 0;
+    const hover = highlighted && (id !== 'building' || world.lighting.lampEnabled) ? 0.22 : 0;
+    palette.cyan.emissiveIntensity = MathUtils.damp(palette.cyan.emissiveIntensity, illumination + hover + pulse, 16, delta);
+    palette.lime.emissiveIntensity = MathUtils.damp(palette.lime.emissiveIntensity, highlighted ? 0.27 : 0.06, 16, delta);
   });
   return materials;
 }
@@ -298,7 +302,7 @@ function SignalTower(props: ModelProps) {
   const segments = world.quality[quality].segments;
   const material = usePalette(props, 'building');
   const sweep = useRef<Mesh<BufferGeometry, MeshPhysicalMaterial>>(null);
-  const sweepMaterial = useMemo(() => new MeshPhysicalMaterial({ color: '#d4ffff', emissive: '#c0ffff', emissiveIntensity: 0.7, transparent: true, opacity: 0, roughness: 0.1, depthWrite: false, side: DoubleSide }), []);
+  const sweepMaterial = useMemo(() => new MeshPhysicalMaterial({ color: '#d4ffff', emissive: '#c0ffff', emissiveIntensity: world.lighting.lampIntensity, transparent: true, opacity: 0, roughness: 0.1, depthWrite: false, side: DoubleSide }), []);
   useEffect(() => () => sweepMaterial.dispose(), [sweepMaterial]);
   const geometry = useResources(() => ({
     base: combine([cylinder(1.45, 0.2, 0.92, segments), cylinder(1.21, 0.13, 1.08, segments), cylinder(0.85, 0.16, 1.22, segments)]),
@@ -309,11 +313,13 @@ function SignalTower(props: ModelProps) {
     crown: combine([new TorusGeometry(0.56, 0.045, 8, segments).rotateX(Math.PI / 2).translate(0, 4.37, 0), cylinder(0.13, 0.25, 4.74, 16), new SphereGeometry(0.1, 12, 8).translate(0, 4.9, 0)]),
     sweep: new CylinderGeometry(0.07, 1.0, 6.3, 24, 1, true).rotateX(-Math.PI / 2).translate(0, 0, 3.15),
   }), quality);
-  useFrame(() => {
+  useFrame((_, delta) => {
     if (paused || !sweep.current) return;
-    const cycle = runtime.current.elapsed % 8;
-    sweep.current.rotation.y = runtime.current.elapsed * TAU / 8;
-    sweep.current.material.opacity = cycle < 2.8 ? Math.sin(cycle / 2.8 * Math.PI) * 0.075 : 0;
+    const selected = props.active || runtime.current.hovered === 'building';
+    const opacity = world.lighting.lampEnabled && selected ? 0.024 * (0.7 + Math.sin(runtime.current.elapsed * 3) * 0.3) : 0;
+    sweep.current.rotation.y = runtime.current.elapsed * 0.22;
+    sweep.current.material.opacity = MathUtils.damp(sweep.current.material.opacity, opacity, 10, delta);
+    sweep.current.material.emissiveIntensity = world.lighting.lampEnabled ? world.lighting.lampIntensity : 0;
   });
   return <group dispose={null}>
     <mesh geometry={geometry.base} material={material.porcelain} castShadow receiveShadow />
@@ -326,9 +332,62 @@ function SignalTower(props: ModelProps) {
   </group>;
 }
 
+function StudySculpture(props: ModelProps) {
+  const segments = world.quality[props.quality].segments;
+  const material = usePalette(props, 'about');
+  const geometry = useResources(() => ({
+    base: combine([cylinder(1.65, 0.2, 1.04, segments), cylinder(1.43, 0.13, 1.2, segments)]),
+    trim: new TorusGeometry(1.49, 0.042, 8, segments).rotateX(Math.PI / 2).translate(0, 1.16, 0),
+    desk: combine([roundedBox(2.03, 0.19, 1.45, 0.085).translate(0, 1.85, 0), new CylinderGeometry(0.11, 0.15, 0.61, 16).translate(-0.68, 1.56, 0), new CylinderGeometry(0.11, 0.15, 0.61, 16).translate(0.68, 1.56, 0)]),
+    support: cylinder(0.39, 0.13, 2.02, segments),
+    sculpture: new TorusKnotGeometry(0.48, 0.115, segments * 2, 10, 2, 3).rotateX(0.38).translate(0, 2.7, 0),
+    lens: new SphereGeometry(0.2, segments / 2, 12).translate(0, 2.7, 0),
+  }), props.quality);
+  return <group dispose={null}>
+    <mesh geometry={geometry.base} material={material.porcelain} castShadow receiveShadow />
+    <mesh geometry={geometry.trim} material={material.cyan} />
+    <mesh geometry={geometry.desk} material={material.porcelain} castShadow />
+    <mesh geometry={geometry.support} material={material.blue} />
+    <mesh geometry={geometry.sculpture} material={material.silver} castShadow />
+    <mesh geometry={geometry.lens} material={material.cyan} />
+  </group>;
+}
+
+function CorrespondenceKiosk(props: ModelProps) {
+  const segments = world.quality[props.quality].segments;
+  const material = usePalette(props, 'contact');
+  const geometry = useResources(() => {
+    const seams = [
+      [new Vector3(-0.78, 0.37, 0.15), new Vector3(0, -0.09, 0.15), new Vector3(0.78, 0.37, 0.15)],
+      [new Vector3(-0.78, -0.42, 0.15), new Vector3(-0.22, -0.09, 0.15)],
+      [new Vector3(0.78, -0.42, 0.15), new Vector3(0.22, -0.09, 0.15)],
+    ].map(points => new TubeGeometry(new CatmullRomCurve3(points, false, 'centripetal'), 16, 0.034, 6, false).translate(0, 2.65, 0.29));
+    return {
+      base: combine([cylinder(1.75, 0.21, 1.04, segments), cylinder(1.5, 0.13, 1.22, segments)]),
+      trim: new TorusGeometry(1.59, 0.045, 8, segments).rotateX(Math.PI / 2).translate(0, 1.16, 0),
+      frame: combine([roundedBox(2.18, 1.44, 0.3, 0.16).translate(0, 2.65, 0.12), roundedBox(2.5, 0.16, 1.12, 0.075).translate(0, 3.51, -0.09), new CylinderGeometry(0.11, 0.15, 1.5, 16).translate(-0.88, 2.02, -0.13), new CylinderGeometry(0.11, 0.15, 1.5, 16).translate(0.88, 2.02, -0.13)]),
+      panel: roundedBox(1.92, 1.19, 0.12, 0.12).translate(0, 2.65, 0.31),
+      seams: combine(seams),
+      seal: new TorusGeometry(0.12, 0.035, 8, 24).translate(0, 2.58, 0.49),
+      light: roundedBox(1.8, 0.045, 0.065, 0.015).translate(0, 3.405, 0.36),
+    };
+  }, props.quality);
+  return <group dispose={null}>
+    <mesh geometry={geometry.base} material={material.porcelain} castShadow receiveShadow />
+    <mesh geometry={geometry.trim} material={material.cyan} />
+    <mesh geometry={geometry.frame} material={material.porcelain} castShadow />
+    <mesh geometry={geometry.panel} material={material.blue} />
+    <mesh geometry={geometry.seams} material={material.porcelain} />
+    <mesh geometry={geometry.seal} material={material.gold} />
+    <mesh geometry={geometry.light} material={material.cyan} />
+  </group>;
+}
+
 export function LandmarkModel({ id, ...props }: ModelProps & { id: LandmarkId }) {
   if (id === 'work') return <Observatory {...props} />;
   if (id === 'research') return <ResearchBook {...props} />;
   if (id === 'purdue') return <Pavilion {...props} />;
+  if (id === 'about') return <StudySculpture {...props} />;
+  if (id === 'contact') return <CorrespondenceKiosk {...props} />;
   return <SignalTower {...props} />;
 }
