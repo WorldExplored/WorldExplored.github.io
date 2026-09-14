@@ -90,7 +90,7 @@ function plantInstances(count: number, flowers: boolean) {
     const r = radius * shoreRadius(angle, islandIndex);
     transform.position.set(
       island.center[0] + Math.cos(angle) * r * island.radius[0],
-      island.center[1] + terrainHeight(radius, island.height) - .015,
+      island.center[1] + terrainHeight(radius, island.height, angle, islandIndex) - .015,
       island.center[2] + Math.sin(angle) * r * island.radius[1],
     );
     const size = .24 + random() * (islandIndex > 2 ? 1.2 : .50);
@@ -231,6 +231,59 @@ function bridgeGeometry(start: Vector3, end: Vector3, offset: number, height: nu
   return new TubeGeometry(new CatmullRomCurve3(points), 28, radius, 6, false);
 }
 
+function makeGrove() {
+  const count = 26;
+  const random = seededRandom(106);
+  const curve = new CatmullRomCurve3([new Vector3(0, 0, 0), new Vector3(.025, .25, 0), new Vector3(-.025, .48, .015), new Vector3(.025, .78, 0)]);
+  const trunkGeometry = new TubeGeometry(curve, 8, .035, 6, false);
+  const foliageGeometry = new SphereGeometry(1, 12, 8);
+  const trunkMaterial = new MeshStandardMaterial({ color: '#78865a', roughness: .86 });
+  const foliageMaterial = new MeshStandardMaterial({ color: '#ffffff', roughness: .85 });
+  const trunks = new InstancedMesh(trunkGeometry, trunkMaterial, count);
+  const crowns = new InstancedMesh(foliageGeometry, foliageMaterial, count * 3);
+  const transform = new Object3D();
+  const tree = new Object3D();
+  const leaf = new Object3D();
+  const color = new Color();
+  const dark = new Color('#286743');
+  const light = new Color('#73a442');
+  for (let index = 0; index < count; index++) {
+    const islandIndex = index < 8 ? 0 : index < 15 ? 1 : index < 17 ? 2 : index < 22 ? 3 : 4;
+    const island = world.islands[islandIndex];
+    // Rear groves frame the architecture; foreground trees hug the outer banks.
+    const angle = islandIndex < 3 ? Math.PI + random() * Math.PI : islandIndex === 3 ? Math.PI * (.68 + random() * .64) : (random() - .5) * Math.PI * .72;
+    const directionalRadius = Math.hypot(Math.cos(angle) * island.radius[0], Math.sin(angle) * island.radius[1]) * shoreRadius(angle, islandIndex);
+    const minimumRadius = islandIndex < 3 ? (islandIndex < 2 ? 3.65 : 1.7) / directionalRadius : .73;
+    const radius = minimumRadius + random() * (.90 - minimumRadius);
+    const r = radius * shoreRadius(angle, islandIndex);
+    const size = (islandIndex > 2 ? 2 + random() * 1.2 : islandIndex === 2 ? 1.2 + random() * .5 : 1.5 + random() * 1.25) / 1.1;
+    tree.position.set(island.center[0] + Math.cos(angle) * r * island.radius[0], island.center[1] + terrainHeight(radius, island.height, angle, islandIndex) - .02, island.center[2] + Math.sin(angle) * r * island.radius[1]);
+    tree.scale.setScalar(size);
+    tree.rotation.set(0, random() * Math.PI * 2, (random() - .5) * .06);
+    tree.updateMatrix();
+    trunks.setMatrixAt(index, tree.matrix);
+    for (let level = 0; level < 3; level++) {
+      leaf.position.set(level === 0 ? -.10 : level === 1 ? .11 : .015, [.58, .78, .92][level], (level - 1) * .025);
+      leaf.scale.set([.34, .30, .23][level], [.26, .25, .18][level], [.28, .27, .21][level]);
+      leaf.rotation.set(0, random() * Math.PI, (random() - .5) * .18);
+      leaf.updateMatrix();
+      transform.matrix.multiplyMatrices(tree.matrix, leaf.matrix);
+      crowns.setMatrixAt(index * 3 + level, transform.matrix);
+      color.copy(dark).lerp(light, .10 + random() * .65 + level * .08);
+      crowns.setColorAt(index * 3 + level, color);
+    }
+  }
+  trunks.instanceMatrix.needsUpdate = true;
+  crowns.instanceMatrix.needsUpdate = true;
+  if (crowns.instanceColor) crowns.instanceColor.needsUpdate = true;
+  trunks.computeBoundingSphere();
+  crowns.computeBoundingSphere();
+  trunks.castShadow = true;
+  crowns.castShadow = true;
+  crowns.receiveShadow = true;
+  return { trunks, crowns, dispose() { trunkGeometry.dispose(); foliageGeometry.dispose(); trunkMaterial.dispose(); foliageMaterial.dispose(); } };
+}
+
 function makeLandscape() {
   const geometries: BufferGeometry[] = [];
   const islands = world.islands.map((island, index) => {
@@ -239,9 +292,8 @@ function makeLandscape() {
     return { geometry, position: island.center };
   });
   const farIslands: Island[] = [
-    { center: [-26, -.6, -43], radius: [9, 4], height: 1.1 },
-    { center: [20, -.7, -49], radius: [12, 4.5], height: 1.6 },
-    { center: [-12, -.6, -60], radius: [7, 3], height: 1.0 },
+    { center: [-25, -.6, -43], radius: [10, 5.5], height: 3.8 },
+    { center: [21, -.7, -51], radius: [13, 6.5], height: 4.5 },
   ];
   farIslands.forEach((island, index) => {
     const geometry = islandGeometry(island, index + 8, 32);
@@ -268,18 +320,18 @@ function makeLandscape() {
   const rail = new MeshStandardMaterial({ color: world.colors.cyan, roughness: .18, metalness: .26 });
   const rockGeometry = new SphereGeometry(1, 10, 7);
   const rockMaterial = new MeshStandardMaterial({ color: world.colors.stone, roughness: .78 });
-  const rocks = new InstancedMesh(rockGeometry, rockMaterial, 32);
+  const rocks = new InstancedMesh(rockGeometry, rockMaterial, 44);
   const random = seededRandom(27);
   const transform = new Object3D();
-  for (let index = 0; index < 32; index++) {
+  for (let index = 0; index < 44; index++) {
     const islandIndex = index % world.islands.length;
     const island = world.islands[islandIndex];
     const angle = random() * Math.PI * 2;
     const radius = .85 + random() * .08;
     const r = radius * shoreRadius(angle, islandIndex);
-    transform.position.set(island.center[0] + Math.cos(angle) * r * island.radius[0], island.center[1] + terrainHeight(radius, island.height) + .015, island.center[2] + Math.sin(angle) * r * island.radius[1]);
-    const size = .13 + random() * .22;
-    transform.scale.set(size * 1.8, size * .72, size);
+    transform.position.set(island.center[0] + Math.cos(angle) * r * island.radius[0], island.center[1] + terrainHeight(radius, island.height, angle, islandIndex) + .015, island.center[2] + Math.sin(angle) * r * island.radius[1]);
+    const size = .13 + random() * (index > 31 ? .52 : .22);
+    transform.scale.set(size * 1.8, size * (index > 31 ? 1.0 : .72), size);
     transform.rotation.set(random(), random() * Math.PI, random() * .2);
     transform.updateMatrix();
     rocks.setMatrixAt(index, transform.matrix);
@@ -305,6 +357,7 @@ function animateEnvironment(state: SceneRuntime, plants: ReturnType<typeof plant
 
 export function AmbientSystem({ runtime, paused, quality }: EnvironmentProps) {
   const landscape = useMemo(() => makeLandscape(), []);
+  const grove = useMemo(() => makeGrove(), []);
   const settings = world.quality[quality];
   const plants = useMemo(() => plantInstances(settings.grass, false), [settings.grass]);
   const flowers = useMemo(() => plantInstances(Math.round(settings.grass / 9), true), [settings.grass]);
@@ -312,6 +365,7 @@ export function AmbientSystem({ runtime, paused, quality }: EnvironmentProps) {
   const bubbles = useMemo(() => makeBubbles(settings.bubbles), [settings.bubbles]);
   const particles = useMemo(() => makeParticles(settings.particles), [settings.particles]);
   useEffect(() => () => landscape.dispose(), [landscape]);
+  useEffect(() => () => grove.dispose(), [grove]);
   useEffect(() => () => {
     [plants, flowers, clouds, bubbles, particles].forEach(resource => { resource.geometry.dispose(); resource.material.dispose(); });
   }, [plants, flowers, clouds, bubbles, particles]);
@@ -326,6 +380,8 @@ export function AmbientSystem({ runtime, paused, quality }: EnvironmentProps) {
       {bridge.rails.map((geometry, rail) => <mesh key={rail} geometry={geometry} material={landscape.rail} />)}
     </group>)}
     <primitive object={landscape.rocks} />
+    <primitive object={grove.trunks} />
+    <primitive object={grove.crowns} />
     <primitive object={plants.mesh} />
     <primitive object={flowers.mesh} />
     <primitive object={clouds.mesh} />
