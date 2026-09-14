@@ -97,33 +97,23 @@ export function WorldCanvas(props: WorldProps) {
   }, [configured, props, tier, visible]);
 
   useEffect(() => {
-    let stops: { y: number; progress: number }[] = [];
-    function measure() {
-      const progress = [0.10, 1 / 3, 2 / 3, 0.79, 0.88, 1];
-      const ids = ['work', 'research', 'purdue', 'about', 'contact', 'building'];
-      stops = [{ y: 0, progress: 0 }, ...ids.flatMap((id, index) => {
-        const element = document.getElementById(id);
-        return element ? [{ y: element.getBoundingClientRect().top + window.scrollY - 90, progress: progress[index] }] : [];
-      })];
-    }
     function scroll() {
-      const y = Math.max(0, window.scrollY);
-      let index = 0;
-      while (index < stops.length - 2 && y > stops[index + 1].y) index++;
-      const a = stops[index];
-      const b = stops[index + 1];
-      if (a && b) runtime.current.scroll = a.progress + (b.progress - a.progress) * Math.min(1, (y - a.y) / Math.max(1, b.y - a.y));
+      runtime.current.scroll = Math.min(1, Math.max(0, window.scrollY) / Math.max(1, window.innerHeight * .7));
     }
     function move(event: PointerEvent) {
-      if (latest.current.paused || latest.current.panelOpen || event.pointerType === 'touch') return;
-      runtime.current.pointer[0] = event.clientX / window.innerWidth * 2 - 1;
-      runtime.current.pointer[1] = 1 - event.clientY / window.innerHeight * 2;
+      const canvas = canvasRef.current;
+      runtime.current.pointerActive = event.target === canvas && !latest.current.paused && !latest.current.panelOpen && event.pointerType !== 'touch';
+      if (!runtime.current.pointerActive || !canvas) return;
+      const bounds = canvas.getBoundingClientRect();
+      runtime.current.pointer[0] = (event.clientX - bounds.left) / bounds.width * 2 - 1;
+      runtime.current.pointer[1] = 1 - (event.clientY - bounds.top) / bounds.height * 2;
     }
     function focus(event: Event) {
-      const target = (event.target as HTMLElement).closest<HTMLElement>('[data-landmark]');
-      if (target || event.type === 'focusin' || event.target !== canvasRef.current) runtime.current.hovered = world.landmarks.find(item => item.id === target?.dataset.landmark)?.id ?? null;
+      const target = (event.target as HTMLElement).closest<HTMLElement>('[data-destination]');
+      if (event.target !== canvasRef.current) runtime.current.hovered = world.landmarks.find(item => item.id === target?.dataset.destination)?.id ?? null;
+      if (event.target !== canvasRef.current) runtime.current.pointerActive = false;
     }
-    function resize() { measure(); scroll(); }
+    function resize() { scroll(); }
     resize();
     window.addEventListener('scroll', scroll, { passive: true });
     window.addEventListener('resize', resize);

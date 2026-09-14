@@ -12,7 +12,7 @@ Verified 2026-09-13 against public sources.
 
 ## Original visual assets
 
-`public/images/habitat.webp` is original scenery commissioned for this portfolio: an optimistic lagoon with an observatory, floating book, pavilion and distant light. It was exported as a 1672 × 941 WebP. No reference-site assets were reused.
+The original static illustration was removed during the Aero refinement. The active landscape consists of original procedural geometry and shaders; no reference-site artwork is reused. Historical screenshots remain only as repository QA evidence.
 
 The glossy icon family, document cover, bubbles, favicon and social image are original SVG/CSS compositions. The social image was rasterized to JPEG; the touch icon to PNG. Fonts use the installed system stack.
 

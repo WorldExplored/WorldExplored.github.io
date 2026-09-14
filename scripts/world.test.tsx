@@ -8,7 +8,6 @@ import { CameraDirector } from '../src/components/world/CameraDirector';
 import { Landmark } from '../src/components/world/Landmark';
 import { Water } from '../src/components/world/Water';
 import { QualityController } from '../src/components/world/QualityController';
-import { bubbleDragVelocity, clampBubblePosition } from '../src/components/world/bubblePhysics';
 import { createSceneRuntime, flightEase, lowerQuality, motionPolicy, world, type LandmarkId, type QualityTier } from '../src/content/world';
 import type { SectionId } from '../src/content/profile';
 
@@ -42,7 +41,7 @@ async function flightFixture(destination: SectionId, paused = false) {
   const onArrive = (id: SectionId | '', serial: number) => { arrivals.push({ id, serial }); };
   const render = (id: SectionId, serial: number, stopped = false) => <>
     <RootProbe capture={capture} />
-    <CameraDirector destination={id} flight={serial} free={false} mobile={false} panelOpen={false} paused={stopped} runtime={runtime} onArrive={onArrive} />
+    <CameraDirector destination={id} flight={serial} mobile={false} panelOpen={false} paused={stopped} runtime={runtime} onArrive={onArrive} />
   </>;
   const renderer = await create(render(destination, 1, paused), {
     width: 1440,
@@ -106,7 +105,7 @@ test('paused navigation arrives immediately and keeps its pose frozen', async t 
   await advance(fixture.renderer, 100);
   assert.deepEqual(fixture.arrivals, [{ id: 'purdue', serial: 1 }]);
   assert.ok(fixture.getRoot().camera.position.distanceTo(expected) < 1e-8);
-  assert.ok(fixture.getRoot().camera.quaternion.angleTo(rotation) < 1e-8);
+  assert.deepEqual(fixture.getRoot().camera.quaternion.toArray(), rotation.toArray());
 });
 
 test('each landmark routes clicks to its semantic destination and ignores drags', async t => {
@@ -161,11 +160,11 @@ test('water keeps finite geometry and ripple uniforms, ignores drags, and freeze
   }
 });
 
-test('each accessibility or data preference disables every scene motion channel', () => {
-  for (let mask = 0; mask < 16; mask++) {
-    const flags = [1, 2, 4, 8].map(bit => Boolean(mask & bit)) as [boolean, boolean, boolean, boolean];
-    const enabled = mask === 0;
-    assert.deepEqual(motionPolicy(...flags), { webgl: enabled, camera: enabled, ambient: enabled, physics: enabled });
+test('automatic reduced motion keeps a stable world while data and forced colors use semantic fallback', () => {
+  for (let mask = 0; mask < 8; mask++) {
+    const [reduced, saveData, forced] = [1, 2, 4].map(bit => Boolean(mask & bit));
+    const enabled = !saveData && !forced;
+    assert.deepEqual(motionPolicy(reduced, saveData, forced), { webgl: enabled, camera: enabled && !reduced, ambient: enabled && !reduced, physics: false });
   }
 });
 
@@ -184,25 +183,6 @@ test('camera easing stays bounded and quality downgrades stop at low', () => {
   assert.equal(lowerQuality('high'), 'medium');
   assert.equal(lowerQuality('medium'), 'low');
   assert.equal(lowerQuality('low'), 'low');
-});
-
-test('bubble drag limits include the sphere radius and cap release speed', () => {
-  const bounds = world.environment.bubbleBounds;
-  const point = new Vector3(-100, 100, 100);
-  const radius = 0.8;
-  clampBubblePosition(point, radius, bounds);
-  assert.deepEqual(point.toArray(), [bounds.min[0] + radius, bounds.max[1] - radius, bounds.max[2] - radius]);
-  const velocity = new Vector3();
-  bubbleDragVelocity(new Vector3(0.1, 0.2, 0.3), new Vector3(), 100, velocity);
-  assert.ok(velocity.distanceTo(new Vector3(1, 2, 3)) < 1e-8);
-  for (const elapsed of [0, -10, 1]) {
-    bubbleDragVelocity(new Vector3(100, 50, -100), new Vector3(), elapsed, velocity);
-    assert.ok(velocity.toArray().every(Number.isFinite));
-    assert.ok(Math.abs(velocity.length() - 8) < 1e-8);
-    assert.ok(velocity.x > 0 && velocity.y > 0 && velocity.z < 0);
-  }
-  bubbleDragVelocity(point, point, 0, velocity);
-  assert.deepEqual(velocity.toArray(), [0, 0, 0]);
 });
 
 

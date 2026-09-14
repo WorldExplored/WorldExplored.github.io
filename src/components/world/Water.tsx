@@ -98,7 +98,7 @@ export function Water({ runtime, paused, quality }: EnvironmentProps) {
   const detail = world.quality[quality].waterDetail;
   const geometry = useMemo(() => {
     const segments = quality === 'high' ? 96 : quality === 'medium' ? 64 : 40;
-    return new PlaneGeometry(190, 190, segments, segments).rotateX(-Math.PI / 2);
+    return new PlaneGeometry(480, 480, segments, segments).rotateX(-Math.PI / 2);
   }, [quality]);
   const material = useMemo(() => new ShaderMaterial({
     vertexShader,

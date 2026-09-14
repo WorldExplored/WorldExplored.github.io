@@ -16,16 +16,36 @@
     {
       "url": "https://www.youtube.com/embed/PiPyx9sBCi8",
       "httpStatus": 200,
-      "videoFlags": { "playableInEmbed": true },
-      "previewPlayabilityStatus": { "status": "OK", "playableInEmbed": true }
+      "videoFlags": {
+        "playableInEmbed": true
+      },
+      "previewPlayabilityStatus": {
+        "status": "OK",
+        "playableInEmbed": true
+      }
     },
     {
       "url": "https://www.youtube-nocookie.com/embed/PiPyx9sBCi8",
       "httpStatus": 200,
-      "videoFlags": { "playableInEmbed": true },
-      "previewPlayabilityStatus": { "status": "OK", "playableInEmbed": true }
+      "videoFlags": {
+        "playableInEmbed": true
+      },
+      "previewPlayabilityStatus": {
+        "status": "OK",
+        "playableInEmbed": true
+      }
     }
   ],
   "browserPlaybackVerified": false,
-  "mediaDownloaded": false
+  "mediaDownloaded": false,
+  "nativePlayback": {
+    "url": "https://www.scottbuckley.com.au/wp-content/audio/sb_firefly.mp3",
+    "sourcePage": "https://www.scottbuckley.com.au/library/firefly/",
+    "verifiedAt": "2026-09-14",
+    "httpStatus": 200,
+    "contentType": "audio/mpeg",
+    "contentLength": 5912941,
+    "acceptRanges": "bytes",
+    "rehosted": false
+  }
 }

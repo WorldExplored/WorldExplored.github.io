@@ -8,12 +8,12 @@ import { useFrame, useThree } from '@react-three/fiber';
 import { Vector3, MathUtils } from 'three';
 import { flightEase, landmarkFor, world, type SceneRuntime, type WorldProps } from '@/content/world';
 
-type Props = Pick<WorldProps, 'destination' | 'flight' | 'free' | 'mobile' | 'onArrive' | 'panelOpen' | 'paused'> & { runtime: MutableRefObject<SceneRuntime> };
+type Props = Pick<WorldProps, 'destination' | 'flight' | 'mobile' | 'onArrive' | 'panelOpen' | 'paused'> & { runtime: MutableRefObject<SceneRuntime> };
 
-export function CameraDirector({ destination, flight, free, mobile, onArrive, panelOpen, paused, runtime }: Props) {
+export function CameraDirector({ destination, flight, mobile, onArrive, panelOpen, paused, runtime }: Props) {
   const { camera, invalidate, size } = useThree();
   const regress = useThree(state => state.performance.regress);
-  const fit = mobile ? 1 : Math.max(1, Math.min(1.55, 1.35 / (size.width / size.height)));
+  const fit = mobile ? Math.max(1, Math.min(2.4, .95 / (size.width / size.height))) : Math.max(1, Math.min(1.55, 1.35 / (size.width / size.height)));
   const look = useRef(new Vector3(...(mobile ? world.mobileOverview : world.overview).target));
   const vectors = useMemo(() => ({ start: new Vector3(), startLook: new Vector3(), end: new Vector3(), endLook: new Vector3(), desired: new Vector3(), desiredLook: new Vector3(), offset: new Vector3() }), []);
   const transition = useRef({ elapsed: 0, active: false, id: destination, serial: flight });
@@ -27,7 +27,13 @@ export function CameraDirector({ destination, flight, free, mobile, onArrive, pa
     vectors.startLook.copy(look.current);
     vectors.end.fromArray(pose.position);
     vectors.endLook.fromArray(pose.target);
-    vectors.end.sub(vectors.endLook).multiplyScalar(mobile && destination ? 1.35 : fit).add(vectors.endLook);
+    if (mobile && destination) {
+      const anchor = landmarkFor(destination)?.position;
+      if (anchor) {
+        vectors.end.set(anchor[0] + 13, anchor[1] + 15, anchor[2] + 27);
+        vectors.endLook.set(anchor[0], anchor[1] - 5, anchor[2]);
+      }
+    } else vectors.end.sub(vectors.endLook).multiplyScalar(fit).add(vectors.endLook);
     transition.current = { elapsed: 0, active: true, id: destination, serial: flight };
     runtime.current.moving = true;
     regress();
@@ -67,18 +73,18 @@ export function CameraDirector({ destination, flight, free, mobile, onArrive, pa
     const routeWeight = Math.min(1, progress * 7);
     vectors.desired.lerp(vectors.start.fromArray(overview.position), 1 - routeWeight);
     vectors.desiredLook.lerp(vectors.startLook.fromArray(overview.target), 1 - routeWeight);
-    if (mobile) vectors.desired.sub(vectors.desiredLook).multiplyScalar(1 + routeWeight * 0.25).add(vectors.desiredLook);
+    if (mobile) vectors.desired.sub(vectors.desiredLook).multiplyScalar(fit * (1 + routeWeight * 0.15)).add(vectors.desiredLook);
     if (!mobile) vectors.desired.sub(vectors.desiredLook).multiplyScalar(fit).add(vectors.desiredLook);
-    const amplitude = free ? 5 : mobile ? 0.25 : 1.1;
+    const amplitude = mobile ? 0.2 : 0.9;
     vectors.desired.x += runtime.current.pointer[0] * amplitude;
-    vectors.desired.y += runtime.current.pointer[1] * (free ? 2.5 : 0.55);
-    vectors.desiredLook.x += runtime.current.pointer[0] * (free ? 1.4 : 0.35);
+    vectors.desired.y += runtime.current.pointer[1] * 0.45;
+    vectors.desiredLook.x += runtime.current.pointer[0] * 0.28;
     const distance = camera.position.distanceToSquared(vectors.desired);
     runtime.current.moving = distance > 0.025;
     if (distance > 0.1) regress();
     camera.position.lerp(vectors.desired, 1 - Math.exp(-3.5 * dt));
     look.current.lerp(vectors.desiredLook, 1 - Math.exp(-3.5 * dt));
-    camera.position.y = MathUtils.clamp(camera.position.y, 5, 30);
+    camera.position.y = MathUtils.clamp(camera.position.y, 5, 55);
     camera.lookAt(look.current);
   });
   return null;

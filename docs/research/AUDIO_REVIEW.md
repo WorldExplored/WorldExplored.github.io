@@ -1,37 +1,24 @@
-# Optional music review
+# Music source and verification
 
-Reviewed 14 September 2026. No music files were downloaded or rehosted.
+Reviewed 14 September 2026. The track is **Firefly — Scott Buckley**. The creator describes piano, synths and light drums suited to a bright setting. The browser playback test verified loading and advancing media time; it was not a listening assessment.
 
-## Source and permission
+## Permission and provenance
 
-The selected track is **Firefly — Scott Buckley**, published in the creator's library in 2013. The creator describes a light, optimistic arrangement of piano, synths and drums; that description fits this site's bright direction better than the more melancholy orchestral candidate Horizons. This is an editorial assessment based on the creator's description, not a claim of listening verification.
+- [Creator's track page](https://www.scottbuckley.com.au/library/firefly/) supplies the official MP3 and explicitly licenses the work under CC BY 4.0 with attribution.
+- [Creator's usage page](https://www.scottbuckley.com.au/library/using-this-music/) covers the published MP3 library and requires credit. This use accompanies the interactive visual portfolio; it is not a standalone music service or redistribution to a streaming platform.
+- [Official YouTube upload](https://www.youtube.com/watch?v=PiPyx9sBCi8) identifies the same creator and track. Its oEmbed response matched, and public player metadata permitted embedding. Recorded fields remain in `audio-source-evidence.json`.
+- [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) is linked beside the creator and track source. The track is unmodified.
 
-- [Creator's track and license page](https://www.scottbuckley.com.au/library/firefly/) explicitly grants use under CC BY 4.0 with attribution.
-- [Creator's official YouTube upload](https://www.youtube.com/watch?v=PiPyx9sBCi8) is credited to Scott Buckley's verified channel and independently supplies the CC BY 4.0 attribution instruction.
-- [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) requires creator credit, a license link and a notice of modifications when applicable. The control links the unmodified source track, creator and license.
-- [Horizons](https://www.scottbuckley.com.au/library/horizons/) also has clear CC BY 4.0 permission, but its creator describes a darker emotional character. It was not selected.
+The integrated YouTube embed remained blank in the available browser. Native HTML audio now streams the official file directly from the creator's website. No track was ripped from YouTube, downloaded into the repository, or rehosted. The verified endpoint returned HTTP 200, `audio/mpeg`, byte-range support and Content-Length 5912941.
 
-The public YouTube oEmbed endpoint returned HTTP 200 with the matching title and creator. Both the normal and privacy-enhanced embed HTML returned HTTP 200 and contained `videoFlags.playableInEmbed: true` and `previewPlayabilityStatus.status: "OK"`, also with `playableInEmbed: true`. These observations establish the current embed permission signal; they do not guarantee that every region or browser will allow playback. The selected fields are recorded in `audio-source-evidence.json`; no full player response or visitor identifiers are stored.
+## Interface
 
-## Player constraints
+One compact Play control is present initially, with an audio element that has `preload="none"` and no source. Intentional Play sets the approved URL and calls native playback at 25% volume. Active controls provide Play/Pause, Mute/Unmute, current state and Close. A small credit surface links the creator's track page, creator, license and YouTube upload. There is no video panel or iframe.
 
-[YouTube's IFrame API](https://developers.google.com/youtube/iframe_api_reference#Requirements) requires at least a 200 × 200 player viewport. [YouTube's developer policies](https://developers.google.com/youtube/terms/developer-policies#iii.-youtube-api-services) prohibit playback through a player hidden from the viewed page or tab. [Required functionality](https://developers.google.com/youtube/terms/required-minimum-functionality#overlays-and-frames) also prohibits covering the embedded player. A tiny audio-only iframe would not satisfy those requirements.
+Closing pauses playback, clears the source and restores focus. A hidden tab pauses. A 20-second loading bound exposes Unavailable if the remote source cannot play; browser autoplay rejection returns Ready. A null or invalid configured source renders no control.
 
-The implementation begins with a 44 px high glossy Play music button. Intentional activation reveals a player whose viewport is at least 200 × 200, normally 304 × 200, with controls and credit outside it. Playback begins only after that action; if the browser blocks delayed programmatic playback, the compact control returns to Ready and another Play action works through the supported API. The initial volume is 25%. No video, thumbnail or API script is requested before activation.
+## Verification
 
-The player stays visible while playing. Closing destroys it and restores focus to Play music. A hidden browser tab or a player with less than half its surface visible pauses playback. Play, Pause, Mute and the current state remain available in the compact controls; the visible YouTube controls remain usable too. A one-second check synchronizes mute and playback state when the visitor uses YouTube's controls. An unavailable player exposes a concise status and retains the source link.
+The four audio tests check silent initial output with no source/autoplay, null or mismatched source rejection, creator/track/license/evidence agreement, and a secure creator-hosted playback URL.
 
-## Integration
-
-- Import the named `AudioControl` from `src/components/AudioControl.tsx`.
-- Import `src/components/AudioControl.css` in the application stylesheet entry or layout. The component does not import global CSS itself.
-- Render `<AudioControl />` once, in a fixed or sticky corner with enough clear space for the revealed 328 px wide surface. Parent layout owns positioning and stacking order.
-- The exported CSS namespace is `.audio-control` and its `__` child classes. Set `className="audio-control--above"` when the revealed player should open above the button, such as next to a bottom dock. The default expands downward.
-- Do not clip the component, cover its iframe, or put it beneath another panel while it is playing. Test the expanded state at every supported viewport.
-- Source, credit, UI labels, permission evidence and verification date live in `src/content/audio.ts`. Setting `audio.source = null` renders nothing and requests nothing. A replacement must include track-specific reuse permission and matching embed evidence.
-
-## Verification and limits
-
-`scripts/audio.test.tsx` checks silent initial HTML, a null source, matching permission/source identifiers, safe embedding URLs with autoplay disabled, actual-origin binding and truthful playback state mapping. Run it with `node --import tsx --test scripts/audio.test.tsx`; the parent should add it to the existing test command during integration.
-
-Browser inventory was empty for this component task; native Chrome was reserved for the parent task. Source metadata and embed flags were verified through public endpoints, but audible playback, visible player sizing, API Play/Pause/Mute, close cleanup and responsive positioning require the parent's integrated browser pass. Do not describe those browser interactions as tested until that pass is complete.
+Integrated browser checks at 390 × 844: intentional Play reached Playing; native readyState was 4; media time advanced; duration was 157.356 seconds. Mute set the media flag and status, Pause stopped at 15.10 seconds, Unmute/Play resumed, and Close left a null source, paused media and focus on Play music. The control and credits fit the viewport. Playback remains dependent on the creator's hosting and browser media support.

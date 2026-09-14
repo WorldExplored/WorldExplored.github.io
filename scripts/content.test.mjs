@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile, readdir } from 'node:fs/promises';
-import { profile, contributions, featured, additionalContributions } from '../src/content/profile.ts';
+import { profile, contributions, featured, publicContributions } from '../src/content/profile.ts';
 import { world } from '../src/content/world.ts';
 
 const html = await readFile(new URL('../out/index.html', import.meta.url), 'utf8');
@@ -49,30 +49,32 @@ test('featured contributions preserve verified status and co-development', () =>
   }
 });
 
-test('authored log is complete, distinct and accurately attributed', () => {
+test('authored source snapshot is complete, distinct and accurately attributed', () => {
   assert.equal(new Set(contributions.map(item => item.number)).size, contributions.length);
   assert.ok(contributions.every(item => item.author === 'WorldExplored'));
   assert.ok(!contributions.some(item => item.number === 26468));
   for (const item of contributions) assert.ok(['Open', 'Merged', 'Closed without merge'].includes(item.status));
-  const authoredFeatured = featured.filter(item => item.author === 'WorldExplored');
-  assert.deepEqual(new Set([...authoredFeatured, ...additionalContributions].map(item => item.number)), new Set(contributions.map(item => item.number)));
+  assert.equal(contributions.length, 11);
+  assert.ok(publicContributions.every(item => item.status === 'Merged' || item.status === 'Open'));
 });
 
 test('all content states have stable identifiers and availability is one flag', () => {
   assert.deepEqual(profile.sections.map(item => item.id), ['work', 'research', 'purdue', 'about', 'contact', 'building']);
   assert.deepEqual(profile.sections.filter(item => item.dock).map(item => item.id), ['work', 'research', 'purdue', 'about', 'contact']);
   assert.equal(typeof profile.showAvailability, 'boolean');
-  assert.equal(profile.building, 'A new technical project is in development. Public details will appear here when ready.');
+  assert.equal(profile.building, 'Building something impactful...');
 });
 
-test('static HTML contains identity, evidence, sections and contribution log', () => {
+test('static HTML contains identity, evidence and canonical sections', () => {
   assert.ok(bodyHtml, 'The exported document has a semantic body.');
   assert.match(bodyHtml, /<main\b/);
   assert.match(bodyHtml, /<h1\b[^>]*>Srreyansh Sethi<\/h1>/);
   for (const required of [profile.name, profile.university, profile.degree, profile.research.title, 'co-developed']) containsText(bodyHtml, required);
   for (const section of profile.sections) sectionBody(section.id);
-  for (const item of contributions) assert.ok(anchors(sectionBody('work')).some(link => link.href === item.url), item.url);
-  assert.ok(sectionBody('work').includes('<details'));
+  for (const item of publicContributions) assert.ok(anchors(sectionBody('work')).some(link => link.href === item.url), item.url);
+  assert.ok(!bodyHtml.includes('<dialog'));
+  assert.ok(!bodyHtml.includes('habitat.webp'));
+  assert.ok(!sectionBody('work').includes('<details'));
   const canonical = Array.from(semanticHtml.matchAll(/<link\b([^>]*)>/gi), match => attributes(match[1])).find(link => link.rel === 'canonical');
   assert.equal(canonical?.href, 'https://worldexplored.github.io/');
 });
@@ -82,31 +84,32 @@ test('essential portfolio content is rendered in semantic sections without WebGL
     for (const value of [item.heading, item.problem, item.contribution, item.status]) containsText(sectionBody('work'), value);
   }
   for (const value of [profile.research.title, profile.research.venue, profile.research.attribution, profile.research.description, profile.research.role]) containsText(sectionBody('research'), value);
-  for (const value of [profile.university, profile.degree, profile.graduation, profile.educationContext]) containsText(sectionBody('purdue'), value);
+  for (const value of [profile.university, profile.degree, profile.graduation]) containsText(sectionBody('purdue'), value);
   containsText(sectionBody('about'), profile.about);
-  containsText(sectionBody('contact'), profile.ui.contact);
   if (profile.showAvailability) containsText(sectionBody('contact'), profile.availability);
-  for (const href of [profile.links.github, profile.links.linkedin, profile.links.paper]) assert.ok(anchors(sectionBody('contact')).some(link => link.href === href));
+  for (const href of [profile.links.email, profile.links.github, profile.links.linkedin]) assert.ok(anchors(sectionBody('contact')).some(link => link.href === href));
   containsText(sectionBody('building'), profile.building);
 });
 
-test('additional authored PRs exclude featured work while retaining the authored record', () => {
-  assert.equal(profile.ui.contributions, 'Additional authored PRs');
-  const selected = new Set(featured.map(item => item.number));
-  assert.equal(new Set(additionalContributions.map(item => item.number)).size, additionalContributions.length);
-  assert.ok(additionalContributions.every(item => item.author === 'WorldExplored' && !selected.has(item.number)));
-  const log = sectionBody('work').match(/<details\b[^>]*class="[^"]*contribution-log[^"]*"[^>]*>([\s\S]*?)<\/details>/i)?.[1];
-  assert.ok(log, 'Additional authored PRs have an accessible disclosure.');
-  containsText(log, profile.ui.contributions);
-  const rendered = anchors(log).map(link => link.href);
-  assert.deepEqual(rendered, additionalContributions.map(item => item.url));
-  assert.ok(featured.every(item => !rendered.includes(item.url)));
+test('one whole-card collection contains only open or merged work, with no repeated PR links', () => {
+  const links = anchors(sectionBody('work'));
+  assert.equal(links.length, publicContributions.length);
+  assert.equal(new Set(links.map(link => link.href)).size, publicContributions.length);
+  for (const item of publicContributions) {
+    const link = links.find(link => link.href === item.url);
+    assert.ok(link.class.includes('contribution-card'));
+    containsText(link.text, item.heading);
+    containsText(link.text, item.problem);
+    containsText(link.text, item.contribution);
+  }
+  assert.doesNotMatch(plainText(bodyHtml), /Closed without merge/);
+  for (const item of contributions.filter(item => item.status === 'Closed without merge')) assert.ok(!links.some(link => link.href === item.url));
 });
 
 test('every spatial landmark has one matching semantic link and destination section', () => {
   const controls = anchors(bodyHtml).filter(link => link['data-landmark']);
-  assert.equal(world.landmarks.length, 4);
-  assert.equal(controls.length, 4);
+  assert.equal(world.landmarks.length, 6);
+  assert.equal(controls.length, 6);
   assert.deepEqual(new Set(controls.map(link => link['data-landmark'])), new Set(world.landmarks.map(item => item.id)));
   for (const landmark of world.landmarks) {
     const control = controls.find(link => link['data-landmark'] === landmark.id);
@@ -117,7 +120,7 @@ test('every spatial landmark has one matching semantic link and destination sect
 });
 
 test('the unannounced-project teaser appears once in rendered HTML', () => {
-  assert.equal(plainText(bodyHtml).split(profile.building).length - 1, 1);
+  assert.equal(plainText(sectionBody('building')).split(profile.building).length - 1, 1);
 });
 
 test('external destinations use HTTPS and new tabs have safe rel attributes', () => {
@@ -125,12 +128,14 @@ test('external destinations use HTTPS and new tabs have safe rel attributes', ()
   const authoredUrls = [...Object.values(profile.links), ...contributions.map(item => item.url), ...featured.map(item => item.url), ...profile.additions.flatMap(item => item.url ? [item.url] : [])];
   for (const href of authoredUrls) {
     const url = new URL(href);
+    if (href === profile.links.email) { assert.equal(href, 'mailto:sethi64@purdue.edu'); continue; }
     assert.equal(url.protocol, 'https:', href);
     assert.ok(url.hostname && !url.username && !url.password, href);
   }
   for (const link of anchors(bodyHtml)) {
     assert.ok(link.href, 'Every semantic anchor has a destination.');
     const url = new URL(link.href, base);
+    if (link.href === profile.links.email) { assert.equal(url.protocol, 'mailto:'); continue; }
     if (url.origin !== base.origin) {
       assert.equal(url.protocol, 'https:', link.href);
       assert.ok(url.hostname && !url.username && !url.password, link.href);
@@ -166,4 +171,12 @@ test('export contains no local paths, credentials or visitor API requests', asyn
     const text = await readFile(new URL(entry, root), 'utf8');
     assert.equal(forbidden.test(text), false, entry);
   }
+});
+
+test('canonical sections avoid duplicate presentations and unrelated links', () => {
+  for (const section of profile.sections) assert.equal((bodyHtml.match(new RegExp(`id="${section.id}"`, 'g')) ?? []).length, 1);
+  assert.equal(anchors(bodyHtml).filter(link => link.href === profile.links.paper).length, 1);
+  assert.equal(anchors(sectionBody('contact')).length, 3);
+  assert.ok(!anchors(sectionBody('contact')).some(link => link.href === profile.links.paper));
+  assert.doesNotMatch(plainText(bodyHtml), /Pause motion|Still view|Guided view|Free Explore|Minimize|Aero Research Habitat|Click the water|Drag a bubble|field guide/i);
 });

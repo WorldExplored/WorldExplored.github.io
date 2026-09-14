@@ -21,9 +21,9 @@ export function QualityController({ runtime, tier, onTier, paused, mobile }: { r
     gl.render(scene, camera);
     sample.current.seconds += delta;
     sample.current.frames++;
-    if (sample.current.seconds < 1) return;
-    const fps = Math.round(sample.current.frames / sample.current.seconds);
-    const status = { tier, fps, calls: gl.info.render.calls, triangles: gl.info.render.triangles, dpr: Number(gl.getPixelRatio().toFixed(2)), frames: runtime.current.frames, elapsed: Number(runtime.current.elapsed.toFixed(2)), camera: camera.position.toArray().map(value => Number(value.toFixed(2))), ripple: runtime.current.ripple.serial, drags: runtime.current.dragCount, paused };
+    if (sample.current.seconds < 1 && !paused) return;
+    const fps = paused ? 0 : Math.round(sample.current.frames / sample.current.seconds);
+    const status = { tier, fps, calls: gl.info.render.calls, triangles: gl.info.render.triangles, dpr: Number(gl.getPixelRatio().toFixed(2)), frames: runtime.current.frames, elapsed: Number(runtime.current.elapsed.toFixed(2)), camera: camera.position.toArray().map(value => Number(value.toFixed(2))), ripple: runtime.current.ripple.serial, drags: runtime.current.dragCount, clouds: runtime.current.cloudInteraction, plants: runtime.current.plantInteraction, paused };
     if (output.current) {
       output.current.textContent = JSON.stringify(status);
       output.current.dataset.tier = tier;

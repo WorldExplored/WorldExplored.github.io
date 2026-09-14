@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, type MutableRefObject } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { BoxGeometry, BufferGeometry, CatmullRomCurve3, CylinderGeometry, DoubleSide, ExtrudeGeometry, Float32BufferAttribute, Group, MathUtils, Mesh, MeshPhysicalMaterial, Shape, SphereGeometry, TorusGeometry, TorusKnotGeometry, TubeGeometry, Vector3 } from 'three';
+import { BoxGeometry, BufferGeometry, CatmullRomCurve3, CylinderGeometry, DoubleSide, ExtrudeGeometry, Float32BufferAttribute, Group, MathUtils, Mesh, MeshPhysicalMaterial, Shape, SphereGeometry, TorusGeometry, TubeGeometry, Vector3 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { world, type LandmarkId, type QualityTier, type SceneRuntime } from '@/content/world';
 
@@ -340,16 +340,12 @@ function StudySculpture(props: ModelProps) {
     trim: new TorusGeometry(1.49, 0.042, 8, segments).rotateX(Math.PI / 2).translate(0, 1.16, 0),
     desk: combine([roundedBox(2.03, 0.19, 1.45, 0.085).translate(0, 1.85, 0), new CylinderGeometry(0.11, 0.15, 0.61, 16).translate(-0.68, 1.56, 0), new CylinderGeometry(0.11, 0.15, 0.61, 16).translate(0.68, 1.56, 0)]),
     support: cylinder(0.39, 0.13, 2.02, segments),
-    sculpture: new TorusKnotGeometry(0.48, 0.115, segments * 2, 10, 2, 3).rotateX(0.38).translate(0, 2.7, 0),
-    lens: new SphereGeometry(0.2, segments / 2, 12).translate(0, 2.7, 0),
   }), props.quality);
   return <group dispose={null}>
     <mesh geometry={geometry.base} material={material.porcelain} castShadow receiveShadow />
     <mesh geometry={geometry.trim} material={material.cyan} />
     <mesh geometry={geometry.desk} material={material.porcelain} castShadow />
     <mesh geometry={geometry.support} material={material.blue} />
-    <mesh geometry={geometry.sculpture} material={material.silver} castShadow />
-    <mesh geometry={geometry.lens} material={material.cyan} />
   </group>;
 }
 

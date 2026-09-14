@@ -1,3 +1,5 @@
+> Historical component brief. Final integration uses the creator-published licensed file with native HTML audio; see `../AUDIO_REVIEW.md` for the implementation and browser evidence.
+
 # Optional audio control
 
 Investigate fitting Frutiger Aero music on YouTube with primary-source licensing and embedding evidence. No ripping, downloads or rehosting. An official creator source must establish CC/reuse permission, and the uploader must allow embedding. Scott Buckley's library is generally CC BY 4.0; Horizons has a specific license page but mood and YouTube availability need assessment. Do not infer embedding permission merely from a watch URL.

@@ -2,7 +2,7 @@
 
 Personal portfolio: [worldexplored.github.io](https://worldexplored.github.io).
 
-The Aero Research Habitat combines an original real-time landscape with a complete HTML portfolio. GPU Observatory, Research Lagoon, Purdue Pavilion and Distant Signal lead to the same sections as the keyboard-accessible links and five-item dock. The page remains readable without WebGL or JavaScript.
+An original Frutiger Aero landscape with semantic portfolio content. Work, Research, Purdue, About and Contact share a five-item dock and matching spatial destinations. Camera approaches reveal one canonical HTML surface connected to its landmark. Native scrolling, links, keyboard focus and browser history remain available.
 
 ## Development
 
@@ -11,37 +11,41 @@ Use Node 24 or newer and the checked-in lockfile.
 ```sh
 npm ci
 npm run dev
+npm run check
+npm test
 ```
 
-Run `npm run check` for ESLint, strict TypeScript and the Next.js static export, then `npm test` for content, export, camera, preference and scene-interaction tests. Preview the generated `out/` directory with `npm start`.
+`check` runs ESLint, strict TypeScript and the Next.js static export. Tests cover content, preference subscriptions, camera arrival/cancellation, localized environmental input, bounded object rotation, water and optional audio. Preview `out/` with `npm start`.
 
-React and React DOM are pinned to 19.2.8, Fiber to 9.7.0, Drei to 10.7.8, Three and its types to 0.182.0, and React Three Rapier to 2.2.0. The scoped `@dimforge/rapier3d-compat` override selects 0.20.0 to fix the upstream deprecated initialization signature. Keep these versions and the lockfile together; test dependency upgrades in the browser as well as in TypeScript.
+React/React DOM 19.2.8, Fiber 9.7.0, Drei 10.7.8 and Three 0.182.0 remain pinned. Keep the lockfile with dependency changes and test them in a browser. Foreground bubble physics and its dependency have been removed.
 
-## Editing content and the world
+## Editing
 
-- `src/content/profile.ts`: identity, education, copy, links, availability, featured work, authored PRs and section labels. Add an entry to `profile.additions` for another project, paper or affiliation in an existing section. Set `showAvailability` to `false` to hide availability.
-- `src/content/world.ts`: landmark positions and camera targets, flight duration, environment colors and speeds, island dimensions, quality tiers and bubble bounds.
-- `src/components/SectionContent.tsx`: semantic section layouts. Featured authored PRs are automatically excluded from “Additional authored PRs”; retain the complete authored source list.
-- `src/components/world/`: procedural models, terrain, vegetation, water, camera, interaction and rendering policies. `src/app/globals.css` owns the HTML chrome and responsive layout.
+- `src/content/profile.ts`: verified copy, contact destinations, availability, public contribution curation and section IDs. The source snapshot retains authored history; the public collection includes only selected Open/Merged work and the attributed co-developed contribution.
+- `src/content/world.ts`: landmarks, camera poses, terrain, quality tiers and the centralized `lighting` configuration. Sky, horizon, sun, ambient light, fog, water, windows, lamp and clouds are controlled here. No time or location system is implemented.
+- `src/content/audio.ts`: approved source, license evidence and player labels. A null source renders no player or requests.
+- `src/components/SectionContent.tsx`: the single semantic presentation of each section. Add a renderer, icon, configuration and tests when adding a section.
+- `src/components/world/`: procedural architecture, vegetation, clouds, water, camera, bounded rotation and renderer policies.
+- `src/app/globals.css`: humanist typography, layered interface surfaces and responsive placement. Source Sans 3 is self-hosted with its SIL Open Font License under `src/app/fonts/`.
 
-`npm run sync:github` refreshes public contribution metadata during maintenance. Review its diff and rerun checks before committing. Visitors make no GitHub API requests.
+`npm run sync:github` refreshes the source snapshot during maintenance. Review its diff and the curated public collection before publishing. Visitors make no GitHub API requests.
 
-For a new section, add its stable ID and configuration in `profile.ts`, provide its `SectionContent` layout and icon, and check native anchors and dialog navigation first. If it also needs a spatial landmark, extend the landmark ID/configuration and model, then update route measurements in `WorldCanvas.tsx`, camera sequencing and fallback label placement. Keep the dock at five primary destinations unless a reviewed navigation change requires otherwise. Extend content and interaction tests, then inspect mobile, keyboard, history and static views.
+## Runtime
 
-## Runtime and fallback
+A guarded WebGL2 initializer creates a client-only Fiber root. Context denial/loss or an initialization error leaves semantic navigation and content over a simple designed background. No separate island screenshot or view selector is shipped. Without JavaScript, all canonical sections remain readable in document flow.
 
-HTML content renders before the scene bundle loads. `WorldCanvas` requests a WebGL2 context inside a guarded initializer, then configures a manual Fiber root. Parent-host resize measurements keep the canvas responsive. Context denial, context loss or a scene error returns to the original static habitat illustration.
+Native scrolling moves the camera through a bounded route. Desktop pointer input adds slight parallax; landmarks and direct links share hash/history state. Normal section selection uses a cancellable 800 ms approach, then reveals its connected surface. Back to world and Escape return to the overview; focus returns to the initiating control. Content scrolls normally without a modal focus trap.
 
-Native page scrolling drives the guided camera route. Landmark and dock selection share hash/history state; an active scene normally completes an 800 ms flight before opening a native HTML dialog. Free Explore on larger screens expands bounded pointer parallax and provides Return to overview. Touch keeps native vertical scrolling.
+Reduced motion automatically freezes ambient motion and removes camera flights while retaining the world. Forced colors and Save-Data use semantic fallback. Hidden/offscreen canvases stop rendering, and reading surfaces use demand rendering. Quality tiers reduce detail and DPR while preserving landmarks; declines have an eight-second cooldown. Desktop DPR caps at 1.75 and mobile at 1.25.
 
-High, medium and low tiers reduce resolution and environmental detail. Sustained declines below 38 FPS can lower a tier with an eight-second cooldown; healthy samples never trigger a fallback or automatically upgrade the tier. DPR is capped at 1.75 on desktop and 1.25 on mobile, with temporary reductions during camera motion. Hidden or offscreen canvases stop rendering. Pause and open panels stop ambient animation and physics. Reduced motion, forced colors, Save-Data and the Static view control bypass WebGL; all content and navigation remain available.
+Cloud and plant responses are local to the pointer. Water clicks alter material normals and highlights. A reflective sculpture supports bounded mouse/pen rotation, touch feedback and keyboard activation. Only a few small distant decorative motes remain.
 
-For local QA, `?diagnostics` displays renderer statistics and `?scene=unavailable` exercises initialization fallback. These controls send no telemetry.
+Music stays silent and makes no player requests until Play. The native player streams the creator-published licensed audio file, with no video embed; close clears the source. Source, creator and license credit accompany playback. Third-party availability can vary.
 
-## Deployment and design record
+## Publication and evidence
 
-GitHub Actions runs `npm ci`, `npm run check` and `npm test`, then publishes only `out/` to GitHub Pages. This root user site requires no repository-name base path or runtime service. Update `siteUrl` and review generated canonical, robots and sitemap output when changing domains.
+The existing GitHub Actions workflow verifies the repository and publishes only `out/` to GitHub Pages. This root user site has no repository-name base path or runtime service.
 
-See `docs/3d-rebuild-notes.md` for architecture, toolkit influence and verification; `design-system/srreyansh-sethi/MASTER.md` for the visual system; and `docs/qa/3D_ITERATION_LOG.md` for iteration evidence. Scene geometry and shaders are original procedural work. Reference-site assets are not reused. The original fallback illustration and icons remain, and the MIT-licensed scaffold utilities retain their notice in `LICENSE`.
+See `docs/research/AERO_REFINEMENT.md`, `docs/qa/AERO_REFINEMENT_LOG.md`, `docs/3d-rebuild-notes.md` and `design-system/srreyansh-sethi/MASTER.md`. Earlier iteration logs and images are historical evidence. `?diagnostics` shows local renderer/input counters; `?scene=unavailable` exercises guarded initialization failure. Neither sends telemetry.
 
-Automated checks and browser results are recorded in the 3D iteration log, including the outstanding native-browser preference check.
+Procedural scene assets are original. Reference-site branding and artwork are not reused. Existing scaffold utilities retain their MIT notice in `LICENSE`.
