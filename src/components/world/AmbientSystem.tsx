@@ -93,7 +93,7 @@ function plantInstances(count: number, flowers: boolean) {
       island.center[1] + terrainHeight(radius, island.height, angle, islandIndex) - .015,
       island.center[2] + Math.sin(angle) * r * island.radius[1],
     );
-    const size = .24 + random() * (islandIndex > 2 ? 1.2 : .50);
+    const size = .18 + random() * (islandIndex > 2 ? .85 : .38);
     transform.scale.set(.7 + random() * .9, size, 1);
     transform.rotation.set(0, random() * Math.PI * 2, (random() - .5) * .15);
     transform.updateMatrix();
@@ -118,9 +118,9 @@ function makeClouds(count: number) {
   const time = { value: 0 };
   material.onBeforeCompile = shader => {
     shader.uniforms.uTime = time;
-    shader.vertexShader = `uniform float uTime; attribute float aSpeed;\n${shader.vertexShader}`.replace('#include <project_vertex>', `
+    shader.vertexShader = `uniform float uTime; attribute float aSpeed; attribute float aOrigin;\n${shader.vertexShader}`.replace('#include <project_vertex>', `
       vec4 mvPosition = instanceMatrix * vec4(transformed, 1.);
-      mvPosition.x = mod(mvPosition.x + uTime * aSpeed + 85., 170.) - 85.;
+      mvPosition.x += mod(aOrigin + uTime * aSpeed + 85., 170.) - 85. - aOrigin;
       mvPosition = modelViewMatrix * mvPosition;
       gl_Position = projectionMatrix * mvPosition;
     `);
@@ -129,6 +129,7 @@ function makeClouds(count: number) {
   const mesh = new InstancedMesh(geometry, material, count * 5);
   const transform = new Object3D();
   const speeds = new Float32Array(count * 5);
+  const origins = new Float32Array(count * 5);
   for (let cloud = 0; cloud < count; cloud++) {
     const x = (random() - .5) * 130;
     const y = 11 + random() * 11;
@@ -142,9 +143,11 @@ function makeClouds(count: number) {
       transform.updateMatrix();
       mesh.setMatrixAt(cloud * 5 + puff, transform.matrix);
       speeds[cloud * 5 + puff] = speed;
+      origins[cloud * 5 + puff] = x;
     }
   }
   geometry.setAttribute('aSpeed', new InstancedBufferAttribute(speeds, 1));
+  geometry.setAttribute('aOrigin', new InstancedBufferAttribute(origins, 1));
   mesh.instanceMatrix.needsUpdate = true;
   mesh.frustumCulled = false;
   return { mesh, geometry, material, time };

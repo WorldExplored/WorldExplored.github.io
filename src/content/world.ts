@@ -13,6 +13,7 @@ export interface SceneRuntime {
   hovered: LandmarkId | null;
   ripple: { x: number; z: number; time: number; serial: number };
   dragCount: number;
+  dragging: boolean;
   frames: number;
 }
 export interface WorldProps {
@@ -30,14 +31,14 @@ export interface WorldProps {
 
 export const world = {
   flightSeconds: 0.8,
-  colors: { sky: '#158de1', horizon: '#b8edf7', water: '#16b9ce', deepWater: '#087baf', grass: '#76b91d', grassLight: '#b4db43', grassDark: '#3c861b', sand: '#f2dfaa', stone: '#c0d9cc', porcelain: '#f5fff4', cyan: '#56e4ee', glass: '#7ee6e7', gold: '#ddb858', ink: '#123a4a' },
-  overview: { position: [15, 15, 32], target: [0, 3, -3] } as CameraPose,
-  mobileOverview: { position: [18, 24, 48], target: [0, 1.5, -3] } as CameraPose,
+  colors: { sky: '#0875cf', horizon: '#b8edf7', water: '#03afc7', deepWater: '#00568e', grass: '#347315', grassLight: '#78ab24', grassDark: '#306b17', sand: '#f2dfaa', stone: '#c0d9cc', porcelain: '#f5fff4', cyan: '#56e4ee', glass: '#7ee6e7', gold: '#ddb858', ink: '#123a4a' },
+  overview: { position: [13, 14, 30], target: [0, 5, -3] } as CameraPose,
+  mobileOverview: { position: [17, 19, 37], target: [0, 2, -3] } as CameraPose,
   landmarks: [
-    { id: 'work', position: [-8, 0, 0], label: [-8, 6.4, 0], camera: { position: [0, 8.5, 14], target: [-8, 2.4, 0] }, color: '#a7ed61' },
-    { id: 'research', position: [0, 0, 6], label: [0, 4.7, 6], camera: { position: [8, 6.5, 18], target: [0, 1.5, 6] }, color: '#65edff' },
-    { id: 'purdue', position: [9, 0, -2], label: [9, 6.3, -2], camera: { position: [19, 8, 10], target: [9, 2, -2] }, color: '#ffe196' },
-    { id: 'building', position: [1, 0, -17], label: [1, 5.8, -17], camera: { position: [10, 8, -3], target: [1, 2.5, -17] }, color: '#bcffff' },
+    { id: 'work', position: [-8, 0, 0], label: [-8, 1.2, 3.5], camera: { position: [0, 8.5, 14], target: [-8, 2.4, 0] }, color: '#a7ed61' },
+    { id: 'research', position: [0, 0, 6], label: [0, 0.2, 9], camera: { position: [8, 6.5, 18], target: [0, 1.5, 6] }, color: '#65edff' },
+    { id: 'purdue', position: [9, 0, -2], label: [10, 1.2, 1.2], camera: { position: [19, 8, 10], target: [9, 2, -2] }, color: '#ffe196' },
+    { id: 'building', position: [1, 0, -17], label: [1, 5.4, -17], camera: { position: [10, 8, -3], target: [1, 2.5, -17] }, color: '#bcffff' },
   ] as LandmarkConfig[],
   islands: [
     { center: [-8, -0.25, 0] as Vec3, radius: [6.3, 4.7] as [number, number], height: 1.15 },
@@ -55,7 +56,7 @@ export const world = {
 };
 
 export function createSceneRuntime(): SceneRuntime {
-  return { elapsed: 0, scroll: 0, pointer: [0, 0], moving: false, hovered: null, ripple: { x: 0, z: 0, time: -100, serial: 0 }, dragCount: 0, frames: 0 };
+  return { elapsed: 0, scroll: 0, pointer: [0, 0], moving: false, hovered: null, ripple: { x: 0, z: 0, time: -100, serial: 0 }, dragCount: 0, dragging: false, frames: 0 };
 }
 
 export function motionPolicy(reduced: boolean, saveData: boolean, forcedColors: boolean, manualStatic: boolean) {

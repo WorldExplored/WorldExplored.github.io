@@ -1,6 +1,6 @@
 {
   "name": "srreyansh-sethi-portfolio",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "private": true,
   "description": "Srreyansh Sethi — ML systems, GPU performance and research.",
   "author": "Srreyansh Sethi",
@@ -25,7 +25,7 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "check": "npm run lint && npm run typecheck && npm run build",
-    "test": "node --test scripts/content.test.mjs",
+    "test": "node --import tsx --test scripts/content.test.mjs scripts/world.test.tsx",
     "sync:github": "node scripts/sync-github.mjs"
   },
   "dependencies": {
@@ -41,7 +41,7 @@
     "react-dom": "19.2.8",
     "shadcn": "^4.1.0",
     "tailwind-merge": "^3.5.0",
-    "three": "0.186.0",
+    "three": "0.182.0",
     "tw-animate-css": "^1.4.0"
   },
   "devDependencies": {
@@ -50,12 +50,17 @@
     "@types/node": "^24",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@types/three": "0.186.0",
+    "@types/three": "0.182.0",
     "eslint": "^9",
     "eslint-config-next": "^16.3.5",
     "tailwindcss": "^4",
     "tsx": "4.23.13",
     "typescript": "^5"
   },
-  "type": "module"
+  "type": "module",
+  "overrides": {
+    "@react-three/rapier": {
+      "@dimforge/rapier3d-compat": "0.20.0"
+    }
+  }
 }

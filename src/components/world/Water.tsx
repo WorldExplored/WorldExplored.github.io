@@ -50,13 +50,13 @@ const fragmentShader = /* glsl */ `
     n = normalize(n);
     float fresnel = pow(1. - max(dot(view, n), 0.), 3.);
     float caustic = 0.;
-    if (uDetail > .5) {
+    {
       caustic = sin(p.x * 2.4 + sin(p.y * 2.1 + uTime * .3)) * sin(p.y * 2.3 - sin(p.x * 1.7 - uTime * .4));
       caustic = pow(max(caustic, 0.), 12.) * .12 * uDetail;
     }
     float broad = sin(p.x * .19 + p.y * .22) * .035;
-    vec3 color = mix(uDeep, uWater, .79 + broad);
-    color = mix(color, uHorizon, fresnel * .78) + caustic;
+    vec3 color = mix(uDeep, uWater, .60 + broad);
+    color = mix(color, uHorizon, fresnel * .52) + caustic;
     vec3 light = normalize(vec3(-.42, .85, .32));
     float sun = pow(max(dot(reflect(-light, n), view), 0.), 110.);
     color += vec3(1., .98, .80) * sun * .75;
@@ -68,7 +68,6 @@ const fragmentShader = /* glsl */ `
     float haze = smoothstep(38., 105., length(cameraPosition - vWorld));
     color = mix(color, uHorizon, haze);
     gl_FragColor = vec4(color, 1.);
-    #include <tonemapping_fragment>
     #include <colorspace_fragment>
   }
 `;

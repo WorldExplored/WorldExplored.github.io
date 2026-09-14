@@ -1,0 +1,32 @@
+[
+  {
+    "focus": "Close panel",
+    "hash": "#work",
+    "motion": "stopped",
+    "title": "Open-source work"
+  },
+  {
+    "focus": "Close panel",
+    "hash": "#research",
+    "motion": "stopped",
+    "title": "Research"
+  },
+  {
+    "focus": "Close panel",
+    "hash": "#purdue",
+    "motion": "stopped",
+    "title": "Purdue"
+  },
+  {
+    "focus": "Close panel",
+    "hash": "#about",
+    "motion": "stopped",
+    "title": "How I work"
+  },
+  {
+    "focus": "Close panel",
+    "hash": "#contact",
+    "motion": "stopped",
+    "title": "Contact"
+  }
+]

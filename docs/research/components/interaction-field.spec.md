@@ -1,9 +1,25 @@
-# Tactile bubbles specification
+# Tactile bubbles
 
-Target: `src/components/world/InteractionField.tsx` plus optional `src/components/world/bubblePhysics.ts` if useful pure helper.
-Export InteractionField({runtime,paused,mobile}): runtime MutableRefObject<SceneRuntime> fromworldconfig; pausedboolean; mobileboolean. Caller placesatworldorigininsideCanvas. Exactly6 tactile bubbles (world.environment.tactileBubbles), independent fromdecorativeinstancedbubbles.
-Useinstalled@react-three/rapierv2.2Physics withsmallballcolliders, restitution.85, linearDamping1.2, gravity[0,0,0], sleepenabled, timeStep1/60. Pause physicswhenpaused. Suspensehandledbyparentbutlocalboundaryokay. Noextraassets/dependencies. Positionforegroundx-9to13,y2to6,z9to15, radii.5-.9; keepcenterworldviewclear. World.cameraoverview[15,15,32] looks[0,3,-3]. Boundsfromworld.environment.bubbleBounds min[-17,1.4,4],max[17,8.5,17]; invisiblefixedcollidersorimpulsereflectionwithclamp. Bubblescollidewithoneanotherandwalls, nohugeenvironmentcollisionmesh.
-Visuallanguage: translucentcyan/Fresneledgessmoothspheres, brightwhitehighlightcaporcustomFresnelshader. Avoidopaquegrayballs, expensive screen-space refraction andpostprocessing. Materialsresponsivecamera. Sharedspheregeometry/materialwithdisposecleanup. No activecontinuousimperceptiblesimulationwhenpanelopen/hidden.
-Mousepointer proximity softlyrepelsbubbles byraydistance, withboundedimpulsesandpreallocatedvectors. Drag selectedbubble: onPointerDown capture event.target.setPointerCapture(pointerId), disableanybubble force forgrabbedbody, compute camera-facingdragplane andoffset. onPointerMove uses event.ray planeintersection toplacebody whiledragging; calculateclampedvelocityfrommotion; onPointerUp releaserecaptureandapplymomentum, incrementruntime.dragCount. Cursorgrab/grabbinghandledvia gl.domElement.style.cursor andrestorecleanup. stopPropagation topreventwaterclick/landmarkbehind. Cancel releasesonpointercancel/lostpointercapture/paused/unmount toavoidstuckbody. No frameallocationsorReactstateperframe. Occasional setStatefordragstart/endokay. For touch, **do not capture/preventvertical scrolling**; omitdragontouch (tapcanapplysmallimpulse) andlet canvasCSS touch-action:pan-y handledefaultscroll. DesktoponlyfreeOrbitControlsmayconflict; supporteventstoppropagation and communicate ifneedparentdisablewhilegrab; runtime can gain draggingboolean afterparentapproval.
-Idle gentle boundedfloatingforcesvisibleon6bodies, applyonlywhen!paused; sleepwherepossible. Reducedmotionunmountssceneinparentandmustnevercreatephysics. No necessarycontentbehindbubbleinteraction, canvasdecorative withDOMlandmarkselsewhere.
-Use strictTS, namedexports, 2spaces. Verify npx tsc --noEmit beforefinishing. Commitonlyownedfilesinassignedworktree; donotpush. Reportcontrols/cancellation andestimateddrawcall/trianglecost. Parentintegratesandtestsactualdrag/collision.
+`InteractionField.tsx` exports `InteractionField({ runtime, paused, mobile })`. The runtime is a mutable `SceneRuntime` ref; both other props are booleans. `bubblePhysics.ts` contains pure boundary and release-velocity helpers. The component is placed at the world origin. Current camera poses, bubble bounds and the tactile count live in [world.ts](../../../src/content/world.ts).
+
+## Physics and appearance
+
+Use six tactile bubbles independently of decorative instances. React Three Rapier supplies small ball colliders, zero gravity, a fixed 1/60-second step, sleeping, approximately 0.85 restitution and 1.2 linear damping. Bubbles collide with one another and invisible boundary colliders; no detailed environment collision mesh is needed. Position them in the foreground while preserving the central view.
+
+Smooth translucent cyan spheres use Fresnel rims and white highlights that respond to the camera. Share sphere geometry and material, and dispose owned resources on cleanup. Avoid opaque gray spheres, screen-space refraction and postprocessing. No portfolio content depends on interacting with a bubble.
+
+## Pointer behavior
+
+Mouse proximity applies gentle, bounded repulsion based on distance from the pointer ray. Reuse vectors for ray and force calculations. A grabbed body receives no idle or repulsion force.
+
+Pointer-down captures the selected bubble and establishes a camera-facing drag plane with an initial offset. Pointer movement intersects that plane, constrains the body's center within the configured bounds including its radius, and records a bounded release velocity. Releasing restores dynamic motion, applies momentum and increments `runtime.dragCount`. The release speed is capped at eight world units per second. Stop propagation so dragging cannot activate water or a landmark behind the bubble.
+
+Use `grab` and `grabbing` cursors and restore the canvas cursor after release or cancellation. Pointer cancellation, lost capture, window blur, pause and unmount must release capture and leave no body stuck in a dragged state. `runtime.dragging` suspends camera response while a bubble is held.
+
+Touch preserves native vertical scrolling through `touch-action: pan-y`. It does not capture bubble dragging or prevent the page's vertical gesture. A small tap impulse is optional.
+
+## Suspension and verification
+
+Idle forces provide gentle visible floating motion within bounds and allow sleeping where possible. Pause, open panels and hidden/offscreen rendering suspend physics. Reduced-motion and static modes do not mount the physics scene. Avoid per-frame React state and temporary vector allocations.
+
+Verification covers radius-aware boundaries, release-speed limits, pointer capture and cancellation, momentum/collision behavior, camera stability during dragging, pause behavior and native touch scrolling. Component tests establish numerical behavior; browser interaction checks establish the visible result.
