@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, type MutableRefObject } from 'react';
 import { useFrame, type ThreeEvent } from '@react-three/fiber';
-import { Color, PlaneGeometry, ShaderMaterial, Vector4 } from 'three';
+import { Color, PlaneGeometry, ShaderMaterial, Vector2, Vector3, Vector4 } from 'three';
 import { world, type QualityTier, type SceneRuntime } from '../../content/world';
 
 export interface EnvironmentProps {
@@ -40,6 +40,11 @@ const fragmentShader = /* glsl */ `
   uniform vec3 uWater;
   uniform vec3 uDeep;
   uniform vec3 uHorizon;
+  uniform vec3 uFog;
+  uniform vec2 uFogRange;
+  uniform vec3 uSunDirection;
+  uniform vec3 uSunColor;
+  uniform float uSunIntensity;
   varying vec3 vWorld;
   varying vec3 vNormal;
   void main() {
@@ -47,26 +52,31 @@ const fragmentShader = /* glsl */ `
     vec3 view = normalize(cameraPosition - vWorld);
     vec3 n = vNormal;
     if (uDetail > .5) n.xz += vec2(sin(p.x * 5.7 + p.y * 3.1 + uTime * 1.2), cos(p.x * 3.4 - p.y * 5.2 - uTime)) * .017 * uDetail;
+    float age = uRipple.z;
+    if (age >= 0. && age < 2.8) {
+      vec2 offset = p - uRipple.xy;
+      float radius = length(offset);
+      float wave = radius - age * 2.1;
+      float spread = .5 + age * .22;
+      float envelope = exp(-wave * wave / (spread * spread));
+      float amplitude = .055 * pow(1. - age / 2.8, 2.) * smoothstep(0., .1, age);
+      float slope = amplitude * envelope * (7.5 * cos(wave * 7.5) - 2. * wave / (spread * spread) * sin(wave * 7.5));
+      n.xz -= offset / max(radius, .25) * slope;
+    }
     n = normalize(n);
     float fresnel = pow(1. - max(dot(view, n), 0.), 3.);
     float caustic = 0.;
     {
       caustic = sin(p.x * 2.4 + sin(p.y * 2.1 + uTime * .3)) * sin(p.y * 2.3 - sin(p.x * 1.7 - uTime * .4));
-      caustic = pow(max(caustic, 0.), 12.) * .12 * uDetail;
+      caustic = pow(max(caustic, 0.), 12.) * .055 * uDetail;
     }
     float broad = sin(p.x * .19 + p.y * .22) * .035;
-    vec3 color = mix(uDeep, uWater, .60 + broad);
+    vec3 color = mix(uDeep, uWater, .78 + broad);
     color = mix(color, uHorizon, fresnel * .52) + caustic;
-    vec3 light = normalize(vec3(-.42, .85, .32));
-    float sun = pow(max(dot(reflect(-light, n), view), 0.), 110.);
-    color += vec3(1., .98, .80) * sun * .75;
-    float age = uRipple.z;
-    float distanceToRipple = length(p - uRipple.xy);
-    float ring = exp(-pow((distanceToRipple - age * 2.6) * 7., 2.));
-    float ring2 = exp(-pow((distanceToRipple - age * 2.6 + .3) * 8., 2.)) * .28;
-    color += (ring + ring2) * max(1. - age / 2.5, 0.) * step(0., age) * .55;
-    float haze = smoothstep(38., 105., length(cameraPosition - vWorld));
-    color = mix(color, uHorizon, haze);
+    float sun = pow(max(dot(reflect(-uSunDirection, n), view), 0.), 110.);
+    color += uSunColor * sun * uSunIntensity * .35;
+    float haze = smoothstep(uFogRange.x, uFogRange.y, length(cameraPosition - vWorld));
+    color = mix(color, uFog, haze);
     gl_FragColor = vec4(color, 1.);
     #include <colorspace_fragment>
   }
@@ -97,9 +107,14 @@ export function Water({ runtime, paused, quality }: EnvironmentProps) {
       uTime: { value: 0 },
       uDetail: { value: detail },
       uRipple: { value: new Vector4(0, 0, 100, 0) },
-      uWater: { value: new Color(world.colors.water) },
-      uDeep: { value: new Color(world.colors.deepWater) },
-      uHorizon: { value: new Color(world.colors.horizon) },
+      uWater: { value: new Color(world.lighting.water) },
+      uDeep: { value: new Color(world.lighting.deepWater) },
+      uHorizon: { value: new Color(world.lighting.horizon) },
+      uFog: { value: new Color(world.lighting.fogColor) },
+      uFogRange: { value: new Vector2(world.lighting.fogNear, world.lighting.fogFar) },
+      uSunDirection: { value: new Vector3(...world.lighting.sunPosition).normalize() },
+      uSunColor: { value: new Color(world.lighting.sunColor) },
+      uSunIntensity: { value: world.lighting.sunIntensity },
     },
   }), [detail]);
   useEffect(() => () => { geometry.dispose(); material.dispose(); }, [geometry, material]);
