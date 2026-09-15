@@ -10,12 +10,12 @@ import { world, type LandmarkConfig, type LandmarkId, type SceneRuntime } from '
 
 export const LANDMARK_HOVER_GRACE_MS = 120;
 export const LANDMARK_HIT_BOUNDS: Record<LandmarkId, { radius: number; floor: number; top: number }> = {
-  work: { radius: 5.5, floor: .8, top: 6.5 },
-  research: { radius: 3.8, floor: .8, top: 4.8 },
-  purdue: { radius: 1.8, floor: .8, top: 2.8 },
-  about: { radius: 3.5, floor: .8, top: 4.2 },
-  contact: { radius: 3.2, floor: .8, top: 4.2 },
-  building: { radius: 2.4, floor: .8, top: 7.5 },
+  work: { radius: 5.5, floor: .8, top: 9.5 },
+  research: { radius: 3.8, floor: .8, top: 7 },
+  purdue: { radius: 1.8, floor: .8, top: 4.3 },
+  about: { radius: 3.5, floor: .8, top: 5 },
+  contact: { radius: 3.2, floor: .8, top: 6.5 },
+  building: { radius: 2.4, floor: .8, top: 7.8 },
 };
 
 function intersectsSculpture(event: { intersections?: { object: Object3D }[] }) {

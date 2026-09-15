@@ -7,6 +7,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { cityBuildings, createCityTransitRoute, writeCityTransitPose, type CityBuilding, type CityTransitRoute } from './city';
 import { terrainHeight } from './terrain';
 import type { EnvironmentProps } from './Water';
+import { CityLife } from './CityLife';
 
 type Finish = 'porcelain' | 'glass' | 'aqua' | 'garden' | 'window';
 interface Part { geometry: BufferGeometry; building: string }
@@ -87,11 +88,7 @@ function makeStaticCity(route: CityTransitRoute, materials: ReturnType<typeof ma
     const tz = office ? -Math.floor((count - 1) / 3) * .12 : -.12;
     add(roundedBox(building.width * topScale + .12, .15, building.depth * .72, .35), 'porcelain', tx, height - .15, tz);
     add(roundedBox(building.width * topScale * .78, .06, building.depth * .5, .3), 'garden', tx, height, tz);
-    for (let panel = 0; panel < 3; panel++) {
-      const solar = new BoxGeometry(building.width * topScale * .21, .055, building.depth * .29);
-      solar.rotateX(-.16);
-      add(solar, 'window', tx + (panel - 1) * building.width * topScale * .25, height + .14, tz - building.depth * .08);
-    }
+
   }
   function dome(building: Readonly<CityBuilding>) {
     const rx = building.width / 2; const rz = building.depth / 2; const height = building.height - .35;
@@ -219,12 +216,13 @@ function retainCity(city: ReturnType<typeof makeCity>) {
   };
 }
 
-export function EcoCity({ runtime, paused }: EnvironmentProps) {
+export function EcoCity({ runtime, paused, quality }: EnvironmentProps) {
   const city = useMemo(() => makeCity(), []);
   useEffect(() => retainCity(city), [city]);
   useFrame(() => { if (!paused) updateCityTransit(city, runtime.current.elapsed); });
   return <group name="coastal-eco-city" dispose={null}>
     {city.meshes.map(mesh => <primitive object={mesh} key={mesh.uuid} />)}
     {city.cars.map(car => <primitive object={car} key={car.uuid} />)}
+    <CityLife runtime={runtime} paused={paused} quality={quality} route={city.route} />
   </group>;
 }

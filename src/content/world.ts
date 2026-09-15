@@ -38,12 +38,12 @@ export const world = {
   overview: { position: [33, 24, 65], target: [-3, 2, -10] } as CameraPose,
   mobileOverview: { position: [9, 30, 95], target: [-4, 1, -12] } as CameraPose,
   landmarks: [
-    { id: 'work', position: [-8, 0, 0], label: [-8, 7, 0], color: '#a7ed61' },
-    { id: 'research', position: [4, 0, -7], label: [4, 5.4, -7], color: '#65edff' },
-    { id: 'purdue', position: [26, 0, -7], label: [26, 3.3, -7], color: '#ffe196' },
-    { id: 'about', position: [-10, 0, 23], label: [-10, 4.6, 23], color: '#a6e65c' },
-    { id: 'contact', position: [12, 0, 23], label: [12, 4.6, 23], color: '#72deff' },
-    { id: 'building', position: [-35, 1.8, -23], label: [-35, 9.8, -23], color: '#bcffff' },
+    { id: 'work', position: [-8, 0, 0], label: [-8, 10, 0], color: '#a7ed61' },
+    { id: 'research', position: [4, 0, -7], label: [4, 7.7, -7], color: '#65edff' },
+    { id: 'purdue', position: [26, 0, -7], label: [26, 4.8, -7], color: '#ffe196' },
+    { id: 'about', position: [-10, 0, 23], label: [-10, 5.6, 23], color: '#a6e65c' },
+    { id: 'contact', position: [12, 0, 23], label: [12, 7, 23], color: '#72deff' },
+    { id: 'building', position: [-76, 1.8, -36], label: [-76, 9.8, -36], color: '#bcffff' },
   ] as LandmarkConfig[],
   quality: {
     high: { dpr: 1.75, grass: 18000, clouds: 24, bubbles: 5, particles: 80, segments: 48, shadows: true, waterDetail: 1 },

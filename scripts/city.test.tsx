@@ -75,7 +75,7 @@ test('the monorail has a closed smooth route with continuous spacing and finite 
   const route = createCityTransitRoute();
   const position = new Vector3(); const tangent = new Vector3();
   const before = new Vector3(); const after = new Vector3(); const previous = new Vector3(); const rear = new Vector3();
-  const period = route.length / route.speed;
+  const period = route.duration;
   route.curve.getPointAt(0, before); route.curve.getPointAt(1, after);
   assert.ok(before.distanceTo(after) < 1e-10);
   writeCityTransitPose(route, period - .001, 0, before, tangent);
@@ -90,7 +90,7 @@ test('the monorail has a closed smooth route with continuous spacing and finite 
     assert.ok([...position.toArray(), ...tangent.toArray()].every(Number.isFinite));
     assert.ok(Math.abs(tangent.length() - 1) < 1e-6);
     assert.ok(position.distanceTo(rear) > 1.45 && position.distanceTo(rear) < 1.9, 'Carriages maintain usable separation around every bend.');
-    if (step) assert.ok(position.distanceTo(previous) < route.length / 800 * 1.05);
+    if (step) assert.ok(position.distanceTo(previous) < route.speed * period / 800 * 1.05);
     previous.copy(position);
   }
   writeCityTransitPose(route, Number.NaN, 0, position, tangent);

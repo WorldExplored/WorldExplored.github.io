@@ -15,6 +15,9 @@ import { LandmarkModel } from './LandmarkModels';
 import { AmbientSystem } from './AmbientSystem';
 import { EcoCity } from './EcoCity';
 import { CoastalLife } from './CoastalLife';
+import { Flora } from './Flora';
+import { Wildlife } from './Wildlife';
+import { ShoreImpacts } from './ShoreImpacts';
 import { Water } from './Water';
 import { QualityController } from './QualityController';
 import { ReflectiveObject } from './ReflectiveObject';
@@ -109,6 +112,9 @@ export function AeroWorld(props: WorldProps & { runtime: MutableRefObject<SceneR
 
     <EcoCity runtime={runtime} paused={stopped} quality={tier} />
     <CoastalLife runtime={runtime} paused={stopped} quality={tier} />
+    <Flora runtime={runtime} paused={stopped} quality={tier} />
+    <Wildlife runtime={runtime} paused={stopped} quality={tier} />
+    <ShoreImpacts runtime={runtime} paused={stopped} quality={tier} />
     <Water runtime={runtime} paused={stopped} quality={tier} />
     <AmbientSystem runtime={runtime} paused={stopped} quality={tier} />
     {world.landmarks.map(config => <Landmark key={config.id} config={config} runtime={runtime} paused={stopped} onNavigate={onNavigate}><LandmarkModel id={config.id} active={destination === config.id} runtime={runtime} paused={stopped} quality={tier} /></Landmark>)}

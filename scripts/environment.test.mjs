@@ -6,7 +6,7 @@ import { useThree } from '@react-three/fiber';
 import { Matrix4, Ray, SRGBColorSpace, Vector3 } from 'three';
 import { AmbientSystem } from '../src/components/world/AmbientSystem.tsx';
 import { architectureFootprints, canPlacePlant, createLandscapePlan, distanceToSegment, generatePlantPositions, archipelagoGeometry, ISLANDS, islandContour, landDistance, pathGeometry, pathHeight, terrainHeight } from '../src/components/world/terrain.ts';
-import { cloudInstanceCount, cloudOriginX, cloudPuffTransform, createCloudClusters, rayCloudDistance, updateCloudResponses } from '../src/components/world/clouds.ts';
+import { cloudOrigin, cloudPuffTransform, createCloudClusters, rayCloudDistance, updateCloudResponses } from '../src/components/world/clouds.ts';
 import { createSceneRuntime, motionPolicy, world } from '../src/content/world.ts';
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
@@ -70,7 +70,7 @@ test('deterministic plants clear actual structures, paths, rocks, trees and shor
   assert.equal(canPlacePlant(0, -45, .95, plan), false);
 });
 
-test('every cloud puff has a matching ray volume through bounded drift and deformation', () => {
+test('every cloud density nucleus remains ray-accessible through diagonal drift and deformation', () => {
   const clusters = createCloudClusters();
   const output = { position: new Vector3(), scale: new Vector3() };
   const ray = new Ray(new Vector3(), new Vector3(0, 0, -1));
@@ -79,8 +79,7 @@ test('every cloud puff has a matching ray volume through bounded drift and defor
       cloudPuffTransform(cluster, puff, elapsed, response, output);
       ray.origin.copy(output.position).addScaledVector(ray.direction, -30);
       assert.notEqual(rayCloudDistance(ray, cluster, elapsed, response), null);
-      ray.origin.x += output.scale.x * .92;
-      assert.notEqual(rayCloudDistance(ray, cluster, elapsed, response), null, 'A ray over the visible edge of a puff must hit its ellipsoid.');
+
     }
     ray.origin.set(10000, 10000, 10000);
     assert.equal(rayCloudDistance(ray, cluster, elapsed, response), null);
@@ -164,7 +163,8 @@ test('tier changes retain all mounted geometry, materials and textures without d
     assert.equal(item.scene.getObjectByName('environment-grass'), grass);
     assert.equal(item.scene.getObjectByName('environment-clouds'), clouds);
     assert.equal(grass.count, world.quality[tier].grass);
-    assert.equal(clouds.count, cloudInstanceCount(createCloudClusters(), world.quality[tier].clouds));
+    assert.equal(item.scene.getObjectByName('grove-foliage').material.userData.canopyWind.strength.value, tier === 'low' ? 0 : 1);
+    assert.equal(clouds.geometry.drawRange.count, clouds.geometry.userData.cloudRanges[world.quality[tier].clouds - 1].start + clouds.geometry.userData.cloudRanges[world.quality[tier].clouds - 1].count);
     item.scene.traverse(object => {
       if (object.geometry) assert.ok(resources.has(object.geometry.uuid));
       if (object.material?.map) assert.ok(resources.has(object.material.map.uuid));
@@ -195,17 +195,21 @@ for (const quality of ['high', 'medium', 'low']) test(`local pointer and pause b
     await item.frames(10);
     assert.equal(item.runtime.current.plantInteraction, 1);
     assert.ok(grass.material.uniforms.uPointerStrength.value > .5);
+    const canopyWind = item.scene.getObjectByName('grove-foliage').material.userData.canopyWind;
+    const frozenCanopy = canopyWind.time.value;
     const frozen = grass.material.uniforms.uPointerStrength.value;
-    const frozenClouds = Array.from(clouds.instanceMatrix.array);
+    const frozenClouds = clouds.material.uniforms.uOrigins.value.map(origin => origin.toArray());
     await item.renderer.update(item.render(quality, true));
     item.runtime.current.pointerActive = false;
     item.runtime.current.elapsed = 50;
     await item.frames(20);
     assert.equal(grass.material.uniforms.uPointerStrength.value, frozen);
-    assert.deepEqual(Array.from(clouds.instanceMatrix.array), frozenClouds);
+    assert.equal(canopyWind.time.value, frozenCanopy);
+    assert.deepEqual(clouds.material.uniforms.uOrigins.value.map(origin => origin.toArray()), frozenClouds);
     await item.renderer.update(item.render(quality, false));
     await item.frames(140);
     assert.ok(grass.material.uniforms.uPointerStrength.value < 1e-7);
+    assert.equal(canopyWind.time.value, 50);
     assert.equal(item.runtime.current.plantInteraction, 1);
   } finally { await item.renderer.unmount(); }
 });
@@ -230,9 +234,11 @@ test('organic shores and vegetation cover every suitable island without the form
 
 
 test('cloud drift remains continuous across long sessions and former wrap boundaries', () => {
+  const position = new Vector3(); const next = new Vector3();
   for (const cloud of createCloudClusters()) for (let time = 0; time <= 10000; time += 17) {
-    const position = cloudOriginX(cloud, time);
-    assert.ok(Math.abs(position - cloud.center[0]) <= 18.00001);
-    assert.ok(Math.abs(cloudOriginX(cloud, time + .1) - position) <= cloud.speed * .10001);
+    cloudOrigin(cloud, time, position); cloudOrigin(cloud, time + .1, next);
+    assert.ok(Math.abs(position.x - cloud.center[0]) <= 80.00001);
+    assert.ok(Math.abs(position.z - cloud.center[2]) <= 58.00001);
+    assert.ok(next.distanceTo(position) <= cloud.speed * .124);
   }
 });

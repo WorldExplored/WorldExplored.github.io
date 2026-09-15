@@ -5,19 +5,29 @@
 
 import { useEffect, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { BufferGeometry, CatmullRomCurve3, Color, Float32BufferAttribute, InstancedMesh, Mesh, MeshPhysicalMaterial, Object3D, SphereGeometry, TubeGeometry, Vector3 } from 'three';
+import { BufferGeometry, CatmullRomCurve3, Color, Float32BufferAttribute, DoubleSide, InstancedMesh, Mesh, MeshPhysicalMaterial, Object3D, SphereGeometry, TubeGeometry, Vector3 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { createLandscapePlan, ISLANDS, islandContour, landDistance, pathHeight, seededRandom, terrainHeight } from './terrain';
+import { createLandscapePlan, pathHeight } from './terrain';
 import type { EnvironmentProps } from './Water';
+import { createSchoolFish, FISH_PER_SCHOOL, SCHOOL_COUNT, stepSchoolFish } from './fishSchools';
 
-export function createFishHomes() {
-  const random = seededRandom(815); const homes: [number, number][] = [];
-  for (let index = 0; index < 36; index++) {
-    const island = ISLANDS[index % 3]; const angle = random() * Math.PI * 2; const contour = islandContour(island, angle);
-    const x = island.x + Math.cos(angle) * (island.rx * contour + 3.2); const z = island.z + Math.sin(angle) * (island.rz * contour + 3.2);
-    if (landDistance(x, z) < -.8) homes.push([x, z]);
+export function createFishHomes(): [number, number][] { return createSchoolFish().map(fish => [fish.position.x, fish.position.z]); }
+
+function finGeometry(vertices: number[]) {
+  const geometry = new BufferGeometry(); geometry.setAttribute('position', new Float32BufferAttribute(vertices, 3));
+  geometry.setAttribute('uv', new Float32BufferAttribute(new Float32Array(vertices.length / 3 * 2), 2));
+  geometry.setIndex(Array.from({ length: vertices.length / 3 }, (_, index) => index)); geometry.computeVertexNormals(); return geometry;
+}
+function fishBody(variant: number) {
+  const lengths = [.29, .26, .35]; const heights = [.063, .105, .07]; const widths = [.075, .085, .065];
+  const body = new SphereGeometry(1, 16, 10); const position = body.attributes.position;
+  for (let index = 0; index < position.count; index++) {
+    const x = position.getX(index); const taper = .78 + .22 * (x + 1) / 2;
+    position.setXYZ(index, x * lengths[variant], position.getY(index) * heights[variant] * taper, position.getZ(index) * widths[variant] * taper);
   }
-  return homes;
+  body.computeVertexNormals();
+  const fins = finGeometry([-.15,.035,0, -.08,heights[variant]+.07,0, .10,.04,0, .015,-.015,.04, -.10,-.025,.16, -.13,-.015,.035, .015,-.015,-.04, -.13,-.015,-.035, -.10,-.025,-.16]);
+  const geometry = mergeGeometries([body, fins])!; body.dispose(); fins.dispose(); return geometry;
 }
 
 function createCoastalLife() {
@@ -46,43 +56,46 @@ function createCoastalLife() {
   const railGeometry = mergeGeometries(rails)!; rails.forEach(geometry => geometry.dispose());
   const railMaterial = new MeshPhysicalMaterial({ color: '#f1fff3', metalness: .08, roughness: .22, clearcoat: 1 });
   const bridges = new Mesh(railGeometry, railMaterial); bridges.name = 'coastal-bridge-rails'; bridges.castShadow = true;
-  const body = new SphereGeometry(1, 12, 8).scale(.25, .07, .075);
-  const tail = new BufferGeometry(); tail.setAttribute('position', new Float32BufferAttribute([-.18,0,0,-.35,0,-.1,-.35,0,.1,-.18,0,0,-.35,.03,.1,-.35,.03,-.1],3)); tail.computeVertexNormals();
-  // Match the sphere's vertex attributes before merging the small tapered tail.
-  tail.setAttribute('uv',new Float32BufferAttribute(new Float32Array(12),2)); tail.setIndex([0,1,2,3,4,5]);
-  const fishGeometry = mergeGeometries([body,tail])!; body.dispose(); tail.dispose();
-  const fishMaterial = new MeshPhysicalMaterial({ color:'#ffffff',roughness:.28,clearcoat:1,metalness:.04 });
-  const homes = createFishHomes(); const fish = new InstancedMesh(fishGeometry,fishMaterial,homes.length); fish.name='shallow-water-fish'; fish.frustumCulled=false;
-  const color=new Color(); homes.forEach((_,index)=>{color.set(index%3?'#14a9b1':'#ffc151');fish.setColorAt(index,color);});
-  return { bridges,fish,homes,scatter:homes.map(()=>new Vector3()),transform:new Object3D(), timer:undefined as ReturnType<typeof setTimeout>|undefined,dispose(){railGeometry.dispose();railMaterial.dispose();fishGeometry.dispose();fishMaterial.dispose();fish.dispose();} };
+  const fishMaterial = new MeshPhysicalMaterial({ color: '#ffffff', roughness: .3, clearcoat: 1, clearcoatRoughness: .22, metalness: .10, side: DoubleSide });
+  const states = createSchoolFish();
+  const bodies = [0, 1, 2].map(variant => {
+    const mesh = new InstancedMesh(fishBody(variant), fishMaterial, states.length / 3); mesh.name = variant === 0 ? 'shallow-water-fish' : `shallow-water-fish-${variant}`; mesh.frustumCulled = false; mesh.raycast = () => {}; return mesh;
+  });
+  const tailGeometry = finGeometry([0,0,0, -.16,0,-.10, -.105,0,0, 0,0,0, -.105,0,0, -.16,0,.10]);
+  const tails = new InstancedMesh(tailGeometry, fishMaterial, states.length); tails.name = 'school-fish-tails'; tails.frustumCulled = false; tails.raycast = () => {};
+  const eyeParts = [-1,1].map(side => new SphereGeometry(.013, 8, 6).translate(.20, .018, side * .055));
+  const eyeGeometry = mergeGeometries(eyeParts)!; eyeParts.forEach(part => part.dispose());
+  const eyeMaterial = new MeshPhysicalMaterial({ color: '#183d43', roughness: .7 });
+  const eyes = new InstancedMesh(eyeGeometry, eyeMaterial, states.length); eyes.name = 'school-fish-eyes'; eyes.frustumCulled = false; eyes.raycast = () => {};
+  const glintGeometry = new SphereGeometry(1, 10, 6).scale(.12, .012, .017);
+  const glintMaterial = new MeshPhysicalMaterial({ color: '#d9ffff', emissive: '#81c9d4', emissiveIntensity: .16, transparent: true, opacity: .45, depthWrite: false });
+  const glints = new InstancedMesh(glintGeometry, glintMaterial, states.length); glints.name = 'school-fish-glints'; glints.frustumCulled = false; glints.raycast = () => {};
+  const color = new Color();
+  states.forEach((fish, index) => {
+    color.set(['#70b6b0', '#b8d8d7', '#bba460'][fish.variant]); color.multiplyScalar(.87 + fish.member % 3 * .065);
+    bodies[fish.variant].setColorAt(fish.member * 3 + Math.floor(fish.schoolIndex / 3), color); tails.setColorAt(index, color);
+  });
+  const meshes = [...bodies, tails, eyes, glints];
+  return { bridges, bodies, tails, eyes, glints, meshes, states, transform: new Object3D(), detail: new Object3D(), disturbance: { camera: new Vector3(), pointer: null as readonly number[] | null, ripple: { x: 0, z: 0, serial: 0 } }, timer: undefined as ReturnType<typeof setTimeout> | undefined,
+    dispose() { railGeometry.dispose(); railMaterial.dispose(); meshes.forEach(mesh => { mesh.geometry.dispose(); mesh.dispose(); }); fishMaterial.dispose(); eyeMaterial.dispose(); glintMaterial.dispose(); } };
 }
 
-export function CoastalLife({runtime,paused,quality}:EnvironmentProps) {
-  const life=useMemo(() => createCoastalLife(), []);
-  useEffect(()=>{clearTimeout(life.timer);return()=>{life.timer=setTimeout(()=>life.dispose(),0);};},[life]);
-  useFrame((_,delta)=>{
-    const state=runtime.current;
-    life.fish.count=quality==='low'?Math.ceil(life.homes.length*.5):life.homes.length;
-    life.homes.forEach(([homeX,homeZ],index)=>{
-      const phase=index*2.399; const time=state.elapsed*.28+phase; const offset=life.scatter[index];
-      const px=state.pointerWorld[0]; const pz=state.pointerWorld[2]; const distance=Math.hypot(homeX-px,homeZ-pz);
-      if(!paused){
-        const response=state.pointerActive?1-Math.min(1,distance/3):0;
-        const blend=1-Math.exp(-3*Math.min(.05,delta));
-        offset.x+=((homeX-px)/Math.max(distance,.3)*response*1.8-offset.x)*blend;
-        offset.z+=((homeZ-pz)/Math.max(distance,.3)*response*1.8-offset.z)*blend;
-      }
-      let x=homeX+Math.cos(time)*.6+offset.x; let z=homeZ+Math.sin(time)*.4+offset.z;
-      if(landDistance(x,z)>-.65){
-        let safe=0;let outside=1;
-        for(let step=0;step<10;step++){const fraction=(safe+outside)/2;if(landDistance(homeX+(x-homeX)*fraction,homeZ+(z-homeZ)*fraction)<-.65)safe=fraction;else outside=fraction;}
-        x=homeX+(x-homeX)*safe;z=homeZ+(z-homeZ)*safe;
-      }
-      life.transform.position.set(x,Math.max(-.28,terrainHeight(x,z)+.15),z);
-      life.transform.rotation.set(0,Math.atan2(-Math.cos(time)*.4,-Math.sin(time)*.6),Math.sin(time*2)*.04);
-      life.transform.scale.setScalar(.8+(index%4)*.15);life.transform.updateMatrix();life.fish.setMatrixAt(index,life.transform.matrix);
+export function CoastalLife({ runtime, paused, quality }: EnvironmentProps) {
+  const life = useMemo(() => createCoastalLife(), []);
+  useEffect(() => { clearTimeout(life.timer); return () => { life.timer = setTimeout(() => life.dispose(), 0); }; }, [life]);
+  useFrame(({ camera }, delta) => {
+    const state = runtime.current; const count = FISH_PER_SCHOOL[quality] * SCHOOL_COUNT;
+    life.bodies.forEach(mesh => { mesh.count = count / 3; }); life.tails.count = life.eyes.count = life.glints.count = count;
+    life.disturbance.camera.copy(camera.position); life.disturbance.pointer = state.pointerActive ? state.pointerWorld : null; life.disturbance.ripple = state.ripple;
+    life.states.forEach((fish, index) => {
+      stepSchoolFish(fish, delta, life.disturbance, quality, paused);
+      const scale = .82 + fish.member % 4 * .11; const tailBeat = Math.sin(fish.time * (7 + fish.variant) + fish.member * 2.39) * (.11 + fish.scatterOut * .12);
+      life.transform.position.copy(fish.position); life.transform.rotation.set(0, fish.heading, fish.jumpPitch + Math.sin(fish.time * .8 + fish.member) * .025); life.transform.scale.setScalar(scale); life.transform.updateMatrix();
+      life.bodies[fish.variant].setMatrixAt(fish.member * 3 + Math.floor(fish.schoolIndex / 3), life.transform.matrix); life.eyes.setMatrixAt(index, life.transform.matrix);
+      life.detail.position.set(-[.24, .22, .30][fish.variant], 0, 0); life.detail.rotation.set(0, tailBeat, 0); life.detail.scale.set(1, 1, 1); life.detail.updateMatrix(); life.detail.matrix.premultiply(life.transform.matrix); life.tails.setMatrixAt(index, life.detail.matrix);
+      life.detail.position.set(0, [.065, .103, .07][fish.variant], 0); life.detail.rotation.set(0, 0, 0); life.detail.scale.setScalar(.02 + fish.glint * .70); life.detail.updateMatrix(); life.detail.matrix.premultiply(life.transform.matrix); life.glints.setMatrixAt(index, life.detail.matrix);
     });
-    life.fish.instanceMatrix.needsUpdate=true;
+    life.meshes.forEach(mesh => { mesh.instanceMatrix.needsUpdate = true; });
   });
-  return <group dispose={null} name="coastal-life"><primitive object={life.bridges}/><primitive object={life.fish}/></group>;
+  return <group dispose={null} name="coastal-life"><primitive object={life.bridges}/>{life.meshes.map(mesh => <primitive key={mesh.name} object={mesh}/>)}</group>;
 }

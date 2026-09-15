@@ -101,15 +101,6 @@ h1 { font-weight: 470; font-size: clamp(54px,5.8vw,88px); letter-spacing: -.035e
 .about-copy .primary-link { margin-top: 27px; }
 .availability { margin-top: 26px; color: #31586a; font-size: 16px; }
 .status-light { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #5d961d; box-shadow: inset 0 1px 2px #f2ffc5,0 0 0 3px #b9e48b4d; margin-right: 9px; }
-.dock { position: fixed; bottom: max(20px,env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); z-index: 30; display: flex; align-items: stretch; gap: 8px; padding: 9px 12px; border: 1px solid white; border-radius: 23px; background: linear-gradient(160deg,#eefcffeb 0,#acddecda 45%,#67b5d0d9 48%,#c5edf4e8 100%); box-shadow: inset 0 0 0 1px #3a8aac70,inset 0 2px 1px #fff,0 5px 13px #06577940; }
-.dock a { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-width: 76px; min-height: 66px; padding: 1px 8px 4px; border-radius: 13px; border: 1px solid transparent; color: #123f57; font-size: 13px; font-weight: 600; }
-.dock a:hover,.dock a[aria-current] { border-color: #4b9aba; background: linear-gradient(#ffffffe6,#d7f7f777); box-shadow: inset 0 1px white,0 2px 5px #22698122; }
-.habitat-icon { display: grid; place-items: center; position: relative; width: 37px; height: 37px; border-radius: 10px; border: 1px solid #ffffffed; background: linear-gradient(155deg,#fff 0,#e9fbff 45%,#a8d6e4 49%,#e6f9ff 100%); box-shadow: inset 0 0 0 1px #3c97b54d,0 2px 3px #0b5a8428; color: #1c7c9e; }
-.habitat-icon svg { width: 31px; height: 31px; }
-.icon-work { color: #467a20; background: linear-gradient(#ffffed,#d4edb4 47%,#a6c976 49%,#f0f8d9); }
-.icon-purdue { color: #886722; background: linear-gradient(#fffdf2,#f5e5b1 47%,#dbc178 49%,#fff8dc); }
-.icon-about { color: #3684a8; }
-.icon-contact { color: #36834c; }
 .skip-link { position: fixed; z-index: 80; left: 20px; top: -90px; padding: 12px 18px; border-radius: 10px; background: white; color: #124e73; }
 .skip-link:focus { top: 16px; }
 .travel-status { position: fixed; bottom: 125px; left: 50%; transform: translateX(-50%); z-index: 30; font-size: 14px; color: #17425a; background: #effbffe8; border-radius: 10px; padding: 7px 14px; }
@@ -199,10 +190,6 @@ html.world-active,html.world-active body { height: 100%; overflow: hidden; overs
 .surface-close { padding: 0; width: 44px; height: 44px; border-radius: 50%; }
 .surface-close svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; }
 .surface-foot { flex: 0 0 6px; }
-.dock { width: 510px; max-width: calc(100vw - 24px); display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); padding: 8px; gap: 6px; }
-.dock a { min-width: 0; min-height: 67px; padding: 3px; font-size: 13px; text-align: center; border: 1px solid #4792b44d; background: linear-gradient(180deg,#f6feff90,#bbe9fa66 47%,#7cc8e370 50%,#d2effb88); box-shadow: inset 0 1px 0 white,0 2px 3px #12518825; }
-.dock a:hover,.dock a[aria-current] { background: radial-gradient(circle 56px at var(--light-x,50%) var(--light-y,20%),#ffffffee,#e9fcff44),linear-gradient(#e4f9ff,#84ceea); }
-.dock a:active { transform: translateY(2px); box-shadow: inset 0 2px 4px #17558250; }
 .scene-fallback .identity { position: relative; top: auto; left: auto; margin: 4vh 5vw 20px; }
 .scene-fallback.has-destination .identity { display: none; }
 .scene-fallback main { padding-top: 1px; }
@@ -231,3 +218,42 @@ html.world-active,html.world-active body { height: 100%; overflow: hidden; overs
   .scene-ready .content-stage { top: 12px; bottom: 95px; }
   .dock { bottom: max(8px,env(safe-area-inset-bottom)); }
 }
+
+/* Molded aqua navigation instrument: a continuous shell with independent jewel controls. */
+.dock { position: fixed; z-index: 30; bottom: max(18px,env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); width: 530px; max-width: calc(100vw - 20px); display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 8px; padding: 15px 22px 12px; border: 0; background: none; isolation: isolate; }
+.dock-shell { position: absolute; inset: 0; z-index: -1; width: 100%; height: 100%; filter: drop-shadow(0 5px 4px #0741664d); pointer-events: none; }
+.dock a { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; min-width: 0; min-height: 75px; padding: 0 2px; border: 0; border-radius: 25px 25px 16px 16px; background: transparent; color: #073954; font-size: 13px; font-weight: 650; line-height: 1.15; text-align: center; text-shadow: 0 1px #d5fbff; box-shadow: none; }
+.habitat-icon { position: relative; display: grid; place-items: center; width: 50px; height: 50px; border: 1px solid #edfefe; border-radius: 50%; color: #146c8e; background: radial-gradient(ellipse at 33% 13%,#ffffff 0,#f6ffffcf 18%,#6ed8e8b3 46%,#187daabd 72%,#b4eff4 100%); box-shadow: inset 0 0 0 2px #17578159,inset 0 3px 2px #ffffffc9,inset 0 -3px 3px #18476973,0 2px 1px #e1fbff,0 3px 4px #103f6c5c; transition: box-shadow 180ms,transform 180ms,background 180ms; }
+.habitat-icon::before { content: ''; position: absolute; inset: 3px 8px auto; height: 13px; border-radius: 50%; background: linear-gradient(#fff9,#fff0); pointer-events: none; z-index: 1; }
+.habitat-icon svg { width: 46px; height: 46px; overflow: visible; }
+.icon-work { background-color: #a2d350; }
+.icon-purdue { background-color: #e2bd5e; }
+.icon-about { background-color: #5bcaa8; }
+.dock a:hover .habitat-icon { background: radial-gradient(circle at var(--light-x,35%) var(--light-y,15%),#fff,#b2f6ff 33%,#35accc 70%,#dbffff); box-shadow: inset 0 0 0 2px #28759766,inset 0 2px 2px white,0 2px 0 #f5ffff,0 0 8px #c9ffff; }
+.dock a[aria-current] .habitat-icon { background: radial-gradient(ellipse at 30% 12%,#fff,#b8fff2 20%,#45d3be 48%,#147f97 80%); box-shadow: inset 0 0 0 2px #0f6287,inset 0 3px 3px #f4ffff,inset 0 -2px 4px #075477,0 0 0 2px #e1ffff,0 0 12px #82fcff; }
+.dock a[aria-current]::after { content: ''; position: absolute; bottom: -7px; width: 22px; height: 3px; background: #c8ffed; border-radius: 4px; box-shadow: 0 0 4px #eaffff; }
+.dock a:active { transform: none; }
+.dock a:active .habitat-icon { transform: translateY(2px); box-shadow: inset 0 3px 5px #10517188,0 1px 0 #e1fbff; }
+.dock a:focus-visible { outline-offset: 5px; }
+.surface { border-radius: 31px 39px 24px 24px; padding: 8px; background: linear-gradient(115deg,#eaffffe8,#89dfefbf 34%,#d8faffdb 65%,#278eb9eb); box-shadow: inset 0 0 0 1px #207598,inset 0 3px 1px #fff,0 5px 0 #13658966,0 10px 22px #034a6633; }
+.surface-rim { background: transparent; padding: 2px 7px 8px 9px; min-height: 55px; }
+.surface-rim .habitat-icon { width: 38px; height: 38px; }
+.surface-rim .habitat-icon svg { width: 36px; height: 36px; }
+.surface-close { border: 1px solid #eaffff; background: radial-gradient(ellipse at 35% 18%,#fff,#c8f4fb 38%,#409abb 82%,#bdeef8); box-shadow: inset 0 0 0 1px #246d925e,inset 0 2px white,0 2px 2px #145b7650; }
+.surface-close:hover { background: radial-gradient(ellipse at 35% 18%,#fff,#dffbff 38%,#65c3d8 82%); }
+.surface-paper { border-radius: 18px 18px 15px 15px; background: linear-gradient(125deg,#faffff,#f1fbfd); border-color: #73b5c7; }
+.contribution-card { border-radius: 17px; border-color: #a1cbd5; border-left: 4px solid #66b9c8; box-shadow: inset 0 1px 0 white,0 3px 0 #c6e3e94a; }
+.contribution-card:hover { border-left-color: #1686a5; box-shadow: inset 0 1px white,0 3px 7px #27708726; }
+.contact-link { border-radius: 24px 15px 15px 24px; background: linear-gradient(135deg,#fff,#d9f6fc); }
+.contact-icon { width: 39px; height: 39px; border-radius: 50%; border: 1px solid #c2edf1; background: radial-gradient(ellipse at 30% 15%,#fff,#c1eef5 55%,#66b2c6); box-shadow: inset 0 1px white,0 2px 2px #145b7633; }
+.primary-link { border-radius: 22px; }
+@keyframes surface-arrive { from { opacity: 0; transform: perspective(1100px) rotateY(-8deg) translateX(-12px); transform-origin: left center; } to { opacity: 1; transform: none; transform-origin: left center; } }
+@media (max-width: 767px) {
+  .dock { gap: 5px; padding: 13px 12px 11px; bottom: max(10px,env(safe-area-inset-bottom)); width: calc(100% - 18px); }
+  .dock a,.dock a:first-child { min-height: 66px; font-size: 11px; gap: 5px; padding: 0; }
+  .dock .habitat-icon { width: 43px; height: 43px; border-radius: 50%; }
+  .dock .habitat-icon svg { width: 41px; height: 41px; }
+  .audio-control { bottom: 112px; }
+  .surface { border-radius: 25px 32px 20px 20px; }
+}
+@media (forced-colors: active) { .dock-shell { display: none; } .dock,.dock a,.habitat-icon,.surface,.surface-paper,.surface-close { background: Canvas; color: CanvasText; border: 1px solid CanvasText; box-shadow: none; } .habitat-icon::before { display: none; } }

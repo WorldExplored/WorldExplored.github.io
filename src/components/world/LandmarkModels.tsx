@@ -5,6 +5,7 @@ import { useFrame } from '@react-three/fiber';
 import { BoxGeometry, BufferGeometry, CatmullRomCurve3, CylinderGeometry, DoubleSide, ExtrudeGeometry, Float32BufferAttribute, LatheGeometry, MathUtils, Mesh, MeshPhysicalMaterial, Quaternion, Shape, SphereGeometry, TubeGeometry, Vector2, Vector3 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { world, type LandmarkId, type QualityTier, type SceneRuntime } from '@/content/world';
+import { LandmarkMechanisms } from './LandmarkMechanisms';
 
 type ModelProps = { active: boolean; runtime: MutableRefObject<SceneRuntime>; paused: boolean; quality: QualityTier };
 type Surface = (u: number, v: number) => Vector3;
@@ -418,7 +419,6 @@ function CoastalLighthouse(props: ModelProps) {
       })]),
       cap,
       finial: new SphereGeometry(0.07, 24, 16).translate(0, 7.07, 0),
-      lens: new SphereGeometry(0.25, 32, 20).translate(0, 6, 0),
       door: roundedBox(0.42, 0.83, 0.05, 0.13).translate(0, 1.48, 0.858),
       windows: combine([roundedBox(0.19, 0.37, 0.035, 0.08).translate(0, 3.12, 0.7), roundedBox(0.17, 0.32, 0.035, 0.075).translate(0, 4.36, 0.565)]),
       threshold: roundedBox(0.73, 0.1, 0.42, 0.04).translate(0, 1.06, 1.03),
@@ -429,7 +429,7 @@ function CoastalLighthouse(props: ModelProps) {
     if (props.paused || !beam.current) return;
     const enabled = world.lighting.lampEnabled && (props.active || props.runtime.current.hovered === 'building');
     beam.current.rotation.y = Math.sin(props.runtime.current.elapsed * 0.12) * Math.PI * 35 / 180;
-    beam.current.material.opacity = world.lighting.lampEnabled ? MathUtils.damp(beam.current.material.opacity, enabled ? 0.035 : 0, 10, delta) : 0;
+    beam.current.material.opacity = world.lighting.lampEnabled ? MathUtils.damp(beam.current.material.opacity, enabled ? (props.active ? 0.045 : 0.035) : 0.008, 10, delta) : 0;
     beam.current.material.emissiveIntensity = world.lighting.lampEnabled ? world.lighting.lampIntensity : 0;
   });
   return <group dispose={null}>
@@ -441,7 +441,6 @@ function CoastalLighthouse(props: ModelProps) {
     <mesh geometry={geometry.frames} material={material.edge} />
     <mesh geometry={geometry.cap} material={material.porcelain} castShadow />
     <mesh geometry={geometry.finial} material={material.edge} />
-    <mesh geometry={geometry.lens} material={material.cyan} />
     <mesh geometry={geometry.door} material={material.navy} />
     <mesh geometry={geometry.windows} material={material.glass} />
     <mesh geometry={geometry.threshold} material={material.porcelain} />
@@ -450,10 +449,6 @@ function CoastalLighthouse(props: ModelProps) {
 }
 
 export function LandmarkModel({ id, ...props }: ModelProps & { id: LandmarkId }) {
-  if (id === 'work') return <CivicPavilion {...props} />;
-  if (id === 'research') return <ReadingConservatory {...props} />;
-  if (id === 'purdue') return <CampusGate {...props} />;
-  if (id === 'about') return <SculptureGarden {...props} />;
-  if (id === 'contact') return <ReceptionPavilion {...props} />;
-  return <CoastalLighthouse {...props} />;
+  const Architecture = id === 'work' ? CivicPavilion : id === 'research' ? ReadingConservatory : id === 'purdue' ? CampusGate : id === 'about' ? SculptureGarden : id === 'contact' ? ReceptionPavilion : CoastalLighthouse;
+  return <group dispose={null}><Architecture {...props} /><LandmarkMechanisms id={id} {...props} /></group>;
 }

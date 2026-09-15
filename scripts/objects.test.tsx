@@ -189,7 +189,7 @@ test('disabled lamp illumination stays off during selection', async () => {
 test('landmarks fit their planting footprints and preserve the intended hierarchy', async () => {
   const runtime = { current: createSceneRuntime() };
   const limits: Record<LandmarkId, number> = { work: 5.5, research: 3.8, purdue: 1.8, about: 3.5, contact: 3.2, building: 2.4 };
-  const heightLimits: Record<LandmarkId, number> = { work: 6.5, research: 4.8, purdue: 2.8, about: 4.2, contact: 4.2, building: 7.5 };
+  const heightLimits: Record<LandmarkId, number> = { work: 9.5, research: 7, purdue: 4.3, about: 5, contact: 6.5, building: 7.8 };
   const bounds: Record<string, { radius: number; width: number; depth: number; top: number; bottom: number; triangles: number }> = {};
   for (const landmark of world.landmarks) {
     const renderer = await create(<LandmarkModel id={landmark.id} runtime={runtime} active={false} paused={false} quality="high" />);
@@ -219,7 +219,7 @@ test('landmarks fit their planting footprints and preserve the intended hierarch
       bounds[landmark.id] = { radius, width: max.x - min.x, depth: max.z - min.z, top: max.y, bottom: min.y, triangles };
     } finally { await renderer.unmount(); }
   }
-  assert.ok(bounds.purdue.top <= 2.8);
+  assert.ok(bounds.purdue.top <= 4.3);
   assert.ok(bounds.work.radius > bounds.research.radius && bounds.research.radius > bounds.purdue.radius);
   assert.ok(bounds.work.top > bounds.research.top && bounds.research.top > bounds.purdue.top);
   assert.ok(bounds.work.triangles > bounds.research.triangles && bounds.research.triangles > bounds.purdue.triangles);

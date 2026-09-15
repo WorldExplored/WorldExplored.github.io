@@ -1,3 +1,4 @@
+import { createCityInfrastructureObstacles } from './cityInfrastructure';
 import { MathUtils, Ray, Vector3 } from 'three';
 import { landmarkFor, world, type CameraPose, type LandmarkId } from '../../content/world';
 import { cityBuildings, createCityTransitRoute } from './city';
@@ -5,11 +6,12 @@ import { architectureFootprints, createLandscapePlan, terrainHeight } from './te
 
 export const CAMERA_LIMITS = { minDistance: 8, maxDistance: 220, minPolarAngle: .28, maxPolarAngle: 1.43, minY: 3.5 };
 export interface CameraObstacle { x: number; z: number; radius: number; top: number }
-const HEIGHTS: Record<LandmarkId, number> = { work: 6.5, research: 4.8, purdue: 3, about: 4.2, contact: 4.2, building: 7.5 };
+const HEIGHTS: Record<LandmarkId, number> = { work: 9.5, research: 7, purdue: 4.3, about: 5, contact: 6.5, building: 7.8 };
 const CLEARANCE = 1.15;
 
 export function cameraObstacles(): CameraObstacle[] {
   return [
+    ...createCityInfrastructureObstacles().map(item => ({ x: item.x, z: item.z, radius: item.radius + CLEARANCE, top: item.base + item.height + CLEARANCE })),
     ...architectureFootprints().map(item => ({ x: item.x, z: item.z, radius: item.radius + CLEARANCE, top: terrainHeight(item.x, item.z) + HEIGHTS[item.id as LandmarkId] + CLEARANCE })),
     ...cityBuildings.map(item => ({ x: item.x, z: item.z, radius: item.radius + CLEARANCE, top: terrainHeight(item.x, item.z) + item.height + CLEARANCE })),
     ...createCityTransitRoute().curve.getPoints(100).map(point => ({ x: point.x, z: point.z, radius: 1.5, top: point.y + 2.2 })),
@@ -19,7 +21,7 @@ export function cameraObstacles(): CameraObstacle[] {
 
 /** Keep the entire near plane clear of terrain and conservative structure envelopes. */
 export function constrainCameraPose(position: Vector3, target: Vector3, obstacles: readonly CameraObstacle[]) {
-  target.set(MathUtils.clamp(target.x, -75, 70), MathUtils.clamp(target.y, -5, 24), MathUtils.clamp(target.z, -120, 60));
+  target.set(MathUtils.clamp(target.x, -110, 80), MathUtils.clamp(target.y, -5, 24), MathUtils.clamp(target.z, -120, 60));
   let dx = position.x - target.x;
   let dy = position.y - target.y;
   let dz = position.z - target.z;

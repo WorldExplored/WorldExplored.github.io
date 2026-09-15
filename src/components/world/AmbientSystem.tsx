@@ -2,11 +2,12 @@
 
 import { useEffect, useMemo } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
-import { BufferGeometry, CatmullRomCurve3, Color, DataTexture, DoubleSide, Float32BufferAttribute, InstancedBufferAttribute, InstancedMesh, LinearFilter, LinearMipmapLinearFilter, MeshBasicMaterial, MeshPhysicalMaterial, Object3D, Points, PointsMaterial, Raycaster, RepeatWrapping, ShaderMaterial, SRGBColorSpace, SphereGeometry, TubeGeometry, Vector2, Vector3, type Camera } from 'three';
+import { BufferGeometry, CatmullRomCurve3, Color, DataTexture, DoubleSide, Float32BufferAttribute, InstancedBufferAttribute, InstancedMesh, LinearFilter, LinearMipmapLinearFilter, MeshPhysicalMaterial, Object3D, Points, PointsMaterial, Raycaster, RepeatWrapping, ShaderMaterial, SRGBColorSpace, SphereGeometry, TubeGeometry, Vector2, Vector3, type Camera } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { world, type QualityTier, type SceneRuntime } from '../../content/world';
 import { createLandscapePlan, generatePlantPositions, archipelagoGeometry, pathGeometry, seededRandom, vegetationSuitability, landDistance, type LandscapePlan, type PlantPosition } from './terrain';
-import { cloudInstanceCount, cloudInstanceRanges, cloudPuffTransform, createCloudClusters, updateCloudResponses } from './clouds';
+import { updateCloudResponses } from './clouds';
+import { makeClouds, writeCloudMatrices } from './CloudSurface';
 import type { EnvironmentProps } from './Water';
 
 const plantVertex = /* glsl */ `
@@ -142,68 +143,6 @@ function makePlants(plan: LandscapePlan, flowers: boolean) {
   return { mesh, geometry, material, positions, occupied };
 }
 
-const cloudVertex = /* glsl */ `
-  varying vec3 vNormal;
-  varying vec3 vView;
-  varying float vDistance;
-  void main() {
-    vec4 point = modelMatrix * instanceMatrix * vec4(position, 1.);
-    vNormal = normalize(mat3(modelMatrix) * (normal / vec3(length(instanceMatrix[0].xyz), length(instanceMatrix[1].xyz), length(instanceMatrix[2].xyz))));
-    vView = cameraPosition - point.xyz;
-    vDistance = length(vView);
-    gl_Position = projectionMatrix * viewMatrix * point;
-  }
-`;
-const cloudFragment = /* glsl */ `
-  uniform vec3 uWhite;
-  uniform vec3 uFog;
-  uniform vec2 uFogRange;
-  varying vec3 vNormal;
-  varying vec3 vView;
-  varying float vDistance;
-  void main() {
-    vec3 n = normalize(vNormal);
-    float light = smoothstep(-.85, .5, n.y);
-    vec3 color = mix(vec3(.57,.76,.94), uWhite, light);
-    float rim = pow(1. - max(dot(n, normalize(vView)), 0.), 3.);
-    color += rim * .045;
-    color = mix(color, uFog, smoothstep(uFogRange.x, uFogRange.y, vDistance));
-    gl_FragColor = vec4(color, 1.);
-    #include <colorspace_fragment>
-  }
-`;
-
-function makeClouds(diagnostics: boolean) {
-  const clusters = createCloudClusters();
-  const geometry = new SphereGeometry(1, 16, 12);
-  const material = new ShaderMaterial({ vertexShader: cloudVertex, fragmentShader: cloudFragment, uniforms: { uWhite: { value: new Color(world.lighting.cloudColor) }, uFog: { value: new Color(world.lighting.fogColor) }, uFogRange: { value: new Vector2(world.lighting.fogNear, world.lighting.fogFar) } } });
-  const mesh = new InstancedMesh(geometry, material, cloudInstanceCount(clusters));
-  mesh.name = 'environment-clouds';
-  mesh.frustumCulled = false;
-  mesh.userData.clusters = clusters;
-  const debugMaterial = diagnostics ? new MeshBasicMaterial({ color: '#117bff', wireframe: true, transparent: true, opacity: .36, depthWrite: false }) : null;
-  const debug = debugMaterial ? new InstancedMesh(geometry, debugMaterial, cloudInstanceCount(clusters)) : null;
-  if (debug) { debug.frustumCulled = false; debug.name = 'cloud-hit-volumes'; }
-  return { clusters, ranges: cloudInstanceRanges(clusters), activeCount: clusters.length, mesh, geometry, material, debug, debugMaterial, transform: new Object3D(), puff: { position: new Vector3(), scale: new Vector3() } };
-}
-
-function writeCloudMatrices(clouds: ReturnType<typeof makeClouds>, elapsed: number) {
-  const active = clouds.activeCount;
-  for (let index = 0; index < active; index++) {
-    const cluster = clouds.clusters[index];
-    for (let puff = 0; puff < cluster.puffs.length; puff++) {
-      cloudPuffTransform(cluster, cluster.puffs[puff], elapsed, cluster.response, clouds.puff);
-      clouds.transform.position.copy(clouds.puff.position);
-      clouds.transform.scale.copy(clouds.puff.scale);
-      clouds.transform.updateMatrix();
-      clouds.mesh.setMatrixAt(clouds.ranges[index].start + puff, clouds.transform.matrix);
-      clouds.debug?.setMatrixAt(clouds.ranges[index].start + puff, clouds.transform.matrix);
-    }
-  }
-  clouds.mesh.instanceMatrix.needsUpdate = true;
-  if (clouds.debug) clouds.debug.instanceMatrix.needsUpdate = true;
-}
-
 function meadowTexture() {
   const size = 512;
   const pixels = new Uint8Array(size * size * 4);
@@ -326,6 +265,18 @@ function makeLandscape(plan: LandscapePlan) {
   const crownGeometry = foliageGeometry();
   const trunkMaterial = new MeshPhysicalMaterial({ color: '#627848', roughness: .94, envMapIntensity: .12 });
   const crownMaterial = new MeshPhysicalMaterial({ color: '#327d27', vertexColors: true, side: DoubleSide, roughness: .73, clearcoat: .08, clearcoatRoughness: .4, envMapIntensity: .15 });
+  const canopyWind = { time: { value: 0 }, strength: { value: 1 } };
+  crownMaterial.userData.canopyWind = canopyWind;
+  crownMaterial.onBeforeCompile = shader => {
+    shader.uniforms.uCanopyTime = canopyWind.time;
+    shader.uniforms.uCanopyStrength = canopyWind.strength;
+    shader.vertexShader = `uniform float uCanopyTime; uniform float uCanopyStrength;\n${shader.vertexShader}`.replace('#include <begin_vertex>', `#include <begin_vertex>
+      float canopyPhase = instanceMatrix[3].x * .21 + instanceMatrix[3].z * .13;
+      float canopyWeight = smoothstep(-.7, .9, position.y) * uCanopyStrength;
+      transformed.x += sin(uCanopyTime * .3 + canopyPhase) * canopyWeight * .035;
+      transformed.z += sin(uCanopyTime * .47 + canopyPhase * 1.7) * canopyWeight * .025;`);
+  };
+  crownMaterial.customProgramCacheKey = () => 'grove-canopy-wind';
   const trunks = new InstancedMesh(trunkGeometry, trunkMaterial, plan.trees.length);
   const crowns = new InstancedMesh(crownGeometry, crownMaterial, plan.trees.length * 9);
   trunks.name = 'grove-trunks';
@@ -351,7 +302,7 @@ function makeLandscape(plan: LandscapePlan) {
     }
   });
   trunks.computeBoundingSphere(); crowns.computeBoundingSphere();
-  return { ground, path, material, pathMaterial, rocks, trunks, crowns, dispose() {
+  return { ground, path, material, pathMaterial, rocks, trunks, crowns, canopyWind, dispose() {
     [ground, path, rockGeometry, trunkGeometry, crownGeometry].forEach(geometry => geometry.dispose());
     [material, pathMaterial, rockMaterial, trunkMaterial, crownMaterial].forEach(value => value.dispose());
     texture.dispose(); rocks.dispose(); trunks.dispose(); crowns.dispose();
@@ -389,8 +340,8 @@ function makeEnvironment() {
     pointer: { raycaster: new Raycaster(), screen: new Vector2(), strength: 0, nearPlant: false },
     dispose() {
       landscape.dispose();
-      [grass, flowers, clouds, motes].forEach(resource => { resource.geometry.dispose(); resource.material.dispose(); resource.mesh.dispose(); });
-      clouds.debug?.dispose(); clouds.debugMaterial?.dispose(); motes.pointsGeometry.dispose(); motes.pointsMaterial.dispose();
+      [grass, flowers, motes].forEach(resource => { resource.geometry.dispose(); resource.material.dispose(); resource.mesh.dispose(); });
+      clouds.dispose(); motes.pointsGeometry.dispose(); motes.pointsMaterial.dispose();
     } };
 }
 
@@ -402,11 +353,10 @@ function retainEnvironment(environment: ReturnType<typeof makeEnvironment>) {
 
 function setQuality(environment: ReturnType<typeof makeEnvironment>, quality: QualityTier) {
   const tier = world.quality[quality];
+  environment.landscape.canopyWind.strength.value = quality === 'low' ? 0 : 1;
   environment.grass.mesh.count = tier.grass;
   environment.flowers.mesh.count = Math.round(260 * tier.grass / world.quality.high.grass);
   environment.clouds.activeCount = Math.min(tier.clouds, environment.clouds.clusters.length);
-  environment.clouds.mesh.count = cloudInstanceCount(environment.clouds.clusters, environment.clouds.activeCount);
-  if (environment.clouds.debug) environment.clouds.debug.count = environment.clouds.mesh.count;
   writeCloudMatrices(environment.clouds, environment.elapsed);
   environment.motes.mesh.count = tier.bubbles;
   environment.motes.pointsGeometry.setDrawRange(0, Math.min(16, Math.ceil(tier.particles / 5)));
@@ -431,6 +381,7 @@ function updatePlantUniforms(plants: ReturnType<typeof makePlants>, state: Scene
 function animateEnvironment(environment: ReturnType<typeof makeEnvironment>, state: SceneRuntime, camera: Camera, delta: number) {
   const { grass, flowers, clouds, motes, pointer } = environment;
   environment.elapsed = state.elapsed;
+  environment.landscape.canopyWind.time.value = state.elapsed;
   pointer.strength += ((state.pointerActive ? 1 : 0) - pointer.strength) * (1 - Math.exp(-8 * Math.min(.05, delta)));
   if (state.pointerActive) { pointer.screen.set(...state.pointer); pointer.raycaster.setFromCamera(pointer.screen, camera); }
   updatePlantUniforms(grass, state, pointer.strength);

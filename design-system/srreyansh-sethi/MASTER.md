@@ -32,7 +32,7 @@ Optional music is silent until intentional Play, compact while inactive, and exp
 
 ## Review
 
-Use the requested local cloner and UI/UX resources for reference analysis, interaction review, responsive behavior and repeated visual comparisons. Inspect desktop, tablet and mobile, read long content, test history/focus/deep links, exercise environmental input and inspect console/shaders. Keep actual browser measurements separate from component-test evidence. The current record is `docs/qa/ARCHIPELAGO_LOG.md`.
+Use the requested local cloner and UI/UX resources for reference analysis, interaction review, responsive behavior and repeated visual comparisons. Inspect desktop, tablet and mobile, read long content, test history/focus/deep links, exercise environmental input and inspect console/shaders. Keep actual browser measurements separate from component-test evidence. The current record is `docs/qa/LIVING_WORLD_LOG.md`.
 
 The enhanced page occupies exactly one viewport. Identity is a single spatial glass title; contact links live in Contact. Dock cells have equal widths, local highlights and a small press depth. Work is the largest detailed structure, Research secondary, Purdue a small black/gold marker. Native content scrolling remains accessible with its visual scrollbar hidden.
 
@@ -44,8 +44,22 @@ Terrain, planting, paths, shoreline shading, tree placement and collision derive
 
 Architectural language: smooth white shells, aqua curved glazing, open terraces, green roofs, sunlit interiors and slender curved supports. Work is largest, Research second, Purdue clearly subordinate. The city contains varied waterfront offices, stepped garden residences, domes, arches, parks and slow transit in near/mid/far layers. Avoid repeated cylinders or unexplained geometric poles.
 
-Use five or more distinct cloud graphs: broad cumulus, tall cauliflower, cotton, long bank and distant thin cloud. Puff count, depth, profile and speed vary. Every practical cloud uses the same damped hit response. Landmark labels use a fixed hover boundary, cancellable exit grace, independent keyboard focus and pointer-events none.
+Use varied continuous implicit cloud volumes: broad cumulus, tall cauliflower, cotton, deep bank and distant thin cloud. Depth, profile and wind layer vary. Prominent clouds use local damped deformation. Landmark labels use a fixed hover boundary, cancellable exit grace, independent keyboard focus and pointer-events none.
 
 Keep the free camera and rendering lifecycle. Expand safe travel around every island, city and beacon. Ambient grass/flower wake, shallow fish, city transit, coastal foam and ocean-facing lighthouse motion remain restrained, deterministic and reduced-motion aware. Do not add UI modes, tutorials, copied imagery, new content or music changes.
 
-Reference research is private. Toolkit search results supply accessibility, responsive and performance guidance; the explicit brief overrides generic monochrome, guided-tour, chrome/purple and dark-mode suggestions. Current acceptance record: docs/qa/ARCHIPELAGO_LOG.md (updated as checks run).
+Reference research is private. Toolkit search results supply accessibility, responsive and performance guidance; the explicit brief overrides generic monochrome, guided-tour, chrome/purple and dark-mode suggestions. Current acceptance record: docs/qa/LIVING_WORLD_LOG.md.
+
+## Living world revision
+
+An inhabited coastal research archipelago from an optimistic 2007 future. The composition must visibly operate within fifteen seconds: broad-winged gulls, advancing surf, diagonal cloud travel, city transit, and at least two architectural mechanisms. Motion uses independent cycles, seeded paths, pauses and articulated construction. Tests establish behavior; screenshots and actual motion observation establish visual acceptance.
+
+Keep the five organic islands and water channels. The beacon moves farther west to (-76,-36), separated by a broad stretch of water. Main Work architecture remains dominant: an aqua compute conservatory with exposed cooling paths, planted terraces and counter-rotating mechanical rings. Research has an articulated solar instrument. Purdue remains compact with a kinetic gold ring. About combines the existing sculpture with a water ribbon and kinetic canopy. Contact has rounded signal petals. All motion is internal to fixed landmark bounds.
+
+Nature forms ecological clusters: shore reeds and beach grass, broad leaves beside calm water, flowering shrubs beside paths, garden daisies, roof planting. Gulls have bodies, articulated wings, tails and distinct flight/perch/takeoff states. Crabs stay on the signed coastal band. Fish scatter as schools and gradually regroup. Wildlife never owns pointer events.
+
+Clouds are continuous irregular volumes with deep overlapping relief, rounded tops and cool shaded undersides. Thin profiles are reserved for distant atmosphere. Two or three coherent diagonal wind layers populate the complete sky, with no visible resets. Surf advances toward the shared coast field in broken bands, then foams and recedes; protected coves are calmer than exposed headlands.
+
+Navigation becomes a curved molded aqua instrument with separate jewel controls and original dimensional pictograms. Use a white upper rim, blue lower refraction, crisp navy text, saturated active lens, local pointer light and pressed depth. Preserve five equal destinations, 44px minimum targets, semantic links, visible focus and canonical content. Panels unfold beside the selected structure with restrained translucent perimeter and a readable pale face. Close, cards, contact controls and music share this material language.
+
+High/medium/low retain waves, several gulls, fish, natural clouds, train and primary machinery. Reduce populations and secondary effects rather than swapping to unrelated visuals. Freeze continuous movement for reduced motion; retain input, content and renderer resources. No new instructions, modes, content, music sources or time-of-day behavior.

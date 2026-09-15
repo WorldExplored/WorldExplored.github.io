@@ -1,3 +1,4 @@
+import { cityInfrastructureFootprints } from './cityInfrastructure';
 import { BufferGeometry, CatmullRomCurve3, Color, Float32BufferAttribute, Vector3 } from 'three';
 import { cityBuildings, createCityTransitRoute } from './city';
 import { world, type LandmarkId } from '../../content/world';
@@ -15,7 +16,7 @@ export const ISLANDS: readonly Island[] = [
   { id: 'main', x: -4, z: -5, rx: 20, rz: 16, phase: .3, beach: 2.8, hill: 2.4 },
   { id: 'garden', x: 1, z: 23, rx: 22, rz: 10, phase: 1.6, beach: 2.1, hill: 1.1 },
   { id: 'purdue', x: 26, z: -7, rx: 7.2, rz: 8.6, phase: 2.4, beach: 2.3, hill: .7 },
-  { id: 'beacon', x: -35, z: -23, rx: 5.8, rz: 5.2, phase: 3.2, beach: 1.1, hill: 1.3 },
+  { id: 'beacon', x: -76, z: -36, rx: 5.8, rz: 5.2, phase: 3.2, beach: 1.1, hill: 1.3 },
   { id: 'city', x: -7, z: -78, rx: 29, rz: 18, phase: 4.1, beach: 3.1, hill: .55 },
 ];
 export const PLANT_REACH = .95;
@@ -90,7 +91,7 @@ export function vegetationSuitability(x: number, z: number, reach: number, plan:
 export function canPlacePlant(x: number, z: number, reach: number, plan: LandscapePlan) { return vegetationSuitability(x, z, reach, plan) > 0; }
 
 export function createLandscapePlan(): LandscapePlan {
-  const structures = [...architectureFootprints(), ...cityBuildings.map(item => ({ id: item.id, x: item.x, z: item.z, radius: item.radius }))];
+  const structures = [...architectureFootprints(), ...cityInfrastructureFootprints, ...cityBuildings.map(item => ({ id: item.id, x: item.x, z: item.z, radius: item.radius }))];
   const point = (id: LandmarkId): PathPoint => { const item = world.landmarks.find(landmark => landmark.id === id)!; return { x: item.position[0], z: item.position[2] }; };
   const paths: LandscapePath[] = [
     { width: 1.25, points: [point('work'), { x: -3, z: -3 }, point('research'), { x: 12, z: -7 }] },

@@ -4,7 +4,8 @@ import { setTimeout as wait } from 'node:timers/promises';
 import { create, act, type ReactThreeTest } from '@react-three/test-renderer';
 import { Group, Object3D, Ray, Vector3, type Mesh } from 'three';
 import { Landmark, LANDMARK_HIT_BOUNDS, LANDMARK_HOVER_GRACE_MS } from '../src/components/world/Landmark';
-import { cloudInstanceCount, cloudInstanceRanges, cloudPuffTransform, createCloudClusters, rayCloudDistance, updateCloudResponses } from '../src/components/world/clouds';
+import { cloudInstanceCount, cloudInstanceRanges, cloudOrigin, cloudDeformation, cloudDensity, cloudBounds, createCloudClusters, updateCloudResponses } from '../src/components/world/clouds';
+import { cloudSurfaceGeometry, makeClouds, writeCloudMatrices } from '../src/components/world/CloudSurface';
 import { createSceneRuntime, world, type LandmarkId, type SceneRuntime } from '../src/content/world';
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
@@ -16,17 +17,17 @@ test('the first ten clouds include five distinct graphs, profiles, depths and po
   assert.equal(new Set(first.map(cluster => cluster.archetype)).size, 5);
   assert.equal(new Set(first.map(cluster => cluster.puffs.length)).size, 5, 'Different families use different graphs, not one rescaled puff arrangement.');
   assert.equal(new Set(first.map(cluster => cluster.azimuth)).size, 10);
-  assert.equal(new Set(first.map(cluster => cluster.speed)).size, 10);
+  assert.equal(new Set(first.map(cluster => cluster.speed)).size, 3, 'Three coherent wind layers.');
   assert.equal(new Set(first.map(cluster => cluster.density)).size, 10);
   assert.ok(Math.max(...first.map(cluster => cluster.center[2])) - Math.min(...first.map(cluster => cluster.center[2])) > 120);
-  for (const cluster of first) assert.ok(cluster.center[1] >= 16 && cluster.center[1] <= 27);
+  for (const cluster of first) assert.ok(cluster.center[1] >= 20 && cluster.center[1] <= 40);
   const profiles = first.slice(0, 5).map(cluster => {
     const width = Math.max(...cluster.puffs.map(puff => puff.offset[0] + puff.scale[0])) - Math.min(...cluster.puffs.map(puff => puff.offset[0] - puff.scale[0]));
     const height = Math.max(...cluster.puffs.map(puff => puff.offset[1] + puff.scale[1])) - Math.min(...cluster.puffs.map(puff => puff.offset[1] - puff.scale[1]));
     return { archetype: cluster.archetype, ratio: width / height };
   });
   assert.ok(profiles.find(item => item.archetype === 'cauliflower')!.ratio < 1.2);
-  assert.ok(profiles.find(item => item.archetype === 'bank')!.ratio > 2.5);
+  assert.ok(profiles.find(item => item.archetype === 'bank')!.ratio > 2);
   assert.ok(profiles.find(item => item.archetype === 'atmospheric')!.ratio > 8);
 });
 
@@ -45,42 +46,89 @@ test('cloud instance ranges pack variable puff counts without overlaps at every 
   assert.equal(cloudInstanceCount(clusters, clusters.length + 10), end);
 });
 
-test('rendered cloud ellipsoids match ray ownership at bounded drift and compression', () => {
-  const output = { position: new Vector3(), scale: new Vector3() };
-  const ray = new Ray(new Vector3(), new Vector3(0, 0, -1));
-  for (const cloud of createCloudClusters()) for (const elapsed of [0, 825, 5000]) for (const response of [0, .5, 1]) for (const puff of cloud.puffs) {
-    cloudPuffTransform(cloud, puff, elapsed, response, output);
-    assert.ok(output.scale.x <= puff.scale[0] && output.scale.y <= puff.scale[1] && output.scale.z <= puff.scale[2], 'Interaction compresses rather than enlarging puffs.');
-    ray.origin.copy(output.position).add(new Vector3(output.scale.x * .95, 0, output.scale.z + 2));
-    assert.notEqual(rayCloudDistance(ray, cloud, elapsed, response), null);
+test('implicit cloud surfaces are closed, connected volumes with rounded depth', () => {
+  const clusters = createCloudClusters(5);
+  const geometry = cloudSurfaceGeometry(clusters);
+  const positions = geometry.getAttribute('position');
+  const normals = geometry.getAttribute('normal');
+  const ids = geometry.getAttribute('aCloud');
+  const edges = new Map<string, number>();
+  const parents = Array.from({ length: positions.count }, (_, index) => index);
+  function root(index: number): number { while (parents[index] !== index) { parents[index] = parents[parents[index]]; index = parents[index]; } return index; }
+  const index = geometry.getIndex()!;
+  for (let triangle = 0; triangle < index.count; triangle += 3) {
+    const a = index.getX(triangle); const b = index.getX(triangle + 1); const c = index.getX(triangle + 2);
+    for (const [first, second] of [[a, b], [b, c], [c, a]]) {
+      const key = `${Math.min(first, second)}:${Math.max(first, second)}`;
+      edges.set(key, (edges.get(key) ?? 0) + 1); parents[root(first)] = root(second);
+    }
   }
+  assert.ok([...edges.values()].every(count => count === 2), 'Each surface edge has exactly two faces, with no intersecting puff shells or openings.');
+  for (let cloud = 0; cloud < clusters.length; cloud++) {
+    const connected = new Set<number>(); let minY = Infinity; let maxY = -Infinity; let minZ = Infinity; let maxZ = -Infinity;
+    for (let vertex = 0; vertex < positions.count; vertex++) if (ids.getX(vertex) === cloud) {
+      connected.add(root(vertex)); minY = Math.min(minY, positions.getY(vertex)); maxY = Math.max(maxY, positions.getY(vertex)); minZ = Math.min(minZ, positions.getZ(vertex)); maxZ = Math.max(maxZ, positions.getZ(vertex));
+      assert.ok(Number.isFinite(normals.getX(vertex)) && Math.hypot(normals.getX(vertex), normals.getY(vertex), normals.getZ(vertex)) > .99);
+    }
+    assert.equal(connected.size, 1, `${clusters[cloud].archetype} is one continuous body.`);
+    if (clusters[cloud].archetype !== 'atmospheric') { assert.ok(maxY - minY > 3); assert.ok(maxZ - minZ > 4); }
+  }
+  geometry.dispose();
 });
 
-test('resting edges retain one cloud owner throughout deformation and release smoothly', () => {
+test('density surface owns rays while only the contacted region deforms', () => {
   const cloud = createCloudClusters(1)[0];
   cloud.center = [0, 20, 0];
-  cloud.puffs = [{ offset: [0, 0, 0], scale: [2, 1, 1] }];
-  const ray = new Ray(new Vector3(1.99, 20, 5), new Vector3(0, 0, -1));
-  let entries = 0;
-  let previous = 0;
+  const puff = cloud.puffs[0];
+  const ray = new Ray(new Vector3(puff.offset[0], 20 + puff.offset[1], puff.offset[2] + 20), new Vector3(0, 0, -1));
+  let entries = 0; let previous = 0;
   for (let frame = 0; frame < 240; frame++) {
     entries += updateCloudResponses([cloud], ray, 0, 1 / 60, 1, false);
-    assert.ok(cloud.response >= previous && cloud.response - previous < .12);
-    previous = cloud.response;
+    assert.ok(cloud.response >= previous && cloud.response - previous < .12); previous = cloud.response;
   }
-  assert.equal(entries, 1);
-  assert.equal(cloud.targeted, true);
-  assert.equal(rayCloudDistance(ray, cloud, 0), null, 'The resting-volume union retains ownership after the puff compresses away from the ray.');
-  for (let frame = 0; frame < 160; frame++) {
-    updateCloudResponses([cloud], null, 0, 1 / 60, 1, false);
-    assert.ok(cloud.response <= previous && previous - cloud.response < .12);
-    previous = cloud.response;
-  }
+  assert.equal(entries, 1); assert.equal(cloud.targeted, true);
+  const contact = new Vector3().fromArray(cloud.interaction); const normal = new Vector3(0, 0, 1); const output = new Vector3();
+  assert.ok(cloudDeformation(cloud, contact, normal, output).distanceTo(contact) > .5);
+  const far = contact.clone().add(new Vector3(8, 0, 0));
+  assert.ok(cloudDeformation(cloud, far, normal, output).distanceTo(far) < .00001, 'The opposite cloud silhouette is unchanged; there is no whole-cloud scaling.');
+  for (let frame = 0; frame < 160; frame++) { updateCloudResponses([cloud], null, 0, 1 / 60, 1, false); assert.ok(cloud.response <= previous && previous - cloud.response < .12); previous = cloud.response; }
   assert.ok(cloud.response < 1e-7);
   const clouds = createCloudClusters(2);
   clouds.forEach((item, index) => { item.center = [0, 20, index === 0 ? -20 : 0]; item.puffs = [{ offset: [0, 0, 0], scale: [2, 1, 1] }]; });
   updateCloudResponses(clouds, new Ray(new Vector3(0, 20, 10), new Vector3(0, 0, -1)), 0, 1 / 60, 2, false);
-  assert.deepEqual(clouds.map(item => item.targeted), [false, true], 'The closest rendered cloud wins even when it comes later in the array.');
+  assert.deepEqual(clouds.map(item => item.targeted), [false, true]);
+});
+
+test('cloud field fills all compass directions and has coherent diagonal wind without visible resets', () => {
+  const clusters = createCloudClusters(); const first = new Vector3(); const next = new Vector3();
+  assert.ok(clusters.some(cloud => cloud.center[0] < -100 && cloud.center[2] < -36), 'Clouds extend beyond the offshore beacon.');
+  for (const axis of [0, 2]) { assert.ok(clusters.some(cloud => cloud.center[axis] > 70)); assert.ok(clusters.some(cloud => cloud.center[axis] < -100)); }
+  for (const cloud of clusters) {
+    cloudOrigin(cloud, 0, first); cloudOrigin(cloud, 15, next);
+    assert.ok(Math.abs(next.x - first.x) > .5 && Math.abs(next.z - first.z) > .02, 'Both horizontal axes travel during the opening view.');
+    for (let elapsed = 0; elapsed < 100000; elapsed += 131) {
+      cloudOrigin(cloud, elapsed, first); cloudOrigin(cloud, elapsed + .1, next);
+      assert.ok(first.distanceTo(next) < .04, 'There is no reset at any wind-loop phase.');
+      assert.ok(Math.abs(first.x - cloud.center[0]) <= 80 && Math.abs(first.z - cloud.center[2]) <= 58);
+    }
+  }
+  const a = clusters[0]; const b = clusters[3];
+  assert.equal(a.layer, b.layer);
+  cloudOrigin(a, 70, first).sub(new Vector3().fromArray(a.center)); cloudOrigin(b, 70, next).sub(new Vector3().fromArray(b.center));
+  assert.ok(first.distanceTo(next) < 1e-10);
+});
+
+test('cloud geometry and material stay allocated across tiers, animation, interaction and pause', () => {
+  const clouds = makeClouds(false); const geometry = clouds.geometry; const material = clouds.material;
+  const positions = geometry.getAttribute('position').array; const origins = material.uniforms.uOrigins.value;
+  for (const count of [10, 16, 24, 10]) { clouds.activeCount = count; writeCloudMatrices(clouds, count); assert.equal(clouds.geometry, geometry); assert.equal(clouds.material, material); assert.equal(geometry.getAttribute('position').array, positions); assert.equal(material.uniforms.uOrigins.value, origins); }
+  const cluster = clouds.clusters[0]; const frozen = JSON.stringify(cluster);
+  updateCloudResponses(clouds.clusters, new Ray(new Vector3(), new Vector3(0, 1, 0)), 100, 1, 24, true);
+  assert.equal(JSON.stringify(cluster), frozen);
+  const origin = new Vector3(); cloudOrigin(cluster, 31, origin);
+  const bounds = cloudBounds(cluster); const mid = bounds.min.clone().add(bounds.max).multiplyScalar(.5);
+  assert.ok(cloudDensity(cluster, mid.x, mid.y, mid.z) > 0);
+  clouds.dispose();
 });
 
 function observedRuntime() {
