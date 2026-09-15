@@ -1,22 +1,25 @@
 import { MathUtils, Ray, Vector3 } from 'three';
 import { landmarkFor, world, type CameraPose, type LandmarkId } from '../../content/world';
+import { cityBuildings, createCityTransitRoute } from './city';
 import { architectureFootprints, createLandscapePlan, terrainHeight } from './terrain';
 
-export const CAMERA_LIMITS = { minDistance: 8, maxDistance: 85, minPolarAngle: .28, maxPolarAngle: 1.43, minY: 3.5 };
+export const CAMERA_LIMITS = { minDistance: 8, maxDistance: 220, minPolarAngle: .28, maxPolarAngle: 1.43, minY: 3.5 };
 export interface CameraObstacle { x: number; z: number; radius: number; top: number }
-const HEIGHTS: Record<LandmarkId, number> = { work: 6, research: 4, purdue: 3, about: 4, contact: 4, building: 6 };
+const HEIGHTS: Record<LandmarkId, number> = { work: 6.5, research: 4.8, purdue: 3, about: 4.2, contact: 4.2, building: 7.5 };
 const CLEARANCE = 1.15;
 
 export function cameraObstacles(): CameraObstacle[] {
   return [
     ...architectureFootprints().map(item => ({ x: item.x, z: item.z, radius: item.radius + CLEARANCE, top: terrainHeight(item.x, item.z) + HEIGHTS[item.id as LandmarkId] + CLEARANCE })),
+    ...cityBuildings.map(item => ({ x: item.x, z: item.z, radius: item.radius + CLEARANCE, top: terrainHeight(item.x, item.z) + item.height + CLEARANCE })),
+    ...createCityTransitRoute().curve.getPoints(100).map(point => ({ x: point.x, z: point.z, radius: 1.5, top: point.y + 2.2 })),
     ...createLandscapePlan().trees.map(item => ({ x: item.x, z: item.z, radius: item.radius + CLEARANCE, top: item.y + item.height + CLEARANCE })),
   ];
 }
 
 /** Keep the entire near plane clear of terrain and conservative structure envelopes. */
 export function constrainCameraPose(position: Vector3, target: Vector3, obstacles: readonly CameraObstacle[]) {
-  target.set(MathUtils.clamp(target.x, -38, 38), MathUtils.clamp(target.y, -5, 12), MathUtils.clamp(target.z, -82, 28));
+  target.set(MathUtils.clamp(target.x, -75, 70), MathUtils.clamp(target.y, -5, 24), MathUtils.clamp(target.z, -120, 60));
   let dx = position.x - target.x;
   let dy = position.y - target.y;
   let dz = position.z - target.z;
@@ -112,7 +115,7 @@ export function focusPose(destination: LandmarkId | '', mobile: boolean, aspect:
     const direction = new Vector3(mobile ? .25 : .32, mobile ? .38 : .3, .9).normalize();
     const distance = mobile ? Math.min(60, Math.max(24, (footprint.radius + 1.8) / (tangent * safeAspect))) : Math.max(23, footprint.radius * 4 + 10);
     target.fromArray(landmark.position);
-    target.y += terrainHeight(target.x, target.z) + HEIGHTS[landmark.id] * .45;
+    target.y = terrainHeight(target.x, target.z) + HEIGHTS[landmark.id] * .45;
     if (mobile) {
       const upY = Math.sqrt(1 - direction.y * direction.y);
       target.y -= distance * tangent * .4 / upY;

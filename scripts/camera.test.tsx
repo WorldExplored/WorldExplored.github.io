@@ -30,7 +30,7 @@ test('camera bounds hold for extreme orbit, pan and zoom poses', () => {
     const target = new Vector3(Math.cos(index * 2.8) * 100, Math.sin(index * .19) * 40, Math.cos(index * 1.9) * 150);
     constrainCameraPose(position, target, obstacles);
     assertSafe(position, target);
-    assert.ok(Math.abs(target.x) <= 38 && target.z >= -82 && target.z <= 28);
+    assert.ok(target.x >= -75 && target.x <= 70 && target.z >= -120 && target.z <= 60);
   }
 });
 

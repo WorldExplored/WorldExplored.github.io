@@ -2,11 +2,11 @@
 
 import { useEffect, useMemo } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
-import { BoxGeometry, BufferGeometry, CatmullRomCurve3, Color, CylinderGeometry, DataTexture, DoubleSide, Float32BufferAttribute, InstancedBufferAttribute, InstancedMesh, LinearFilter, LinearMipmapLinearFilter, MeshBasicMaterial, MeshPhysicalMaterial, Object3D, Points, PointsMaterial, Raycaster, RepeatWrapping, ShaderMaterial, SRGBColorSpace, SphereGeometry, TubeGeometry, Vector2, Vector3, type Camera } from 'three';
+import { BufferGeometry, CatmullRomCurve3, Color, DataTexture, DoubleSide, Float32BufferAttribute, InstancedBufferAttribute, InstancedMesh, LinearFilter, LinearMipmapLinearFilter, MeshBasicMaterial, MeshPhysicalMaterial, Object3D, Points, PointsMaterial, Raycaster, RepeatWrapping, ShaderMaterial, SRGBColorSpace, SphereGeometry, TubeGeometry, Vector2, Vector3, type Camera } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { world, type QualityTier, type SceneRuntime } from '../../content/world';
-import { createLandscapePlan, generatePlantPositions, meadowGeometry, pathGeometry, seededRandom, terrainHeight, type LandscapePlan, type PlantPosition } from './terrain';
-import { cloudPuffTransform, createCloudClusters, updateCloudResponses } from './clouds';
+import { createLandscapePlan, generatePlantPositions, archipelagoGeometry, pathGeometry, seededRandom, vegetationSuitability, landDistance, type LandscapePlan, type PlantPosition } from './terrain';
+import { cloudInstanceCount, cloudInstanceRanges, cloudPuffTransform, createCloudClusters, updateCloudResponses } from './clouds';
 import type { EnvironmentProps } from './Water';
 
 const plantVertex = /* glsl */ `
@@ -120,7 +120,7 @@ function makePlants(plan: LandscapePlan, flowers: boolean) {
   const dark = new Color(world.colors.grassDark);
   const light = new Color(world.colors.grassLight);
   const random = seededRandom(flowers ? 713 : 914);
-  const occupied = new Uint16Array(80 * 80);
+  const occupied = new Uint16Array(160 * 160);
   for (let index = 0; index < maximum; index++) {
     const plant = positions[index];
     transform.position.set(plant.x, plant.y, plant.z);
@@ -131,9 +131,9 @@ function makePlants(plan: LandscapePlan, flowers: boolean) {
     phases[index] = plant.phase;
     if (flowers) tint.set('#ffffff'); else tint.copy(dark).lerp(light, .25 + random() * .5);
     colors.set([tint.r, tint.g, tint.b], index * 3);
-    const x = Math.floor((plant.x + 60) / 1.5);
-    const z = Math.floor((plant.z + 60) / 1.5);
-    occupied[z * 80 + x] ||= index + 1;
+    const x = Math.floor((plant.x + 120) / 1.5);
+    const z = Math.floor((plant.z + 120) / 1.5);
+    occupied[z * 160 + x] ||= index + 1;
   }
   geometry.setAttribute('aPhase', new InstancedBufferAttribute(phases, 1));
   geometry.setAttribute('aTint', new InstancedBufferAttribute(colors, 3));
@@ -148,7 +148,7 @@ const cloudVertex = /* glsl */ `
   varying float vDistance;
   void main() {
     vec4 point = modelMatrix * instanceMatrix * vec4(position, 1.);
-    vNormal = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * normal);
+    vNormal = normalize(mat3(modelMatrix) * (normal / vec3(length(instanceMatrix[0].xyz), length(instanceMatrix[1].xyz), length(instanceMatrix[2].xyz))));
     vView = cameraPosition - point.xyz;
     vDistance = length(vView);
     gl_Position = projectionMatrix * viewMatrix * point;
@@ -177,18 +177,18 @@ function makeClouds(diagnostics: boolean) {
   const clusters = createCloudClusters();
   const geometry = new SphereGeometry(1, 16, 12);
   const material = new ShaderMaterial({ vertexShader: cloudVertex, fragmentShader: cloudFragment, uniforms: { uWhite: { value: new Color(world.lighting.cloudColor) }, uFog: { value: new Color(world.lighting.fogColor) }, uFogRange: { value: new Vector2(world.lighting.fogNear, world.lighting.fogFar) } } });
-  const mesh = new InstancedMesh(geometry, material, clusters.length * 6);
+  const mesh = new InstancedMesh(geometry, material, cloudInstanceCount(clusters));
   mesh.name = 'environment-clouds';
   mesh.frustumCulled = false;
   mesh.userData.clusters = clusters;
   const debugMaterial = diagnostics ? new MeshBasicMaterial({ color: '#117bff', wireframe: true, transparent: true, opacity: .36, depthWrite: false }) : null;
-  const debug = debugMaterial ? new InstancedMesh(geometry, debugMaterial, clusters.length * 6) : null;
+  const debug = debugMaterial ? new InstancedMesh(geometry, debugMaterial, cloudInstanceCount(clusters)) : null;
   if (debug) { debug.frustumCulled = false; debug.name = 'cloud-hit-volumes'; }
-  return { clusters, mesh, geometry, material, debug, debugMaterial, transform: new Object3D(), puff: { position: new Vector3(), scale: new Vector3() } };
+  return { clusters, ranges: cloudInstanceRanges(clusters), activeCount: clusters.length, mesh, geometry, material, debug, debugMaterial, transform: new Object3D(), puff: { position: new Vector3(), scale: new Vector3() } };
 }
 
 function writeCloudMatrices(clouds: ReturnType<typeof makeClouds>, elapsed: number) {
-  const active = clouds.mesh.count / 6;
+  const active = clouds.activeCount;
   for (let index = 0; index < active; index++) {
     const cluster = clouds.clusters[index];
     for (let puff = 0; puff < cluster.puffs.length; puff++) {
@@ -196,8 +196,8 @@ function writeCloudMatrices(clouds: ReturnType<typeof makeClouds>, elapsed: numb
       clouds.transform.position.copy(clouds.puff.position);
       clouds.transform.scale.copy(clouds.puff.scale);
       clouds.transform.updateMatrix();
-      clouds.mesh.setMatrixAt(index * 6 + puff, clouds.transform.matrix);
-      clouds.debug?.setMatrixAt(index * 6 + puff, clouds.transform.matrix);
+      clouds.mesh.setMatrixAt(clouds.ranges[index].start + puff, clouds.transform.matrix);
+      clouds.debug?.setMatrixAt(clouds.ranges[index].start + puff, clouds.transform.matrix);
     }
   }
   clouds.mesh.instanceMatrix.needsUpdate = true;
@@ -280,39 +280,21 @@ function treeGeometry() {
   return geometry;
 }
 
-function makeSkyline() {
-  const geometry = new CylinderGeometry(1, 1, 1, 20);
-  const frameGeometry = new BoxGeometry(1, 1, 1);
-  const material = new MeshPhysicalMaterial({ color: '#62bacd', metalness: .42, roughness: .17, clearcoat: 1, clearcoatRoughness: .08, envMapIntensity: 1.2 });
-  const frameMaterial = new MeshPhysicalMaterial({ color: '#deeff7', metalness: .25, roughness: .25, clearcoat: .7 });
-  const towers = new InstancedMesh(geometry, material, 16);
-  const frames = new InstancedMesh(frameGeometry, frameMaterial, 16 * 4);
-  towers.name = 'distant-glass-skyline';
-  const transform = new Object3D();
-  const random = seededRandom(992);
-  for (let index = 0; index < 16; index++) {
-    const x = -31 + index * 2;
-    const z = -91 + random() * 6;
-    const radius = .55 + random() * .38;
-    const height = 3.2 + Math.sin(index / 15 * Math.PI) * 5 + random() * 2.3;
-    const y = terrainHeight(x, z) + height / 2;
-    transform.position.set(x, y, z); transform.scale.set(radius, height, radius * .8); transform.rotation.set(0, 0, 0); transform.updateMatrix(); towers.setMatrixAt(index, transform.matrix);
-    for (let fin = 0; fin < 4; fin++) {
-      const angle = fin * Math.PI / 2;
-      transform.position.set(x + Math.cos(angle) * radius, y, z + Math.sin(angle) * radius * .8);
-      transform.scale.set(.045, height + .06, .045); transform.updateMatrix(); frames.setMatrixAt(index * 4 + fin, transform.matrix);
+function makeLandscape(plan: LandscapePlan) {
+  const ground = archipelagoGeometry();
+  const path = pathGeometry(plan.paths);
+  const diagnostics = process.env.NODE_ENV !== 'production' && typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('vegetation');
+  if (diagnostics) {
+    const positions = ground.getAttribute('position'); const colors = ground.getAttribute('color'); const tint = new Color();
+    for (let index = 0; index < positions.count; index++) {
+      const x = positions.getX(index); const z = positions.getZ(index); const suitable = vegetationSuitability(x, z, .95, plan);
+      tint.set(landDistance(x, z) < 1.1 ? '#199ed4' : suitable <= 0 ? '#ec7354' : suitable < .95 ? '#ffdb52' : '#38ff62'); colors.setXYZ(index,tint.r,tint.g,tint.b);
     }
   }
-  towers.computeBoundingSphere(); frames.computeBoundingSphere();
-  return { towers, frames, dispose() { towers.dispose(); frames.dispose(); geometry.dispose(); frameGeometry.dispose(); material.dispose(); frameMaterial.dispose(); } };
-}
-
-function makeLandscape(plan: LandscapePlan) {
-  const ground = meadowGeometry();
-  const path = pathGeometry(plan.paths);
   const texture = meadowTexture();
-  const material = new MeshPhysicalMaterial({ color: '#d0edab', specularIntensity: 0, vertexColors: true, map: texture, bumpMap: texture, bumpScale: .012, roughness: .96, clearcoat: 0, envMapIntensity: .08 });
+  const material = new MeshPhysicalMaterial({ color: '#f4fff2', specularIntensity: 0, vertexColors: true, map: texture, bumpMap: texture, bumpScale: .012, roughness: .96, clearcoat: 0, envMapIntensity: .08 });
   material.onBeforeCompile = shader => {
+    if (diagnostics) return;
     shader.vertexShader = `varying vec2 meadowPosition;\n${shader.vertexShader}`.replace('#include <begin_vertex>', '#include <begin_vertex>\n meadowPosition = position.xz;');
     shader.fragmentShader = `varying vec2 meadowPosition;
       float meadowHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -325,7 +307,14 @@ function makeLandscape(plan: LandscapePlan) {
   material.customProgramCacheKey = () => 'layered-meadow-color';
   const pathMaterial = new MeshPhysicalMaterial({ color: '#e9fff1', roughness: .34, clearcoat: .65, clearcoatRoughness: .3 });
   const rockGeometry = new SphereGeometry(1, 16, 12);
-  const rockMaterial = new MeshPhysicalMaterial({ color: '#effff2', roughness: .35, clearcoat: .75, clearcoatRoughness: .22 });
+  const rockVertices = rockGeometry.getAttribute('position');
+  for (let index = 0; index < rockVertices.count; index++) {
+    const x = rockVertices.getX(index); const y = rockVertices.getY(index); const z = rockVertices.getZ(index);
+    const relief = 1 + .10 * Math.sin(x * 8 + z * 3) * Math.cos(y * 7 - z * 4) + .06 * Math.cos(z * 9 + x * 3);
+    rockVertices.setXYZ(index, x * relief, y * relief, z * relief);
+  }
+  rockGeometry.computeVertexNormals();
+  const rockMaterial = new MeshPhysicalMaterial({ color: '#9dafa0', roughness: .88, clearcoat: .06, clearcoatRoughness: .7 });
   const rocks = new InstancedMesh(rockGeometry, rockMaterial, plan.rocks.length);
   rocks.name = 'shoreline-rocks';
   rocks.castShadow = true;
@@ -362,11 +351,10 @@ function makeLandscape(plan: LandscapePlan) {
     }
   });
   trunks.computeBoundingSphere(); crowns.computeBoundingSphere();
-  const skyline = makeSkyline();
-  return { ground, path, material, pathMaterial, rocks, trunks, crowns, skyline, dispose() {
+  return { ground, path, material, pathMaterial, rocks, trunks, crowns, dispose() {
     [ground, path, rockGeometry, trunkGeometry, crownGeometry].forEach(geometry => geometry.dispose());
     [material, pathMaterial, rockMaterial, trunkMaterial, crownMaterial].forEach(value => value.dispose());
-    texture.dispose(); skyline.dispose(); rocks.dispose(); trunks.dispose(); crowns.dispose();
+    texture.dispose(); rocks.dispose(); trunks.dispose(); crowns.dispose();
   } };
 }
 
@@ -416,18 +404,19 @@ function setQuality(environment: ReturnType<typeof makeEnvironment>, quality: Qu
   const tier = world.quality[quality];
   environment.grass.mesh.count = tier.grass;
   environment.flowers.mesh.count = Math.round(260 * tier.grass / world.quality.high.grass);
-  environment.clouds.mesh.count = tier.clouds * 6;
-  if (environment.clouds.debug) environment.clouds.debug.count = tier.clouds * 6;
+  environment.clouds.activeCount = Math.min(tier.clouds, environment.clouds.clusters.length);
+  environment.clouds.mesh.count = cloudInstanceCount(environment.clouds.clusters, environment.clouds.activeCount);
+  if (environment.clouds.debug) environment.clouds.debug.count = environment.clouds.mesh.count;
   writeCloudMatrices(environment.clouds, environment.elapsed);
   environment.motes.mesh.count = tier.bubbles;
   environment.motes.pointsGeometry.setDrawRange(0, Math.min(16, Math.ceil(tier.particles / 5)));
 }
 
 function nearPlants(point: SceneRuntime['pointerWorld'], positions: readonly PlantPosition[], occupied: Uint16Array, count: number) {
-  const cellX = Math.floor((point[0] + 60) / 1.5);
-  const cellZ = Math.floor((point[2] + 60) / 1.5);
-  for (let z = Math.max(0, cellZ - 2); z <= Math.min(79, cellZ + 2); z++) for (let x = Math.max(0, cellX - 2); x <= Math.min(79, cellX + 2); x++) {
-    const index = occupied[z * 80 + x] - 1;
+  const cellX = Math.floor((point[0] + 120) / 1.5);
+  const cellZ = Math.floor((point[2] + 120) / 1.5);
+  for (let z = Math.max(0, cellZ - 2); z <= Math.min(159, cellZ + 2); z++) for (let x = Math.max(0, cellX - 2); x <= Math.min(159, cellX + 2); x++) {
+    const index = occupied[z * 160 + x] - 1;
     if (index >= 0 && index < count && Math.hypot(positions[index].x - point[0], positions[index].z - point[2]) < 1.8) return true;
   }
   return false;
@@ -449,7 +438,7 @@ function animateEnvironment(environment: ReturnType<typeof makeEnvironment>, sta
   const nearPlant = state.pointerActive && nearPlants(state.pointerWorld, grass.positions, grass.occupied, grass.mesh.count);
   if (nearPlant && !pointer.nearPlant) state.plantInteraction++;
   pointer.nearPlant = nearPlant;
-  state.cloudInteraction += updateCloudResponses(clouds.clusters, state.pointerActive ? pointer.raycaster.ray : null, state.elapsed, delta, clouds.mesh.count / 6, false);
+  state.cloudInteraction += updateCloudResponses(clouds.clusters, state.pointerActive ? pointer.raycaster.ray : null, state.elapsed, delta, clouds.activeCount, false);
   writeCloudMatrices(clouds, state.elapsed);
   motes.points.rotation.y = Math.sin(state.elapsed * .025) * .08;
   motes.points.position.y = Math.sin(state.elapsed * .15) * .12;
@@ -462,10 +451,9 @@ export function AmbientSystem({ runtime, paused, quality }: EnvironmentProps) {
   useEffect(() => { setQuality(environment, quality); invalidate(); }, [environment, quality, invalidate]);
   useFrame(({ camera }, delta) => { if (!paused) animateEnvironment(environment, runtime.current, camera, delta); });
   const { landscape, grass, flowers, clouds, motes } = environment;
-  return <group dispose={null} name="continuous-environment">
-    <mesh geometry={landscape.ground} material={landscape.material} receiveShadow name="continuous-meadow" />
-    <mesh geometry={landscape.path} material={landscape.pathMaterial} receiveShadow name="meadow-paths" />
-    <primitive object={landscape.skyline.towers} /><primitive object={landscape.skyline.frames} />
+  return <group dispose={null} name="coastal-archipelago">
+    <mesh geometry={landscape.ground} material={landscape.material} receiveShadow name="archipelago-land" />
+    <mesh geometry={landscape.path} material={landscape.pathMaterial} receiveShadow name="island-paths" />
     <primitive object={landscape.rocks} /><primitive object={landscape.trunks} /><primitive object={landscape.crowns} />
     <primitive object={grass.mesh} /><primitive object={flowers.mesh} /><primitive object={clouds.mesh} />
     {clouds.debug && <primitive object={clouds.debug} />}

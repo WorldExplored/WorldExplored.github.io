@@ -8,7 +8,7 @@ import { AeroWorld } from './AeroWorld';
 import { auditing, renderAudit, sampleFrame } from './renderDiagnostics';
 
 extend({ Mesh: THREE.Mesh, Group: THREE.Group, Object3D: THREE.Object3D,
-  SphereGeometry: THREE.SphereGeometry, RingGeometry: THREE.RingGeometry, PlaneGeometry: THREE.PlaneGeometry,
+  CylinderGeometry: THREE.CylinderGeometry, SphereGeometry: THREE.SphereGeometry, RingGeometry: THREE.RingGeometry, PlaneGeometry: THREE.PlaneGeometry,
   BoxGeometry: THREE.BoxGeometry, ShaderMaterial: THREE.ShaderMaterial, MeshBasicMaterial: THREE.MeshBasicMaterial,
   HemisphereLight: THREE.HemisphereLight, DirectionalLight: THREE.DirectionalLight, PointLight: THREE.PointLight,
   Fog: THREE.Fog, CubeCamera: THREE.CubeCamera });
@@ -63,7 +63,7 @@ export function WorldCanvas(props: WorldProps) {
       renderAudit.configurations++;
       void root.configure({ events, gl: renderer, size,
         scene: { background: new THREE.Color(world.lighting.horizon) },
-        camera: { position: overview.position, fov: 43, near: .1, far: 500 },
+        camera: { position: overview.position, fov: 43, near: .1, far: 1500 },
         dpr: Math.min(window.devicePixelRatio, latest.current.mobile ? 1.25 : 1.75),
         shadows: true, frameloop: 'always',
         onCreated: state => { stateRef.current = state; state.camera.lookAt(...overview.target); },

@@ -13,6 +13,8 @@ import { intersectTerrainRay } from './cameraControls';
 import { Landmark } from './Landmark';
 import { LandmarkModel } from './LandmarkModels';
 import { AmbientSystem } from './AmbientSystem';
+import { EcoCity } from './EcoCity';
+import { CoastalLife } from './CoastalLife';
 import { Water } from './Water';
 import { QualityController } from './QualityController';
 import { ReflectiveObject } from './ReflectiveObject';
@@ -27,9 +29,9 @@ function SceneClock({ runtime, paused }: { runtime: MutableRefObject<SceneRuntim
 
 function Sky() {
   const uniforms = useMemo(() => ({ top: { value: new Color(world.lighting.skyTop) }, bottom: { value: new Color(world.lighting.horizon) }, sun: { value: new Vector3(...world.lighting.sunPosition).normalize() } }), []);
-  return <mesh><sphereGeometry args={[360, 32, 24]} /><shaderMaterial side={BackSide} depthWrite={false} uniforms={uniforms}
+  return <mesh><sphereGeometry args={[900, 32, 24]} /><shaderMaterial side={BackSide} depthWrite={false} uniforms={uniforms}
     vertexShader={'varying vec3 direction; void main(){direction=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}' }
-    fragmentShader={'uniform vec3 top;uniform vec3 bottom;uniform vec3 sun;varying vec3 direction;void main(){vec3 ray=normalize(direction);float h=ray.y;float light=max(dot(ray,sun),0.);vec3 sky=mix(bottom,top,smoothstep(-.02,.13,h));sky+=vec3(1.,.98,.9)*(pow(light,1600.)*3.+pow(light,80.)*.12);gl_FragColor=vec4(sky,1.);\n #include <colorspace_fragment>\n}'} />
+    fragmentShader={'uniform vec3 top;uniform vec3 bottom;uniform vec3 sun;varying vec3 direction;void main(){vec3 ray=normalize(direction);float h=ray.y;float light=max(dot(ray,sun),0.);vec3 sky=mix(bottom,top,smoothstep(-.02,.13,h));sky+=vec3(1.,.98,.9)*(pow(light,14000.)*2.5+pow(light,450.)*.06);gl_FragColor=vec4(sky,1.);\n #include <colorspace_fragment>\n}'} />
   </mesh>;
 }
 
@@ -56,7 +58,7 @@ function Labels({ runtime, mobile }: { runtime: MutableRefObject<SceneRuntime>; 
     }
     if (mobile) return;
     if (sculpture.current) {
-      point.set(-10, 2.5, 11).project(camera);
+      point.set(-10, 2.5, 23).project(camera);
       sculpture.current.style.transform = `translate3d(${(point.x * .5 + .5) * size.width}px,${(-point.y * .5 + .5) * size.height}px,0) translate(-50%,-50%)`;
     }
     for (const label of labels.current) {
@@ -90,6 +92,8 @@ function PointerGround({ runtime, paused }: { runtime: MutableRefObject<SceneRun
 export function AeroWorld(props: WorldProps & { runtime: MutableRefObject<SceneRuntime>; tier: QualityTier; onTier: (tier: QualityTier) => void }) {
   const { runtime, tier, onTier, paused, mobile, destination, onNavigate } = props;
   const stopped = paused;
+  // Preserve sunlight direction while placing every island in front of the shadow camera.
+  const sunlightPosition = useMemo(() => new Vector3(...world.lighting.sunPosition).multiplyScalar(3), []);
   const reflections = useMemo(() => (<Environment frames={1} resolution={128}>
       <Lightformer position={[0, 10, 0]} rotation={[Math.PI / 2, 0, 0]} scale={[20, 20, 1]} intensity={2} color="#edffff" />
       <Lightformer position={[-12, 8, 10]} scale={[7, 18, 1]} intensity={2.4} color="#ffffff" />
@@ -100,13 +104,15 @@ export function AeroWorld(props: WorldProps & { runtime: MutableRefObject<SceneR
     <Sky />
     <fog attach="fog" args={[world.lighting.fogColor, world.lighting.fogNear, world.lighting.fogFar]} />
     <hemisphereLight args={[world.lighting.ambientSky, world.lighting.ambientGround, world.lighting.ambientIntensity]} />
-    <directionalLight position={world.lighting.sunPosition} intensity={world.lighting.sunIntensity} color={world.lighting.sunColor} castShadow={world.quality[tier].shadows} shadow-mapSize={[1024, 1024]} shadow-camera-left={-25} shadow-camera-right={25} shadow-camera-top={25} shadow-camera-bottom={-25} shadow-camera-far={70} shadow-normalBias={0.08} shadow-bias={-0.0001} />
+    <directionalLight position={sunlightPosition} intensity={world.lighting.sunIntensity} color={world.lighting.sunColor} castShadow={world.quality[tier].shadows} shadow-mapSize={[2048, 2048]} shadow-camera-left={-55} shadow-camera-right={80} shadow-camera-top={45} shadow-camera-bottom={-22} shadow-camera-near={100} shadow-camera-far={340} shadow-normalBias={0.08} shadow-bias={-0.0001} />
     {reflections}
 
+    <EcoCity runtime={runtime} paused={stopped} quality={tier} />
+    <CoastalLife runtime={runtime} paused={stopped} quality={tier} />
     <Water runtime={runtime} paused={stopped} quality={tier} />
     <AmbientSystem runtime={runtime} paused={stopped} quality={tier} />
     {world.landmarks.map(config => <Landmark key={config.id} config={config} runtime={runtime} paused={stopped} onNavigate={onNavigate}><LandmarkModel id={config.id} active={destination === config.id} runtime={runtime} paused={stopped} quality={tier} /></Landmark>)}
-    <ReflectiveObject position={[-10, 2.5, 11]} runtime={runtime} paused={stopped} quality={tier} command={props.rotationCommand} />
+    <ReflectiveObject position={[-10, 2.5, 23]} runtime={runtime} paused={stopped} quality={tier} command={props.rotationCommand} />
     <PointerGround runtime={runtime} paused={stopped} />
     <CameraDirector {...props} />
     <Labels runtime={runtime} mobile={mobile} />

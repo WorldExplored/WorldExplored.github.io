@@ -46,6 +46,6 @@ Music stays silent and makes no player requests until Play. The native player st
 
 The existing GitHub Actions workflow verifies the repository and publishes only `out/` to GitHub Pages. This root user site has no repository-name base path or runtime service.
 
-See `docs/research/RENDERING_CORRECTION.md`, `docs/qa/RENDERING_CORRECTION_LOG.md`, `docs/3d-rebuild-notes.md` and `design-system/srreyansh-sethi/MASTER.md`. Earlier iteration logs and images are historical evidence. `?diagnostics` shows local renderer/input counters; `?scene=unavailable` exercises guarded initialization failure. Neither sends telemetry.
+See `docs/qa/ARCHIPELAGO_LOG.md` and `design-system/srreyansh-sethi/MASTER.md` for the current coastal world and verification. Earlier iteration logs and images are historical evidence. Development-only `?vegetation` shows land coverage and structural exclusions. `?diagnostics` shows local renderer/input counters; `?scene=unavailable` exercises guarded initialization failure. Neither sends telemetry.
 
 Procedural scene assets are original. Reference-site branding and artwork are not reused. Existing scaffold utilities retain their MIT notice in `LICENSE`.

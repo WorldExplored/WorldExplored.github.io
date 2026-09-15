@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { useEffect } from 'react';
 import { useThree, type RootState } from '@react-three/fiber';
 import { act, create, type ReactThreeTest } from '@react-three/test-renderer';
-import { type Mesh, type MeshPhysicalMaterial, DoubleSide, Vector3 } from 'three';
+import { type BufferGeometry, type Mesh, type MeshPhysicalMaterial, DoubleSide, Raycaster, Vector3 } from 'three';
 import { ReflectiveObject, type RotationCommand } from '../src/components/world/ReflectiveObject';
 import { LandmarkModel } from '../src/components/world/LandmarkModels';
 import { createSceneRuntime, world, type LandmarkId, type QualityTier } from '../src/content/world';
@@ -186,10 +186,10 @@ test('disabled lamp illumination stays off during selection', async () => {
   }
 });
 
-
 test('landmarks fit their planting footprints and preserve the intended hierarchy', async () => {
   const runtime = { current: createSceneRuntime() };
-  const limits: Partial<Record<LandmarkId, number>> = { work: 5.1, research: 3, purdue: 1.5, about: 3, contact: 2.6 };
+  const limits: Record<LandmarkId, number> = { work: 5.5, research: 3.8, purdue: 1.8, about: 3.5, contact: 3.2, building: 2.4 };
+  const heightLimits: Record<LandmarkId, number> = { work: 6.5, research: 4.8, purdue: 2.8, about: 4.2, contact: 4.2, building: 7.5 };
   const bounds: Record<string, { radius: number; width: number; depth: number; top: number; bottom: number; triangles: number }> = {};
   for (const landmark of world.landmarks) {
     const renderer = await create(<LandmarkModel id={landmark.id} runtime={runtime} active={false} paused={false} quality="high" />);
@@ -213,8 +213,9 @@ test('landmarks fit their planting footprints and preserve the intended hierarch
         }
       }
       const limit = limits[landmark.id];
-      if (limit !== undefined) assert.ok(radius <= limit, `${landmark.id} radius ${radius} exceeds ${limit}`);
-      assert.ok(min.y >= 0.6 && min.y <= 1.05, `${landmark.id} must meet the meadow`);
+      assert.ok(radius <= limit, `${landmark.id} radius ${radius} exceeds ${limit}`);
+      assert.ok(Math.abs(min.y - 0.8) < 0.06, `${landmark.id} must meet the island floor`);
+      assert.ok(max.y <= heightLimits[landmark.id], `${landmark.id} exceeds its camera envelope`);
       bounds[landmark.id] = { radius, width: max.x - min.x, depth: max.z - min.z, top: max.y, bottom: min.y, triangles };
     } finally { await renderer.unmount(); }
   }
@@ -235,19 +236,29 @@ test('architectural surfaces use smooth low-metalness clearcoat and transparent 
       if (mesh.name === 'signal-light-sweep') continue;
       const material = mesh.material as MeshPhysicalMaterial;
       assert.ok(material.metalness <= 0.15, 'Surfaces must read as porcelain, glass, or coated plastic.');
-      assert.equal(material.clearcoat, 1);
+      if (material.name === 'architectural-trim') {
+        assert.ok(material.roughness >= 0.3 && material.clearcoatRoughness >= 0.25, 'Thin trim must avoid subpixel clearcoat highlights.');
+      }
+      const color = material.color.getHexString();
+      if (color === '429a08') {
+        assert.ok(material.roughness >= 0.6 && material.clearcoat <= 0.2, 'Roof planting must retain a natural diffuse surface.');
+      } else if (color === 'dcebd9') {
+        assert.ok(material.roughness >= 0.4, 'Terrace paving must remain readable beneath the glazing.');
+      } else {
+        assert.ok(material.clearcoat >= 0.8);
+        assert.ok(material.roughness <= 0.35);
+      }
       assert.equal(material.flatShading, false);
-      assert.ok(material.roughness <= 0.3);
       assert.ok(material.envMapIntensity >= 1);
       if (material.transparent) {
         glass++;
-        assert.ok(material.opacity >= 0.15 && material.opacity <= 0.3);
+        assert.ok(material.opacity >= 0.2 && material.opacity <= 0.45);
         assert.equal(material.depthWrite, false);
         assert.equal(material.transmission, 0);
         assert.equal(mesh.castShadow, false);
       }
     }
-    assert.ok(glass >= 3, 'The dome, data columns, and signal lens must retain glass.');
+    assert.ok(glass >= 6, 'Atrium, conservatories, reception and lantern must retain distinct glazed surfaces.');
   } finally { await renderer.unmount(); }
 });
 
@@ -280,4 +291,104 @@ test('quality, selection, and pause changes preserve every architectural resourc
     }
   } finally { await renderer.unmount(); }
   assert.ok([...disposals.values()].every(count => count === 1), 'Owned resources must be released exactly once on unmount.');
+});
+
+test('the garden canopy preserves the existing sculpture volume', async () => {
+  const runtime = { current: createSceneRuntime() };
+  const renderer = await create(<LandmarkModel id="about" runtime={runtime} active={false} paused={false} quality="high" />);
+  try {
+    renderer.scene.instance.updateMatrixWorld(true);
+    const center = new Vector3(0, 2.5, 0);
+    const point = new Vector3();
+    for (const node of renderer.scene.findAll(item => item.instance.type === 'Mesh')) {
+      const mesh = node.instance as Mesh;
+      const positions = mesh.geometry.attributes.position;
+      for (let index = 0; index < positions.count; index++) {
+        point.fromBufferAttribute(positions, index).applyMatrix4(mesh.matrixWorld);
+        assert.ok(point.distanceTo(center) > 0.97, 'Architecture must leave room for every sculpture orientation.');
+      }
+    }
+  } finally { await renderer.unmount(); }
+});
+
+test('the lighthouse beam remains westward, freezes when paused, and darkens when disabled', async () => {
+  const runtime = { current: createSceneRuntime() };
+  const enabled = world.lighting.lampEnabled;
+  world.lighting.lampEnabled = true;
+  const render = (paused = false) => <LandmarkModel id="building" runtime={runtime} active paused={paused} quality="high" />;
+  const renderer = await create(render());
+  try {
+    const beam = renderer.scene.findByProps({ name: 'signal-light-sweep' }).instance as Mesh<BufferGeometry, MeshPhysicalMaterial>;
+    const direction = new Vector3();
+    for (let second = 0; second <= 180; second += 3) {
+      runtime.current.elapsed = second;
+      await advance(renderer, 1);
+      assert.ok(Math.abs(beam.rotation.y) <= Math.PI * 35 / 180 + 1e-8);
+      direction.set(-1, 0, 0).applyEuler(beam.rotation);
+      assert.ok(direction.x <= -Math.cos(Math.PI * 35 / 180) + 1e-8, 'The beam cannot sweep toward the eastern islands.');
+    }
+    assert.ok(beam.material.opacity > 0.02);
+    await renderer.update(render(true));
+    const rotation = beam.rotation.toArray();
+    const opacity = beam.material.opacity;
+    runtime.current.elapsed += 30;
+    await advance(renderer, 60);
+    assert.deepEqual(beam.rotation.toArray(), rotation);
+    assert.equal(beam.material.opacity, opacity);
+    world.lighting.lampEnabled = false;
+    await renderer.update(render());
+    await advance(renderer, 1);
+    assert.equal(beam.material.emissiveIntensity, 0);
+    assert.equal(beam.material.opacity, 0);
+    for (const node of renderer.scene.findAll(item => item.instance.type === 'Mesh')) {
+      const material = (node.instance as Mesh).material as MeshPhysicalMaterial;
+      if (material.emissive.getHex() !== 0) assert.equal(material.emissiveIntensity, 0);
+    }
+  } finally {
+    await renderer.unmount();
+    world.lighting.lampEnabled = enabled;
+  }
+});
+
+test('facade glass vertices stay outside opaque walls and window frames', async () => {
+  const runtime = { current: createSceneRuntime() };
+  for (const id of ['work', 'research'] as const) {
+    const renderer = await create(<LandmarkModel id={id} runtime={runtime} active={false} paused={false} quality="high" />);
+    try {
+      renderer.scene.instance.updateMatrixWorld(true);
+      for (const target of [`${id}-curved-enclosure`, `${id}-window-frames`]) {
+        const solid = renderer.scene.findByProps({ name: target }).instance as Mesh;
+        // Ray parity needs both entry and exit crossings through closed geometry.
+        (solid.material as MeshPhysicalMaterial).side = DoubleSide;
+        solid.geometry.computeBoundingBox();
+        const bounds = solid.geometry.boundingBox!;
+        const raycaster = new Raycaster();
+        const direction = new Vector3(1, 0.37, 0.23).normalize();
+        const point = new Vector3();
+        const checked = new Set<string>();
+        for (const node of renderer.scene.findAll(item => item.instance.type === 'Mesh')) {
+          const mesh = node.instance as Mesh;
+          if (!(mesh.material as MeshPhysicalMaterial).transparent) continue;
+          const positions = mesh.geometry.attributes.position;
+          for (let index = 0; index < positions.count; index++) {
+            point.fromBufferAttribute(positions, index).applyMatrix4(mesh.matrixWorld);
+            if (!bounds.containsPoint(point)) continue;
+            const key = point.toArray().map(value => value.toFixed(5)).join(',');
+            if (checked.has(key)) continue;
+            checked.add(key);
+            raycaster.set(point, direction);
+            const hits = raycaster.intersectObject(solid, false);
+            let crossings = 0;
+            let previous = -1;
+            for (const hit of hits) {
+              if (Math.abs(hit.distance - previous) < 0.00001) continue;
+              previous = hit.distance;
+              crossings++;
+            }
+            assert.equal(crossings % 2, 0, `Glass at ${key} intersects ${target}`);
+          }
+        }
+      }
+    } finally { await renderer.unmount(); }
+  }
 });
