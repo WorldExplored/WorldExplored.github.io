@@ -1,5 +1,8 @@
 'use client';
 
+// Three.js renderer and material objects are imperative resources owned by Fiber.
+/* eslint-disable react-hooks/immutability */
+
 import { useEffect, useMemo, type MutableRefObject } from 'react';
 import { useFrame, type ThreeEvent } from '@react-three/fiber';
 import { Color, PlaneGeometry, ShaderMaterial, Vector2, Vector3, Vector4 } from 'three';
@@ -50,8 +53,11 @@ const fragmentShader = /* glsl */ `
   void main() {
     vec2 p = vWorld.xz;
     vec3 view = normalize(cameraPosition - vWorld);
-    vec3 n = vNormal;
-    if (uDetail > .5) n.xz += vec2(sin(p.x * 5.7 + p.y * 3.1 + uTime * 1.2), cos(p.x * 3.4 - p.y * 5.2 - uTime)) * .017 * uDetail;
+    float a = p.x * .39 + p.y * .25 + uTime;
+    float b = p.x * -.24 + p.y * .53 - uTime * .75;
+    vec2 slope = cos(a) * vec2(.39,.25) * .055 + cos(b) * vec2(-.24,.53) * .035;
+    vec3 n = normalize(vec3(-slope.x, 1., -slope.y));
+    if (uDetail > .5) n.xz += vec2(sin(p.x * 5.7 + p.y * 3.1 + uTime * 1.2), cos(p.x * 3.4 - p.y * 5.2 - uTime)) * .006 * uDetail * (1. - smoothstep(25., 80., length(cameraPosition - vWorld)));
     float age = uRipple.z;
     if (age >= 0. && age < 2.8) {
       vec2 offset = p - uRipple.xy;
@@ -72,9 +78,11 @@ const fragmentShader = /* glsl */ `
     }
     float broad = sin(p.x * .19 + p.y * .22) * .035;
     vec3 color = mix(uDeep, uWater, .78 + broad);
-    color = mix(color, uHorizon, fresnel * .52) + caustic;
+    color = mix(color, uHorizon, fresnel * .62) + caustic;
+    float sheen = pow(max(dot(reflect(-normalize(vec3(-.4,.8,.25)),n), view),0.),24.);
+    color += vec3(.35,.55,.6) * sheen * .23;
     float sun = pow(max(dot(reflect(-uSunDirection, n), view), 0.), 110.);
-    color += uSunColor * sun * uSunIntensity * .35;
+    color += uSunColor * sun * uSunIntensity * .14;
     float haze = smoothstep(uFogRange.x, uFogRange.y, length(cameraPosition - vWorld));
     color = mix(color, uFog, haze);
     gl_FragColor = vec4(color, 1.);
@@ -97,15 +105,15 @@ function startRipple(state: SceneRuntime, x: number, z: number) {
 export function Water({ runtime, paused, quality }: EnvironmentProps) {
   const detail = world.quality[quality].waterDetail;
   const geometry = useMemo(() => {
-    const segments = quality === 'high' ? 96 : quality === 'medium' ? 64 : 40;
+    const segments = 96;
     return new PlaneGeometry(480, 480, segments, segments).rotateX(-Math.PI / 2);
-  }, [quality]);
+  }, []);
   const material = useMemo(() => new ShaderMaterial({
     vertexShader,
     fragmentShader,
     uniforms: {
       uTime: { value: 0 },
-      uDetail: { value: detail },
+      uDetail: { value: 1 },
       uRipple: { value: new Vector4(0, 0, 100, 0) },
       uWater: { value: new Color(world.lighting.water) },
       uDeep: { value: new Color(world.lighting.deepWater) },
@@ -116,8 +124,9 @@ export function Water({ runtime, paused, quality }: EnvironmentProps) {
       uSunColor: { value: new Color(world.lighting.sunColor) },
       uSunIntensity: { value: world.lighting.sunIntensity },
     },
-  }), [detail]);
+  }), []);
   useEffect(() => () => { geometry.dispose(); material.dispose(); }, [geometry, material]);
+  useEffect(() => { material.uniforms.uDetail.value = detail; }, [material, detail]);
   useFrame(() => {
     if (paused) return;
     updateWater(material, runtime.current);

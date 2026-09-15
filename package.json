@@ -25,7 +25,7 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "check": "npm run lint && npm run typecheck && npm run build",
-    "test": "node --import tsx --test scripts/content.test.mjs scripts/world.test.tsx scripts/objects.test.tsx scripts/audio.test.tsx scripts/environment.test.mjs scripts/preferences.test.mjs",
+    "test": "node --import tsx --test scripts/content.test.mjs scripts/world.test.tsx scripts/objects.test.tsx scripts/audio.test.tsx scripts/environment.test.mjs scripts/preferences.test.mjs scripts/rendering.test.ts scripts/camera.test.tsx",
     "sync:github": "node scripts/sync-github.mjs"
   },
   "dependencies": {

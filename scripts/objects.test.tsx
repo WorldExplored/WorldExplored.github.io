@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { useEffect } from 'react';
 import { useThree, type RootState } from '@react-three/fiber';
 import { act, create, type ReactThreeTest } from '@react-three/test-renderer';
-import { type Mesh, type MeshPhysicalMaterial, DoubleSide } from 'three';
+import { type Mesh, type MeshPhysicalMaterial, DoubleSide, Vector3 } from 'three';
 import { ReflectiveObject, type RotationCommand } from '../src/components/world/ReflectiveObject';
 import { LandmarkModel } from '../src/components/world/LandmarkModels';
 import { createSceneRuntime, world, type LandmarkId, type QualityTier } from '../src/content/world';
@@ -184,4 +184,100 @@ test('disabled lamp illumination stays off during selection', async () => {
     await renderer?.unmount();
     world.lighting.lampEnabled = enabled;
   }
+});
+
+
+test('landmarks fit their planting footprints and preserve the intended hierarchy', async () => {
+  const runtime = { current: createSceneRuntime() };
+  const limits: Partial<Record<LandmarkId, number>> = { work: 5.1, research: 3, purdue: 1.5, about: 3, contact: 2.6 };
+  const bounds: Record<string, { radius: number; width: number; depth: number; top: number; bottom: number; triangles: number }> = {};
+  for (const landmark of world.landmarks) {
+    const renderer = await create(<LandmarkModel id={landmark.id} runtime={runtime} active={false} paused={false} quality="high" />);
+    try {
+      renderer.scene.instance.updateMatrixWorld(true);
+      const point = new Vector3();
+      const min = new Vector3(Infinity, Infinity, Infinity);
+      const max = new Vector3(-Infinity, -Infinity, -Infinity);
+      let radius = 0;
+      let triangles = 0;
+      for (const node of renderer.scene.findAll(item => item.instance.type === 'Mesh')) {
+        const mesh = node.instance as Mesh;
+        if (mesh.name === 'signal-light-sweep') continue;
+        const positions = mesh.geometry.attributes.position;
+        triangles += (mesh.geometry.index?.count ?? positions.count) / 3;
+        for (let index = 0; index < positions.count; index++) {
+          point.fromBufferAttribute(positions, index).applyMatrix4(mesh.matrixWorld);
+          min.min(point);
+          max.max(point);
+          radius = Math.max(radius, Math.hypot(point.x, point.z));
+        }
+      }
+      const limit = limits[landmark.id];
+      if (limit !== undefined) assert.ok(radius <= limit, `${landmark.id} radius ${radius} exceeds ${limit}`);
+      assert.ok(min.y >= 0.6 && min.y <= 1.05, `${landmark.id} must meet the meadow`);
+      bounds[landmark.id] = { radius, width: max.x - min.x, depth: max.z - min.z, top: max.y, bottom: min.y, triangles };
+    } finally { await renderer.unmount(); }
+  }
+  assert.ok(bounds.purdue.top <= 2.8);
+  assert.ok(bounds.work.radius > bounds.research.radius && bounds.research.radius > bounds.purdue.radius);
+  assert.ok(bounds.work.top > bounds.research.top && bounds.research.top > bounds.purdue.top);
+  assert.ok(bounds.work.triangles > bounds.research.triangles && bounds.research.triangles > bounds.purdue.triangles);
+  console.log(JSON.stringify({ landmarkBounds: bounds }));
+});
+
+test('architectural surfaces use smooth low-metalness clearcoat and transparent glass', async () => {
+  const runtime = { current: createSceneRuntime() };
+  const renderer = await create(<group>{world.landmarks.map(({ id }) => <LandmarkModel key={id} id={id} runtime={runtime} active={false} paused={false} quality="low" />)}</group>);
+  try {
+    let glass = 0;
+    for (const node of renderer.scene.findAll(item => item.instance.type === 'Mesh')) {
+      const mesh = node.instance as Mesh;
+      if (mesh.name === 'signal-light-sweep') continue;
+      const material = mesh.material as MeshPhysicalMaterial;
+      assert.ok(material.metalness <= 0.15, 'Surfaces must read as porcelain, glass, or coated plastic.');
+      assert.equal(material.clearcoat, 1);
+      assert.equal(material.flatShading, false);
+      assert.ok(material.roughness <= 0.3);
+      assert.ok(material.envMapIntensity >= 1);
+      if (material.transparent) {
+        glass++;
+        assert.ok(material.opacity >= 0.15 && material.opacity <= 0.3);
+        assert.equal(material.depthWrite, false);
+        assert.equal(material.transmission, 0);
+        assert.equal(mesh.castShadow, false);
+      }
+    }
+    assert.ok(glass >= 3, 'The dome, data columns, and signal lens must retain glass.');
+  } finally { await renderer.unmount(); }
+});
+
+test('quality, selection, and pause changes preserve every architectural resource until unmount', async () => {
+  const runtime = { current: createSceneRuntime() };
+  const render = (quality: QualityTier, active = false, paused = false) => <group>{world.landmarks.map(({ id }) => <LandmarkModel key={id} id={id} runtime={runtime} active={active} paused={paused} quality={quality} />)}</group>;
+  const renderer = await create(render('high'));
+  const snapshot = () => renderer.scene.findAll(node => node.instance.type === 'Mesh').map(node => {
+    const mesh = node.instance as Mesh;
+    return { mesh, geometry: mesh.geometry, material: mesh.material as MeshPhysicalMaterial };
+  });
+  const original = snapshot();
+  const resources = new Set(original.flatMap(({ geometry, material }) => [geometry, material]));
+  const disposals = new Map([...resources].map(resource => [resource, 0]));
+  for (const resource of resources) resource.addEventListener('dispose', () => disposals.set(resource, disposals.get(resource)! + 1));
+  try {
+    for (const quality of ['low', 'medium', 'high', 'low'] as QualityTier[]) {
+      for (const [active, paused] of [[true, false], [false, true], [false, false]]) {
+        await renderer.update(render(quality, active, paused));
+        await advance(renderer, 1);
+        const current = snapshot();
+        assert.equal(current.length, original.length);
+        for (let index = 0; index < original.length; index++) {
+          assert.equal(current[index].mesh, original[index].mesh);
+          assert.equal(current[index].geometry, original[index].geometry);
+          assert.equal(current[index].material, original[index].material);
+        }
+        assert.ok([...disposals.values()].every(count => count === 0), 'Live resources cannot be disposed during quality or navigation updates.');
+      }
+    }
+  } finally { await renderer.unmount(); }
+  assert.ok([...disposals.values()].every(count => count === 1), 'Owned resources must be released exactly once on unmount.');
 });

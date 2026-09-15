@@ -4,10 +4,9 @@ export type Vec3 = [number, number, number];
 export type QualityTier = 'high' | 'medium' | 'low';
 export type LandmarkId = SectionId;
 export interface CameraPose { position: Vec3; target: Vec3 }
-export interface LandmarkConfig { id: LandmarkId; position: Vec3; label: Vec3; camera: CameraPose; color: string }
+export interface LandmarkConfig { id: LandmarkId; position: Vec3; label: Vec3; color: string }
 export interface SceneRuntime {
   elapsed: number;
-  scroll: number;
   pointer: [number, number];
   pointerActive: boolean;
   pointerWorld: Vec3;
@@ -35,35 +34,28 @@ export interface WorldProps {
 
 export const world = {
   flightSeconds: 0.8,
-  colors: { grass: '#347315', grassLight: '#78ab24', grassDark: '#306b17', sand: '#f2dfaa', stone: '#c0d9cc', porcelain: '#f5fff4', cyan: '#56e4ee', glass: '#7ee6e7', gold: '#ddb858', ink: '#123a4a' },
-  overview: { position: [13, 14, 30], target: [0, 5, -3] } as CameraPose,
-  mobileOverview: { position: [17, 19, 37], target: [0, 2, -3] } as CameraPose,
+  colors: { grass: '#429a08', grassLight: '#79b619', grassDark: '#205d08', sand: '#ebf1d0', stone: '#c0d9cc', porcelain: '#f5fff4', cyan: '#56e4ee', glass: '#7ee6e7', gold: '#ddb858', ink: '#123a4a' },
+  overview: { position: [23, 10, 34], target: [-2, 4, -7] } as CameraPose,
+  mobileOverview: { position: [0, 19, 48], target: [0.7, 4, -3] } as CameraPose,
   landmarks: [
-    { id: 'work', position: [-8, 0, 0], label: [-8, 5, 0], camera: { position: [4, 8.5, 17], target: [-1.5, 2.8, 0] }, color: '#a7ed61' },
-    { id: 'research', position: [0, 0, 6], label: [0, 3, 6], camera: { position: [12, 7, 21], target: [6, 2, 6] }, color: '#65edff' },
-    { id: 'purdue', position: [9, 0, -2], label: [9, 5, -2], camera: { position: [22, 8, 14], target: [15, 2.5, -2] }, color: '#ffe196' },
-    { id: 'about', position: [-6, 0, 12], label: [-6, 3.5, 12], camera: { position: [6, 7, 25], target: [0, 2.5, 12] }, color: '#a6e65c' },
-    { id: 'contact', position: [14, 0, 7], label: [14, 3.5, 7], camera: { position: [25, 7, 20], target: [19, 2, 7] }, color: '#72deff' },
-    { id: 'building', position: [1, 0, -42], label: [1, 5.8, -42], camera: { position: [12, 8, -23], target: [7, 3, -42] }, color: '#bcffff' },
+    { id: 'work', position: [-8, 0, 0], label: [-8, 6, 0], color: '#a7ed61' },
+    { id: 'research', position: [4, 0, -7], label: [4, 4, -7], color: '#65edff' },
+    { id: 'purdue', position: [13, 0, -12], label: [13, 3, -12], color: '#ffe196' },
+    { id: 'about', position: [-10, 0, 11], label: [-10, 3.5, 11], color: '#a6e65c' },
+    { id: 'contact', position: [12, 0, 8], label: [12, 3.5, 8], color: '#72deff' },
+    { id: 'building', position: [1, 0, -65], label: [1, 5.8, -65], color: '#bcffff' },
   ] as LandmarkConfig[],
-  islands: [
-    { center: [-8, -0.25, 0] as Vec3, radius: [6.3, 4.7] as [number, number], height: 1.15 },
-    { center: [9, -0.25, -2] as Vec3, radius: [5.8, 4.5] as [number, number], height: 1.15 },
-    { center: [1, -0.25, -42] as Vec3, radius: [3, 2.6] as [number, number], height: 0.8 },
-    { center: [-6, -0.4, 12] as Vec3, radius: [7.5, 4] as [number, number], height: 1.35 },
-    { center: [14, -0.45, 7] as Vec3, radius: [5, 3.5] as [number, number], height: 1.2 },
-  ],
   quality: {
-    high: { dpr: 1.75, grass: 2000, clouds: 24, bubbles: 5, particles: 80, segments: 48, shadows: true, waterDetail: 1 },
-    medium: { dpr: 1.35, grass: 1100, clouds: 16, bubbles: 3, particles: 40, segments: 32, shadows: true, waterDetail: 0.65 },
-    low: { dpr: 1, grass: 450, clouds: 10, bubbles: 2, particles: 18, segments: 24, shadows: false, waterDetail: 0.35 },
+    high: { dpr: 1.75, grass: 9000, clouds: 24, bubbles: 5, particles: 80, segments: 48, shadows: true, waterDetail: 1 },
+    medium: { dpr: 1.35, grass: 5000, clouds: 16, bubbles: 3, particles: 40, segments: 32, shadows: true, waterDetail: 0.65 },
+    low: { dpr: 1, grass: 2200, clouds: 10, bubbles: 2, particles: 18, segments: 24, shadows: false, waterDetail: 0.35 },
   },
-  lighting: { skyTop: '#006bd6', horizon: '#87dbe9', sunPosition: [-12, 24, 12] as Vec3, sunIntensity: 2.05, sunColor: '#fff3ce', ambientSky: '#c4eaff', ambientGround: '#568b28', ambientIntensity: 1.0, fogColor: '#87dbe9', fogNear: 110, fogFar: 190, water: '#00b9d0', deepWater: '#006fa4', windowIllumination: 0.3, lampIntensity: 0.7, lampEnabled: true, cloudColor: '#ffffff' },
+  lighting: { skyTop: '#005cdd', horizon: '#87dbe9', sunPosition: [-24, 12, -48] as Vec3, sunIntensity: 2.4, sunColor: '#ffffff', ambientSky: '#c4eaff', ambientGround: '#83ab41', ambientIntensity: .75, fogColor: '#87dbe9', fogNear: 170, fogFar: 290, water: '#00b9d0', deepWater: '#006fa4', windowIllumination: 0.3, lampIntensity: 0.7, lampEnabled: true, cloudColor: '#ffffff' },
   environment: { cloudSpeed: 0.12, windSpeed: 0.7, waterSpeed: 0.55 },
 };
 
 export function createSceneRuntime(): SceneRuntime {
-  return { elapsed: 0, scroll: 0, pointer: [0, 0], pointerActive: false, pointerWorld: [0, 0, 0], cloudInteraction: 0, plantInteraction: 0, moving: false, hovered: null, ripple: { x: 0, z: 0, time: -100, serial: 0 }, dragCount: 0, dragging: false, frames: 0 };
+  return { elapsed: 0, pointer: [0, 0], pointerActive: false, pointerWorld: [0, 0, 0], cloudInteraction: 0, plantInteraction: 0, moving: false, hovered: null, ripple: { x: 0, z: 0, time: -100, serial: 0 }, dragCount: 0, dragging: false, frames: 0 };
 }
 
 export function motionPolicy(reduced: boolean, saveData: boolean, forcedColors: boolean) {

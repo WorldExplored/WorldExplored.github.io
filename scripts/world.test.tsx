@@ -5,6 +5,7 @@ import { create, act, type ReactThreeTest } from '@react-three/test-renderer';
 import { useFrame, useThree, type RootState } from '@react-three/fiber';
 import { Vector3, type Mesh, type ShaderMaterial, type PlaneGeometry } from 'three';
 import { CameraDirector } from '../src/components/world/CameraDirector';
+import { focusPose } from '../src/components/world/cameraControls';
 import { Landmark } from '../src/components/world/Landmark';
 import { Water } from '../src/components/world/Water';
 import { QualityController } from '../src/components/world/QualityController';
@@ -61,7 +62,7 @@ test('camera arrives after 800 ms once, even after performance regression and re
   assert.deepEqual(fixture.arrivals, []);
   await advance(fixture.renderer, 1);
   assert.deepEqual(fixture.arrivals, [{ id: 'work', serial: 1 }]);
-  const expected = new Vector3(...world.landmarks.find(item => item.id === 'work')!.camera.position);
+  const expected = new Vector3(...focusPose('work', false, 1440 / 900).position);
   assert.ok(fixture.getRoot().camera.position.distanceTo(expected) < 1e-8);
   assert.equal(fixture.runtime.current.moving, false);
 
@@ -96,11 +97,10 @@ test('paused navigation arrives immediately and keeps its pose frozen', async t 
   await advance(fixture.renderer, 1);
   assert.deepEqual(fixture.arrivals, [{ id: 'purdue', serial: 1 }]);
   assert.equal(fixture.runtime.current.moving, false);
-  const expected = new Vector3(...world.landmarks.find(item => item.id === 'purdue')!.camera.position);
+  const expected = new Vector3(...focusPose('purdue', false, 1440 / 900).position);
   assert.ok(fixture.getRoot().camera.position.distanceTo(expected) < 1e-8);
   const rotation = fixture.getRoot().camera.quaternion.clone();
   fixture.runtime.current.pointer = [1, -1];
-  fixture.runtime.current.scroll = 1;
   await recoverPerformance();
   await advance(fixture.renderer, 100);
   assert.deepEqual(fixture.arrivals, [{ id: 'purdue', serial: 1 }]);
@@ -192,10 +192,14 @@ function SampleClock({ clockRef }: { clockRef: MutableRefObject<number> }) {
 }
 
 test('healthy performance never forces low quality and declines respect the eight-second gate', async t => {
+  const previousRAF = Object.getOwnPropertyDescriptor(globalThis, 'requestAnimationFrame');
+  const previousCancelRAF = Object.getOwnPropertyDescriptor(globalThis, 'cancelAnimationFrame');
+  Object.defineProperty(globalThis, 'requestAnimationFrame', { configurable: true, value: () => 1 });
+  Object.defineProperty(globalThis, 'cancelAnimationFrame', { configurable: true, value: () => {} });
   const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
   const previousDocument = Object.getOwnPropertyDescriptor(globalThis, 'document');
-  Object.defineProperty(globalThis, 'window', { configurable: true, value: { devicePixelRatio: 2 } });
-  Object.defineProperty(globalThis, 'document', { configurable: true, value: { querySelector: () => null } });
+  Object.defineProperty(globalThis, 'window', { configurable: true, value: { devicePixelRatio: 2, addEventListener() {}, removeEventListener() {}, location: { search: '' } } });
+  Object.defineProperty(globalThis, 'document', { configurable: true, value: { querySelector: () => null, hidden: false, addEventListener() {}, removeEventListener() {} } });
   const clock = { current: 1000 };
   t.mock.method(performance, 'now', () => clock.current);
   const runtime = { current: createSceneRuntime() };
@@ -212,7 +216,7 @@ test('healthy performance never forces low quality and declines respect the eigh
     await advance(renderer, 3600);
     assert.deepEqual(changes, [], 'Repeated healthy sample windows must not invoke a low-quality fallback.');
 
-    // Hold scene time at each boundary while the real Drei monitor samples slow frames.
+    // Hold scene time at each boundary while consecutive frame windows are measured.
     runtime.current.elapsed = 7.9;
     await advance(renderer, 180, 1 / 20);
     assert.deepEqual(changes, []);
@@ -232,6 +236,8 @@ test('healthy performance never forces low quality and declines respect the eigh
     assert.deepEqual(changes, ['medium', 'low']);
   } finally {
     await renderer?.unmount();
+    if (previousRAF) Object.defineProperty(globalThis, 'requestAnimationFrame', previousRAF); else Reflect.deleteProperty(globalThis, 'requestAnimationFrame');
+    if (previousCancelRAF) Object.defineProperty(globalThis, 'cancelAnimationFrame', previousCancelRAF); else Reflect.deleteProperty(globalThis, 'cancelAnimationFrame');
     if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
     else Reflect.deleteProperty(globalThis, 'window');
     if (previousDocument) Object.defineProperty(globalThis, 'document', previousDocument);

@@ -1,39 +1,54 @@
 'use client';
 
+// Three.js renderer and material objects are imperative resources owned by Fiber.
+/* eslint-disable react-hooks/immutability */
+
 import { useEffect, useRef, type MutableRefObject } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
-import { PerformanceMonitor } from '@react-three/drei';
 import { lowerQuality, world, type QualityTier, type SceneRuntime } from '@/content/world';
+import { auditing, renderAudit } from './renderDiagnostics';
 
 export function QualityController({ runtime, tier, onTier, paused, mobile }: { runtime: MutableRefObject<SceneRuntime>; tier: QualityTier; onTier: (tier: QualityTier) => void; paused: boolean; mobile: boolean }) {
-  const last = useRef(0);
-  const sample = useRef({ seconds: 0, frames: 0 });
+  const lastDowngrade = useRef(0);
+  const stressStep = useRef(-1);
+  const stress = useRef(false);
+  const sample = useRef({ seconds: 0, frames: 0, slowWindows: 0 });
   const output = useRef<HTMLElement | null>(null);
-  const { gl, camera, scene, setDpr } = useThree();
-  const performanceFactor = useThree(state => state.performance.current);
+  const { gl, camera, setDpr, setFrameloop, invalidate } = useThree();
   useEffect(() => {
-    setDpr(Math.max(0.75, Math.min(window.devicePixelRatio, world.quality[tier].dpr, mobile ? 1.25 : 1.75) * performanceFactor));
-  }, [tier, mobile, performanceFactor, setDpr]);
+    const update = () => {
+      const dpr = Math.min(window.devicePixelRatio, world.quality[tier].dpr, mobile ? 1.25 : 1.75);
+      if (gl.getPixelRatio() !== dpr) { renderAudit.dprChanges++; setDpr(dpr); invalidate(); }
+    };
+    update(); window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, [gl, tier, mobile, setDpr, invalidate]);
   useEffect(() => {
-    output.current = document.querySelector<HTMLElement>('[data-scene-diagnostics]');
-  }, []);
+    renderAudit.qualityChanges++;
+    gl.shadowMap.enabled = world.quality[tier].shadows;
+    gl.shadowMap.needsUpdate = true;
+    invalidate();
+  }, [gl, tier, invalidate]);
+  useEffect(() => {
+    const update = () => { renderAudit.frameLoopChanges++; setFrameloop(document.hidden ? 'never' : paused ? 'demand' : 'always'); if (!document.hidden) invalidate(); };
+    update(); document.addEventListener('visibilitychange', update);
+    return () => document.removeEventListener('visibilitychange', update);
+  }, [paused, setFrameloop, invalidate]);
+  useEffect(() => { output.current = document.querySelector('[data-scene-diagnostics]'); stress.current = auditing() && new URLSearchParams(window.location.search).has('stress'); }, []);
   useFrame((_, delta) => {
-    gl.render(scene, camera);
-    sample.current.seconds += delta;
-    sample.current.frames++;
-    if (sample.current.seconds < 1 && !paused) return;
-    const fps = paused ? 0 : Math.round(sample.current.frames / sample.current.seconds);
-    const status = { tier, fps, calls: gl.info.render.calls, triangles: gl.info.render.triangles, dpr: Number(gl.getPixelRatio().toFixed(2)), frames: runtime.current.frames, elapsed: Number(runtime.current.elapsed.toFixed(2)), camera: camera.position.toArray().map(value => Number(value.toFixed(2))), ripple: runtime.current.ripple.serial, drags: runtime.current.dragCount, clouds: runtime.current.cloudInteraction, plants: runtime.current.plantInteraction, paused };
-    if (output.current) {
-      output.current.textContent = JSON.stringify(status);
-      output.current.dataset.tier = tier;
+    // Observe only. Fiber owns the sole screen render after all subscribers finish.
+    if (stress.current) {
+      const step = Math.min(6, Math.floor(runtime.current.elapsed / 12));
+      if (stressStep.current !== step) { stressStep.current = step; onTier((['high','medium','low'] as const)[step % 3]); }
     }
-    sample.current = { seconds: 0, frames: 0 };
-  }, 1);
-  function downgrade() {
-    if (paused || runtime.current.elapsed - last.current < 8) return;
-    last.current = runtime.current.elapsed;
-    onTier(lowerQuality(tier));
-  }
-  return <>{!paused && <PerformanceMonitor ms={500} iterations={6} bounds={() => [38, 58]} onDecline={downgrade} />}</>;
+    const state = sample.current;
+    state.seconds += Math.min(delta, .1); state.frames++;
+    if (state.seconds < 1) return;
+    const fps = Math.round(state.frames / state.seconds);
+    if (!paused && runtime.current.elapsed - lastDowngrade.current >= 8 && fps < 30) state.slowWindows++; else state.slowWindows = 0;
+    if (state.slowWindows >= 6 && tier !== 'low') { state.slowWindows = 0; lastDowngrade.current = runtime.current.elapsed; onTier(lowerQuality(tier)); }
+    if (output.current && auditing()) output.current.textContent = JSON.stringify({ tier, fps, calls: gl.info.render.calls, triangles: gl.info.render.triangles, dpr: gl.getPixelRatio(), frames: runtime.current.frames, elapsed: +runtime.current.elapsed.toFixed(2), camera: camera.position.toArray().map(n => +n.toFixed(2)), clouds: runtime.current.cloudInteraction, plants: runtime.current.plantInteraction, ripple: runtime.current.ripple.serial, paused, audit: renderAudit });
+    state.seconds = 0; state.frames = 0;
+  });
+  return null;
 }

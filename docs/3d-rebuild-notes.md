@@ -4,20 +4,20 @@ Current revision: September 2026 refinement. Earlier build evidence remains in `
 
 ## Canonical content and navigation
 
-`Habitat.tsx` renders each semantic section exactly once. Before enhancement all sections are readable in document flow. Enhancement selects one canonical section after a cancellable 800 ms camera approach. Content appears in a framed architectural display on the right of desktop views and below the selected structure on narrow views. A projected connector ties the surface to the landmark; no backdrop or modal is used.
+`Habitat.tsx` renders each semantic section exactly once. Before enhancement all sections are readable in document flow. Enhancement selects one canonical section after a cancellable 800 ms camera approach. Content appears in a framed architectural display on the right of desktop views and below the selected structure on narrow views. Placement and camera framing connect the surface to its landmark; there is no connector line or backdrop.
 
-`navigation.ts` provides stable hash/history snapshots. Native and modified anchors, deep links, Back/Forward and Escape are preserved. Opening focuses Back to world; closing returns focus to the initiating control. The reading surface uses native document scrolling and a sticky Back control, with no focus trap.
+`navigation.ts` provides stable hash/history snapshots. Native and modified anchors, deep links, Back/Forward and Escape are preserved. Opening focuses an accessibly named close icon; closing returns focus to the initiating control. The reading surface owns native scrolling inside one viewport, with no focus trap.
 
 ## Scene
 
-`WorldCanvas.tsx` guards WebGL2 initialization, serializes Fiber root reconfiguration, observes host size, handles context loss and exposes failure to HTML. There is no image fallback. Automatic reduced motion retains a stable 3D view with immediate destination changes. Forced colors, Save-Data and genuine WebGL failure use a simple background and semantic navigation/content.
+`WorldCanvas.tsx` guards WebGL2 initialization, creates and configures one stable Fiber root, observes host size, handles context loss and exposes failure to HTML. There is no image fallback. Automatic reduced motion retains a stable 3D view with immediate destination changes. Forced colors, Save-Data and genuine WebGL failure use a simple background and semantic navigation/content.
 
 | Module | Responsibility |
 | --- | --- |
-| `AeroWorld` | Sky, sun, ambient light, reflection sources, pointer projection and HTML connectors |
-| `CameraDirector` | Native scroll route, aspect fitting, cancellable approaches and immediate reduced-motion navigation |
+| `AeroWorld` | Sky, sun, ambient light, reflection sources, pointer projection and spatial labels |
+| `CameraDirector` | Free orbit/pan, cursor-targeted wheel zoom, pinch, bounded parallax, collision checks and cancellable focus |
 | `Landmark` / `LandmarkModels` | Six distinct destinations, full model click handling and corresponding local feedback |
-| `AmbientSystem` / `terrain` | Islands, bridges, groves, instanced grass, clouds and a few distant motes |
+| `AmbientSystem` / `terrain` | Continuous meadow/shoreline, connected paths, foliage, excluded plant placement and per-puff cloud volumes |
 | `Water` | Local radial disturbance in analytic normals/highlights, natural decay and drag filtering |
 | `ReflectiveObject` | Bounded rotation, damped release, fixed scale, capture cleanup and touch/keyboard behavior |
 | `QualityController` | Actual renderer statistics, DPR and tier reductions |
@@ -25,9 +25,9 @@ Current revision: September 2026 refinement. Earlier build evidence remains in `
 
 All future daylight inputs live in `world.lighting`: sky and horizon, sun position/intensity/color, ambient colors/intensity, fog range/color, water colors, window illumination, lamp state/intensity and cloud color. There is no location request or clock-based lighting system.
 
-Frame callbacks mutate reused Three.js objects/uniforms, not React state. Repeated environmental forms share geometry/materials. Reading uses demand rendering; hidden/offscreen canvases stop. Desktop/mobile DPR caps are 1.75/1.25. Sustained declines can reduce high to medium to low after an eight-second cooldown.
+Frame callbacks mutate reused Three.js objects/uniforms, not React state. Repeated environmental forms share geometry/materials. Reduced motion uses demand rendering; hidden canvases stop. Content surfaces retain free world interaction. Desktop/mobile DPR caps are 1.75/1.25. Sustained declines can reduce high to medium to low after an eight-second cooldown.
 
-Foreground physics bubbles and Rapier were removed. Distant motes are small, soft, high and far behind the destinations. Cloud proximity uses the pointer's camera ray; vegetation uses its projected ground point. UI hover disables environmental proximity, and destination focus affects only the corresponding landmark.
+Foreground physics bubbles and Rapier were removed. Distant motes are small, soft, high and far behind the destinations. Cloud proximity ray-tests every active puff ellipsoid with the same drift/deformation transform used for rendering. Vegetation uses the terrain intersection and deterministic architecture/path/rock/tree/water exclusions including blade reach. UI hover disables environmental proximity, and destination focus affects only the corresponding landmark.
 
 ## Content and assets
 

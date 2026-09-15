@@ -22,7 +22,7 @@ React/React DOM 19.2.8, Fiber 9.7.0, Drei 10.7.8 and Three 0.182.0 remain pinned
 ## Editing
 
 - `src/content/profile.ts`: verified copy, contact destinations, availability, public contribution curation and section IDs. The source snapshot retains authored history; the public collection includes only selected Open/Merged work and the attributed co-developed contribution.
-- `src/content/world.ts`: landmarks, camera poses, terrain, quality tiers and the centralized `lighting` configuration. Sky, horizon, sun, ambient light, fog, water, windows, lamp and clouds are controlled here. No time or location system is implemented.
+- `src/content/world.ts`: landmarks, overview framing, terrain, quality tiers and the centralized `lighting` configuration. Sky, horizon, sun, ambient light, fog, water, windows, lamp and clouds are controlled here. No time or location system is implemented.
 - `src/content/audio.ts`: approved source, license evidence and player labels. A null source renders no player or requests.
 - `src/components/SectionContent.tsx`: the single semantic presentation of each section. Add a renderer, icon, configuration and tests when adding a section.
 - `src/components/world/`: procedural architecture, vegetation, clouds, water, camera, bounded rotation and renderer policies.
@@ -34,11 +34,11 @@ React/React DOM 19.2.8, Fiber 9.7.0, Drei 10.7.8 and Three 0.182.0 remain pinned
 
 A guarded WebGL2 initializer creates a client-only Fiber root. Context denial/loss or an initialization error leaves semantic navigation and content over a simple designed background. No separate island screenshot or view selector is shipped. Without JavaScript, all canonical sections remain readable in document flow.
 
-Native scrolling moves the camera through a bounded route. Desktop pointer input adds slight parallax; landmarks and direct links share hash/history state. Normal section selection uses a cancellable 800 ms approach, then reveals its connected surface. Back to world and Escape return to the overview; focus returns to the initiating control. Content scrolls normally without a modal focus trap.
+Empty-world dragging orbits, right-drag pans, wheel zoom follows the cursor and pinch zooms. Pointer motion adds bounded parallax. Destination selection uses a cancellable 800 ms approach, then leaves the camera free. Close and Escape return to overview and restore focus. The enhanced document occupies one viewport; long content scrolls inside its keyboard-focusable surface with a hidden scrollbar. Hashes and browser history remain available.
 
-Reduced motion automatically freezes ambient motion and removes camera flights while retaining the world. Forced colors and Save-Data use semantic fallback. Hidden/offscreen canvases stop rendering, and reading surfaces use demand rendering. Quality tiers reduce detail and DPR while preserving landmarks; declines have an eight-second cooldown. Desktop DPR caps at 1.75 and mobile at 1.25.
+Reduced motion automatically freezes ambient motion and removes camera flights while retaining the world. Forced colors and Save-Data use semantic fallback. Hidden canvases stop rendering; reduced motion uses demand rendering. Reading surfaces preserve ambient rendering and world input. Quality tiers reduce detail and DPR while preserving landmarks; declines have an eight-second cooldown. Desktop DPR caps at 1.75 and mobile at 1.25.
 
-Cloud and plant responses are local to the pointer. Water clicks alter material normals and highlights. A reflective sculpture supports bounded mouse/pen rotation, touch feedback and keyboard activation. Only a few small distant decorative motes remain.
+Every visible cloud uses ray-tested puff ellipsoids synchronized with drift and deformation. Plant placement excludes architecture, paths, rocks, trees and shoreline with a motion margin; responses remain local to the pointer. Water clicks alter material normals and highlights. A reflective sculpture supports bounded mouse/pen rotation, touch feedback and keyboard activation. Only a few small distant decorative motes remain.
 
 Music stays silent and makes no player requests until Play. The native player streams the creator-published licensed audio file, with no video embed; close clears the source. Source, creator and license credit accompany playback. Third-party availability can vary.
 
@@ -46,6 +46,6 @@ Music stays silent and makes no player requests until Play. The native player st
 
 The existing GitHub Actions workflow verifies the repository and publishes only `out/` to GitHub Pages. This root user site has no repository-name base path or runtime service.
 
-See `docs/research/AERO_REFINEMENT.md`, `docs/qa/AERO_REFINEMENT_LOG.md`, `docs/3d-rebuild-notes.md` and `design-system/srreyansh-sethi/MASTER.md`. Earlier iteration logs and images are historical evidence. `?diagnostics` shows local renderer/input counters; `?scene=unavailable` exercises guarded initialization failure. Neither sends telemetry.
+See `docs/research/RENDERING_CORRECTION.md`, `docs/qa/RENDERING_CORRECTION_LOG.md`, `docs/3d-rebuild-notes.md` and `design-system/srreyansh-sethi/MASTER.md`. Earlier iteration logs and images are historical evidence. `?diagnostics` shows local renderer/input counters; `?scene=unavailable` exercises guarded initialization failure. Neither sends telemetry.
 
 Procedural scene assets are original. Reference-site branding and artwork are not reused. Existing scaffold utilities retain their MIT notice in `LICENSE`.

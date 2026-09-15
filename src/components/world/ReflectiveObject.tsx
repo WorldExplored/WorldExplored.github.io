@@ -37,7 +37,7 @@ interface RotationDrag {
   deliberate: boolean;
 }
 
-const DEFAULT_POSITION: Vec3 = [-12, 2.5, 13];
+const DEFAULT_POSITION: Vec3 = [-10, 2.5, 11];
 const INITIAL_PITCH = 0.22;
 const INITIAL_YAW = -0.3;
 const PITCH_LIMIT = 0.8;
@@ -47,7 +47,7 @@ function boundedAngle(angle: number) {
   return MathUtils.euclideanModulo(angle + Math.PI, Math.PI * 2) - Math.PI;
 }
 
-export function ReflectiveObject({ runtime: runtimeRef, paused, quality, position = DEFAULT_POSITION, command }: ReflectiveObjectProps) {
+export function ReflectiveObject({ runtime: runtimeRef, paused, position = DEFAULT_POSITION, command }: ReflectiveObjectProps) {
   const { gl } = useThree();
   const objectRef = useRef<Group>(null);
   const shellRef = useRef<Mesh<SphereGeometry, MeshPhysicalMaterial>>(null);
@@ -57,18 +57,18 @@ export function ReflectiveObject({ runtime: runtimeRef, paused, quality, positio
   const hoveredRef = useRef(false);
   const lastCommandRef = useRef(-1);
   const resources = useMemo(() => {
-    const segments = world.quality[quality].segments;
+    const segments = world.quality.high.segments;
     return {
       shell: new SphereGeometry(0.66, segments, segments / 2).scale(0.85, 1.08, 0.85),
       orbit: new TorusGeometry(0.81, 0.058, 10, segments),
       inner: new TorusGeometry(0.68, 0.025, 8, segments),
       node: new SphereGeometry(0.105, 16, 12),
-      blue: new MeshPhysicalMaterial({ color: '#087de0', emissive: '#279fff', emissiveIntensity: 0.04, metalness: 0.62, roughness: 0.105, clearcoat: 1, clearcoatRoughness: 0.055, envMapIntensity: 1.7 }),
-      silver: new MeshPhysicalMaterial({ color: '#e7f6ff', metalness: 0.86, roughness: 0.09, clearcoat: 1, envMapIntensity: 1.7 }),
+      blue: new MeshPhysicalMaterial({ color: '#087de0', emissive: '#279fff', emissiveIntensity: 0.04, metalness: 0.12, roughness: 0.105, clearcoat: 1, clearcoatRoughness: 0.055, envMapIntensity: 1.7 }),
+      silver: new MeshPhysicalMaterial({ color: '#e7f6ff', metalness: 0.08, roughness: 0.09, clearcoat: 1, envMapIntensity: 1.7 }),
       white: new MeshPhysicalMaterial({ color: world.colors.porcelain, metalness: 0.06, roughness: 0.17, clearcoat: 1, clearcoatRoughness: 0.07 }),
       gold: new MeshPhysicalMaterial({ color: world.colors.gold, metalness: 0.55, roughness: 0.17, clearcoat: 1 }),
     };
-  }, [quality]);
+  }, []);
   useEffect(() => () => Object.values(resources).forEach(resource => resource.dispose()), [resources]);
 
   const restoreCursor = useCallback(() => {

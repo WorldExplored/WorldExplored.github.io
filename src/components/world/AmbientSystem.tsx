@@ -1,14 +1,12 @@
 'use client';
 
 import { useEffect, useMemo } from 'react';
-import { useFrame } from '@react-three/fiber';
-import {
-  BufferGeometry, CatmullRomCurve3, Color, DoubleSide, Float32BufferAttribute,
-  InstancedBufferAttribute, InstancedMesh, MeshLambertMaterial, MeshStandardMaterial,
-  Object3D, Points, PointsMaterial, Raycaster, ShaderMaterial, SphereGeometry, TubeGeometry, Vector2, Vector3, type Camera,
-} from 'three';
-import { world, type SceneRuntime } from '../../content/world';
-import { islandGeometry, seededRandom, shoreRadius, terrainHeight, type Island } from './terrain';
+import { useFrame, useThree } from '@react-three/fiber';
+import { BoxGeometry, BufferGeometry, CatmullRomCurve3, Color, CylinderGeometry, DataTexture, DoubleSide, Float32BufferAttribute, InstancedBufferAttribute, InstancedMesh, LinearFilter, LinearMipmapLinearFilter, MeshBasicMaterial, MeshPhysicalMaterial, Object3D, Points, PointsMaterial, Raycaster, RepeatWrapping, ShaderMaterial, SRGBColorSpace, SphereGeometry, TubeGeometry, Vector2, Vector3, type Camera } from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { world, type QualityTier, type SceneRuntime } from '../../content/world';
+import { createLandscapePlan, generatePlantPositions, meadowGeometry, pathGeometry, seededRandom, terrainHeight, type LandscapePlan, type PlantPosition } from './terrain';
+import { cloudPuffTransform, createCloudClusters, updateCloudResponses } from './clouds';
 import type { EnvironmentProps } from './Water';
 
 const plantVertex = /* glsl */ `
@@ -22,22 +20,21 @@ const plantVertex = /* glsl */ `
   varying float vDistance;
   void main() {
     vec3 p = position;
-    p.x += sin(uTime + aPhase + p.y * .9) * p.y * p.y * .18;
-    p.z += cos(uTime * .7 + aPhase) * p.y * .06;
+    p.x += sin(uTime + aPhase + p.y * .9) * p.y * p.y * .14;
+    p.z += cos(uTime * .7 + aPhase) * p.y * .055;
     vec4 local = instanceMatrix * vec4(p, 1.);
     vec2 away = instanceMatrix[3].xz - uPointerWorld.xz;
     float proximity = 1. - smoothstep(.10, 1.8, length(away));
     float bend = uPointerStrength * proximity * position.y * position.y;
-    local.xz += away / max(length(away), .15) * bend * .46;
-    local.y -= bend * .055;
+    local.xz += away / max(length(away), .15) * bend * .40;
+    local.y -= bend * .045;
     vec4 mv = modelViewMatrix * local;
     vTint = aTint;
-    vLight = .77 + position.y * .23;
+    vLight = .76 + position.y * .29;
     vDistance = length(mv.xyz);
     gl_Position = projectionMatrix * mv;
   }
 `;
-
 const plantFragment = /* glsl */ `
   uniform vec3 uFog;
   uniform vec2 uFogRange;
@@ -48,421 +45,430 @@ const plantFragment = /* glsl */ `
     vec3 color = vTint * vLight;
     color = mix(color, uFog, smoothstep(uFogRange.x, uFogRange.y, vDistance));
     gl_FragColor = vec4(color, 1.);
-    #include <tonemapping_fragment>
     #include <colorspace_fragment>
   }
 `;
 
-function bladeGeometry() {
-  const geometry = new BufferGeometry();
-  geometry.setAttribute('position', new Float32BufferAttribute([
-    -.06, 0, 0, .06, 0, 0, -.045, .48, .015, .045, .48, .015, -.015, .83, .07, .02, .83, .07, .035, 1, .10,
-  ], 3));
-  geometry.setIndex([0, 1, 2, 1, 3, 2, 2, 3, 4, 3, 5, 4, 4, 5, 6]);
-  geometry.computeVertexNormals();
-  return geometry;
-}
-
-function blossomGeometry() {
-  const geometry = new BufferGeometry();
+function tuftGeometry() {
   const positions: number[] = [];
-  for (let petal = 0; petal < 5; petal++) {
-    const angle = petal / 5 * Math.PI * 2;
-    positions.push(0, .8, 0, Math.cos(angle - .45) * .15, .83, Math.sin(angle - .45) * .15, Math.cos(angle + .45) * .15, .83, Math.sin(angle + .45) * .15);
+  const indices: number[] = [];
+  for (let blade = 0; blade < 7; blade++) {
+    const angle = blade * 2.399;
+    const cx = Math.cos(angle) * .25;
+    const cz = Math.sin(angle) * .25;
+    const height = .55 + (blade % 3) * .15;
+    const width = .018;
+    const start = positions.length / 3;
+    for (const [x, y, z] of [[-width, 0, 0], [width, 0, 0], [-width * .8, height * .48, .025], [width * .8, height * .48, .025], [-width * .4, height * .83, .08], [width * .4, height * .83, .08], [.04, height, .14]]) {
+      positions.push(cx + x * Math.cos(angle) - z * Math.sin(angle), y, cz + x * Math.sin(angle) + z * Math.cos(angle));
+    }
+    indices.push(start, start + 1, start + 2, start + 1, start + 3, start + 2, start + 2, start + 3, start + 4, start + 3, start + 5, start + 4, start + 4, start + 5, start + 6);
   }
+  const geometry = new BufferGeometry();
   geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
+  geometry.setIndex(indices);
   geometry.computeVertexNormals();
   return geometry;
 }
 
-function plantInstances(count: number, flowers: boolean) {
-  const random = seededRandom(flowers ? 83 : 41);
-  const geometry = flowers ? blossomGeometry() : bladeGeometry();
-  const material = new ShaderMaterial({
-    vertexShader: plantVertex, fragmentShader: plantFragment, side: DoubleSide,
-    uniforms: { uTime: { value: 0 }, uPointerStrength: { value: 0 }, uPointerWorld: { value: new Vector3() }, uFog: { value: new Color(world.lighting.fogColor) }, uFogRange: { value: new Vector2(world.lighting.fogNear, world.lighting.fogFar) } },
-  });
-  const mesh = new InstancedMesh(geometry, material, count);
+function daisyGeometry() {
+  const positions: number[] = [];
+  const colors: number[] = [];
+  const indices: number[] = [];
+  const white = new Color('#ffffff');
+  const gold = new Color('#f4c918');
+  const green = new Color(world.colors.grassDark);
+  function vertex(x: number, y: number, z: number, color: Color) { positions.push(x, y, z); colors.push(color.r, color.g, color.b); }
+  for (let petal = 0; petal < 9; petal++) {
+    const angle = petal / 9 * Math.PI * 2;
+    const start = positions.length / 3;
+    for (const [radius, lateral, y] of [[.035, 0, .81], [.13, -.052, .82], [.235, -.035, .87], [.26, 0, .88], [.235, .035, .87], [.13, .052, .82]]) {
+      vertex(Math.cos(angle) * radius - Math.sin(angle) * lateral, y, Math.sin(angle) * radius + Math.cos(angle) * lateral, white);
+    }
+    for (let index = 1; index < 5; index++) indices.push(start, start + index, start + index + 1);
+  }
+  const center = positions.length / 3;
+  vertex(0, .85, 0, gold);
+  for (let segment = 0; segment <= 12; segment++) {
+    const angle = segment / 12 * Math.PI * 2;
+    vertex(Math.cos(angle) * .068, .825, Math.sin(angle) * .068, gold);
+    if (segment < 12) indices.push(center, center + segment + 1, center + segment + 2);
+  }
+  const stem = positions.length / 3;
+  vertex(-.016, 0, 0, green); vertex(.016, 0, 0, green); vertex(.016, .81, 0, green); vertex(-.016, .81, 0, green);
+  indices.push(stem, stem + 1, stem + 2, stem, stem + 2, stem + 3);
+  const geometry = new BufferGeometry();
+  geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('color', new Float32BufferAttribute(colors, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+function makePlants(plan: LandscapePlan, flowers: boolean) {
+  const maximum = flowers ? 260 : world.quality.high.grass;
+  const positions = generatePlantPositions(maximum, plan, flowers ? 83 : 41);
+  const geometry = flowers ? daisyGeometry() : tuftGeometry();
+  const material = new ShaderMaterial({ vertexShader: flowers ? plantVertex.replace('vTint = aTint;', 'vTint = aTint * color;') : plantVertex, fragmentShader: plantFragment, vertexColors: flowers, side: DoubleSide,
+    uniforms: { uTime: { value: 0 }, uPointerStrength: { value: 0 }, uPointerWorld: { value: new Vector3() }, uFog: { value: new Color(world.lighting.fogColor) }, uFogRange: { value: new Vector2(world.lighting.fogNear, world.lighting.fogFar) } } });
+  const mesh = new InstancedMesh(geometry, material, maximum);
   mesh.name = flowers ? 'environment-flowers' : 'environment-grass';
+  const phases = new Float32Array(maximum);
+  const colors = new Float32Array(maximum * 3);
   const transform = new Object3D();
   const tint = new Color();
-  const phases = new Float32Array(count);
-  const colors = new Float32Array(count * 3);
-  const positions = new Float32Array(count * 3);
-  // Proximity diagnostics query nearby cells instead of scanning every blade.
-  const occupied = new Uint16Array(64 * 64);
-  for (let index = 0; index < count; index++) {
-    const islandIndex = index % world.islands.length;
-    const island = world.islands[islandIndex];
-    const angle = random() * Math.PI * 2;
-    const shore = shoreRadius(angle, islandIndex);
-    const directionalRadius = Math.hypot(Math.cos(angle) * island.radius[0], Math.sin(angle) * island.radius[1]) * shore;
-    const minimumRadius = (islandIndex < 2 ? 3.5 : 1.6) / directionalRadius;
-    const radius = islandIndex < 3 ? minimumRadius + random() * (.88 - minimumRadius) : Math.sqrt(random()) * .86;
-    const r = radius * shoreRadius(angle, islandIndex);
-    transform.position.set(
-      island.center[0] + Math.cos(angle) * r * island.radius[0],
-      island.center[1] + terrainHeight(radius, island.height, angle, islandIndex) - .015,
-      island.center[2] + Math.sin(angle) * r * island.radius[1],
-    );
-    const size = .18 + random() * (islandIndex > 2 ? .85 : .38);
-    transform.scale.set(.7 + random() * .9, size, 1);
-    transform.rotation.set(0, random() * Math.PI * 2, (random() - .5) * .15);
+  const dark = new Color(world.colors.grassDark);
+  const light = new Color(world.colors.grassLight);
+  const random = seededRandom(flowers ? 713 : 914);
+  const occupied = new Uint16Array(80 * 80);
+  for (let index = 0; index < maximum; index++) {
+    const plant = positions[index];
+    transform.position.set(plant.x, plant.y, plant.z);
+    transform.scale.setScalar(plant.scale);
+    transform.rotation.set(0, plant.rotation, 0);
     transform.updateMatrix();
     mesh.setMatrixAt(index, transform.matrix);
-    positions.set([transform.position.x, transform.position.y, transform.position.z], index * 3);
-    const cellX = Math.floor((transform.position.x + 48) / 1.5);
-    const cellZ = Math.floor((transform.position.z + 48) / 1.5);
-    if (cellX >= 0 && cellX < 64 && cellZ >= 0 && cellZ < 64) occupied[cellZ * 64 + cellX] ||= index + 1;
-    phases[index] = random() * Math.PI * 2;
-    tint.set(flowers ? world.colors.porcelain : world.colors.grassDark);
-    if (!flowers) tint.lerp(new Color(world.colors.grassLight), random() * .8);
+    phases[index] = plant.phase;
+    if (flowers) tint.set('#ffffff'); else tint.copy(dark).lerp(light, .25 + random() * .5);
     colors.set([tint.r, tint.g, tint.b], index * 3);
+    const x = Math.floor((plant.x + 60) / 1.5);
+    const z = Math.floor((plant.z + 60) / 1.5);
+    occupied[z * 80 + x] ||= index + 1;
   }
   geometry.setAttribute('aPhase', new InstancedBufferAttribute(phases, 1));
   geometry.setAttribute('aTint', new InstancedBufferAttribute(colors, 3));
   mesh.instanceMatrix.needsUpdate = true;
-  mesh.computeBoundingSphere();
   mesh.frustumCulled = false;
   return { mesh, geometry, material, positions, occupied };
 }
 
-function makeClouds(count: number) {
-  const random = seededRandom(19);
-  const geometry = new SphereGeometry(1, 12, 8);
-  const material = new MeshLambertMaterial({ color: world.lighting.cloudColor, emissive: world.lighting.ambientSky, emissiveIntensity: .14 });
-  const time = { value: 0 };
-  const strength = { value: 0 };
-  const rayOrigin = { value: new Vector3() };
-  const rayDirection = { value: new Vector3(0, 0, -1) };
-  material.onBeforeCompile = shader => {
-    shader.uniforms.uTime = time;
-    shader.uniforms.uPointerStrength = strength;
-    shader.uniforms.uRayOrigin = rayOrigin;
-    shader.uniforms.uRayDirection = rayDirection;
-    shader.vertexShader = `uniform float uTime; uniform float uPointerStrength; uniform vec3 uRayOrigin; uniform vec3 uRayDirection; attribute float aSpeed; attribute vec3 aCenter;\n${shader.vertexShader}`.replace('#include <project_vertex>', `
-      vec4 mvPosition = instanceMatrix * vec4(transformed, 1.);
-      vec3 center = aCenter;
-      center.x = mod(aCenter.x + uTime * aSpeed + 85., 170.) - 85.;
-      mvPosition.x += center.x - aCenter.x;
-      float along = dot(center - uRayOrigin, uRayDirection);
-      vec3 away = center - (uRayOrigin + uRayDirection * max(along, 0.));
-      float response = (1. - smoothstep(.6, 4.5, length(away))) * uPointerStrength * step(0., along);
-      mvPosition.xyz = center + (mvPosition.xyz - center) * vec3(1. + response * .07, 1. - response * .11, 1.);
-      mvPosition.xyz += away / max(length(away), .8) * response * .85;
-      mvPosition = modelViewMatrix * mvPosition;
-      gl_Position = projectionMatrix * mvPosition;
-    `);
-  };
-  material.customProgramCacheKey = () => 'habitat-cloud-proximity';
-  const mesh = new InstancedMesh(geometry, material, count * 5);
-  mesh.name = 'environment-clouds';
-  const transform = new Object3D();
-  const speeds = new Float32Array(count * 5);
-  const centers = new Float32Array(count * 5 * 3);
-  for (let cloud = 0; cloud < count; cloud++) {
-    const x = (random() - .5) * 130;
-    const y = 11 + random() * 11;
-    const z = -15 - random() * 50;
-    const size = 1.1 + random() * 1.5;
-    const speed = world.environment.cloudSpeed * (.25 + random() * .75);
-    for (let puff = 0; puff < 5; puff++) {
-      const center = puff === 2;
-      transform.position.set(x + (puff - 2) * size * 1.1, y + (center ? size * .35 : random() * size * .2), z + (random() - .5) * size);
-      transform.scale.set(size * (center ? 1.55 : 1.15), size * (center ? .80 : .53), size * .8);
-      transform.updateMatrix();
-      mesh.setMatrixAt(cloud * 5 + puff, transform.matrix);
-      speeds[cloud * 5 + puff] = speed;
-      centers.set([x, y, z], (cloud * 5 + puff) * 3);
-    }
-  }
-  geometry.setAttribute('aSpeed', new InstancedBufferAttribute(speeds, 1));
-  geometry.setAttribute('aCenter', new InstancedBufferAttribute(centers, 3));
-  mesh.instanceMatrix.needsUpdate = true;
-  mesh.frustumCulled = false;
-  return { mesh, geometry, material, time, strength, rayOrigin, rayDirection, centers, speeds };
-}
-
-const bubbleVertex = /* glsl */ `
-  uniform float uTime;
-  attribute float aPhase;
+const cloudVertex = /* glsl */ `
   varying vec3 vNormal;
   varying vec3 vView;
   varying float vDistance;
   void main() {
-    vec4 p = instanceMatrix * vec4(position, 1.);
-    p.y += sin(uTime * .21 + aPhase) * .22;
-    p.x += sin(uTime * .13 + aPhase) * .18;
-    vec4 wp = modelMatrix * p;
+    vec4 point = modelMatrix * instanceMatrix * vec4(position, 1.);
     vNormal = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * normal);
-    vView = cameraPosition - wp.xyz;
+    vView = cameraPosition - point.xyz;
     vDistance = length(vView);
-    gl_Position = projectionMatrix * viewMatrix * wp;
+    gl_Position = projectionMatrix * viewMatrix * point;
   }
 `;
-
-const bubbleFragment = /* glsl */ `
+const cloudFragment = /* glsl */ `
+  uniform vec3 uWhite;
   uniform vec3 uFog;
   uniform vec2 uFogRange;
-  uniform vec3 uTint;
-  uniform vec3 uSunDirection;
   varying vec3 vNormal;
   varying vec3 vView;
   varying float vDistance;
   void main() {
     vec3 n = normalize(vNormal);
-    float rim = pow(1. - abs(dot(n, normalize(vView))), 1.5);
-    float highlight = pow(max(dot(n, uSunDirection), 0.), 38.);
-    vec3 color = mix(uFog, uTint, rim * .8 + highlight * .4);
+    float light = smoothstep(-.85, .5, n.y);
+    vec3 color = mix(vec3(.57,.76,.94), uWhite, light);
+    float rim = pow(1. - max(dot(n, normalize(vView)), 0.), 3.);
+    color += rim * .045;
     color = mix(color, uFog, smoothstep(uFogRange.x, uFogRange.y, vDistance));
-    gl_FragColor = vec4(color, .015 + rim * .15 + highlight * .10);
-    #include <tonemapping_fragment>
+    gl_FragColor = vec4(color, 1.);
     #include <colorspace_fragment>
   }
 `;
 
-function makeBubbles(count: number) {
-  const random = seededRandom(44);
-  const geometry = new SphereGeometry(1, 16, 10);
-  const material = new ShaderMaterial({
-    vertexShader: bubbleVertex, fragmentShader: bubbleFragment, transparent: true, depthWrite: false,
-    uniforms: { uTime: { value: 0 }, uFog: { value: new Color(world.lighting.fogColor) }, uFogRange: { value: new Vector2(world.lighting.fogNear, world.lighting.fogFar) }, uTint: { value: new Color(world.lighting.cloudColor) }, uSunDirection: { value: new Vector3(...world.lighting.sunPosition).normalize() } },
-  });
-  const mesh = new InstancedMesh(geometry, material, count);
-  mesh.name = 'environment-distant-motes';
-  const phases = new Float32Array(count);
-  const transform = new Object3D();
-  for (let index = 0; index < count; index++) {
-    transform.position.set((random() - .5) * 48, 10 + random() * 9, -27 - random() * 33);
-    transform.scale.setScalar(.08 + random() * .14);
-    transform.updateMatrix();
-    mesh.setMatrixAt(index, transform.matrix);
-    phases[index] = random() * Math.PI * 2;
-  }
-  geometry.setAttribute('aPhase', new InstancedBufferAttribute(phases, 1));
-  mesh.instanceMatrix.needsUpdate = true;
+function makeClouds(diagnostics: boolean) {
+  const clusters = createCloudClusters();
+  const geometry = new SphereGeometry(1, 16, 12);
+  const material = new ShaderMaterial({ vertexShader: cloudVertex, fragmentShader: cloudFragment, uniforms: { uWhite: { value: new Color(world.lighting.cloudColor) }, uFog: { value: new Color(world.lighting.fogColor) }, uFogRange: { value: new Vector2(world.lighting.fogNear, world.lighting.fogFar) } } });
+  const mesh = new InstancedMesh(geometry, material, clusters.length * 6);
+  mesh.name = 'environment-clouds';
   mesh.frustumCulled = false;
-  return { mesh, geometry, material };
+  mesh.userData.clusters = clusters;
+  const debugMaterial = diagnostics ? new MeshBasicMaterial({ color: '#117bff', wireframe: true, transparent: true, opacity: .36, depthWrite: false }) : null;
+  const debug = debugMaterial ? new InstancedMesh(geometry, debugMaterial, clusters.length * 6) : null;
+  if (debug) { debug.frustumCulled = false; debug.name = 'cloud-hit-volumes'; }
+  return { clusters, mesh, geometry, material, debug, debugMaterial, transform: new Object3D(), puff: { position: new Vector3(), scale: new Vector3() } };
 }
 
-function makeParticles(count: number) {
-  const random = seededRandom(62);
-  const geometry = new BufferGeometry();
-  const positions = new Float32Array(count * 3);
-  for (let index = 0; index < count; index++) positions.set([(random() - .5) * 45, 7 + random() * 12, -25 - random() * 30], index * 3);
-  geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
-  const material = new PointsMaterial({ color: world.lighting.sunColor, size: .045, transparent: true, opacity: .25, depthWrite: false, sizeAttenuation: true });
-  const mesh = new Points(geometry, material);
-  return { mesh, geometry, material };
-}
-
-function bridgeGeometry(start: Vector3, end: Vector3, offset: number, height: number, radius: number) {
-  const direction = end.clone().sub(start).normalize();
-  const side = new Vector3(-direction.z, 0, direction.x).multiplyScalar(offset);
-  const points = [start.clone(), start.clone().lerp(end, .25), start.clone().lerp(end, .5), start.clone().lerp(end, .75), end.clone()];
-  points.forEach((point, index) => { point.add(side); point.y += Math.sin(index / 4 * Math.PI) * .8 + height; });
-  return new TubeGeometry(new CatmullRomCurve3(points), 28, radius, 6, false);
-}
-
-function makeGrove() {
-  const count = 26;
-  const random = seededRandom(106);
-  const curve = new CatmullRomCurve3([new Vector3(0, 0, 0), new Vector3(.025, .25, 0), new Vector3(-.025, .48, .015), new Vector3(.025, .78, 0)]);
-  const trunkGeometry = new TubeGeometry(curve, 8, .035, 6, false);
-  const foliageGeometry = new SphereGeometry(1, 12, 8);
-  const trunkMaterial = new MeshStandardMaterial({ color: '#78865a', roughness: .86 });
-  const foliageMaterial = new MeshStandardMaterial({ color: '#ffffff', roughness: .85 });
-  const trunks = new InstancedMesh(trunkGeometry, trunkMaterial, count);
-  const crowns = new InstancedMesh(foliageGeometry, foliageMaterial, count * 3);
-  const transform = new Object3D();
-  const tree = new Object3D();
-  const leaf = new Object3D();
-  const color = new Color();
-  const dark = new Color('#286743');
-  const light = new Color('#73a442');
-  for (let index = 0; index < count; index++) {
-    const islandIndex = index < 8 ? 0 : index < 15 ? 1 : index < 17 ? 2 : index < 22 ? 3 : 4;
-    const island = world.islands[islandIndex];
-    // Rear groves frame the architecture; foreground trees hug the outer banks.
-    const angle = islandIndex < 3 ? Math.PI + random() * Math.PI : islandIndex === 3 ? Math.PI * (.68 + random() * .64) : (random() - .5) * Math.PI * .72;
-    const directionalRadius = Math.hypot(Math.cos(angle) * island.radius[0], Math.sin(angle) * island.radius[1]) * shoreRadius(angle, islandIndex);
-    const minimumRadius = islandIndex < 3 ? (islandIndex < 2 ? 3.65 : 1.7) / directionalRadius : .73;
-    const radius = minimumRadius + random() * (.90 - minimumRadius);
-    const r = radius * shoreRadius(angle, islandIndex);
-    const size = (islandIndex > 2 ? 2 + random() * 1.2 : islandIndex === 2 ? 1.2 + random() * .5 : 1.5 + random() * 1.25) / 1.1;
-    tree.position.set(island.center[0] + Math.cos(angle) * r * island.radius[0], island.center[1] + terrainHeight(radius, island.height, angle, islandIndex) - .02, island.center[2] + Math.sin(angle) * r * island.radius[1]);
-    tree.scale.setScalar(size);
-    tree.rotation.set(0, random() * Math.PI * 2, (random() - .5) * .06);
-    tree.updateMatrix();
-    trunks.setMatrixAt(index, tree.matrix);
-    for (let level = 0; level < 3; level++) {
-      leaf.position.set(level === 0 ? -.10 : level === 1 ? .11 : .015, [.58, .78, .92][level], (level - 1) * .025);
-      leaf.scale.set([.34, .30, .23][level], [.26, .25, .18][level], [.28, .27, .21][level]);
-      leaf.rotation.set(0, random() * Math.PI, (random() - .5) * .18);
-      leaf.updateMatrix();
-      transform.matrix.multiplyMatrices(tree.matrix, leaf.matrix);
-      crowns.setMatrixAt(index * 3 + level, transform.matrix);
-      color.copy(dark).lerp(light, .10 + random() * .65 + level * .08);
-      crowns.setColorAt(index * 3 + level, color);
+function writeCloudMatrices(clouds: ReturnType<typeof makeClouds>, elapsed: number) {
+  const active = clouds.mesh.count / 6;
+  for (let index = 0; index < active; index++) {
+    const cluster = clouds.clusters[index];
+    for (let puff = 0; puff < cluster.puffs.length; puff++) {
+      cloudPuffTransform(cluster, cluster.puffs[puff], elapsed, cluster.response, clouds.puff);
+      clouds.transform.position.copy(clouds.puff.position);
+      clouds.transform.scale.copy(clouds.puff.scale);
+      clouds.transform.updateMatrix();
+      clouds.mesh.setMatrixAt(index * 6 + puff, clouds.transform.matrix);
+      clouds.debug?.setMatrixAt(index * 6 + puff, clouds.transform.matrix);
     }
   }
-  trunks.instanceMatrix.needsUpdate = true;
-  crowns.instanceMatrix.needsUpdate = true;
-  if (crowns.instanceColor) crowns.instanceColor.needsUpdate = true;
-  trunks.computeBoundingSphere();
-  crowns.computeBoundingSphere();
+  clouds.mesh.instanceMatrix.needsUpdate = true;
+  if (clouds.debug) clouds.debug.instanceMatrix.needsUpdate = true;
+}
+
+function meadowTexture() {
+  const size = 512;
+  const pixels = new Uint8Array(size * size * 4);
+  const random = seededRandom(1723);
+  function pixel(x: number, y: number, value: number) {
+    const offset = (((y % size + size) % size) * size + (x % size + size) % size) * 4;
+    pixels[offset] = Math.min(255, value); pixels[offset + 1] = Math.min(255, value); pixels[offset + 2] = Math.min(255, value); pixels[offset + 3] = 255;
+  }
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) pixel(x, y, 176 + random() * 38);
+  // Dense curved fibers give the ground the same fine scale as the foreground blades.
+  for (let blade = 0; blade < 24000; blade++) {
+    const x = Math.floor(random() * size); const y = Math.floor(random() * size);
+    const length = 3 + Math.floor(random() * 9); const lean = (random() - .5) * 5;
+    const shade = 145 + random() * 108;
+    for (let step = 0; step < length; step++) pixel(x + Math.round(lean * (step / length) ** 2), y + step, shade + step / length * 8);
+  }
+  const texture = new DataTexture(pixels, size, size);
+  // Pixel values describe display-referred fiber colors; Three decodes them before lighting.
+  texture.colorSpace = SRGBColorSpace;
+  texture.wrapS = texture.wrapT = RepeatWrapping;
+  texture.minFilter = LinearMipmapLinearFilter;
+  texture.magFilter = LinearFilter;
+  texture.generateMipmaps = true;
+  texture.anisotropy = 4;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+function foliageGeometry() {
+  const geometry = new BufferGeometry();
+  const positions: number[] = [];
+  const colors: number[] = [];
+  const indices: number[] = [];
+  const random = seededRandom(1782);
+  const leaf = new Object3D();
+  const point = new Vector3();
+  // Individual curved leaves make an open crown with a fine, irregular edge.
+  for (let index = 0; index < 96; index++) {
+    const azimuth = random() * Math.PI * 2;
+    const y = random() * 2 - 1;
+    const radius = .78 * Math.cbrt(random());
+    const radial = Math.sqrt(1 - y * y) * radius;
+    leaf.position.set(Math.cos(azimuth) * radial, y * radius, Math.sin(azimuth) * radial);
+    leaf.rotation.set((random() - .5) * Math.PI, random() * Math.PI * 2, (random() - .5) * .7);
+    leaf.updateMatrix();
+    const length = .34 + random() * .20;
+    const width = .12 + random() * .07;
+    const shade = .66 + random() * .34;
+    const start = positions.length / 3;
+    const outline = [[0, 0, -.5], [-1, .03, -.16], [-.7, .065, .28], [0, .025, .5], [.7, .065, .28], [1, .03, -.16], [0, .10, 0]];
+    for (const [x, height, z] of outline) {
+      point.set(x * width, height, z * length).applyMatrix4(leaf.matrix);
+      positions.push(point.x, point.y, point.z);
+      colors.push(shade * .92, shade, shade * .88);
+    }
+    for (let edge = 0; edge < 6; edge++) indices.push(start + 6, start + edge, start + (edge + 1) % 6);
+  }
+  geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('color', new Float32BufferAttribute(colors, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+function treeGeometry() {
+  const paths = [
+    [[0, 0, 0], [.03, .3, 0], [-.025, .57, .015], [.02, .9, 0]],
+    [[0, .36, 0], [-.08, .51, .025], [-.21, .64, .04]],
+    [[0, .48, 0], [.09, .59, -.03], [.22, .73, -.10]],
+  ];
+  const tubes = paths.map((points, index) => new TubeGeometry(new CatmullRomCurve3(points.map(point => new Vector3(...point))), 8, index ? .012 : .026, 7, false));
+  const geometry = mergeGeometries(tubes)!;
+  tubes.forEach(tube => tube.dispose());
+  return geometry;
+}
+
+function makeSkyline() {
+  const geometry = new CylinderGeometry(1, 1, 1, 20);
+  const frameGeometry = new BoxGeometry(1, 1, 1);
+  const material = new MeshPhysicalMaterial({ color: '#62bacd', metalness: .42, roughness: .17, clearcoat: 1, clearcoatRoughness: .08, envMapIntensity: 1.2 });
+  const frameMaterial = new MeshPhysicalMaterial({ color: '#deeff7', metalness: .25, roughness: .25, clearcoat: .7 });
+  const towers = new InstancedMesh(geometry, material, 16);
+  const frames = new InstancedMesh(frameGeometry, frameMaterial, 16 * 4);
+  towers.name = 'distant-glass-skyline';
+  const transform = new Object3D();
+  const random = seededRandom(992);
+  for (let index = 0; index < 16; index++) {
+    const x = -31 + index * 2;
+    const z = -91 + random() * 6;
+    const radius = .55 + random() * .38;
+    const height = 3.2 + Math.sin(index / 15 * Math.PI) * 5 + random() * 2.3;
+    const y = terrainHeight(x, z) + height / 2;
+    transform.position.set(x, y, z); transform.scale.set(radius, height, radius * .8); transform.rotation.set(0, 0, 0); transform.updateMatrix(); towers.setMatrixAt(index, transform.matrix);
+    for (let fin = 0; fin < 4; fin++) {
+      const angle = fin * Math.PI / 2;
+      transform.position.set(x + Math.cos(angle) * radius, y, z + Math.sin(angle) * radius * .8);
+      transform.scale.set(.045, height + .06, .045); transform.updateMatrix(); frames.setMatrixAt(index * 4 + fin, transform.matrix);
+    }
+  }
+  towers.computeBoundingSphere(); frames.computeBoundingSphere();
+  return { towers, frames, dispose() { towers.dispose(); frames.dispose(); geometry.dispose(); frameGeometry.dispose(); material.dispose(); frameMaterial.dispose(); } };
+}
+
+function makeLandscape(plan: LandscapePlan) {
+  const ground = meadowGeometry();
+  const path = pathGeometry(plan.paths);
+  const texture = meadowTexture();
+  const material = new MeshPhysicalMaterial({ color: '#d0edab', specularIntensity: 0, vertexColors: true, map: texture, bumpMap: texture, bumpScale: .012, roughness: .96, clearcoat: 0, envMapIntensity: .08 });
+  material.onBeforeCompile = shader => {
+    shader.vertexShader = `varying vec2 meadowPosition;\n${shader.vertexShader}`.replace('#include <begin_vertex>', '#include <begin_vertex>\n meadowPosition = position.xz;');
+    shader.fragmentShader = `varying vec2 meadowPosition;
+      float meadowHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      float meadowNoise(vec2 p) {
+        vec2 cell = floor(p); vec2 f = fract(p); f = f * f * (3. - 2. * f);
+        return mix(mix(meadowHash(cell), meadowHash(cell + vec2(1.,0.)), f.x), mix(meadowHash(cell + vec2(0.,1.)), meadowHash(cell + 1.), f.x), f.y);
+      }
+      ${shader.fragmentShader}`.replace('#include <color_fragment>', '#include <color_fragment>\n float meadowTone = meadowNoise(meadowPosition * .68) * .20 + meadowNoise(meadowPosition * 2.7) * .10; diffuseColor.rgb *= .73 + meadowTone;');
+  };
+  material.customProgramCacheKey = () => 'layered-meadow-color';
+  const pathMaterial = new MeshPhysicalMaterial({ color: '#e9fff1', roughness: .34, clearcoat: .65, clearcoatRoughness: .3 });
+  const rockGeometry = new SphereGeometry(1, 16, 12);
+  const rockMaterial = new MeshPhysicalMaterial({ color: '#effff2', roughness: .35, clearcoat: .75, clearcoatRoughness: .22 });
+  const rocks = new InstancedMesh(rockGeometry, rockMaterial, plan.rocks.length);
+  rocks.name = 'shoreline-rocks';
+  rocks.castShadow = true;
+  rocks.receiveShadow = true;
+  const transform = new Object3D();
+  plan.rocks.forEach((rock, index) => { transform.position.set(rock.x, rock.y, rock.z); transform.scale.fromArray(rock.scale); transform.rotation.set(0, rock.rotation, .08); transform.updateMatrix(); rocks.setMatrixAt(index, transform.matrix); });
+  rocks.computeBoundingSphere();
+  const trunkGeometry = treeGeometry();
+  const crownGeometry = foliageGeometry();
+  const trunkMaterial = new MeshPhysicalMaterial({ color: '#627848', roughness: .94, envMapIntensity: .12 });
+  const crownMaterial = new MeshPhysicalMaterial({ color: '#327d27', vertexColors: true, side: DoubleSide, roughness: .73, clearcoat: .08, clearcoatRoughness: .4, envMapIntensity: .15 });
+  const trunks = new InstancedMesh(trunkGeometry, trunkMaterial, plan.trees.length);
+  const crowns = new InstancedMesh(crownGeometry, crownMaterial, plan.trees.length * 9);
+  trunks.name = 'grove-trunks';
+  crowns.name = 'grove-foliage';
   trunks.castShadow = true;
   crowns.castShadow = true;
   crowns.receiveShadow = true;
-  return { trunks, crowns, dispose() { trunkGeometry.dispose(); foliageGeometry.dispose(); trunkMaterial.dispose(); foliageMaterial.dispose(); } };
-}
-
-function makeLandscape() {
-  const geometries: BufferGeometry[] = [];
-  const islands = world.islands.map((island, index) => {
-    const geometry = islandGeometry(island, index);
-    geometries.push(geometry);
-    return { geometry, position: island.center };
-  });
-  const farIslands: Island[] = [
-    { center: [-25, -.6, -43], radius: [10, 5.5], height: 3.8 },
-    { center: [21, -.7, -51], radius: [13, 6.5], height: 4.5 },
-  ];
-  farIslands.forEach((island, index) => {
-    const geometry = islandGeometry(island, index + 8, 32);
-    geometries.push(geometry);
-    islands.push({ geometry, position: island.center });
-  });
-  const paths = [[new Vector3(-3, 1, 2), new Vector3(-1, .7, 5)], [new Vector3(2, .7, 5), new Vector3(5, 1, 0)]];
-  const bridges = paths.map(([start, end]) => {
-    const deck = bridgeGeometry(start, end, 0, 0, .49);
-    // Flatten the tube cross-section into an uninterrupted rounded walking deck.
-    const vertices = deck.getAttribute('position');
-    for (let index = 0; index < vertices.count; index++) {
-      const progress = Math.floor(index / 7) / 28;
-      const base = start.y + (end.y - start.y) * progress + Math.sin(progress * Math.PI) * .8;
-      vertices.setY(index, base + (vertices.getY(index) - base) * .16);
+  const leaf = new Object3D();
+  const tree = new Object3D();
+  const random = seededRandom(643);
+  const tint = new Color();
+  plan.trees.forEach((item, index) => {
+    tree.position.set(item.x, item.y, item.z); tree.scale.setScalar(item.height); tree.rotation.set(0, item.rotation, 0); tree.updateMatrix(); trunks.setMatrixAt(index, tree.matrix);
+    for (let cluster = 0; cluster < 9; cluster++) {
+      const angle = cluster * 2.399;
+      const spread = cluster < 6 ? .19 : .10;
+      const size = .13 + random() * .035;
+      leaf.position.set(Math.cos(angle) * spread, .58 + cluster / 9 * .31 + (random() - .5) * .08, Math.sin(angle) * spread);
+      leaf.scale.set(size * (1.05 + random() * .3), size * (1 + random() * .5), size);
+      leaf.rotation.set(random() * .3, angle, (random() - .5) * .4);
+      leaf.updateMatrix(); transform.matrix.multiplyMatrices(tree.matrix, leaf.matrix); crowns.setMatrixAt(index * 9 + cluster, transform.matrix);
+      tint.setRGB(.78 + random() * .22, .88 + random() * .12, .68 + random() * .22); crowns.setColorAt(index * 9 + cluster, tint);
     }
-    deck.computeVertexNormals();
-    const rails = [-.47, .47].map(offset => bridgeGeometry(start, end, offset, .58, .035));
-    geometries.push(deck, ...rails);
-    return { deck, rails };
   });
-  const material = new MeshStandardMaterial({ vertexColors: true, roughness: .88 });
-  const porcelain = new MeshStandardMaterial({ color: world.colors.porcelain, roughness: .3, metalness: .12 });
-  const rail = new MeshStandardMaterial({ color: world.colors.cyan, roughness: .18, metalness: .26 });
-  const rockGeometry = new SphereGeometry(1, 10, 7);
-  const rockMaterial = new MeshStandardMaterial({ color: world.colors.stone, roughness: .78 });
-  const rocks = new InstancedMesh(rockGeometry, rockMaterial, 44);
-  const random = seededRandom(27);
-  const transform = new Object3D();
-  for (let index = 0; index < 44; index++) {
-    const islandIndex = index % world.islands.length;
-    const island = world.islands[islandIndex];
-    const angle = random() * Math.PI * 2;
-    const radius = .85 + random() * .08;
-    const r = radius * shoreRadius(angle, islandIndex);
-    transform.position.set(island.center[0] + Math.cos(angle) * r * island.radius[0], island.center[1] + terrainHeight(radius, island.height, angle, islandIndex) + .015, island.center[2] + Math.sin(angle) * r * island.radius[1]);
-    const size = .13 + random() * (index > 31 ? .52 : .22);
-    transform.scale.set(size * 1.8, size * (index > 31 ? 1.0 : .72), size);
-    transform.rotation.set(random(), random() * Math.PI, random() * .2);
-    transform.updateMatrix();
-    rocks.setMatrixAt(index, transform.matrix);
-  }
-  rocks.instanceMatrix.needsUpdate = true;
-  rocks.computeBoundingSphere();
-  return { islands, bridges, material, porcelain, rail, rocks, dispose() {
-    geometries.forEach(geometry => geometry.dispose());
-    material.dispose(); porcelain.dispose(); rail.dispose(); rockGeometry.dispose(); rockMaterial.dispose();
+  trunks.computeBoundingSphere(); crowns.computeBoundingSphere();
+  const skyline = makeSkyline();
+  return { ground, path, material, pathMaterial, rocks, trunks, crowns, skyline, dispose() {
+    [ground, path, rockGeometry, trunkGeometry, crownGeometry].forEach(geometry => geometry.dispose());
+    [material, pathMaterial, rockMaterial, trunkMaterial, crownMaterial].forEach(value => value.dispose());
+    texture.dispose(); skyline.dispose(); rocks.dispose(); trunks.dispose(); crowns.dispose();
   } };
 }
 
-function createPointerField() {
-  return { raycaster: new Raycaster(), screen: new Vector2(), center: new Vector3(), strength: 0, nearCloud: false, nearPlant: false };
+function makeMotes() {
+  const geometry = new SphereGeometry(1, 12, 8);
+  const material = new MeshPhysicalMaterial({ color: '#efffff', transparent: true, opacity: .17, depthWrite: false, roughness: .08, clearcoat: 1 });
+  const mesh = new InstancedMesh(geometry, material, world.quality.high.bubbles);
+  mesh.name = 'environment-distant-motes';
+  const transform = new Object3D();
+  const random = seededRandom(84);
+  for (let index = 0; index < mesh.count; index++) { transform.position.set((random() - .5) * 70, 13 + random() * 10, -45 - random() * 50); transform.scale.setScalar(.10 + random() * .08); transform.updateMatrix(); mesh.setMatrixAt(index, transform.matrix); }
+  mesh.computeBoundingSphere();
+  const pointsGeometry = new BufferGeometry();
+  const pointsPosition = new Float32Array(16 * 3);
+  for (let index = 0; index < 16; index++) pointsPosition.set([(random() - .5) * 40, 3 + random() * 13, -30 - random() * 30], index * 3);
+  pointsGeometry.setAttribute('position', new Float32BufferAttribute(pointsPosition, 3));
+  const pointsMaterial = new PointsMaterial({ color: world.lighting.sunColor, size: .04, transparent: true, opacity: .25, depthWrite: false });
+  const points = new Points(pointsGeometry, pointsMaterial);
+  return { mesh, geometry, material, points, pointsGeometry, pointsMaterial };
 }
 
-function nearPlants(point: SceneRuntime['pointerWorld'], plants: ReturnType<typeof plantInstances>) {
-  const cellX = Math.floor((point[0] + 48) / 1.5);
-  const cellZ = Math.floor((point[2] + 48) / 1.5);
-  for (let z = Math.max(0, cellZ - 2); z <= Math.min(63, cellZ + 2); z++) {
-    for (let x = Math.max(0, cellX - 2); x <= Math.min(63, cellX + 2); x++) {
-      const index = plants.occupied[z * 64 + x] - 1;
-      if (index >= 0 && Math.hypot(plants.positions[index * 3] - point[0], plants.positions[index * 3 + 2] - point[2]) < 1.8) return true;
-    }
+function makeEnvironment() {
+  const plan = createLandscapePlan();
+  const landscape = makeLandscape(plan);
+  const grass = makePlants(plan, false);
+  const flowers = makePlants(plan, true);
+  const diagnostics = process.env.NODE_ENV !== 'production' && typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('cloud-volumes');
+  const clouds = makeClouds(diagnostics);
+  writeCloudMatrices(clouds, 0);
+  const motes = makeMotes();
+  return { plan, landscape, grass, flowers, clouds, motes, elapsed: 0, disposeTimer: undefined as ReturnType<typeof setTimeout> | undefined,
+    pointer: { raycaster: new Raycaster(), screen: new Vector2(), strength: 0, nearPlant: false },
+    dispose() {
+      landscape.dispose();
+      [grass, flowers, clouds, motes].forEach(resource => { resource.geometry.dispose(); resource.material.dispose(); resource.mesh.dispose(); });
+      clouds.debug?.dispose(); clouds.debugMaterial?.dispose(); motes.pointsGeometry.dispose(); motes.pointsMaterial.dispose();
+    } };
+}
+
+function retainEnvironment(environment: ReturnType<typeof makeEnvironment>) {
+  clearTimeout(environment.disposeTimer);
+  // Strict Mode can replay an effect while retaining its mounted scene objects.
+  return () => { environment.disposeTimer = setTimeout(() => environment.dispose(), 0); };
+}
+
+function setQuality(environment: ReturnType<typeof makeEnvironment>, quality: QualityTier) {
+  const tier = world.quality[quality];
+  environment.grass.mesh.count = tier.grass;
+  environment.flowers.mesh.count = Math.round(260 * tier.grass / world.quality.high.grass);
+  environment.clouds.mesh.count = tier.clouds * 6;
+  if (environment.clouds.debug) environment.clouds.debug.count = tier.clouds * 6;
+  writeCloudMatrices(environment.clouds, environment.elapsed);
+  environment.motes.mesh.count = tier.bubbles;
+  environment.motes.pointsGeometry.setDrawRange(0, Math.min(16, Math.ceil(tier.particles / 5)));
+}
+
+function nearPlants(point: SceneRuntime['pointerWorld'], positions: readonly PlantPosition[], occupied: Uint16Array, count: number) {
+  const cellX = Math.floor((point[0] + 60) / 1.5);
+  const cellZ = Math.floor((point[2] + 60) / 1.5);
+  for (let z = Math.max(0, cellZ - 2); z <= Math.min(79, cellZ + 2); z++) for (let x = Math.max(0, cellX - 2); x <= Math.min(79, cellX + 2); x++) {
+    const index = occupied[z * 80 + x] - 1;
+    if (index >= 0 && index < count && Math.hypot(positions[index].x - point[0], positions[index].z - point[2]) < 1.8) return true;
   }
   return false;
 }
 
-function updatePointerField(state: SceneRuntime, camera: Camera, delta: number, field: ReturnType<typeof createPointerField>, plants: ReturnType<typeof plantInstances>, flowers: ReturnType<typeof plantInstances>, clouds: ReturnType<typeof makeClouds>) {
-  field.strength += ((state.pointerActive ? 1 : 0) - field.strength) * (1 - Math.exp(-8 * Math.min(delta, .05)));
-  if (state.pointerActive) {
-    field.screen.set(state.pointer[0], state.pointer[1]);
-    field.raycaster.setFromCamera(field.screen, camera);
-    clouds.rayOrigin.value.copy(field.raycaster.ray.origin);
-    clouds.rayDirection.value.copy(field.raycaster.ray.direction);
-    plants.material.uniforms.uPointerWorld.value.fromArray(state.pointerWorld);
-    flowers.material.uniforms.uPointerWorld.value.fromArray(state.pointerWorld);
-  }
-  clouds.strength.value = field.strength;
-  plants.material.uniforms.uPointerStrength.value = field.strength;
-  flowers.material.uniforms.uPointerStrength.value = field.strength;
-  let nearCloud = false;
-  if (state.pointerActive) {
-    for (let index = 0; index < clouds.centers.length; index += 15) {
-      const x = (clouds.centers[index] + state.elapsed * clouds.speeds[index / 3] + 85) % 170 - 85;
-      field.center.set(x, clouds.centers[index + 1], clouds.centers[index + 2]);
-      if (field.raycaster.ray.distanceSqToPoint(field.center) < 4.5 * 4.5) { nearCloud = true; break; }
-    }
-  }
-  const nearPlant = state.pointerActive && nearPlants(state.pointerWorld, plants);
-  if (nearCloud && !field.nearCloud) state.cloudInteraction++;
-  if (nearPlant && !field.nearPlant) state.plantInteraction++;
-  field.nearCloud = nearCloud;
-  field.nearPlant = nearPlant;
+function updatePlantUniforms(plants: ReturnType<typeof makePlants>, state: SceneRuntime, strength: number) {
+  plants.material.uniforms.uTime.value = state.elapsed * world.environment.windSpeed;
+  plants.material.uniforms.uPointerStrength.value = strength;
+  if (state.pointerActive) plants.material.uniforms.uPointerWorld.value.fromArray(state.pointerWorld);
 }
 
-function animateEnvironment(state: SceneRuntime, plants: ReturnType<typeof plantInstances>, flowers: ReturnType<typeof plantInstances>, clouds: ReturnType<typeof makeClouds>, bubbles: ReturnType<typeof makeBubbles>, particles: ReturnType<typeof makeParticles>) {
-  plants.material.uniforms.uTime.value = state.elapsed * world.environment.windSpeed;
-  flowers.material.uniforms.uTime.value = state.elapsed * world.environment.windSpeed;
-  clouds.time.value = state.elapsed;
-  bubbles.material.uniforms.uTime.value = state.elapsed;
-  particles.mesh.rotation.y = Math.sin(state.elapsed * .025) * .13;
-  particles.mesh.position.y = Math.sin(state.elapsed * .14) * .2;
+function animateEnvironment(environment: ReturnType<typeof makeEnvironment>, state: SceneRuntime, camera: Camera, delta: number) {
+  const { grass, flowers, clouds, motes, pointer } = environment;
+  environment.elapsed = state.elapsed;
+  pointer.strength += ((state.pointerActive ? 1 : 0) - pointer.strength) * (1 - Math.exp(-8 * Math.min(.05, delta)));
+  if (state.pointerActive) { pointer.screen.set(...state.pointer); pointer.raycaster.setFromCamera(pointer.screen, camera); }
+  updatePlantUniforms(grass, state, pointer.strength);
+  updatePlantUniforms(flowers, state, pointer.strength);
+  const nearPlant = state.pointerActive && nearPlants(state.pointerWorld, grass.positions, grass.occupied, grass.mesh.count);
+  if (nearPlant && !pointer.nearPlant) state.plantInteraction++;
+  pointer.nearPlant = nearPlant;
+  state.cloudInteraction += updateCloudResponses(clouds.clusters, state.pointerActive ? pointer.raycaster.ray : null, state.elapsed, delta, clouds.mesh.count / 6, false);
+  writeCloudMatrices(clouds, state.elapsed);
+  motes.points.rotation.y = Math.sin(state.elapsed * .025) * .08;
+  motes.points.position.y = Math.sin(state.elapsed * .15) * .12;
 }
 
 export function AmbientSystem({ runtime, paused, quality }: EnvironmentProps) {
-  const landscape = useMemo(() => makeLandscape(), []);
-  const grove = useMemo(() => makeGrove(), []);
-  const pointerField = useMemo(() => createPointerField(), []);
-  const settings = world.quality[quality];
-  const plants = useMemo(() => plantInstances(settings.grass, false), [settings.grass]);
-  const flowers = useMemo(() => plantInstances(Math.round(settings.grass / 9), true), [settings.grass]);
-  const clouds = useMemo(() => makeClouds(settings.clouds), [settings.clouds]);
-  const bubbles = useMemo(() => makeBubbles(Math.max(3, Math.round(settings.bubbles / 5))), [settings.bubbles]);
-  const particles = useMemo(() => makeParticles(Math.min(16, Math.ceil(settings.particles / 5))), [settings.particles]);
-  useEffect(() => () => landscape.dispose(), [landscape]);
-  useEffect(() => () => grove.dispose(), [grove]);
-  useEffect(() => () => {
-    [plants, flowers, clouds, bubbles, particles].forEach(resource => { resource.geometry.dispose(); resource.material.dispose(); });
-  }, [plants, flowers, clouds, bubbles, particles]);
-  useFrame(({ camera }, delta) => {
-    if (paused) return;
-    updatePointerField(runtime.current, camera, delta, pointerField, plants, flowers, clouds);
-    animateEnvironment(runtime.current, plants, flowers, clouds, bubbles, particles);
-  });
-  return <group>
-    {landscape.islands.map((island, index) => <mesh key={index} geometry={island.geometry} material={landscape.material} position={island.position} receiveShadow />)}
-    {landscape.bridges.map((bridge, index) => <group key={index}>
-      <mesh geometry={bridge.deck} material={landscape.porcelain} receiveShadow />
-      {bridge.rails.map((geometry, rail) => <mesh key={rail} geometry={geometry} material={landscape.rail} />)}
-    </group>)}
-    <primitive object={landscape.rocks} />
-    <primitive object={grove.trunks} />
-    <primitive object={grove.crowns} />
-    <primitive object={plants.mesh} />
-    <primitive object={flowers.mesh} />
-    <primitive object={clouds.mesh} />
-    <primitive object={bubbles.mesh} />
-    <primitive object={particles.mesh} />
+  const environment = useMemo(() => makeEnvironment(), []);
+  const invalidate = useThree(state => state.invalidate);
+  useEffect(() => retainEnvironment(environment), [environment]);
+  useEffect(() => { setQuality(environment, quality); invalidate(); }, [environment, quality, invalidate]);
+  useFrame(({ camera }, delta) => { if (!paused) animateEnvironment(environment, runtime.current, camera, delta); });
+  const { landscape, grass, flowers, clouds, motes } = environment;
+  return <group dispose={null} name="continuous-environment">
+    <mesh geometry={landscape.ground} material={landscape.material} receiveShadow name="continuous-meadow" />
+    <mesh geometry={landscape.path} material={landscape.pathMaterial} receiveShadow name="meadow-paths" />
+    <primitive object={landscape.skyline.towers} /><primitive object={landscape.skyline.frames} />
+    <primitive object={landscape.rocks} /><primitive object={landscape.trunks} /><primitive object={landscape.crowns} />
+    <primitive object={grass.mesh} /><primitive object={flowers.mesh} /><primitive object={clouds.mesh} />
+    {clouds.debug && <primitive object={clouds.debug} />}
+    <primitive object={motes.mesh} /><primitive object={motes.points} />
   </group>;
 }

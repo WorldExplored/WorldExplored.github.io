@@ -174,6 +174,9 @@ test('export contains no local paths, credentials or visitor API requests', asyn
 });
 
 test('canonical sections avoid duplicate presentations and unrelated links', () => {
+  assert.doesNotMatch(plainText(bodyHtml), /Verified|Back to world|How I work/);
+  assert.equal((bodyHtml.match(/<h1\b/g) ?? []).length, 1);
+  assert.doesNotMatch(bodyHtml, /<header\b|surface-attachment/);
   for (const section of profile.sections) assert.equal((bodyHtml.match(new RegExp(`id="${section.id}"`, 'g')) ?? []).length, 1);
   assert.equal(anchors(bodyHtml).filter(link => link.href === profile.links.paper).length, 1);
   assert.equal(anchors(sectionBody('contact')).length, 3);

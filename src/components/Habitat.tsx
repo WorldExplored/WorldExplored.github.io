@@ -8,7 +8,6 @@ import { readNavigation, serverNavigation, subscribeNavigation, pushDestination,
 import { readPreferences, serverPreferences, subscribePreferences } from './world/preferences';
 import { HabitatIcon } from './HabitatIcon';
 import { SectionContent } from './SectionContent';
-import { ContactLinks } from './ContactLinks';
 import { AudioControl } from './AudioControl';
 
 const WorldCanvas = dynamic(() => import('./world/WorldCanvas').then(module => module.WorldCanvas), { ssr: false });
@@ -33,6 +32,10 @@ export function Habitat() {
     const frame = requestAnimationFrame(() => { setStarted(true); setDiagnostics(new URLSearchParams(window.location.search).has('diagnostics')); });
     return () => cancelAnimationFrame(frame);
   }, []);
+  useEffect(() => {
+    document.documentElement.classList.toggle('world-active', useWorld && ready);
+    return () => document.documentElement.classList.remove('world-active');
+  }, [useWorld, ready]);
   useEffect(() => {
     if (active && surfaceOpen) {
       window.scrollTo({ top: 0, behavior: 'instant' });
@@ -69,16 +72,20 @@ export function Habitat() {
       {useWorld && <WorldCanvas destination={active} flight={navigation.serial} paused={preferences.hidden || !policy.ambient} panelOpen={surfaceOpen} mobile={preferences.mobile} rotationCommand={rotation ? { serial: rotation, yaw: Math.PI / 4 } : undefined} onNavigate={choose} onArrive={onArrive} onReady={onReady} onFailure={onFailure} />}
       <nav className="landmarks" aria-label={profile.ui.landscapeNavigation}>{profile.sections.map(section => <a key={section.id} data-landmark={section.id} data-destination={section.id} href={`#${section.id}`} className={`landmark landmark-${section.id}`} onClick={event => navigate(event, section.id)} aria-label={section.label}><span>{section.label}</span></a>)}</nav>
       <button className="sculpture-control" data-sculpture-control aria-label={profile.ui.rotate} onClick={() => setRotation(value => value + 1)}>↻</button>
-      <svg className="surface-attachment" aria-hidden="true"><path data-surface-line /><circle data-surface-dot r="5" /></svg>
     </div>
-    <header className="site-header"><a className="brand" href="#" onClick={event => { event.preventDefault(); overview(); }} aria-label={profile.ui.home}><span>{profile.initials}</span></a><ContactLinks compact /></header>
     <main>
-      <div className="identity"><p className="education-line">{profile.university} · {profile.degree} · {profile.graduation}</p><h1>{profile.name}</h1><p className="hero-evidence">{profile.heroContribution}</p><a className="research-credential" data-destination="research" href="#research" onClick={event => navigate(event, 'research')}>{profile.ui.researchEvidence}</a></div>
+      <div className="identity" data-world-identity><h1>{profile.name}</h1><p className="hero-evidence">{profile.heroContribution}</p><p className="research-credential">{profile.ui.researchEvidence}</p></div>
       <div className="content-stage">{profile.sections.map(section => <section id={section.id} key={section.id} className={`scene-section section-${section.id}`} data-active={surfaceOpen && active === section.id} aria-labelledby={`heading-${section.id}`} tabIndex={-1}>
-        <div className="surface"><div className="surface-rim"><HabitatIcon kind={section.id} /><button className="surface-close" onClick={overview} aria-label={profile.ui.close}><span aria-hidden="true">×</span><span>{profile.ui.close}</span></button></div><div className="surface-paper"><h2 id={`heading-${section.id}`}>{section.title}</h2><SectionContent id={section.id} /></div><div className="surface-foot" aria-hidden="true" /></div>
+        <div className="surface"><div className="surface-rim"><HabitatIcon kind={section.id} /><button className="surface-close" onClick={overview} aria-label={`Close ${section.title}`}><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18" /></svg></button></div><div className="surface-paper" tabIndex={0} role="region" aria-labelledby={`heading-${section.id}`}><h2 id={`heading-${section.id}`}>{section.title}</h2><SectionContent id={section.id} /></div><div className="surface-foot" aria-hidden="true" /></div>
       </section>)}</div>
     </main>
-    <nav className="dock" aria-label={profile.ui.mainNavigation}>{dock.map(section => <a href={`#${section.id}`} data-destination={section.id} key={section.id} onClick={event => navigate(event, section.id)} aria-current={active === section.id ? 'location' : undefined}><HabitatIcon kind={section.id} /><span>{section.label}</span></a>)}</nav>
+    <nav className="dock" onPointerMove={event => {
+      const target = (event.target as HTMLElement).closest('a');
+      if (!target) return;
+      const rect = target.getBoundingClientRect();
+      target.style.setProperty('--light-x', `${event.clientX - rect.left}px`);
+      target.style.setProperty('--light-y', `${event.clientY - rect.top}px`);
+    }} aria-label={profile.ui.mainNavigation}>{dock.map(section => <a href={`#${section.id}`} data-destination={section.id} key={section.id} onClick={event => navigate(event, section.id)} aria-current={active === section.id ? 'location' : undefined}><HabitatIcon kind={section.id} /><span>{section.label}</span></a>)}</nav>
     <AudioControl className="audio-control--above" />
     <div className="travel-status" role="status" aria-live="polite">{active && !surfaceOpen ? `${profile.ui.travel} ${profile.sections.find(section => section.id === active)?.label}` : ''}</div>
     {diagnostics && <output className="scene-diagnostics" data-scene-diagnostics aria-label="Scene performance diagnostics" />}
