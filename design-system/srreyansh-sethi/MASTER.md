@@ -34,15 +34,15 @@ Optional music is silent until intentional Play, compact while inactive, and exp
 
 Use the requested local cloner and UI/UX resources for reference analysis, interaction review, responsive behavior and repeated visual comparisons. Inspect desktop, tablet and mobile, read long content, test history/focus/deep links, exercise environmental input and inspect console/shaders. Keep actual browser measurements separate from component-test evidence. The current record is `docs/qa/LIVING_WORLD_LOG.md`.
 
-The enhanced page occupies exactly one viewport. Identity is a single spatial glass title; contact links live in Contact. Dock cells have equal widths, local highlights and a small press depth. Work is the largest detailed structure, Research secondary, Purdue a small black/gold marker. Native content scrolling remains accessible with its visual scrollbar hidden.
+The enhanced page occupies exactly one viewport. Identity is a single spatial glass title; contact links live in Contact. Dock cells have equal widths, local highlights and a small press depth. Work is the largest detailed structure, Research secondary, Purdue a compact black-and-gold campus hall. Native content scrolling remains accessible with its visual scrollbar hidden.
 
 ## Coastal archipelago revision
 
 A natural 2006–2009 optimistic coastal future. A substantial asymmetric main island contains Work and Research; a lush southern garden island contains About and Contact; Purdue occupies a small eastern islet. The lighthouse sits on its own western islet, and a separate northern island carries a layered eco-city. The opening view includes visible channels, shallow aqua shelves, rich planting and bright architecture. There is no rectangular meadow.
 
-Terrain, planting, paths, shoreline shading, tree placement and collision derive from one signed land distance and height function. Mesh rings follow each island's organic contour, including the submerged shelf. Grass samples the entire suitable land area and fades near actual coastlines and every structural exclusion. Development coverage diagnostics never become visitor controls.
+Terrain, planting, paths, shoreline shading, tree placement and collision derive from one signed land distance and height function. One Cartesian terrain lattice spans the organic contours and submerged shelves without radial seams or overlapping island meshes. Grass samples the entire suitable land area and fades near actual coastlines and every structural exclusion. Development coverage diagnostics never become visitor controls.
 
-Architectural language: smooth white shells, aqua curved glazing, open terraces, green roofs, sunlit interiors and slender curved supports. Work is largest, Research second, Purdue clearly subordinate. The city contains varied waterfront offices, stepped garden residences, domes, arches, parks and slow transit in near/mid/far layers. Avoid repeated cylinders or unexplained geometric poles.
+Architectural language: enclosed white building volumes, thick aqua glazing, recognizable doors and windows, planted roofs, and distinct fronts and service elevations. Work is largest, Research second, Purdue clearly subordinate. The city contains varied waterfront offices, stepped garden residences, domes, arches, parks and slow transit in near/mid/far layers. Avoid repeated cylinders or unexplained geometric poles.
 
 Use varied continuous implicit cloud volumes: broad cumulus, tall cauliflower, cotton, deep bank and distant thin cloud. Depth, profile and wind layer vary. Prominent clouds use local damped deformation. Landmark labels use a fixed hover boundary, cancellable exit grace, independent keyboard focus and pointer-events none.
 
@@ -54,7 +54,7 @@ Reference research is private. Toolkit search results supply accessibility, resp
 
 An inhabited coastal research archipelago from an optimistic 2007 future. The composition must visibly operate within fifteen seconds: broad-winged gulls, advancing surf, diagonal cloud travel, city transit, and at least two architectural mechanisms. Motion uses independent cycles, seeded paths, pauses and articulated construction. Tests establish behavior; screenshots and actual motion observation establish visual acceptance.
 
-Keep the five organic islands and water channels. The beacon moves farther west to (-76,-36), separated by a broad stretch of water. Main Work architecture remains dominant: an aqua compute conservatory with exposed cooling paths, planted terraces and counter-rotating mechanical rings. Research has an articulated solar instrument. Purdue remains compact with a kinetic gold ring. About combines the existing sculpture with a water ribbon and kinetic canopy. Contact has rounded signal petals. All motion is internal to fixed landmark bounds.
+Keep the five organic islands and water channels. The beacon moves farther west to (-76,-36), separated by a broad stretch of water. Work remains dominant: an enclosed two-level compute building with a glass atrium, service core, cooling loops, roof solar equipment and supported counter-rotating rings. Research combines a low laboratory wing, glass growing room and offset observatory dome. Purdue is a compact gabled campus hall facing its bridge approach. About encloses a gallery and barrel-roof conservatory around the existing sculpture court. Contact is a round reception lobby with a service wing and roof-mounted signal petals. All motion is internal to fixed landmark bounds.
 
 Nature forms ecological clusters: shore reeds and beach grass, broad leaves beside calm water, flowering shrubs beside paths, garden daisies, roof planting. Gulls have bodies, articulated wings, tails and distinct flight/perch/takeoff states. Crabs stay on the signed coastal band. Fish scatter as schools and gradually regroup. Wildlife never owns pointer events.
 
@@ -63,3 +63,16 @@ Clouds are continuous irregular volumes with deep overlapping relief, rounded to
 Navigation becomes a curved molded aqua instrument with separate jewel controls and original dimensional pictograms. Use a white upper rim, blue lower refraction, crisp navy text, saturated active lens, local pointer light and pressed depth. Preserve five equal destinations, 44px minimum targets, semantic links, visible focus and canonical content. Panels unfold beside the selected structure with restrained translucent perimeter and a readable pale face. Close, cards, contact controls and music share this material language.
 
 High/medium/low retain waves, several gulls, fish, natural clouds, train and primary machinery. Reduce populations and secondary effects rather than swapping to unrelated visuals. Freeze continuous movement for reduced motion; retain input, content and renderer resources. No new instructions, modes, content, music sources or time-of-day behavior.
+
+
+## Structural and coastal acceptance
+
+The interface uses its final spatial layout from the first paint. Core terrain, water, camera and buildings render before detailed plants, wildlife and city activity. Deterministic coast data is prepared during export; large planting work yields between batches. No loading screen or visitor mode controls are added.
+
+Each bridge uses one sampled spatial curve for its thick deck, rails, supports, landing pads and camera obstacles. Ground paths meet exterior entrances. Purdue faces the separated arrival plaza. Verify actual mesh clearance, including views beneath the deck.
+
+Terrain blends inland grass and soil, pale dry sand, darker wet sand, shallow seabed and steep exposed stone using coast distance, height and slope. Grass fibers affect inland shading only. Sand has fine grain, gentle ripples and occasional small shells. Shared wave phases wash the shore; shallow water reveals sparse muted seaweed beds rooted below the lowest water surface. Do not distribute vegetation uniformly around every coast.
+
+Each gull has a distinct route. Approaches reserve one physical perch and use validated high waypoints; departures reverse a clear corridor. The lighthouse resident has a tangential balcony perch and folded wings. Crabs select one retreat per disturbance, then hide and return with bounded movement and hysteresis. All fauna remain outside pointer raycasting.
+
+New activity must have a physical purpose, visible home, bounded route and complete return cycle. Preserve the free camera, reduced-motion rendering, canonical content, music behavior and existing city transit. Visual review and measured browser behavior remain release gates alongside tests.

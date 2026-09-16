@@ -27,7 +27,7 @@ a:focus-visible,button:focus-visible { outline: 3px solid #073e78; outline-offse
 a:active,button:active { transform: translateY(1px); }
 ::selection { background: #b8e879; color: #17320e; }
 .portfolio { overflow-anchor: none; min-height: 100svh; background: linear-gradient(155deg,#1671b9 0,#3b99ce 32%,#9fe4ef 70%,#e4f7ee); }
-.portfolio.scene-ready { background: #87dbe9; }
+.portfolio:is(.scene-ready,html[data-world-boot] .portfolio) { background: #87dbe9; }
 .portfolio.has-destination { min-height: 100svh; }
 .world-stage { position: fixed; inset: 0; z-index: 0; overflow: hidden; }
 .canvas-host { position: absolute; inset: 0; background: #87dbe9; }
@@ -172,18 +172,18 @@ h1 { font-weight: 470; font-size: clamp(54px,5.8vw,88px); letter-spacing: -.035e
 
 /* The live world occupies one viewport; only the reading region scrolls. */
 html.world-active,html.world-active body { height: 100%; overflow: hidden; overscroll-behavior: none; }
-.scene-ready.portfolio { position: fixed; inset: 0; height: 100dvh; min-height: 0; overflow: hidden; }
-.scene-ready main { position: absolute; inset: 0; min-height: 0; }
+:is(.scene-ready,html[data-world-boot] .portfolio).portfolio { position: fixed; inset: 0; height: 100dvh; min-height: 0; overflow: hidden; }
+:is(.scene-ready,html[data-world-boot] .portfolio) main { position: absolute; inset: 0; min-height: 0; }
 .identity { position: absolute; top: max(6vh,env(safe-area-inset-top)); left: 5vw; width: max-content; max-width: 88vw; padding: 19px 26px 21px; border-left: 2px solid #eaffff; border-radius: 4px 27px 27px 4px; background: linear-gradient(110deg,#e9faffcc,#e6faff48 65%,#e6faff00); pointer-events: none; transform: perspective(900px) rotateY(-4deg); transform-origin: left; }
 .identity h1 { font-size: clamp(36px,4.25vw,65px); margin: 0 0 6px; color: #07366b; font-weight: 520; text-shadow: 0 1px 1px #fff; }
 .identity .hero-evidence { color: #0b3f70; font-size: 21px; font-weight: 480; }
 .identity .research-credential { min-height: 0; display: block; margin-top: 5px; font-size: 15px; color: #174e7d; text-decoration: none; }
 .has-destination .identity { opacity: 0; visibility: hidden; }
-.scene-ready .content-stage { position: absolute; inset: 5vh 3vw 120px auto; width: min(47vw,660px); padding: 0; pointer-events: none; }
-.scene-ready .scene-section { height: 100%; max-height: 100%; margin: 0; max-width: none; }
-.scene-ready .surface { display: flex; flex-direction: column; max-height: 100%; overflow: hidden; }
-.scene-ready .surface-paper { min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-width: none; scroll-padding: 24px; touch-action: pan-y; }
-.scene-ready .surface-paper::-webkit-scrollbar { display: none; }
+:is(.scene-ready,html[data-world-boot] .portfolio) .content-stage { position: absolute; inset: 5vh 3vw 120px auto; width: min(47vw,660px); padding: 0; pointer-events: none; }
+:is(.scene-ready,html[data-world-boot] .portfolio) .scene-section { height: 100%; max-height: 100%; margin: 0; max-width: none; }
+:is(.scene-ready,html[data-world-boot] .portfolio) .surface { display: flex; flex-direction: column; max-height: 100%; overflow: hidden; }
+:is(.scene-ready,html[data-world-boot] .portfolio) .surface-paper { min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-width: none; scroll-padding: 24px; touch-action: pan-y; }
+:is(.scene-ready,html[data-world-boot] .portfolio) .surface-paper::-webkit-scrollbar { display: none; }
 .surface-paper:focus-visible { outline: 3px solid #096cad; outline-offset: -3px; }
 .surface-rim { position: relative; top: auto; flex: 0 0 auto; min-height: 48px; padding: 0 5px 5px; }
 .surface-rim .habitat-icon { width: 32px; height: 32px; }
@@ -197,7 +197,7 @@ html.world-active,html.world-active body { height: 100%; overflow: hidden; overs
 .scene-fallback .surface-close { display: flex; }
 .portfolio:not(.is-enhanced) .surface-close { display: none; }
 @media (max-width: 1050px) and (min-width: 768px) {
-  .scene-ready .content-stage { width: 51vw; inset: 4vh 2vw 120px auto; }
+  :is(.scene-ready,html[data-world-boot] .portfolio) .content-stage { width: 51vw; inset: 4vh 2vw 120px auto; }
   .identity { left: 4vw; padding: 17px 22px; }
 }
 @media (max-width: 767px) {
@@ -205,9 +205,9 @@ html.world-active,html.world-active body { height: 100%; overflow: hidden; overs
   .identity h1 { font-size: clamp(30px,8.5vw,52px); }
   .identity .hero-evidence { font-size: 17px; }
   .identity .research-credential { font-size: 13px; }
-  .scene-ready .content-stage { inset: 33dvh 10px calc(154px + env(safe-area-inset-bottom)); width: auto; }
-  .scene-ready .surface-paper { padding: 20px 17px 24px; }
-  .scene-ready .surface-paper h2 { font-size: 29px; margin-bottom: 18px; }
+  :is(.scene-ready,html[data-world-boot] .portfolio) .content-stage { inset: 33dvh 10px calc(154px + env(safe-area-inset-bottom)); width: auto; }
+  :is(.scene-ready,html[data-world-boot] .portfolio) .surface-paper { padding: 20px 17px 24px; }
+  :is(.scene-ready,html[data-world-boot] .portfolio) .surface-paper h2 { font-size: 29px; margin-bottom: 18px; }
   .dock { width: calc(100% - 24px); gap: 5px; padding: 7px; }
   .dock a { font-size: 11px; min-height: 62px; }
   .surface-rim { min-height: 46px; }
@@ -215,7 +215,7 @@ html.world-active,html.world-active body { height: 100%; overflow: hidden; overs
 @media (max-height: 580px) {
   .identity { top: 15px; }
   .identity h1 { font-size: 35px; }
-  .scene-ready .content-stage { top: 12px; bottom: 95px; }
+  :is(.scene-ready,html[data-world-boot] .portfolio) .content-stage { top: 12px; bottom: 95px; }
   .dock { bottom: max(8px,env(safe-area-inset-bottom)); }
 }
 
@@ -257,3 +257,17 @@ html.world-active,html.world-active body { height: 100%; overflow: hidden; overs
   .surface { border-radius: 25px 32px 20px 20px; }
 }
 @media (forced-colors: active) { .dock-shell { display: none; } .dock,.dock a,.habitat-icon,.surface,.surface-paper,.surface-close { background: Canvas; color: CanvasText; border: 1px solid CanvasText; box-shadow: none; } .habitat-icon::before { display: none; } }
+
+/* The script opt-in selects the final layout before first paint; no script keeps the document. */
+html[data-world-boot],html[data-world-boot] body { height: 100%; overflow: hidden; }
+html[data-world-boot] .portfolio { background: linear-gradient(#2457d3 0%,#93d5e5 30%,#91d8e0 40%,#389cbc 100%); }
+html[data-world-boot] .portfolio .identity { position: absolute; top: max(6vh,env(safe-area-inset-top)); left: 5vw; margin: 0; }
+html[data-world-boot] .portfolio main { padding-top: 0; }
+html[data-world-boot] .portfolio .scene-section { display: none; margin: 0; }
+html[data-world-boot] .portfolio .scene-section:target,html[data-world-boot] .portfolio .scene-section[data-active="true"] { display: block; }
+html[data-world-boot] .portfolio:has(.scene-section:target) .identity { visibility: hidden; }
+html[data-world-boot] .portfolio .canvas-host { background: transparent !important; }
+@media (max-width: 767px) { html[data-world-boot] .portfolio .identity { top: max(25px,env(safe-area-inset-top)); } }
+
+@media (max-width: 1050px) and (min-width: 768px) { html[data-world-boot] .portfolio .identity { left: 4vw; } }
+@media (max-height: 580px) { html[data-world-boot] .portfolio .identity { top: 15px; } }

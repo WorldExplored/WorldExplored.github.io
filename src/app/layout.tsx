@@ -22,5 +22,5 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en" className={humanist.variable}><body>{children}</body></html>;
+  return <html lang="en" className={humanist.variable} suppressHydrationWarning><head><script dangerouslySetInnerHTML={{ __html: "document.documentElement.dataset.worldBoot='pending'" }} /><link rel="preload" href="/coast-field.png" as="image" /></head><body>{children}</body></html>;
 }

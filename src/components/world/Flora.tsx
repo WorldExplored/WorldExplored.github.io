@@ -1,5 +1,7 @@
 'use client';
 
+import { measureConstruction } from './renderDiagnostics';
+
 // Frame callbacks mutate persistent Three.js resources outside React rendering.
 /* eslint-disable react-hooks/immutability */
 
@@ -16,7 +18,7 @@ const KINDS: FloraKind[] = ['reeds', 'beach', 'shrub', 'flower', 'broadleaf'];
 export function createFloraSites() {
   const random = seededRandom(4621); const plan = createLandscapePlan(); const sites: FloraSite[] = [];
   const anchors: Array<[number,number,number,FloraKind]> = [
-    [-16,20,4,'flower'],[-7,24,3,'flower'],[3,22,3,'flower'],[16,25,3,'flower'],[-6,18,1.5,'broadleaf'],[-6,28,1.5,'broadleaf'],
+    [-16,20,4,'flower'],[-7,24,3,'flower'],[3,22,3,'flower'],[16,25,3,'flower'],[3,23,1.4,'broadleaf'],[-1,-11,1.6,'broadleaf'],[-4,-11,2,'flower'],
     [-15,1,3,'shrub'],[-4,4,3,'shrub'],[8,-3,2,'shrub'],[3,-13,3,'shrub'],[-23,-69,2,'shrub'],[2,-64,2,'shrub'],
   ];
   for (let round = 0; round < 70; round++) for (const [ax,az,radius,kind] of anchors) {
@@ -77,7 +79,7 @@ function floraGeometry(kind:FloraKind) {
 
 export function Flora({runtime,paused,quality}:EnvironmentProps) {
   const flora=useMemo(()=>{
-    const sites=createFloraSites();const transform=new Object3D();
+    const sites=measureConstruction('flora-sites', () => createFloraSites());const transform=new Object3D();
     const uniforms={time:{value:0},pointer:{value:new Vector3(10000,0,10000)},strength:{value:0}};
     const batches=KINDS.map((kind,index)=>{
       const entries=sites.filter(site=>site.kind===kind);const geometry=floraGeometry(kind);

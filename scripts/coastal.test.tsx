@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { create, act } from '@react-three/test-renderer';
-import { InstancedMesh, Matrix4, Vector3, type Mesh } from 'three';
+import { InstancedMesh, Matrix4, Vector3 } from 'three';
 import { CoastalLife, createFishHomes } from '../src/components/world/CoastalLife';
 import { createSceneRuntime, type QualityTier } from '../src/content/world';
 import { landDistance, terrainHeight } from '../src/components/world/terrain';
@@ -54,16 +54,15 @@ test('a new local ripple scatters schools then they gently rejoin their formatio
   assert.ok(disturbed[0].scatterOut > .1);
 });
 
-test('school tiers retain every school, preserve bridge resources, and freeze independently of runtime time', async () => {
+test('school tiers retain every school, freeze independently of runtime time', async () => {
   const runtime = { current: createSceneRuntime() }; const render = (quality: QualityTier = 'high', paused = false) => <CoastalLife runtime={runtime} paused={paused} quality={quality}/>;
   const renderer = await create(render()); const meshes: InstancedMesh[] = [];
   renderer.scene.instance.traverse(object => { if (object instanceof InstancedMesh) meshes.push(object); });
   const bodies = meshes.filter(mesh => /^shallow-water-fish/.test(mesh.name));
-  const bridges = renderer.scene.instance.getObjectByName('coastal-bridge-rails') as Mesh;
   const geometry = meshes.map(mesh => mesh.geometry); const material = meshes.map(mesh => mesh.material); const matrix = new Matrix4();
   const advance = async (count: number) => act(async () => { for (let frame = 0; frame < count; frame++) await renderer.advanceFrames(1, 1 / 60); });
   try {
-    assert.equal(createFishHomes().length, 72); assert.ok(Array.from(bridges.geometry.attributes.position.array).every(Number.isFinite));
+    assert.equal(createFishHomes().length, 72);
     await advance(1);
     for (const mesh of meshes) { mesh.getMatrixAt(0, matrix); assert.ok(matrix.determinant() > 0); const hits: unknown[] = []; mesh.raycast({} as never, hits as never); assert.equal(hits.length, 0); }
     for (const quality of ['high', 'medium', 'low'] as const) {

@@ -33,9 +33,10 @@ export function Habitat() {
     return () => cancelAnimationFrame(frame);
   }, []);
   useEffect(() => {
-    document.documentElement.classList.toggle('world-active', useWorld && ready);
+    document.documentElement.classList.toggle('world-active', useWorld);
+    if (ready || (started && !useWorld)) delete document.documentElement.dataset.worldBoot;
     return () => document.documentElement.classList.remove('world-active');
-  }, [useWorld, ready]);
+  }, [useWorld, started, ready]);
   useEffect(() => {
     if (active && surfaceOpen) {
       window.scrollTo({ top: 0, behavior: 'instant' });

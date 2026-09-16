@@ -1,6 +1,6 @@
 'use client';
 
-import { Component, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Component, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { addAfterEffect, createRoot, events, extend, type RootState } from '@react-three/fiber';
 import * as THREE from 'three';
 import { createSceneRuntime, world, type QualityTier, type WorldProps } from '@/content/world';
@@ -28,6 +28,10 @@ export function WorldCanvas(props: WorldProps) {
   const latest = useRef(props);
   const [tier, setTier] = useState<QualityTier>(props.mobile ? 'medium' : 'high');
   const [configured, setConfigured] = useState(false);
+  const [coreVisible, setCoreVisible] = useState(false);
+  const [stage, setStage] = useState(0);
+  const [plantsReady, setPlantsReady] = useState(false);
+  const onPlantsReady = useCallback(() => { performance.mark('world:plants-ready'); setPlantsReady(true); }, []);
   useEffect(() => { latest.current = props; });
 
   useEffect(() => {
@@ -81,7 +85,7 @@ export function WorldCanvas(props: WorldProps) {
       const stopSampling = addAfterEffect(() => {
         if (cancelled || runtime.current.frames === previousFrames) return;
         previousFrames = runtime.current.frames;
-        if (!ready) { ready = true; latest.current.onReady(); }
+        if (!ready) { ready = true; performance.mark('world:core-frame'); setCoreVisible(true); latest.current.onReady(); }
         if (auditing()) sampleFrame(context!);
       });
       function lost(event: Event) { event.preventDefault(); renderAudit.contextLosses++; latest.current.onFailure(); }
@@ -104,9 +108,16 @@ export function WorldCanvas(props: WorldProps) {
   }, []);
 
   useEffect(() => {
+    if (!coreVisible || stage >= 5) return;
+    let timer: ReturnType<typeof setTimeout>;
+    const frame = requestAnimationFrame(() => { timer = setTimeout(() => setStage(value => value + 1), 32); });
+    return () => { cancelAnimationFrame(frame); clearTimeout(timer); };
+  }, [coreVisible, stage]);
+
+  useEffect(() => {
     if (!configured) return;
-    rootRef.current?.render(<SceneBoundary onFailure={props.onFailure}><AeroWorld {...props} runtime={runtime} tier={tier} onTier={setTier} /></SceneBoundary>);
-  }, [configured, props, tier]);
+    rootRef.current?.render(<SceneBoundary onFailure={props.onFailure}><AeroWorld {...props} onPlantsReady={onPlantsReady} stage={stage} runtime={runtime} tier={tier} onTier={setTier} /></SceneBoundary>);
+  }, [configured, props, tier, stage, onPlantsReady]);
 
   useEffect(() => {
     function move(event: PointerEvent) {
@@ -136,5 +147,5 @@ export function WorldCanvas(props: WorldProps) {
       document.removeEventListener('pointerleave', leave); document.removeEventListener('focusin', focus); document.removeEventListener('pointerover', focus);
     };
   }, []);
-  return <div className="canvas-host" aria-hidden="true" data-quality={tier} data-motion={props.paused ? 'stopped' : 'active'} style={{ background: world.lighting.horizon }}><canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block', touchAction: 'none' }} /></div>;
+  return <div className="canvas-host" aria-hidden="true" data-quality={tier} data-environment={stage === 5 && plantsReady ? 'complete' : 'initializing'} data-motion={props.paused ? 'stopped' : 'active'} style={{ background: world.lighting.horizon }}><canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block', touchAction: 'none' }} /></div>;
 }

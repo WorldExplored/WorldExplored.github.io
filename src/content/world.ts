@@ -4,7 +4,9 @@ export type Vec3 = [number, number, number];
 export type QualityTier = 'high' | 'medium' | 'low';
 export type LandmarkId = SectionId;
 export interface CameraPose { position: Vec3; target: Vec3 }
-export interface LandmarkConfig { id: LandmarkId; position: Vec3; label: Vec3; color: string }
+export interface LandmarkConfig {
+  rotationY?: number;
+  id: LandmarkId; position: Vec3; label: Vec3; color: string }
 export interface SceneRuntime {
   elapsed: number;
   pointer: [number, number];
@@ -38,9 +40,9 @@ export const world = {
   overview: { position: [33, 24, 65], target: [-3, 2, -10] } as CameraPose,
   mobileOverview: { position: [9, 30, 95], target: [-4, 1, -12] } as CameraPose,
   landmarks: [
-    { id: 'work', position: [-8, 0, 0], label: [-8, 10, 0], color: '#a7ed61' },
+    { id: 'work', position: [-8, 0, 0], label: [-8, 11.9, 0], color: '#a7ed61' },
     { id: 'research', position: [4, 0, -7], label: [4, 7.7, -7], color: '#65edff' },
-    { id: 'purdue', position: [26, 0, -7], label: [26, 4.8, -7], color: '#ffe196' },
+    { id: 'purdue', rotationY: -Math.PI / 2, position: [26, 0, -7], label: [26, 4.8, -7], color: '#ffe196' },
     { id: 'about', position: [-10, 0, 23], label: [-10, 5.6, 23], color: '#a6e65c' },
     { id: 'contact', position: [12, 0, 23], label: [12, 7, 23], color: '#72deff' },
     { id: 'building', position: [-76, 1.8, -36], label: [-76, 9.8, -36], color: '#bcffff' },

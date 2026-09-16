@@ -54,7 +54,8 @@ export function createLandmarkMechanism(id: LandmarkId) {
   };
 
   if (id === 'work') {
-    // Two orbital compute wheels form the tall silhouette; their open centers frame the conservatory.
+    // Roof-mounted exchangers and solar wheels serve the enclosed compute floors.
+    root.position.y = 1.9;
     const supports: BufferGeometry[] = [];
     for (const [index, x] of [-1.35, 1.35].entries()) {
       const mount = armature(`work-ring-mount-${index}`, [x, 6.55, -.15], index ? -.48 : .48);
@@ -62,6 +63,8 @@ export function createLandmarkMechanism(id: LandmarkId) {
       const wheel = new Group(); wheel.name = `work-compute-wheel-${index}`; mount.add(wheel);
       const radius = index ? 2.12 : 2.7;
       mesh(wheel, `work-wheel-frame-${index}`, join([circle(radius, .105), circle(radius - .38, .045)]), 'white');
+      mesh(wheel, `work-wheel-hub-${index}`, new CylinderGeometry(.22,.22,.32,20).rotateX(Math.PI/2), 'solar');
+      mesh(wheel, `work-wheel-spokes-${index}`, join([0,1,2].map(spoke=>{const angle=spoke*TAU/3;return bar(new Vector3(Math.cos(angle)*.18,Math.sin(angle)*.18,0),new Vector3(Math.cos(angle)*(radius-.37),Math.sin(angle)*(radius-.37),0),.045);})), 'white');
       const panels: BufferGeometry[] = []; const seams: BufferGeometry[] = [];
       for (let segment = 0; segment < 12; segment++) {
         const angle = segment * TAU / 12;
@@ -72,69 +75,42 @@ export function createLandmarkMechanism(id: LandmarkId) {
       mesh(wheel, `work-segmented-solar-ring-${index}`, join(panels), 'solar');
       mesh(wheel, `work-ring-data-seams-${index}`, join(seams), 'aqua');
       motion.push((time, response) => { wheel.rotation.z = (index ? -.12 : .085) * time + index * .8; mount.rotation.y = (index ? -.48 : .48) + Math.sin(time * .13 + index) * .06 + response * (index ? -.1 : .1); });
-      supports.push(bar(new Vector3(x, 3.75, -.6), new Vector3(x, 6.55, -.15), .15));
+      supports.push(bar(new Vector3(x, 3.3, -.6), new Vector3(x, 6.55, -.15), .15));
     }
     mesh(root, 'work-compute-supports', join(supports), 'white');
+    mesh(root, 'work-exchanger-roof-mount', new CylinderGeometry(.52,.68,.7,24).translate(.25,3.55,-.15), 'white');
     const exchanger = armature('work-heat-exchanger', [.25, 5.25, -.15]);
     mesh(exchanger, 'work-exchanger-core', new CylinderGeometry(.44, .56, 2.7, 24), 'solar');
     mesh(exchanger, 'work-exchanger-fins', join(Array.from({ length: 9 }, (_, index) => new CylinderGeometry(.8, .8, .055, 32).translate(0, -1.1 + index * .28, 0))), 'white');
     motion.push(time => { exchanger.rotation.y = time * .19; });
-    const loops = [-1, 1].map(side => new CatmullRomCurve3(Array.from({ length: 12 }, (_, index) => { const angle = index / 12 * TAU; return new Vector3(side * 3.65 + Math.cos(angle) * .55, 3.8 + Math.sin(angle) * 1.95, .05 + Math.cos(angle) * .22); }), true));
-    mesh(root, 'work-transparent-cooling-conduits', join(loops.map(curve => new TubeGeometry(curve, 80, .17, 10, true))), 'glass');
+    const loops = [-1, 1].map(side => new CatmullRomCurve3(Array.from({ length: 12 }, (_, index) => { const angle = index / 12 * TAU; return new Vector3(side * (4.8 + Math.cos(angle) * .05), 3.8 + Math.sin(angle) * 1.2, Math.cos(angle) * .65); }), true));
+    mesh(root, 'work-cooling-service-couplings', join([-1,1].flatMap(side=>[-.5,.5].map(z=>bar(new Vector3(side*4.3,3.2,z),new Vector3(side*4.8,3.2,z),.09)))), 'white');
+    mesh(root, 'work-transparent-cooling-conduits', join(loops.map(curve => new TubeGeometry(curve, 80, .12, 10, true))), 'glass');
     const capsules: Mesh[] = [];
     for (let index = 0; index < 4; index++) {
       const capsule = mesh(root, `work-coolant-capsule-${index}`, pod(.3, .105), 'aqua'); capsules.push(capsule);
     }
     const tangent = new Vector3(); const up = new Vector3(0, 1, 0);
     motion.push(time => capsules.forEach((capsule, index) => { const curve = loops[index % 2]; const t = (time * .065 + Math.floor(index / 2) * .5) % 1; curve.getPointAt(t, capsule.position); curve.getTangentAt(t, tangent); capsule.quaternion.setFromUnitVectors(up, tangent); }));
-    mesh(root, 'work-planted-exchange-terraces', join([-1, 1].flatMap(side => [0, 1].map(level => new CylinderGeometry(.76, .87, .15, 24).translate(side * 3.1, 4.1 + level * .55, -.35)))), 'white');
-    mesh(root, 'work-terrace-planting', join([-1, 1].flatMap(side => [0, 1].map(level => new CylinderGeometry(.68, .69, .075, 24).translate(side * 3.1, 4.22 + level * .55, -.35)))), 'plant');
     mesh(root, 'work-service-rail', pipe([new Vector3(-3.6, 2.38, 2.25), new Vector3(0, 2.38, 2.6), new Vector3(3.6, 2.38, 2.25)], .045), 'white');
     const carriage = mesh(root, 'work-service-carriage', pod(.72, .23).rotateZ(Math.PI / 2), 'aqua');
     motion.push(time => { carriage.position.set(Math.sin(time * .23) * 3.35, 2.64, 2.6 - Math.pow(Math.sin(time * .23), 2) * .3); });
   }
 
   if (id === 'research') {
-    mesh(root, 'research-observatory-mast', join([new CylinderGeometry(.19, .3, 1.55, 16).translate(.65, 4.45, -.25), circle(.53, .08).rotateX(Math.PI / 2).translate(.65, 4.65, -.25)]), 'white');
-    for (let index = 0; index < 3; index++) {
-      const petal = armature(`research-articulated-solar-canopy-${index}`, [.45, 4.65, -.15], index * TAU / 3 + .3);
-      mesh(petal, `research-canopy-shell-${index}`, leaf(2.6, .8, .1), 'white');
-      mesh(petal, `research-canopy-cells-${index}`, leaf(2.2, .55, .025).translate(.2, .09, 0), 'solar');
-      motion.push((time, response) => { petal.rotation.z = .24 + Math.sin(time * .17 + index * 1.8) * .14 + response * .18; });
+    mesh(root,'research-observatory-mast',new CylinderGeometry(.11,.2,.8,16).translate(-1.3,3.26,-.7),'white');
+    const scanner=armature('research-observation-instrument',[-1.3,3.78,-.7]);
+    mesh(scanner,'research-instrument-gimbal',circle(.36,.045),'white');
+    mesh(scanner,'research-scanner-barrel',pod(.77,.2).rotateX(Math.PI/2),'solar');
+    mesh(scanner,'research-scanner-lens',new SphereGeometry(.17,16,10).scale(1,1,.2).translate(0,0,.4),'aqua');
+    motion.push((time,response)=>{scanner.rotation.y=time*.16;scanner.rotation.x=Math.sin(time*.11)*.14-response*.16;});
+    for(let index=0;index<2;index++){
+      const panel=armature(`research-tracking-solar-panel-${index}`,[-2.05+index*1.3,3.09,.75]);
+      mesh(panel,`research-panel-frame-${index}`,new BoxGeometry(1.04,.07,.69),'white');
+      mesh(panel,`research-panel-cells-${index}`,new BoxGeometry(.94,.025,.59).translate(0,.05,0),'solar');
+      mesh(root,`research-panel-mount-${index}`,new CylinderGeometry(.06,.09,.24,10).translate(-2.05+index*1.3,2.97,.75),'white');
+      motion.push(time=>{panel.rotation.x=-.2+Math.sin(time*.1+index)*.08;});
     }
-    const scanner = armature('research-observation-instrument', [.45, 5.55, -.15]);
-    mesh(scanner, 'research-instrument-gimbal', join([circle(.53, .07), new CylinderGeometry(.12, .12, .55, 12).translate(0, -.4, 0)]), 'white');
-    const barrel = mesh(scanner, 'research-scanner-barrel', pod(.95, .27).rotateX(Math.PI / 2), 'solar'); barrel.position.y = .08;
-    mesh(scanner, 'research-scanner-lens', new SphereGeometry(.225, 16, 10).scale(1, 1, .2).translate(0, .08, .49), 'aqua');
-    motion.push((time, response) => { scanner.rotation.y = time * .16; scanner.rotation.x = Math.sin(time * .11) * .14 - response * .16; });
-    mesh(root, 'research-water-fed-planters', join([-1, 0, 1].map(index => new CylinderGeometry(.42, .45, .19, 20).translate(-1.7 + index * .72, 1.24, 1.45))), 'white');
-    mesh(root, 'research-terrace-leaves', join([-1, 0, 1].map(index => new SphereGeometry(.35, 12, 6).scale(1, .5, 1).translate(-1.7 + index * .72, 1.44, 1.45))), 'plant');
-    const feed = mesh(root, 'research-irrigation-water', pipe([new Vector3(-2.5, 2.7, 1.25), new Vector3(-2.5, 2.2, 1.4), new Vector3(-2.35, 1.52, 1.45)], .045), 'aqua');
-    motion.push((time, response) => { feed.scale.x = 1 + Math.sin(time * .9) * .008 + response * .012; });
-  }
-
-  if (id === 'purdue') {
-    mesh(root, 'purdue-beacon-support', new CylinderGeometry(.16, .23, .95, 16).translate(0, 2.82, -.15), 'black');
-    const ring = armature('purdue-kinetic-gold-ring', [0, 3.36, -.15]);
-    mesh(ring, 'purdue-gold-orbit', circle(.69, .08), 'gold');
-    mesh(ring, 'purdue-campus-core', new SphereGeometry(.24, 20, 12), 'glass');
-    motion.push((time, response) => { ring.rotation.y = time * .25; ring.rotation.x = .22 + Math.sin(time * .19) * .13 + response * .22; });
-    const runner = mesh(root, 'purdue-travelling-route-light', new SphereGeometry(.085, 12, 8), 'aqua');
-    motion.push(time => { const angle = time * .6; runner.position.set(Math.sin(angle) * 1.2, 2.47 + Math.cos(angle) * .08, .16); });
-  }
-
-  if (id === 'about') {
-    for (let index = 0; index < 3; index++) {
-      const angle = Math.PI * (.16 + index * .34);
-      const canopy = armature(`about-kinetic-canopy-${index}`, [Math.cos(angle) * 1.5, 3.9, -Math.sin(angle) * 1.5], angle);
-      mesh(canopy, `about-canopy-leaf-${index}`, leaf(1.2, .72, .08), 'white');
-      motion.push((time, response) => { canopy.rotation.z = .17 + Math.sin(time * .22 + index * 2) * .17 + response * .2; });
-    }
-    mesh(root, 'about-fountain-basin', new CylinderGeometry(.63, .68, .16, 32).translate(0, 1.15, -2.1), 'white');
-    const fountain = armature('about-water-ribbon', [0, 1.25, -2.1]);
-    mesh(fountain, 'about-fountain-ribbon', pipe(Array.from({ length: 18 }, (_, index) => { const t = index / 17; return new Vector3(Math.sin(t * Math.PI) * .42, Math.sin(t * Math.PI) * 1.75, Math.cos(t * Math.PI) * .36); }), .06), 'glass');
-    const light = mesh(fountain, 'about-reflected-water-light', circle(.38, .03).rotateX(Math.PI / 2), 'aqua');
-    motion.push((time, response) => { fountain.rotation.y = Math.sin(time * .18) * .2 + response * .12; light.rotation.z = Math.sin(time * .4) * .08; });
   }
 
   if (id === 'contact') {
@@ -148,7 +124,7 @@ export function createLandmarkMechanism(id: LandmarkId) {
     mesh(root, 'contact-signal-core', new SphereGeometry(.36, 24, 16).translate(0, 4.55, -.18), 'aqua');
     const pulse = mesh(root, 'contact-outward-signal-pulse', circle(.55, .025).rotateX(Math.PI / 2), 'glass');
     motion.push((time, response) => { const wave = (Math.sin(time * 1.45) + 1) / 2; pulse.position.set(0, 4.73 + wave * .55, -.18); pulse.scale.setScalar(1 + wave * (.5 + response * .65)); });
-    mesh(root, 'contact-waterside-landing', join([new BoxGeometry(1.45, .08, .65).translate(.4, 1.02, 2.24), bar(new Vector3(-.3, 1.06, 2.44), new Vector3(-.3, 1.55, 2.44), .035), bar(new Vector3(1.1, 1.06, 2.44), new Vector3(1.1, 1.55, 2.44), .035)]), 'white');
+    mesh(root, 'contact-arrival-landing', join([new BoxGeometry(1.45, .08, .65).translate(.4, 1.02, 2.24), bar(new Vector3(-.3, 1.06, 2.44), new Vector3(-.3, 1.55, 2.44), .035), bar(new Vector3(1.1, 1.06, 2.44), new Vector3(1.1, 1.55, 2.44), .035)]), 'white');
   }
 
   if (id === 'building') {

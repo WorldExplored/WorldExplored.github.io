@@ -18,6 +18,9 @@ import { CoastalLife } from './CoastalLife';
 import { Flora } from './Flora';
 import { Wildlife } from './Wildlife';
 import { ShoreImpacts } from './ShoreImpacts';
+import { Bridges } from './Bridges';
+import { GardenRover } from './GardenRover';
+import { Seaweed } from './Seaweed';
 import { Water } from './Water';
 import { QualityController } from './QualityController';
 import { ReflectiveObject } from './ReflectiveObject';
@@ -92,9 +95,10 @@ function PointerGround({ runtime, paused }: { runtime: MutableRefObject<SceneRun
   return null;
 }
 
-export function AeroWorld(props: WorldProps & { runtime: MutableRefObject<SceneRuntime>; tier: QualityTier; onTier: (tier: QualityTier) => void }) {
+export function AeroWorld(props: WorldProps & { runtime: MutableRefObject<SceneRuntime>; tier: QualityTier; onTier: (tier: QualityTier) => void; stage?: number; onPlantsReady?: () => void }) {
   const { runtime, tier, onTier, paused, mobile, destination, onNavigate } = props;
   const stopped = paused;
+  const stage = props.stage ?? 5;
   // Preserve sunlight direction while placing every island in front of the shadow camera.
   const sunlightPosition = useMemo(() => new Vector3(...world.lighting.sunPosition).multiplyScalar(3), []);
   const reflections = useMemo(() => (<Environment frames={1} resolution={128}>
@@ -110,13 +114,16 @@ export function AeroWorld(props: WorldProps & { runtime: MutableRefObject<SceneR
     <directionalLight position={sunlightPosition} intensity={world.lighting.sunIntensity} color={world.lighting.sunColor} castShadow={world.quality[tier].shadows} shadow-mapSize={[2048, 2048]} shadow-camera-left={-55} shadow-camera-right={80} shadow-camera-top={45} shadow-camera-bottom={-22} shadow-camera-near={100} shadow-camera-far={340} shadow-normalBias={0.08} shadow-bias={-0.0001} />
     {reflections}
 
-    <EcoCity runtime={runtime} paused={stopped} quality={tier} />
-    <CoastalLife runtime={runtime} paused={stopped} quality={tier} />
-    <Flora runtime={runtime} paused={stopped} quality={tier} />
-    <Wildlife runtime={runtime} paused={stopped} quality={tier} />
-    <ShoreImpacts runtime={runtime} paused={stopped} quality={tier} />
+    {stage >= 1 && <EcoCity runtime={runtime} paused={stopped} quality={tier} />}
+    {stage >= 3 && <CoastalLife runtime={runtime} paused={stopped} quality={tier} />}
+    {stage >= 3 && <Seaweed runtime={runtime} paused={stopped} quality={tier} />}
+    {stage >= 4 && <Flora runtime={runtime} paused={stopped} quality={tier} />}
+    {stage >= 4 && <Wildlife runtime={runtime} paused={stopped} quality={tier} />}
+    {stage >= 5 && <GardenRover runtime={runtime} paused={stopped} quality={tier} active={false} />}
+    {stage >= 5 && <ShoreImpacts runtime={runtime} paused={stopped} quality={tier} />}
+    <Bridges />
     <Water runtime={runtime} paused={stopped} quality={tier} />
-    <AmbientSystem runtime={runtime} paused={stopped} quality={tier} />
+    <AmbientSystem onPlantsReady={props.onPlantsReady} stage={stage} runtime={runtime} paused={stopped} quality={tier} />
     {world.landmarks.map(config => <Landmark key={config.id} config={config} runtime={runtime} paused={stopped} onNavigate={onNavigate}><LandmarkModel id={config.id} active={destination === config.id} runtime={runtime} paused={stopped} quality={tier} /></Landmark>)}
     <ReflectiveObject position={[-10, 2.5, 23]} runtime={runtime} paused={stopped} quality={tier} command={props.rotationCommand} />
     <PointerGround runtime={runtime} paused={stopped} />

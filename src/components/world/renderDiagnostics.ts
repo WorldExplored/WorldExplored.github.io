@@ -25,3 +25,11 @@ export function sampleFrame(context: WebGL2RenderingContext) {
   renderAudit.worstBlackFraction = Math.max(renderAudit.worstBlackFraction, fraction);
   if (fraction > .8) renderAudit.blackFrames++;
 }
+
+/** Measure construction only when explicitly inspecting a local or published build. */
+export function measureConstruction<T>(name: string, create: () => T): T {
+  if (!auditing()) return create();
+  const start = performance.now();
+  try { return create(); }
+  finally { performance.measure(`world:${name}`, { start, end: performance.now() }); }
+}

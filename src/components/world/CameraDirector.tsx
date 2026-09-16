@@ -61,6 +61,7 @@ export function CameraDirector({ destination, flight, mobile, onArrive, paused, 
     controls.touches = { ONE: TOUCH.ROTATE, TWO: TOUCH.DOLLY_PAN };
     controls.target.fromArray((latest.current.mobile ? world.mobileOverview : world.overview).target);
     controls.update();
+    if (typeof performance !== 'undefined') performance.mark('world:camera-ready');
     const previousControls = get().controls;
     set({ controls: controls as unknown as RootState['controls'] });
     const onChange = () => {

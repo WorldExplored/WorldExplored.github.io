@@ -1,10 +1,12 @@
 'use client';
 
+import { measureConstruction } from './renderDiagnostics';
+
 // Three.js renderer and material objects are imperative resources owned by Fiber.
 /* eslint-disable react-hooks/immutability */
 
 import { useEffect, useMemo, type MutableRefObject } from 'react';
-import { useFrame, type ThreeEvent } from '@react-three/fiber';
+import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
 import { Color, DataTexture, LinearFilter, PlaneGeometry, RGBAFormat, ShaderMaterial, Vector2, Vector3, Vector4 } from 'three';
 import { landDistance } from './terrain';
 import { coastExposure, shorelineWaveGLSL } from './waves';
@@ -106,7 +108,7 @@ const fragmentShader = /* glsl */ `
     color += uSunColor * sun * uSunIntensity * .14;
     float haze = smoothstep(uFogRange.x, uFogRange.y, length(cameraPosition - vWorld));
     color = mix(color, uFog, haze);
-    gl_FragColor = vec4(color, mix(.985, .70, shallows));
+    gl_FragColor = vec4(color, mix(.985, .48, shallows));
     #include <colorspace_fragment>
   }
 `;
@@ -124,7 +126,7 @@ function startRipple(state: SceneRuntime, x: number, z: number) {
 }
 
 function coastTexture() {
-  const width = 640; const height = 640; const data = new Uint8Array(width * height * 4);
+  const width = 96; const height = 96; const data = new Uint8Array(width * height * 4);
   for (let row = 0; row < height; row++) for (let col = 0; col < width; col++) {
     const x = -100 + col / (width - 1) * 180; const z = -120 + row / (height - 1) * 180;
     const distance = landDistance(x,z);
@@ -136,6 +138,7 @@ function coastTexture() {
 
 export function Water({ runtime, paused, quality }: EnvironmentProps) {
   const detail = world.quality[quality].waterDetail;
+  const invalidate = useThree(state => state.invalidate);
   const geometry = useMemo(() => {
     const segments = 96;
     return new PlaneGeometry(1600, 1600, segments, segments).rotateX(-Math.PI / 2);
@@ -146,7 +149,7 @@ export function Water({ runtime, paused, quality }: EnvironmentProps) {
     transparent: true,
     uniforms: {
       uTime: { value: 0 },
-      uCoast: { value: coastTexture() },
+      uCoast: { value: measureConstruction('coast-field', () => coastTexture()) },
       uCoastBounds: { value: new Vector4(-100, -120, 180, 180) },
       uDetail: { value: 1 },
       uRipple: { value: new Vector4(0, 0, 100, 0) },
@@ -160,6 +163,23 @@ export function Water({ runtime, paused, quality }: EnvironmentProps) {
       uSunIntensity: { value: world.lighting.sunIntensity },
     },
   }), []);
+  useEffect(() => {
+    if (typeof Image === 'undefined') return;
+    let cancelled = false;
+    const image = new Image();
+    image.onload = () => {
+      if (cancelled) return;
+      const canvas = document.createElement('canvas'); canvas.width = image.width; canvas.height = image.height;
+      const context = canvas.getContext('2d');
+      if (!context) return;
+      context.drawImage(image, 0, 0);
+      const texture = material.uniforms.uCoast.value as DataTexture;
+      texture.image = { data: new Uint8Array(context.getImageData(0, 0, image.width, image.height).data), width: image.width, height: image.height };
+      texture.needsUpdate = true; invalidate();
+    };
+    image.src = '/coast-field.png';
+    return () => { cancelled = true; image.onload = null; };
+  }, [material, invalidate]);
   useEffect(() => () => { geometry.dispose(); material.uniforms.uCoast.value.dispose(); material.dispose(); }, [geometry, material]);
   useEffect(() => { material.uniforms.uDetail.value = detail; }, [material, detail]);
   useFrame(() => {

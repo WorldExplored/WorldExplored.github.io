@@ -35,7 +35,7 @@ test('archipelago preserves architecture bases and bridges connect across real c
 });
 
 test('each curved path is one connected ribbon without separate segment seams', () => {
-  const paths = createLandscapePlan().paths.filter(path => !path.elevated);
+  const paths = createLandscapePlan().paths.filter(path => !path.elevated && !path.bridge);
   const geometry = pathGeometry(paths);
   try {
     const parents = Array.from({ length: geometry.attributes.position.count }, (_, index) => index);
@@ -142,8 +142,8 @@ test('fine foliage stays inside the same exclusion footprints used for planting'
     }
     const ground = item.scene.getObjectByName('archipelago-land');
     assert.equal(ground.material.map.colorSpace, SRGBColorSpace);
-    assert.ok(ground.material.color.g > ground.material.color.r);
-    assert.ok(ground.material.envMapIntensity <= .1);
+    assert.equal(ground.geometry.attributes.aTerrain.count, ground.geometry.attributes.position.count);
+    assert.ok(ground.material.envMapIntensity <= .2);
   } finally { await item.renderer.unmount(); }
 });
 

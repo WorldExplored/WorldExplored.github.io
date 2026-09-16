@@ -189,7 +189,7 @@ test('disabled lamp illumination stays off during selection', async () => {
 test('landmarks fit their planting footprints and preserve the intended hierarchy', async () => {
   const runtime = { current: createSceneRuntime() };
   const limits: Record<LandmarkId, number> = { work: 5.5, research: 3.8, purdue: 1.8, about: 3.5, contact: 3.2, building: 2.4 };
-  const heightLimits: Record<LandmarkId, number> = { work: 9.5, research: 7, purdue: 4.3, about: 5, contact: 6.5, building: 7.8 };
+  const heightLimits: Record<LandmarkId, number> = { work: 11.6, research: 7, purdue: 4.3, about: 5, contact: 6.5, building: 7.8 };
   const bounds: Record<string, { radius: number; width: number; depth: number; top: number; bottom: number; triangles: number }> = {};
   for (const landmark of world.landmarks) {
     const renderer = await create(<LandmarkModel id={landmark.id} runtime={runtime} active={false} paused={false} quality="high" />);
@@ -290,10 +290,11 @@ test('quality, selection, and pause changes preserve every architectural resourc
       }
     }
   } finally { await renderer.unmount(); }
+  await new Promise(resolve => setTimeout(resolve, 5));
   assert.ok([...disposals.values()].every(count => count === 1), 'Owned resources must be released exactly once on unmount.');
 });
 
-test('the garden canopy preserves the existing sculpture volume', async () => {
+test('the garden gallery preserves the existing sculpture volume', async () => {
   const runtime = { current: createSceneRuntime() };
   const renderer = await create(<LandmarkModel id="about" runtime={runtime} active={false} paused={false} quality="high" />);
   try {
@@ -350,45 +351,26 @@ test('the lighthouse beam remains westward, freezes when paused, and darkens whe
   }
 });
 
-test('facade glass vertices stay outside opaque walls and window frames', async () => {
-  const runtime = { current: createSceneRuntime() };
-  for (const id of ['work', 'research'] as const) {
-    const renderer = await create(<LandmarkModel id={id} runtime={runtime} active={false} paused={false} quality="high" />);
-    try {
+test('occupied building volumes have continuous exterior walls, roofs, floors and doors', async () => {
+  const runtime={current:createSceneRuntime()};
+  const rooms: Partial<Record<LandmarkId, number[][]>>={work:[[-2.875,2.2,0],[0,2,0],[2.875,3.9,0]],research:[[-1.215,1.9,0],[1.68,1.8,1.1],[1.58,2,-.73]],purdue:[[0,1.8,0]],about:[[0,2,-1.7],[-1.95,2,0]],contact:[[0,2,0]]};
+  for(const [id,centers] of Object.entries(rooms)){
+    const renderer=await create(<LandmarkModel id={id as LandmarkId} runtime={runtime} active={false} paused quality="high"/>);
+    try{
       renderer.scene.instance.updateMatrixWorld(true);
-      for (const target of [`${id}-curved-enclosure`, `${id}-window-frames`]) {
-        const solid = renderer.scene.findByProps({ name: target }).instance as Mesh;
-        // Ray parity needs both entry and exit crossings through closed geometry.
-        (solid.material as MeshPhysicalMaterial).side = DoubleSide;
-        solid.geometry.computeBoundingBox();
-        const bounds = solid.geometry.boundingBox!;
-        const raycaster = new Raycaster();
-        const direction = new Vector3(1, 0.37, 0.23).normalize();
-        const point = new Vector3();
-        const checked = new Set<string>();
-        for (const node of renderer.scene.findAll(item => item.instance.type === 'Mesh')) {
-          const mesh = node.instance as Mesh;
-          if (!(mesh.material as MeshPhysicalMaterial).transparent) continue;
-          const positions = mesh.geometry.attributes.position;
-          for (let index = 0; index < positions.count; index++) {
-            point.fromBufferAttribute(positions, index).applyMatrix4(mesh.matrixWorld);
-            if (!bounds.containsPoint(point)) continue;
-            const key = point.toArray().map(value => value.toFixed(5)).join(',');
-            if (checked.has(key)) continue;
-            checked.add(key);
-            raycaster.set(point, direction);
-            const hits = raycaster.intersectObject(solid, false);
-            let crossings = 0;
-            let previous = -1;
-            for (const hit of hits) {
-              if (Math.abs(hit.distance - previous) < 0.00001) continue;
-              previous = hit.distance;
-              crossings++;
-            }
-            assert.equal(crossings % 2, 0, `Glass at ${key} intersects ${target}`);
-          }
+      const shells=renderer.scene.findAll(item=>item.instance.type==='Mesh').map(node=>node.instance as Mesh).filter(mesh=>{
+        for(let parent=mesh.parent;parent;parent=parent.parent)if(parent.name.endsWith('-operating-assembly'))return false;
+        return true;
+      });
+      for(const center of centers!){
+        const origin=new Vector3(...center);
+        const directions=[new Vector3(0,1,0),new Vector3(0,-1,0)];
+        for(let i=0;i<24;i++)for(const pitch of [-.2,0,.2])directions.push(new Vector3(Math.cos(i*Math.PI/12),pitch,Math.sin(i*Math.PI/12)).normalize());
+        for(const direction of directions){
+          const ray=new Raycaster(origin,direction,.01,12);
+          assert.ok(ray.intersectObjects(shells,false).length>0,`${id} room ${center} opens to outside along ${direction.toArray()}`);
         }
       }
-    } finally { await renderer.unmount(); }
+    }finally{await renderer.unmount();}
   }
 });

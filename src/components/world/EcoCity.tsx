@@ -1,5 +1,7 @@
 'use client';
 
+import { measureConstruction } from './renderDiagnostics';
+
 import { useEffect, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { BoxGeometry, BufferGeometry, CatmullRomCurve3, DoubleSide, ExtrudeGeometry, Float32BufferAttribute, Group, Matrix4, Mesh, MeshPhysicalMaterial, Object3D, Shape, SphereGeometry, TubeGeometry, Vector3 } from 'three';
@@ -217,7 +219,7 @@ function retainCity(city: ReturnType<typeof makeCity>) {
 }
 
 export function EcoCity({ runtime, paused, quality }: EnvironmentProps) {
-  const city = useMemo(() => makeCity(), []);
+  const city = useMemo(() => measureConstruction('city', () => makeCity()), []);
   useEffect(() => retainCity(city), [city]);
   useFrame(() => { if (!paused) updateCityTransit(city, runtime.current.elapsed); });
   return <group name="coastal-eco-city" dispose={null}>

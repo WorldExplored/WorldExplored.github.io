@@ -79,7 +79,7 @@ test('each destination fits left of desktop content and above the mobile sheet',
     const center = new Vector3(...landmark.position);
     center.y += terrainHeight(center.x, center.z) + ({ work: 6, research: 4, purdue: 3, about: 4, contact: 4, building: 6 }[landmark.id]) * .45;
     center.project(camera);
-    if (mobile) assert.ok(center.y > .15 && center.y < .65, `${landmark.id} projects above the sheet (${center.y}).`);
+    if (mobile) assert.ok(center.y > .34 && center.y < .9, `${landmark.id} projects above the sheet (${center.y}).`);
     else assert.ok(center.x < -.25 && center.x > -.65, `${landmark.id} remains left of the panel (${center.x}).`);
   }
 });
@@ -270,6 +270,21 @@ test('overview keeps every primary structure inside the reviewed desktop and por
         const point = new Vector3(landmark.position[0] + Math.cos(angle) * radius, 2, landmark.position[2] + Math.sin(angle) * radius).project(camera);
         assert.ok(Math.abs(point.x) < 1 && Math.abs(point.y) < 1, `${width}: ${landmark.id} remains visible`);
       }
+    }
+  }
+});
+
+
+test('portrait destination views retain the entrance and roof above the content panel', () => {
+  const heights = { work: 11.25, research: 4.2, purdue: 3.25, about: 3, contact: 5.44, building: 7.8 };
+  for (const landmark of world.landmarks) {
+    const pose = focusPose(landmark.id, true, 390 / 844);
+    const camera = new PerspectiveCamera(43, 390 / 844, .1, 500);
+    camera.position.fromArray(pose.position); camera.lookAt(...pose.target); camera.updateMatrixWorld();
+    assertSafe(camera.position, new Vector3(...pose.target));
+    for (const height of [0, heights[landmark.id]]) {
+      const point = new Vector3(landmark.position[0], terrainHeight(landmark.position[0], landmark.position[2]) + height, landmark.position[2]).project(camera);
+      assert.ok(point.y > .34 && point.y < 1, `${landmark.id}: entrance and roof remain in the upper 33%`);
     }
   }
 });

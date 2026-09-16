@@ -10,7 +10,7 @@ import { world, type LandmarkConfig, type LandmarkId, type SceneRuntime } from '
 
 export const LANDMARK_HOVER_GRACE_MS = 120;
 export const LANDMARK_HIT_BOUNDS: Record<LandmarkId, { radius: number; floor: number; top: number }> = {
-  work: { radius: 5.5, floor: .8, top: 9.5 },
+  work: { radius: 5.5, floor: .8, top: 11.6 },
   research: { radius: 3.8, floor: .8, top: 7 },
   purdue: { radius: 1.8, floor: .8, top: 4.3 },
   about: { radius: 3.5, floor: .8, top: 5 },
@@ -53,7 +53,7 @@ export function Landmark({ config, runtime, paused, onNavigate, children }: { co
     material.opacity += ((active ? .65 : .16) - material.opacity) * (paused ? 1 : Math.min(1, delta * 8));
   });
   return <group name={`landmark-${config.id}`} position={config.position}>
-    <group name={`landmark-model-${config.id}`}>{children}</group>
+    <group name={`landmark-model-${config.id}`} rotation={[0, config.rotationY ?? 0, 0]}>{children}</group>
     <mesh ref={ring} position={[0, .08, 0]} rotation={[-Math.PI / 2, 0, 0]}>
       <ringGeometry args={[bounds.radius - .05, bounds.radius, world.quality.high.segments]} />
       <meshBasicMaterial color={config.color} transparent opacity={.16} depthWrite={false} />

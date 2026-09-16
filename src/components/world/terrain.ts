@@ -1,11 +1,13 @@
+import { coastExposure } from './waves';
+import { BRIDGES, BRIDGE_LANDINGS, bridgeHeightAt } from './bridgePlan';
 import { cityInfrastructureFootprints } from './cityInfrastructure';
-import { BufferGeometry, CatmullRomCurve3, Color, Float32BufferAttribute, Vector3 } from 'three';
+import { BufferGeometry, CatmullRomCurve3, Float32BufferAttribute, Vector3 } from 'three';
 import { cityBuildings, createCityTransitRoute } from './city';
 import { world, type LandmarkId } from '../../content/world';
 
 export interface Footprint { id: string; x: number; z: number; radius: number }
 export interface PathPoint { x: number; z: number }
-export interface LandscapePath { points: PathPoint[]; width: number; bridge?: boolean; elevated?: boolean }
+export interface LandscapePath { bridgeId?: string; points: PathPoint[]; width: number; bridge?: boolean; elevated?: boolean }
 export interface LandscapeRock extends Footprint { y: number; scale: [number, number, number]; rotation: number }
 export interface LandscapeTree extends Footprint { y: number; height: number; rotation: number }
 export interface LandscapePlan { structures: Footprint[]; paths: LandscapePath[]; rocks: LandscapeRock[]; trees: LandscapeTree[] }
@@ -41,7 +43,9 @@ export function islandDistance(island: Island, x: number, z: number) {
   return (islandContour(island, Math.atan2(dz, dx)) - Math.hypot(dx, dz)) * Math.min(island.rx, island.rz);
 }
 export function landDistance(x: number, z: number) {
-  return Math.max(...ISLANDS.map(island => islandDistance(island, x, z)));
+  let distance = -Infinity;
+  for (const island of ISLANDS) distance = Math.max(distance, islandDistance(island, x, z));
+  return distance;
 }
 export function islandAt(x: number, z: number) {
   let owner = ISLANDS[0]; let distance = -Infinity;
@@ -65,6 +69,12 @@ export function terrainHeight(x: number, z: number) {
     const blend = 1 - smooth(item.radius + .1, item.radius + 1.4, Math.hypot(x - item.x, z - item.z));
     height += (.8 - height) * blend * smooth(.2, 1.4, distance);
   }
+  for (const landing of BRIDGE_LANDINGS) {
+    const blend = 1 - smooth(landing.radius, landing.radius + 1.2, Math.hypot(x-landing.x,z-landing.z));
+    if (blend === 0) continue;
+    const free = smooth(0, .5, Math.min(...world.landmarks.map(item => Math.hypot(x-item.position[0],z-item.position[2])-FOOTPRINT_RADII[item.id])));
+    height += (landing.top - .05 - height) * blend * free;
+  }
   return height;
 }
 export function terrainSlope(x: number, z: number) {
@@ -83,10 +93,45 @@ function pathClearance(x: number, z: number, paths: readonly LandscapePath[]) {
   for (const path of paths) for (let index = 1; index < path.points.length; index++) clearance = Math.min(clearance, distanceToSegment(x, z, path.points[index - 1], path.points[index]) - path.width / 2);
   return clearance;
 }
+type PlantCell = { circles: Footprint[]; segments: { a: PathPoint; b: PathPoint; halfWidth: number }[] };
+const plantIndexes = new WeakMap<LandscapePlan, Map<string, PlantCell>>();
+function plantingIndex(plan: LandscapePlan) {
+  let index = plantIndexes.get(plan);
+  if (index) return index;
+  index = new Map();
+  function add(x0: number, z0: number, x1: number, z1: number, insert: (cell: PlantCell) => void) {
+    for (let z = Math.floor(z0 / 8); z <= Math.floor(z1 / 8); z++) for (let x = Math.floor(x0 / 8); x <= Math.floor(x1 / 8); x++) {
+      const key = `${x},${z}`;
+      let cell = index!.get(key);
+      if (!cell) { cell = { circles: [], segments: [] }; index!.set(key, cell); }
+      insert(cell);
+    }
+  }
+  for (const circle of [...plan.structures, ...plan.rocks, ...plan.trees]) {
+    const r = circle.radius + 3;
+    add(circle.x - r, circle.z - r, circle.x + r, circle.z + r, cell => cell.circles.push(circle));
+  }
+  for (const path of plan.paths) for (let i = 1; i < path.points.length; i++) {
+    const a = path.points[i - 1], b = path.points[i], r = path.width / 2 + 3;
+    const segment = { a, b, halfWidth: path.width / 2 };
+    add(Math.min(a.x,b.x)-r, Math.min(a.z,b.z)-r, Math.max(a.x,b.x)+r, Math.max(a.z,b.z)+r, cell => cell.segments.push(segment));
+  }
+  plantIndexes.set(plan, index);
+  return index;
+}
 export function vegetationSuitability(x: number, z: number, reach: number, plan: LandscapePlan) {
-  const coast = landDistance(x, z) - reach;
-  const clearance = Math.min(circleClearance(x, z, plan.structures), circleClearance(x, z, plan.rocks), circleClearance(x, z, plan.trees), pathClearance(x, z, plan.paths)) - reach;
-  return smooth(1.1, 3.4, coast) * smooth(0, .75, clearance) * (1 - smooth(.35, .65, terrainSlope(x, z)));
+  const coast = smooth(1.1, 3.4, landDistance(x, z) - reach);
+  if (!coast) return 0;
+  let clearance = Infinity;
+  if (reach <= 2) {
+    const cell = plantingIndex(plan).get(`${Math.floor(x / 8)},${Math.floor(z / 8)}`);
+    if (cell) {
+      clearance = circleClearance(x, z, cell.circles);
+      for (const { a, b, halfWidth } of cell.segments) clearance = Math.min(clearance, distanceToSegment(x, z, a, b) - halfWidth);
+    }
+  } else clearance = Math.min(circleClearance(x, z, plan.structures), circleClearance(x, z, plan.rocks), circleClearance(x, z, plan.trees), pathClearance(x, z, plan.paths));
+  const free = smooth(0, .75, clearance - reach);
+  return free ? coast * free * (1 - smooth(.35, .65, terrainSlope(x, z))) : 0;
 }
 export function canPlacePlant(x: number, z: number, reach: number, plan: LandscapePlan) { return vegetationSuitability(x, z, reach, plan) > 0; }
 
@@ -94,11 +139,13 @@ export function createLandscapePlan(): LandscapePlan {
   const structures = [...architectureFootprints(), ...cityInfrastructureFootprints, ...cityBuildings.map(item => ({ id: item.id, x: item.x, z: item.z, radius: item.radius }))];
   const point = (id: LandmarkId): PathPoint => { const item = world.landmarks.find(landmark => landmark.id === id)!; return { x: item.position[0], z: item.position[2] }; };
   const paths: LandscapePath[] = [
-    { width: 1.25, points: [point('work'), { x: -3, z: -3 }, point('research'), { x: 12, z: -7 }] },
-    { width: 1.2, points: [point('about'), { x: -3, z: 20 }, { x: 5, z: 21 }, point('contact')] },
-    { width: 1.25, points: [point('work'), { x: -10, z: 7 }] },
-    { width: 1.3, bridge: true, points: [{ x: -10, z: 7 }, { x: -9, z: 13 }, { x: -10, z: 20 }] },
-    { width: 1.1, bridge: true, points: [{ x: 12, z: -7 }, { x: 18, z: -8 }, point('purdue')] },
+    { width: 1.25, points: [{ x: -8, z: 3 }, { x: -3, z: 3 }, { x: 1, z: -3.8 }, { x: 2.67, z: -5.15 }] },
+    { width: 1.25, points: [{ x: 2.67, z: -5.15 }, { x: 7.5, z: -4.1 }, { x: 10, z: -5.5 }, { x: 12, z: -7 }] },
+    { width: 1.2, points: [point('about'), { x: -5.5, z: 24.1 }, { x: 5, z: 26 }, { x: 12, z: 25.05 }] },
+    { width: 1.25, points: [point('work'), { x: -6, z: 7 }] },
+    { width: 1.25, points: [{ x: -6, z: 18 }, { x: -4, z: 21.5 }, { x: -5.5, z: 24.1 }] },
+    { width: 1.25, points: [{ x: 21.7, z: -7 }, point('purdue')] },
+    ...BRIDGES.map(bridge => ({ width: bridge.width, bridge: true, bridgeId: bridge.id, points: bridge.samples.map(({point}) => ({x: point.x,z: point.z})) })),
   ];
   for (const path of paths) {
     if (path.bridge) continue;
@@ -129,10 +176,11 @@ export function createLandscapePlan(): LandscapePlan {
   }
   return { structures, paths, rocks, trees };
 }
-export function generatePlantPositions(count: number, plan: LandscapePlan, seed = 41): PlantPosition[] {
+function* samplePlantPositions(count: number, plan: LandscapePlan, seed: number): Generator<void, PlantPosition[]> {
   const random = seededRandom(seed); const positions: PlantPosition[] = [];
   const area = ISLANDS.reduce((total, island) => total + island.rx * island.rz, 0);
   for (let attempt = 0; positions.length < count && attempt < count * 140; attempt++) {
+    if (attempt % 256 === 0) yield;
     let choose = random() * area; let island = ISLANDS[0];
     for (const candidate of ISLANDS) { choose -= candidate.rx * candidate.rz; if (choose <= 0) { island = candidate; break; } }
     const angle = random() * Math.PI * 2; const radius = Math.sqrt(random()) * islandContour(island, angle);
@@ -145,37 +193,69 @@ export function generatePlantPositions(count: number, plan: LandscapePlan, seed 
   return positions;
 }
 
-export function archipelagoGeometry() {
-  const geometry = new BufferGeometry(); const positions: number[] = []; const colors: number[] = []; const uvs: number[] = []; const indices: number[] = [];
-  const green = new Color(world.colors.grass); const lime = new Color(world.colors.grassLight); const sand = new Color('#f8f3d9'); const shelf = new Color('#91ded2'); const color = new Color();
-  const sectors = 192; const rings = 48;
-  for (const island of ISLANDS) {
-    const start = positions.length / 3;
-    for (let ring = 0; ring <= rings; ring++) for (let segment = 0; segment <= sectors; segment++) {
-      const angle = segment / sectors * Math.PI * 2; const contour = islandContour(island, angle); const r = ring / rings;
-      const x = island.x + Math.cos(angle) * (island.rx * contour + 8) * r;
-      const z = island.z + Math.sin(angle) * (island.rz * contour + 8) * r;
-      const d = islandDistance(island, x, z);
-      const y = d < 0 ? -.04 - Math.min(5, -d * .38 + Math.pow(Math.max(0, -d - 3), 1.4) * .08) : terrainHeight(x, z);
-      positions.push(x, y, z); uvs.push(x / 4, z / 4);
-      color.copy(shelf).lerp(sand, smooth(-4, -.2, d)).lerp(green, smooth(.8, 3.4, d));
-      if (d > 3.4) color.lerp(lime, .06 + .05 * Math.sin(x * .18 + z * .11));
-      if (island.id === 'beacon' && d > 0 && d < 1.7) color.set('#8fa99a').lerp(green, smooth(1.1, 1.7, d));
-      colors.push(color.r, color.g, color.b);
-      if (ring < rings && segment < sectors) { const a = start + ring * (sectors + 1) + segment; const b = a + sectors + 1; indices.push(a, a + 1, b, a + 1, b + 1, b); }
-    }
+export function generatePlantPositions(count: number, plan: LandscapePlan, seed = 41) {
+  const sampler = samplePlantPositions(count, plan, seed);
+  let batch = sampler.next();
+  while (!batch.done) batch = sampler.next();
+  return batch.value;
+}
+export async function generatePlantPositionsAsync(count: number, plan: LandscapePlan, signal: AbortSignal, seed = 41) {
+  const sampler = samplePlantPositions(count, plan, seed);
+  let batch = sampler.next();
+  while (!batch.done) {
+    if (signal.aborted) return null;
+    const deadline = performance.now() + 5;
+    do { batch = sampler.next(); } while (!batch.done && performance.now() < deadline);
+    if (!batch.done) await new Promise(resolve => setTimeout(resolve, 0));
   }
-  geometry.setAttribute('position', new Float32BufferAttribute(positions, 3)); geometry.setAttribute('color', new Float32BufferAttribute(colors, 3)); geometry.setAttribute('uv', new Float32BufferAttribute(uvs, 2)); geometry.setIndex(indices); geometry.computeVertexNormals(); return geometry;
+  return signal.aborted ? null : batch.value;
+}
+
+/** A shared Cartesian lattice avoids radial seams and overlapping island shelves. */
+export function archipelagoGeometry() {
+  const geometry = new BufferGeometry();
+  const positions: number[] = [], colors: number[] = [], uvs: number[] = [], zones: number[] = [], exposures: number[] = [], indices: number[] = [];
+  const step = .4, vertices = new Map<string, number>();
+  const vertex = (ix: number, iz: number) => {
+    const key = `${ix},${iz}`;
+    const existing = vertices.get(key); if (existing !== undefined) return existing;
+    const x = ix * step, z = iz * step, y = terrainHeight(x, z);
+    const index = positions.length / 3; vertices.set(key, index);
+    positions.push(x, y, z); uvs.push(x / 4, z / 4); colors.push(1, 1, 1);
+    const distance = landDistance(x, z);
+    zones.push(distance, y, 0); exposures.push(distance > -.8 && distance < .8 ? coastExposure(x, z, distance) : 0);
+    return index;
+  };
+  for (let iz = -280; iz < 110; iz++) for (let ix = -230; ix < 105; ix++) {
+    if (landDistance((ix + .5) * step, (iz + .5) * step) < -6.5) continue;
+    const a = vertex(ix, iz), b = vertex(ix + 1, iz), c = vertex(ix, iz + 1), d = vertex(ix + 1, iz + 1);
+    indices.push(a, c, b, b, c, d);
+  }
+  geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('color', new Float32BufferAttribute(colors, 3));
+  geometry.setAttribute('uv', new Float32BufferAttribute(uvs, 2));
+  geometry.setAttribute('aTerrain', new Float32BufferAttribute(zones, 3));
+  geometry.setAttribute('aExposure', new Float32BufferAttribute(exposures, 1));
+  geometry.setIndex(indices); geometry.computeVertexNormals();
+  const normals = geometry.getAttribute('normal'), terrain = geometry.getAttribute('aTerrain');
+  for (let i = 0; i < normals.count; i++) terrain.setZ(i, Math.hypot(normals.getX(i), normals.getZ(i)) / Math.max(.01, normals.getY(i)));
+  return geometry;
+}
+/** Height on the same two triangles used by the ground lattice. */
+export function terrainMeshHeight(x: number, z: number) {
+  const step = .4, ix = Math.floor(x / step), iz = Math.floor(z / step);
+  const u = x / step - ix, v = z / step - iz;
+  const b = terrainHeight((ix + 1) * step, iz * step), c = terrainHeight(ix * step, (iz + 1) * step);
+  return u + v <= 1 ? terrainHeight(ix * step, iz * step) * (1 - u - v) + b * u + c * v
+    : terrainHeight((ix + 1) * step, (iz + 1) * step) * (u + v - 1) + b * (1 - v) + c * (1 - u);
 }
 export function pathHeight(path: LandscapePath, x: number, z: number) {
-  if (!path.bridge) return terrainHeight(x, z) + .045;
-  const a = path.points[0]; const b = path.points[path.points.length - 1]; const span = Math.hypot(b.x - a.x, b.z - a.z);
-  const t = Math.max(0, Math.min(1, Math.hypot(x - a.x, z - a.z) / span));
-  return Math.max(terrainHeight(x, z) + .045, .85 + Math.sin(t * Math.PI) * 1.15);
+  if (!path.bridge) return terrainMeshHeight(x, z) + .045;
+  return bridgeHeightAt(BRIDGES.find(bridge => bridge.id === path.bridgeId)!, x, z);
 }
 export function pathGeometry(paths: readonly LandscapePath[]) {
   const positions: number[] = []; const indices: number[] = [];
-  for (const path of paths.filter(path => !path.elevated)) {
+  for (const path of paths.filter(path => !path.elevated && !path.bridge)) {
     const samples: PathPoint[] = [];
     for (let segment = 1; segment < path.points.length; segment++) {
       const a = path.points[segment - 1]; const b = path.points[segment];

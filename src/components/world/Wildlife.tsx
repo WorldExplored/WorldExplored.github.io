@@ -1,12 +1,14 @@
 'use client';
 
+import { measureConstruction } from './renderDiagnostics';
+
 /* eslint-disable react-hooks/immutability */
 import { useEffect, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { BufferGeometry, ConeGeometry, CylinderGeometry, Group, InstancedMesh, MeshStandardMaterial, Object3D, SphereGeometry, Vector3 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { EnvironmentProps } from './Water';
-import { createCrabStates, createGullStates, stepCrab, stepGull, WILDLIFE_COUNTS } from './wildlifeState';
+import { createCrabStates, createGullStates, stepCrab, stepGull, WILDLIFE_COUNTS, type GullState } from './wildlifeState';
 
 function ellipsoid(x: number, y: number, z: number, sx: number, sy: number, sz: number, turn = 0) {
   return new SphereGeometry(1, 16, 10).scale(sx, sy, sz).rotateY(turn).translate(x, y, z);
@@ -25,7 +27,7 @@ function mirrored(geometry: BufferGeometry) {
   return copy;
 }
 
-function createWildlife() {
+export function createWildlife() {
   const group = new Group(); group.name = 'coastal-wildlife';
   const materials = [new MeshStandardMaterial({ color: '#f8fbfa', roughness: .65 }), new MeshStandardMaterial({ color: '#b8c6cc', roughness: .7 }), new MeshStandardMaterial({ color: '#263640', roughness: .75 }), new MeshStandardMaterial({ color: '#eaba42', roughness: .58 }), new MeshStandardMaterial({ color: '#c85730', roughness: .48 }), new MeshStandardMaterial({ color: '#ed8a50', roughness: .65 })];
   const meshes: InstancedMesh[] = [];
@@ -63,33 +65,38 @@ function createWildlife() {
   return { leftWing, leftPrimaries, leftCrabLegs, leftCrabClaws, group, meshes, materials, gullBody, gullEyes, gullBill, wing, primaries, gullLegs, crabBody, crabEyes, crabLegs, crabClaws, gulls: createGullStates(), crabs: createCrabStates(), root: new Object3D(), hinge: new Object3D(), tip: new Object3D(), local: new Object3D(), timer: undefined as ReturnType<typeof setTimeout> | undefined };
 }
 
+export function writeGullPose(life: ReturnType<typeof createWildlife>, bird: GullState, index: number) {
+  const { root, hinge, tip, local } = life;
+  const perched = bird.mode === 'perched';
+  const pulse = Math.sin(bird.time * (6.8 + index % 3 * .4) + bird.phase);
+  const glideAngle = .09 + Math.sin(bird.time * 1.1 + bird.phase) * .055;
+  const wingAngle = (glideAngle * (1 - bird.flap) + pulse * .52 * bird.flap) * (1 - bird.fold) - .10 * bird.fold;
+  const bank = perched ? 0 : Math.sin(bird.time * bird.speed + bird.phase) * .14;
+  root.position.copy(bird.position); root.rotation.set(perched ? -.04+Math.sin(bird.time*.7+bird.phase)*.015 : -Math.atan2(bird.velocity.y, Math.max(.5, Math.hypot(bird.velocity.x, bird.velocity.z))) * .45, bird.heading, bank);
+  root.scale.setScalar(.91 + index % 4 * .075); root.updateMatrix();
+  for (const mesh of [life.gullBody, life.gullEyes, life.gullBill]) mesh.setMatrixAt(index, root.matrix);
+  local.position.set(0, 0, 0); local.rotation.set(0, 0, 0); local.scale.set(1, perched || bird.mode === 'approach' ? 1 : .26, 1); local.updateMatrix(); local.matrix.premultiply(root.matrix); life.gullLegs.setMatrixAt(index, local.matrix);
+  for (let sideIndex = 0; sideIndex < 2; sideIndex++) {
+    const side = sideIndex === 0 ? -1 : 1;
+    hinge.position.set(side * .12, .06, .01); hinge.rotation.set(0, -side * 1.35 * bird.fold, side * wingAngle); hinge.scale.set(1-.6*bird.fold, 1, 1-.15*bird.fold); hinge.updateMatrix(); hinge.matrix.premultiply(root.matrix);
+    (side < 0 ? life.leftWing : life.wing).setMatrixAt(index, hinge.matrix);
+    tip.position.set(side * .73, 0, .06); tip.rotation.set(0, side * (-.12 + 1.5 * bird.fold), side * (.05 * (1 - bird.flap) - .14 * pulse * bird.flap)); tip.scale.set(1-.7*bird.fold, 1, 1); tip.updateMatrix(); tip.matrix.premultiply(hinge.matrix);
+    (side < 0 ? life.leftPrimaries : life.primaries).setMatrixAt(index, tip.matrix);
+  }
+}
+
 export function Wildlife({ runtime, paused, quality }: EnvironmentProps) {
-  const life = useMemo(() => createWildlife(), []);
+  const life = useMemo(() => measureConstruction('wildlife', () => createWildlife()), []);
   useEffect(() => { clearTimeout(life.timer); return () => { life.timer = setTimeout(() => { life.meshes.forEach(mesh => { mesh.geometry.dispose(); mesh.dispose(); }); life.materials.forEach(material => material.dispose()); }, 0); }; }, [life]);
   useFrame(({ camera }, delta) => {
     const counts = WILDLIFE_COUNTS[quality]; const pointer = runtime.current.pointerActive ? runtime.current.pointerWorld : null;
-    const { root, hinge, tip, local } = life;
+    const { root, local } = life;
     for (const mesh of [life.gullBody, life.gullEyes, life.gullBill, life.gullLegs]) mesh.count = counts.gulls;
     life.wing.count = life.primaries.count = life.leftWing.count = life.leftPrimaries.count = counts.gulls;
     life.crabBody.count = life.crabEyes.count = counts.crabs; life.crabLegs.count = life.leftCrabLegs.count = counts.crabs * 4; life.crabClaws.count = life.leftCrabClaws.count = counts.crabs;
     life.gulls.forEach((bird, index) => {
       stepGull(bird, delta, camera.position, pointer, paused);
-      const perched = bird.mode === 'perched';
-      const pulse = Math.sin(bird.time * (6.8 + index % 3 * .4) + bird.phase);
-      const glideAngle = .09 + Math.sin(bird.time * 1.1 + bird.phase) * .055;
-      const wingAngle = (glideAngle * (1 - bird.flap) + pulse * .52 * bird.flap) * (1 - bird.fold) - 1.30 * bird.fold;
-      const bank = perched ? 0 : Math.sin(bird.time * bird.speed + bird.phase) * .14;
-      root.position.copy(bird.position); root.rotation.set(perched ? -.12 : -Math.atan2(bird.velocity.y, Math.max(.5, Math.hypot(bird.velocity.x, bird.velocity.z))) * .45, bird.heading, bank);
-      root.scale.setScalar(.91 + index % 4 * .075); root.updateMatrix();
-      for (const mesh of [life.gullBody, life.gullEyes, life.gullBill]) mesh.setMatrixAt(index, root.matrix);
-      local.position.set(0, 0, 0); local.rotation.set(0, 0, 0); local.scale.set(1, perched || bird.mode === 'approach' ? 1 : .26, 1); local.updateMatrix(); local.matrix.premultiply(root.matrix); life.gullLegs.setMatrixAt(index, local.matrix);
-      for (let sideIndex = 0; sideIndex < 2; sideIndex++) {
-        const side = sideIndex === 0 ? -1 : 1;
-        hinge.position.set(side * .12, .06, .01); hinge.rotation.set(0, -side * .58 * bird.fold, side * wingAngle); hinge.scale.set(1, 1, 1); hinge.updateMatrix(); hinge.matrix.premultiply(root.matrix);
-        (side < 0 ? life.leftWing : life.wing).setMatrixAt(index, hinge.matrix);
-        tip.position.set(side * .73, 0, .06); tip.rotation.set(0, side * (-.12 - .38 * bird.fold), side * (.05 * (1 - bird.flap) - .14 * pulse * bird.flap)); tip.scale.set(1, 1, 1); tip.updateMatrix(); tip.matrix.premultiply(hinge.matrix);
-        (side < 0 ? life.leftPrimaries : life.primaries).setMatrixAt(index, tip.matrix);
-      }
+      writeGullPose(life, bird, index);
     });
     life.crabs.forEach((crab, index) => {
       stepCrab(crab, delta, camera.position, pointer, paused);

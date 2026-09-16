@@ -1,13 +1,14 @@
 'use client';
 
+import { measureConstruction } from './renderDiagnostics';
+
 // Frame callbacks update persistent Three.js objects outside React rendering.
 /* eslint-disable react-hooks/immutability */
 
 import { useEffect, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { BufferGeometry, CatmullRomCurve3, Color, Float32BufferAttribute, DoubleSide, InstancedMesh, Mesh, MeshPhysicalMaterial, Object3D, SphereGeometry, TubeGeometry, Vector3 } from 'three';
+import { BufferGeometry, Color, Float32BufferAttribute, DoubleSide, InstancedMesh, MeshPhysicalMaterial, Object3D, SphereGeometry, Vector3 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { createLandscapePlan, pathHeight } from './terrain';
 import type { EnvironmentProps } from './Water';
 import { createSchoolFish, FISH_PER_SCHOOL, SCHOOL_COUNT, stepSchoolFish } from './fishSchools';
 
@@ -31,31 +32,6 @@ function fishBody(variant: number) {
 }
 
 function createCoastalLife() {
-  const rails: BufferGeometry[] = [];
-  for (const path of createLandscapePlan().paths.filter(path => path.bridge)) {
-    for (const side of [-1, 1]) {
-      const points: Vector3[] = [];
-      for (let segment = 1; segment < path.points.length; segment++) {
-        const a = path.points[segment - 1]; const b = path.points[segment]; const length = Math.hypot(b.x - a.x, b.z - a.z);
-        const nx = -(b.z - a.z) / length * path.width / 2 * side; const nz = (b.x - a.x) / length * path.width / 2 * side;
-        for (let step = 0; step <= 16; step++) {
-          const x = a.x + (b.x - a.x) * step / 16 + nx; const z = a.z + (b.z - a.z) * step / 16 + nz; const y = pathHeight(path, x, z);
-          points.push(new Vector3(x, y + .65, z));
-          if (step % 8 === 0) rails.push(new TubeGeometry(new CatmullRomCurve3([new Vector3(x, y, z), new Vector3(x, y + .3, z), new Vector3(x, y + .65, z)]), 4, .025, 5, false));
-        }
-      }
-      rails.push(new TubeGeometry(new CatmullRomCurve3(points), 96, .035, 6, false));
-    }
-    const first = path.points[0]; const last = path.points[path.points.length - 1];
-    const midX = (first.x + last.x) / 2; const midZ = (first.z + last.z) / 2;
-    for (const side of [-1, 1]) {
-      const dx = last.x - first.x; const dz = last.z - first.z; const length = Math.hypot(dx, dz); const nx = -dz / length * .45 * side; const nz = dx / length * .45 * side;
-      rails.push(new TubeGeometry(new CatmullRomCurve3([new Vector3(first.x + nx, .35, first.z + nz), new Vector3(midX + nx, 1.1, midZ + nz), new Vector3(last.x + nx, .35, last.z + nz)]), 48, .09, 8, false));
-    }
-  }
-  const railGeometry = mergeGeometries(rails)!; rails.forEach(geometry => geometry.dispose());
-  const railMaterial = new MeshPhysicalMaterial({ color: '#f1fff3', metalness: .08, roughness: .22, clearcoat: 1 });
-  const bridges = new Mesh(railGeometry, railMaterial); bridges.name = 'coastal-bridge-rails'; bridges.castShadow = true;
   const fishMaterial = new MeshPhysicalMaterial({ color: '#ffffff', roughness: .3, clearcoat: 1, clearcoatRoughness: .22, metalness: .10, side: DoubleSide });
   const states = createSchoolFish();
   const bodies = [0, 1, 2].map(variant => {
@@ -76,12 +52,12 @@ function createCoastalLife() {
     bodies[fish.variant].setColorAt(fish.member * 3 + Math.floor(fish.schoolIndex / 3), color); tails.setColorAt(index, color);
   });
   const meshes = [...bodies, tails, eyes, glints];
-  return { bridges, bodies, tails, eyes, glints, meshes, states, transform: new Object3D(), detail: new Object3D(), disturbance: { camera: new Vector3(), pointer: null as readonly number[] | null, ripple: { x: 0, z: 0, serial: 0 } }, timer: undefined as ReturnType<typeof setTimeout> | undefined,
-    dispose() { railGeometry.dispose(); railMaterial.dispose(); meshes.forEach(mesh => { mesh.geometry.dispose(); mesh.dispose(); }); fishMaterial.dispose(); eyeMaterial.dispose(); glintMaterial.dispose(); } };
+  return { bodies, tails, eyes, glints, meshes, states, transform: new Object3D(), detail: new Object3D(), disturbance: { camera: new Vector3(), pointer: null as readonly number[] | null, ripple: { x: 0, z: 0, serial: 0 } }, timer: undefined as ReturnType<typeof setTimeout> | undefined,
+    dispose() { meshes.forEach(mesh => { mesh.geometry.dispose(); mesh.dispose(); }); fishMaterial.dispose(); eyeMaterial.dispose(); glintMaterial.dispose(); } };
 }
 
 export function CoastalLife({ runtime, paused, quality }: EnvironmentProps) {
-  const life = useMemo(() => createCoastalLife(), []);
+  const life = useMemo(() => measureConstruction('fish-bridges', () => createCoastalLife()), []);
   useEffect(() => { clearTimeout(life.timer); return () => { life.timer = setTimeout(() => life.dispose(), 0); }; }, [life]);
   useFrame(({ camera }, delta) => {
     const state = runtime.current; const count = FISH_PER_SCHOOL[quality] * SCHOOL_COUNT;
@@ -97,5 +73,5 @@ export function CoastalLife({ runtime, paused, quality }: EnvironmentProps) {
     });
     life.meshes.forEach(mesh => { mesh.instanceMatrix.needsUpdate = true; });
   });
-  return <group dispose={null} name="coastal-life"><primitive object={life.bridges}/>{life.meshes.map(mesh => <primitive key={mesh.name} object={mesh}/>)}</group>;
+  return <group dispose={null} name="coastal-life">{life.meshes.map(mesh => <primitive key={mesh.name} object={mesh}/>)}</group>;
 }
