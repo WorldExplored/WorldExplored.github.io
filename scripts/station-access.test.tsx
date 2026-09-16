@@ -4,7 +4,7 @@ import { StrictMode } from 'react';
 import { create } from '@react-three/test-renderer';
 import { DoubleSide, Mesh, MeshBasicMaterial, Raycaster, Vector3 } from 'three';
 import { createStationAccess, stationAccessPlan, stationSectionGeometry, StationAccess, STATION_ACCESS } from '../src/components/world/StationAccess';
-import { archipelagoGeometry, terrainMeshHeight } from '../src/components/world/terrain';
+import { archipelagoGeometry, terrainBaseMeshHeight } from '../src/components/world/terrain';
 import { cityBuildings, cityEntranceWorld } from '../src/components/world/city';
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
@@ -15,7 +15,7 @@ test('the measured station stair has consistent closed steps and exact landing e
   const stairMaterial = new MeshBasicMaterial();
   const terrain = new Mesh(archipelagoGeometry(), terrainMaterial); terrain.updateMatrixWorld();
   try {
-    assert.deepEqual(plan.bottom, { x: -5, y: terrainMeshHeight(-5, -73.8) + .07, z: -73.8 });
+    assert.deepEqual(plan.bottom, { x: -5, y: terrainBaseMeshHeight(-5, -73.8) + .07, z: -73.8 });
     assert.deepEqual(plan.top, { x: -5, y: 3.12, z: -69.6 });
     assert.ok(plan.rise > .14 && plan.rise < .17);
     assert.ok(plan.run > .24 && plan.run < .29);
@@ -33,7 +33,8 @@ test('the measured station stair has consistent closed steps and exact landing e
           const actualTerrain = ray.intersectObject(terrain)[0]?.point.y;
           assert.notEqual(actualTerrain, undefined);
           assert.ok(Math.abs(vertices.getY(n) - actualTerrain!) < .002, `Foundation ${x},${z}: geometry ${vertices.getY(n)} vs terrain ${actualTerrain}`);
-          assert.ok(vertices.getY(n + 1) > actualTerrain! + .025, 'No tread is buried');
+          if(section.kind==='bottom-landing')assert.ok(vertices.getY(n+1)>=actualTerrain!-.003,'Graded ground must not rise through the landing');
+          else assert.ok(vertices.getY(n+1)>actualTerrain!+.025,'Every elevated tread remains visibly above ground');
         }
         for (const x of [-5.5, -5, -4.5]) {
           ray.ray.origin.set(x, 20, (section.from + section.to) / 2);

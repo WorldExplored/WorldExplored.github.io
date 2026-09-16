@@ -35,10 +35,29 @@ export function pushDestination(id: SectionId) {
   window.dispatchEvent(new Event('habitat:navigate'));
 }
 export function clearDestination() {
+  const current = readNavigation();
   const state = window.history.state;
+  // Recovery is a new flight even when the URL already names the overview.
+  if (!current.id) {
+    snapshot = { id: '', serial: current.serial + 1 };
+    previousHash = '';
+    window.history.replaceState({ ...state, habitatDepth: 0, habitatBaseHash: '' }, '', window.location.pathname + window.location.search);
+    window.dispatchEvent(new Event('habitat:navigate'));
+    return;
+  }
   if (state?.habitatDepth && state.habitatBaseHash === '') window.history.go(-state.habitatDepth);
   else {
     window.history.replaceState(state, '', window.location.pathname + window.location.search);
     window.dispatchEvent(new Event('habitat:navigate'));
   }
+}
+
+/** Escape also recovers a camera that has moved while the overview URL is unchanged. */
+export function subscribeOverviewRecovery(recover: () => void) {
+  const escape = (event: KeyboardEvent) => {
+    if (event.key !== 'Escape' || event.defaultPrevented) return;
+    event.preventDefault(); recover();
+  };
+  window.addEventListener('keydown', escape);
+  return () => window.removeEventListener('keydown', escape);
 }

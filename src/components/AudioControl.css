@@ -4,7 +4,7 @@
 .audio-control__button--square { width: 44px; padding-inline: 10px; }
 .audio-control__button:hover { background: linear-gradient(180deg,#fff 0%,#e2fdff 46%,#9ce8f1 48%,#c7f6fa 100%); box-shadow: inset 0 1px 0 #fff,inset 0 0 0 2px #ffffff99,0 3px 8px #063b4d38; }
 .audio-control__button:active { transform: translateY(1px); box-shadow: inset 0 1px 3px #0b4b6540,0 1px 2px #063b4d25; }
-.audio-control__button:focus-visible,.audio-control__credit a:focus-visible { outline: 3px solid #075783; outline-offset: 3px; }
+.audio-control__button:focus-visible,.audio-control__credit a:focus-visible,.audio-control__title a:focus-visible,.audio-control__volume input:focus-visible { outline: 3px solid #075783; outline-offset: 3px; }
 .audio-control__button:disabled,.audio-control__button[aria-disabled="true"] { opacity: .6; cursor: default; }
 .audio-control__surface { position: absolute; top: calc(100% + 8px); right: 0; width: min(288px,calc(100vw - 32px)); box-sizing: border-box; padding: 10px; border: 1px solid #257c9e; border-radius: 23px; background: linear-gradient(160deg,#f5fffff5,#d3f4f9f7 50%,#a5dbe8f7); box-shadow: inset 0 1px 0 #fff,inset 0 0 0 2px #ffffff5c,0 5px 15px #063b4d36; }
 .audio-control__status { min-height: 24px; padding: 0 2px 6px; color: #174b64; font-size: 12px; font-weight: 650; line-height: 1.5; }
@@ -14,3 +14,12 @@
 .audio-control--above .audio-control__surface { top: auto; bottom: calc(100% + 8px); }
 @media (prefers-reduced-motion: reduce) { .audio-control__button { transition: none; } }
 @media (forced-colors: active) { .audio-control__button,.audio-control__surface { color: CanvasText; background: Canvas; border: 1px solid ButtonText; box-shadow: none; } .audio-control__credit,.audio-control__status { color: CanvasText; } .audio-control__credit a { color: LinkText; } }
+
+.audio-control__title { margin: 0 2px 7px; font-size: 16px; font-weight: 650; line-height: 1.3; }
+.audio-control__title a { color: #123f54; text-decoration: none; }
+.audio-control__title a:hover { text-decoration: underline; text-underline-offset: 3px; }
+.audio-control__transport { display: flex; align-items: center; gap: 8px; }
+.audio-control__volume { display: grid; flex: 1; min-width: 0; gap: 0; font-size: 11px; color: #275365; }
+.audio-control__volume input { width: 100%; min-width: 0; height: 44px; margin: 0; accent-color: #1b7894; cursor: pointer; }
+.audio-control__failure { margin: 8px 2px 2px; font-size: 12px; line-height: 1.5; color: #3d5260; }
+@media (forced-colors: active) { .audio-control__title a { color: LinkText; } .audio-control__volume,.audio-control__failure { color: CanvasText; } }

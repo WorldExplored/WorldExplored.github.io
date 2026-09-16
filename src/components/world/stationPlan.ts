@@ -1,12 +1,12 @@
 import { Vector3 } from 'three';
-import { terrainMeshHeight } from './terrain';
+import { terrainBaseMeshHeight } from './terrain';
 
 export const STATION_ACCESS = Object.freeze({ x: -5, width: 1.3, bottomZ: -73.8, landingStartZ: -74.45, topLandingZ: -70.1, platformZ: -69.6, platformY: 3.12, railHeight: .82, railRadius: .035, steps: 15 });
 export interface StationStairSection { from: number; to: number; top: number; kind: 'bottom-landing' | 'step' | 'top-landing' }
 
 export function stationAccessPlan() {
   const { x, width, bottomZ, landingStartZ, topLandingZ, platformZ, platformY, steps } = STATION_ACCESS;
-  const bottomY = terrainMeshHeight(x, bottomZ) + .07;
+  const bottomY = terrainBaseMeshHeight(x, bottomZ) + .07;
   const rise = (platformY - bottomY) / steps;
   const run = (topLandingZ - bottomZ) / steps;
   const sections: StationStairSection[] = [

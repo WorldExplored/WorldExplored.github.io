@@ -4,7 +4,7 @@ import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type MouseEvent } from 'react';
 import { profile, type SectionId } from '@/content/profile';
 import { motionPolicy } from '@/content/world';
-import { readNavigation, serverNavigation, subscribeNavigation, pushDestination, clearDestination } from './world/navigation';
+import { readNavigation, serverNavigation, subscribeNavigation, pushDestination, clearDestination, subscribeOverviewRecovery } from './world/navigation';
 import { readPreferences, serverPreferences, subscribePreferences } from './world/preferences';
 import { DockShell, HabitatIcon } from './HabitatIcon';
 import { SectionContent } from './SectionContent';
@@ -48,11 +48,7 @@ export function Habitat() {
     }
   }, [active, surfaceOpen]);
   const overview = useCallback(() => { window.scrollTo({ top: 0, behavior: 'instant' }); clearDestination(); }, []);
-  useEffect(() => {
-    function escape(event: KeyboardEvent) { if (event.key === 'Escape' && readNavigation().id) { event.preventDefault(); overview(); } }
-    window.addEventListener('keydown', escape);
-    return () => window.removeEventListener('keydown', escape);
-  }, [overview]);
+  useEffect(() => subscribeOverviewRecovery(overview), [overview]);
   const onArrive = useCallback((id: SectionId | '', serial: number) => {
     const current = readNavigation();
     if (current.id === id && current.serial === serial) setArrived({ id, serial });
@@ -75,7 +71,7 @@ export function Habitat() {
       <button className="sculpture-control" data-sculpture-control aria-label={profile.ui.rotate} onClick={() => setRotation(value => value + 1)}>↻</button>
     </div>
     <main>
-      <div className="identity" data-world-identity><h1>{profile.name}</h1><p className="hero-evidence">{profile.heroContribution}</p><p className="research-credential">{profile.ui.researchEvidence}</p></div>
+      <div className="identity" data-world-identity><h1 aria-label={profile.name}><button type="button" onClick={overview} aria-label="Return to overview" style={{ border: 0, padding: 0, background: 'transparent', color: 'inherit', font: 'inherit', letterSpacing: 'inherit', lineHeight: 'inherit', textShadow: 'inherit', textAlign: 'inherit', pointerEvents: 'auto' }}>{profile.name}</button></h1><p className="hero-evidence">{profile.heroContribution}</p><p className="research-credential">{profile.ui.researchEvidence}</p></div>
       <div className="content-stage">{profile.sections.map(section => <section id={section.id} key={section.id} className={`scene-section section-${section.id}`} data-active={surfaceOpen && active === section.id} aria-labelledby={`heading-${section.id}`} tabIndex={-1}>
         <div className="surface"><div className="surface-rim"><HabitatIcon kind={section.id} /><button className="surface-close" onClick={overview} aria-label={`Close ${section.title}`}><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18" /></svg></button></div><div className="surface-paper" tabIndex={0} role="region" aria-labelledby={`heading-${section.id}`}><h2 id={`heading-${section.id}`}>{section.title}</h2><SectionContent id={section.id} /></div><div className="surface-foot" aria-hidden="true" /></div>
       </section>)}</div>

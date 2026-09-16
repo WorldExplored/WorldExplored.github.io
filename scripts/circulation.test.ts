@@ -1,8 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createElement } from 'react';
+import { create } from '@react-three/test-renderer';
+import { ComputeBuilding } from '../src/components/world/ComputeBuilding';
+import { ResearchInstitute } from '../src/components/world/ResearchInstitute';
+import { CampusHall } from '../src/components/world/CampusHall';
+import { GardenGallery } from '../src/components/world/GardenGallery';
+import { ReceptionTerminal } from '../src/components/world/ReceptionTerminal';
+import { createSceneRuntime, world } from '../src/content/world';
+import { buildCityArchitecture } from '../src/components/world/CityArchitecture';
 import { createCirculationGraph, circulationPaths, STATION_ACCESS } from '../src/components/world/circulation';
-import { createLandscapePlan, distanceToSegment, pathGeometry, terrainMeshHeight } from '../src/components/world/terrain';
-import { cityBuildings, cityEntranceWorld, citySecondaryEntrances } from '../src/components/world/city';
+import { DoubleSide, Mesh, MeshBasicMaterial, Raycaster, Vector3 } from 'three';
+import { archipelagoGeometry, terrainHeight, createLandscapePlan, distanceToSegment, pathGeometry, terrainMeshHeight } from '../src/components/world/terrain';
+import { cityBuildings, cityEntranceWorld, citySecondaryEntrances, cityLocalToWorld } from '../src/components/world/city';
 import { stationAccessPlan } from '../src/components/world/StationAccess';
 
 function reachable(start: string, boat: boolean) {
@@ -59,33 +69,43 @@ test('station graph meets measured ground landing and actual upper platform', ()
   } finally { mesh.dispose(); }
 });
 
-test('path top vertices and triangle interiors stay above final terrain, with grounded closed edges', () => {
-  const failures: string[] = [];
-  for (const path of circulationPaths().filter(p=>!p.bridge)) {
-    const mesh = pathGeometry([path]);
-    assert.ok(Number.isInteger(mesh.userData.surfaceVertexCount) && Number.isInteger(mesh.userData.rowStride) && mesh.userData.rowStride >= 3, 'Path geometry must identify its top surface layout');
-    try {
-      const positions=mesh.attributes.position, topCount=mesh.userData.surfaceVertexCount as number, indices=mesh.index!;
-      for(let i=0;i<topCount;i++) {
-        const x=positions.getX(i),y=positions.getY(i),z=positions.getZ(i),height=terrainMeshHeight(x,z);
-        if(y<height+.039)failures.push(`${path.id} top vertex ${i} buried: ${y-height}`);
-      }
-      for(let i=0;i<indices.count;i+=3) {
-        const ids=[indices.getX(i),indices.getX(i+1),indices.getX(i+2)]; if(ids.some(id=>id>=topCount))continue;
-        // Centroid and edge midpoint sampling catches a hill poking through a face
-        // even when its perimeter vertices individually clear the ground.
-        for(const weights of [[1/3,1/3,1/3],[.5,.5,0],[0,.5,.5],[.5,0,.5]]) {
-          const x=ids.reduce((n,id,k)=>n+positions.getX(id)*weights[k],0),y=ids.reduce((n,id,k)=>n+positions.getY(id)*weights[k],0),z=ids.reduce((n,id,k)=>n+positions.getZ(id)*weights[k],0);
-          if(y-terrainMeshHeight(x,z)<.008)failures.push(`${path.id} triangle ${i/3} intersects terrain at ${x},${z}`);
+test('paved routes are samples of one rendered ground mesh, without floating ribbons or side caps', () => {
+  const material=new MeshBasicMaterial({side:DoubleSide}),ground=new Mesh(archipelagoGeometry(),material);
+  ground.updateMatrixWorld();const ray=new Raycaster(new Vector3(),new Vector3(0,-1,0));
+  try {
+    for(const path of circulationPaths().filter(p=>!p.bridge)) {
+      const sample=pathGeometry([path]);
+      try {
+        assert.equal(sample.userData.auditOnly,true,'Route geometry is an audit proxy, not a raised surface');
+        assert.equal(sample.userData.surfaceVertexCount,sample.attributes.position.count,'No detached side walls remain');
+        assert.ok(Number.isInteger(sample.userData.rowStride)&&sample.userData.rowStride>=3);
+        const p=sample.attributes.position;
+        for(let i=0;i<p.count;i++)assert.ok(Math.abs(p.getY(i)-terrainMeshHeight(p.getX(i),p.getZ(i)))<.00002,`${path.id}: route sample floats above or below its ground`);
+        // Read actual final terrain triangles, including each doorway edge and
+        // interior route samples. Proxy triangles are deliberately not rendered.
+        const stride=sample.userData.rowStride as number;
+        const samples=new Set<number>([...Array.from({length:stride},(_,i)=>i),...Array.from({length:stride},(_,i)=>p.count-stride+i)]);
+        for(let i=0;i<p.count;i+=Math.max(stride,Math.floor(p.count/5/stride)*stride))samples.add(i+Math.floor(stride/2));
+        for(const i of samples){
+          ray.ray.origin.set(p.getX(i),30,p.getZ(i));const hit=ray.intersectObject(ground,false)[0];
+          assert.ok(hit&&Math.abs(hit.point.y-p.getY(i))<.00003,`${path.id}: rendered ground differs from route at vertex ${i}`);
         }
-      }
-      for(let i=topCount;i<positions.count;i++) assert.ok(Math.abs(positions.getY(i)-(terrainMeshHeight(positions.getX(i),positions.getZ(i))-.025))<1e-5, `${path.id}: ramp side does not reach ground`);
-    } finally { mesh.dispose(); }
-  }
-  assert.equal(failures.length,0,failures.slice(0,16).join('\n'));
+      }finally{sample.dispose();}
+    }
+  }finally{ground.geometry.dispose();material.dispose();}
 });
 
-test('all raised route endpoints meet their thresholds across the full path width', () => {
+test('route unions grade continuously across segment and junction boundaries',()=>{
+  for(const path of circulationPaths().filter(p=>!p.bridge))for(let i=0;i<path.points.length;i+=3){
+    const p=path.points[i];
+    for(const [dx,dz] of [[.0001,0],[0,.0001],[.0001,.0001]]){
+      const difference=Math.abs(terrainHeight(p.x+dx,p.z+dz)-terrainHeight(p.x-dx,p.z-dz));
+      assert.ok(difference<.005,`${path.id}: grade discontinuity ${difference} at ${p.x},${p.z}`);
+    }
+  }
+});
+
+test('all graded route endpoints meet their thresholds across the full path width', () => {
   const paths=circulationPaths().filter(p=>!p.bridge);
   for(const path of paths) {
     const mesh=pathGeometry([path]);
@@ -97,11 +117,11 @@ test('all raised route endpoints meet their thresholds across the full path widt
     } finally { mesh.dispose(); }
   }
   // Architectural threshold surfaces, not the centre of the corresponding boxes.
-  // Rounded thresholds include their .02 bevel; tolerance admits that small bevel.
-  const expected: Record<string,number>={work:1.105,research:1.07,purdue:1.03,about:1.06,'about-conservatory':1.06,contact:1.06,building:2.93};
+  // Surface height includes rounded trim; graded approach must meet within 5mm.
+  const expected: Record<string,number>={work:1.105,research:1.07,purdue:1.03,about:1.06,'about-conservatory':1.06,contact:1.06,building:2.86};
   for(const [id,y] of Object.entries(expected)) {
     const node=createCirculationGraph().nodes.find(n=>n.id===id)!;
-    assert.ok(Math.abs(node.y!-y)<.025, `${id}: path endpoint y=${node.y} differs from modeled threshold top ${y}`);
+    assert.ok(Math.abs(node.y!-y)<.005, `${id}: path endpoint y=${node.y} differs from modeled threshold top ${y}`);
   }
 });
 
@@ -143,4 +163,46 @@ test('narrow gallery path clears the complete sculpture sweep, bench, and plante
       assert.ok(!(x>1.49&&x<2.23&&z>1.09&&z<1.88), `Gallery route intersects court planter at ${x},${z}`);
     }
   } finally { geometry.dispose(); }
+});
+
+
+test('graded ground supports actual foundations and stays below finished floors',async()=>{
+  Object.assign(globalThis,{IS_REACT_ACT_ENVIRONMENT:true});
+  const samples=(positions:{getX:(i:number)=>number;getY:(i:number)=>number;getZ:(i:number)=>number},ids:number[],top:number,worldPoint:(x:number,y:number,z:number)=>readonly number[],name:string,bearing=false)=>{
+    for(let offset=0;offset<ids.length;offset+=3){
+      const triangle=ids.slice(offset,offset+3);if(triangle.length<3||triangle.some(i=>Math.abs(positions.getY(i)-top)>.0001))continue;
+      for(let row=0;row<=4;row++)for(let column=0;column<=4-row;column++){
+        const weights=[row/4,column/4,1-(row+column)/4];
+        const x=triangle.reduce((sum,i,k)=>sum+positions.getX(i)*weights[k],0),z=triangle.reduce((sum,i,k)=>sum+positions.getZ(i)*weights[k],0),p=worldPoint(x,top,z);
+        const ground=terrainMeshHeight(p[0],p[2]);
+        if(bearing)assert.ok(ground>=p[1]-.001,`${name}: foundation unsupported by ${p[1]-ground} at ${p[0]},${p[2]}`);
+        else assert.ok(ground<p[1]-.0001,`${name}: graded terrain rises through finished floor at ${p[0]},${p[2]}`);
+      }
+    }
+  };
+  for(const [id,Component]of Object.entries({work:ComputeBuilding,research:ResearchInstitute,purdue:CampusHall,about:GardenGallery,contact:ReceptionTerminal})){
+    const renderer=await create(createElement(Component,{active:false,paused:true,quality:'high',runtime:{current:createSceneRuntime()}}));
+    try{
+      const landmark=world.landmarks.find(l=>l.id===id)!,c=Math.cos(landmark.rotationY??0),s=Math.sin(landmark.rotationY??0);
+      for(const node of renderer.scene.findAll(n=>n.instance.type==='Mesh')){
+        const geometry=(node.instance as Mesh).geometry,positions=geometry.attributes.position;
+        if(geometry.userData.floor?.kind==='foundation'){
+          const ids=Array.from({length:geometry.index?.count??positions.count},(_,i)=>geometry.index?geometry.index.getX(i):i),bottom=Math.min(...ids.map(i=>positions.getY(i)));
+          samples(positions,ids,bottom,(x,y,z)=>[landmark.position[0]+x*c+z*s,landmark.position[1]+y,landmark.position[2]-x*s+z*c],geometry.userData.floor.name,true);
+        }
+        for(const part of geometry.userData.floors??[]){
+          const ids=Array.from({length:part.count},(_,i)=>part.start+i),top=Math.max(...ids.map(i=>positions.getY(i)));if(top>1.6)continue;
+          samples(positions,ids,top,(x,y,z)=>[landmark.position[0]+x*c+z*s,landmark.position[1]+y,landmark.position[2]-x*s+z*c],part.name);
+        }
+      }
+    }finally{await renderer.unmount();}
+  }
+  for(const building of cityBuildings)buildCityArchitecture(building,(geometry,_finish,x=0,y=0,z=0,sx=1,sy=1,sz=1,yaw=0)=>{
+    try{
+      const kind=geometry.userData.floor?.kind;if(kind!=='floor'&&kind!=='foundation')return;
+      geometry.scale(sx,sy,sz).rotateY(yaw).translate(x,y,z);geometry.computeBoundingBox();const top=kind==='foundation'?geometry.boundingBox!.min.y:geometry.boundingBox!.max.y;if(top>.35)return;
+      const ids=Array.from({length:geometry.index?.count??geometry.attributes.position.count},(_,i)=>geometry.index?geometry.index.getX(i):i);
+      samples(geometry.attributes.position,ids,top,(px,py,pz)=>cityLocalToWorld(building,[px,py,pz]),geometry.userData.floor.name,kind==='foundation');
+    }finally{geometry.dispose();}
+  });
 });

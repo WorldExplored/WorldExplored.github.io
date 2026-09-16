@@ -1,10 +1,10 @@
 'use client';
 
 import { BoxGeometry, CylinderGeometry, type BufferGeometry } from 'three';
-import { FurnishedInterior, InteriorBuilder } from './InteriorKit';
+import { FurnishedInterior, InteriorBuilder, floorSlab, floorRectangle } from './InteriorKit';
 import { combine, roundedBox, usePalette, useResources, type ModelProps } from './BuildingKit';
 
-function makeComputeBuilding() {
+export function makeComputeBuilding() {
   const walls: BufferGeometry[] = [];
   const frames: BufferGeometry[] = [];
   const windows: BufferGeometry[] = [];
@@ -18,7 +18,7 @@ function makeComputeBuilding() {
   for (const side of [-1, 1]) {
     const x = side * 2.875;
     for (const [y, height] of [[1.28, 0.44], [3.04, 0.3], [4.78, 0.3]]) {
-      walls.push(box(2.85, height, 4.7, x, y, 0));
+      walls.push(box(2.85, height, .22, x, y, 2.24), box(.22, height, 4.7, side * 4.19, y, 0));
     }
     // Open connections from the atrium to both occupied wings.
     for (const z of [-1.85, 1.85]) walls.push(box(0.22, 3.86, 0.22, side * 1.52, 2.99, z));
@@ -69,7 +69,10 @@ function makeComputeBuilding() {
   }
 
   // Actual floor slabs and a short internal stair establish a legible second story.
-  const floors = [box(8.82, 0.22, 4.81, 0, 0.91, 0), box(8.6, 0.14, 4.7, 0, 1.06, 0), box(2.85, 0.15, 4.28, -2.875, 3.135, 0), box(2.85, 0.15, 4.28, 2.875, 3.135, 0), box(2.7, 0.15, 0.72, 0, 3.135, -1.62)];
+  const foundation = floorSlab('work-foundation', [floorRectangle(-2.875,0,2.87,4.72),floorRectangle(2.875,0,2.87,4.72),floorRectangle(0,.04,3.08,4.82)],1.02,.22,'foundation');
+  const ground = floorSlab('work-ground-floor', [floorRectangle(-2.855,.055,2.43,4.35),floorRectangle(2.855,.055,2.43,4.35),floorRectangle(0,.14,3.28,4.08),floorRectangle(0,2.24,2.72,.12)],1.126,.106);
+  const upper = floorSlab('work-upper-floors', [floorRectangle(-2.855,.055,2.43,4.35),floorRectangle(2.855,.055,2.43,4.35),floorRectangle(0,-1.58,3.28,.64)],3.206,.146);
+  const floors: BufferGeometry[] = [];
   for (let step = 0; step < 11; step++) {
     const height = (step + 1) * 0.188;
     floors.push(box(0.77, height, 0.26, -0.9, 1.13 + height / 2, 1.2 - step * 0.26));
@@ -86,13 +89,13 @@ function makeComputeBuilding() {
     box(0.28, 0.14, 0.72, 0.98, 5.26, -0.54),
   ]);
   const entry = combine([
-    roundedBox(2.5, 0.12, 0.5, 0.04).translate(0, 1.025, 2.51),
+    floorSlab('work-door-threshold',[floorRectangle(0,2.51,2.5,.5)],1.105,.305,'threshold'),
     box(2.23, 0.11, 0.68, 0, 3.275, 2.57),
   ]);
   return {
     walls: combine(walls), frames: combine(frames), windows: combine(windows),
     service: combine(service), planting: combine(planting), solar: combine(solar), hardware: combine(hardware),
-    floors: combine(floors), roof, atrium, doors, entry,
+    foundation, ground, upper, floors: combine(floors), roof, atrium, doors, entry,
   };
 }
 
@@ -100,7 +103,7 @@ export function makeComputeInterior() {
   const room = new InteriorBuilder();
   for (const x of [-2.875, 2.875]) {
     for (const floor of [1.135, 3.215]) {
-      room.box('wood', 2.59, .018, 4.05, x, floor, 0);
+      room.floor(`work-wing-floor-${x}-${floor}`, [floorRectangle(Math.sign(x)*2.855,0,2.39,4.05)],floor+.009);
       for (const dx of [-.59, .59]) {
         room.table(x + dx, floor + .01, 1.56, 1.03, .48, .64);
         room.monitor(x + dx, floor + .69, 1.56, Math.PI);
@@ -147,6 +150,9 @@ export function ComputeBuilding(props: ModelProps) {
     <mesh name="work-exterior-walls" geometry={geometry.walls} material={materials.porcelain} castShadow receiveShadow />
     <mesh name="work-roof" geometry={geometry.roof} material={materials.porcelain} castShadow receiveShadow />
     <mesh name="work-entry-threshold-and-lintel" geometry={geometry.entry} material={materials.porcelain} castShadow receiveShadow />
+    <mesh name="work-foundation" geometry={geometry.foundation} material={materials.paving} receiveShadow />
+    <mesh name="work-ground-floor" geometry={geometry.ground} material={materials.paving} receiveShadow />
+    <mesh name="work-upper-floors" geometry={geometry.upper} material={materials.paving} receiveShadow />
     <mesh name="work-floors-and-atrium-stair" geometry={geometry.floors} material={materials.paving} receiveShadow />
     <mesh name="work-window-frames" geometry={geometry.frames} material={materials.edge} castShadow receiveShadow />
     <mesh name="work-wing-windows" geometry={geometry.windows} material={materials.glass} />

@@ -1,14 +1,17 @@
 'use client';
 
 import { BoxGeometry, type BufferGeometry } from 'three';
-import { combine, roundedBox, usePalette, useResources, type ModelProps } from './BuildingKit';
-import { FurnishedInterior, InteriorBuilder } from './InteriorKit';
+import { combine, usePalette, useResources, type ModelProps } from './BuildingKit';
+import { FurnishedInterior, InteriorBuilder, floorSlab, floorRectangle } from './InteriorKit';
 
 export const CAMPUS_HALL = { width: 4.5, depth: 3.2, floor: 1.03, ceiling: 3.3, entrance: [0, 1.03, 1.72] as const };
 
 export function createCampusInterior() {
   const b = new InteriorBuilder(); const floor = CAMPUS_HALL.floor;
-  for (let plank = 0; plank < 14; plank++) b.box('wood', .282, .022, 2.87, -1.885 + plank * .29, floor - .012, 0);
+  // A continuous substrate closes the joints above the graded entrance ground.
+  // The narrow doorway tongue stops exactly where the exterior threshold begins.
+  b.floor('purdue-continuous-subfloor',[floorRectangle(0,0,4.052,2.84),floorRectangle(0,1.4675,1.4,.095)],floor-.001,.024);
+  for (let plank = 0; plank < 14; plank++) b.floor(`purdue-floor-plank-${plank}`,[floorRectangle(-1.885+plank*.29,0,.282,2.84)],floor,.001);
   // Two window study areas flank the clear central entrance and information wall.
   b.table(-1.32, floor, -.35, 1.12, .48); b.monitor(-1.32, floor + .67, -.43);
   b.chair(-1.32, floor, .14, Math.PI); b.chair(1.4, floor, .72, Math.PI / 2);
@@ -43,7 +46,7 @@ export function CampusHall(props: ModelProps) {
     // Solid corner piers, transparent bays, and a raised central clerestory.
     for (const x of [-2.13,2.13]) walls.push(box(.16,2.25,.16,x,2.15,-1.48));
     return {
-      base:roundedBox(4.75,.22,3.55,.09).translate(0,.91,0), walls:combine(walls), windows:combine(windows), frames:combine(frames),
+      base:floorSlab('purdue-foundation',[floorRectangle(0,0,4.44,3.19)],1.005,.205,'foundation'), walls:combine(walls), windows:combine(windows), frames:combine(frames),
       roof:combine([box(4.72,.16,3.55,0,3.36,0),box(1.65,.12,2.82,0,3.92,-.1)]),
       clerestory:combine([box(.05,.42,2.68,-.76,3.65,-.1),box(.05,.42,2.68,.76,3.65,-.1),box(1.56,.42,.05,0,3.65,1.24),box(1.56,.42,.05,0,3.65,-1.44)]),
       clerestoryFrame:combine([box(.07,.44,.07,-.79,3.65,1.27),box(.07,.44,.07,.79,3.65,1.27),box(.07,.44,.07,-.79,3.65,-1.47),box(.07,.44,.07,.79,3.65,-1.47)]),
@@ -51,7 +54,7 @@ export function CampusHall(props: ModelProps) {
       entry:combine([box(.085,1.95,.11,-.645,2.015,1.6),box(.085,1.95,.11,.645,2.015,1.6),box(1.37,.085,.11,0,2.99,1.6),box(.035,1.86,.08,0,1.97,1.63),box(.027,.27,.05,-.07,1.94,1.685),box(.027,.27,.05,.07,1.94,1.685)]),
       canopy:box(1.7,.10,.55,0,3.13,1.71),
       trim:combine([box(4.74,.047,.045,0,3.45,1.79),box(.53,.10,.025,0,3.19,2),box(.055,.06,3.53,-2.35,3.45,0),box(.055,.06,3.53,2.35,3.45,0)]),
-      threshold:box(1.45,.14,.43,0,.96,1.73),
+      threshold:floorSlab('purdue-door-threshold',[floorRectangle(0,1.73,1.45,.43)],1.03,.23,'threshold'),
     };
   });
   return <group dispose={null}>

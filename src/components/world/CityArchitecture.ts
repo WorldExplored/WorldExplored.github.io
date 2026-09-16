@@ -1,4 +1,5 @@
 import { BoxGeometry, BufferGeometry, CylinderGeometry, Float32BufferAttribute, ExtrudeGeometry, Shape, SphereGeometry, TorusGeometry } from 'three';
+import { floorSlab, floorRectangle, floorEllipse, type FloorPolygon } from './InteriorKit';
 import { cityEntrances, type CityBuilding, type CityPoint } from './city';
 
 export type CityFinish = 'porcelain' | 'glass' | 'aqua' | 'garden' | 'window' | 'stone' | 'wood' | 'fabric' | 'metal';
@@ -16,9 +17,11 @@ export function cityRoundedBox(width: number, height: number, depth: number, cor
 
 export function buildCityArchitecture(building: Readonly<CityBuilding>, add: CityAdd) {
   const roomViews: CityRoomView[] = [];
+  const foundationPolygons: FloorPolygon[] = [];
+  let roomIndex=0;
   const { width: w, depth: d, height: h, family } = building;
   const box = (x: number, y: number, z: number, width: number, height: number, depth: number, finish: CityFinish = 'porcelain', yaw = 0) => add(new BoxGeometry(width, height, depth), finish, x, y, z, 1, 1, 1, yaw);
-  const slab = (x: number, y: number, z: number, width: number, depth: number, finish: CityFinish = 'stone', corner = .12) => add(cityRoundedBox(width, .13, depth, corner), finish, x, y, z);
+  const slab = (x: number, y: number, z: number, width: number, depth: number, finish: CityFinish = 'stone', corner = .12) => {const geometry=cityRoundedBox(width,.13,depth,corner);geometry.name=`${building.id}-exterior-slab`;geometry.userData.exteriorSlab=true;add(geometry,finish,x,y,z);};
   const plant = (x: number, y: number, z: number, scale = 1) => {
     add(new CylinderGeometry(.14, .1, .24, 8), 'stone', x, y + .12 * scale, z, scale, scale, scale);
     add(new SphereGeometry(.23, 7, 5), 'garden', x, y + .42 * scale, z, scale * .7, scale * 1.3, scale * .7);
@@ -43,23 +46,28 @@ export function buildCityArchitecture(building: Readonly<CityBuilding>, add: Cit
     if (variant % 3 === 1) box(x + width * .36, y + (height - .2) / 2, z + depth * .36, width * .2, height - .2, .04, 'fabric');
   };
   const room = (x: number, y: number, z: number, width: number, depth: number, height: number, variant: number, furnish = true, balcony = false) => {
-    slab(x, y, z, width, depth, 'wood');
+    const roomId=`${building.id}-room-${roomIndex++}`;
+    add(floorSlab(roomId,[floorRectangle(x,z+.045,width-.26,depth-.15)],y+.13,.13),'wood');
+    if(y<.21)foundationPolygons.push(floorRectangle(x,z+.02,width+.02,depth+.08));
+    const wall=(role:string,cx:number,cy:number,cz:number,ww:number,hh:number,dd:number,finish:CityFinish)=>{
+      const geometry=new BoxGeometry(ww,hh,dd);geometry.userData.roomWall={room:roomId,role,ground:y<.21};add(geometry,finish,cx,cy,cz);
+    };
     // Each facade is a thin wall or glazing plane. There is no filled opaque body behind the window.
-    box(x, y + height / 2, z - depth / 2 + .06, width, height, .12, variant % 2 ? 'aqua' : 'stone');
+    wall('back',x, y + height / 2, z - depth / 2 + .06, width, height, .12, variant % 2 ? 'aqua' : 'stone');
     for (const side of [-1, 1]) {
-      box(x + side * (width / 2 - .06), y + height / 2, z, .12, height, depth, 'porcelain');
+      wall(side<0?'left':'right',x + side * (width / 2 - .06), y + height / 2, z, .12, height, depth, 'porcelain');
       box(x + side * (width / 2 - .11), y + height / 2, z + depth / 2, .075, height, .075, 'metal');
     }
-    box(x, y + height - .1, z + depth / 2, width, .2, .12, 'porcelain');
+    wall('lintel',x, y + height - .1, z + depth / 2, width, .2, .12, 'porcelain');
     if (y > .21 || (Math.abs(x) > .5 && family !== 'public-station')) box(x, y + .26, z + depth / 2, width, .25, .11, 'porcelain');
-    box(x, y + height / 2 + .09, z + depth / 2, width - .22, height - .45, .015, 'window');
+    wall('front',x, y + height / 2 + .09, z + depth / 2, width - .22, height - .45, .015, 'window');
     if (width > 2.3) box(x + width * .12, y + height / 2, z + depth / 2 + .012, .055, height, .06, 'metal');
     if (furnish) {
       furnishing(x, y + .14, z, width - .24, depth - .24, variant, height - .14);
       roomViews.push({ building: building.id, window: [x - width * (family === 'arched-apartments' ? .1 : .15), y + .86, z + depth / 2 + .015], target: [x - width * (family === 'arched-apartments' ? .1 : .15), y + .7, z], floor: y + .13, width: width - .24, height, depth: depth - .24 });
     } else box(x + width * .18, y + height / 2, z + depth / 2 - .14, width * .44, height - .25, .035, 'fabric');
     if (balcony) {
-      slab(x, y + .02, z + depth / 2 + .16, width + .1, .55, 'porcelain');
+      add(floorSlab(`${roomId}-balcony`,[floorRectangle(x,z+depth/2+.22,width+.1,.44)],y+.15,.13,'balcony'),'porcelain');
       box(x, y + .62, z + depth / 2 + .42, width, .055, .055, 'metal');
       for (const side of [-1, 1]) box(x + side * width * .45, y + .35, z + depth / 2 + .42, .035, .55, .035, 'metal');
       plant(x + width * .34, y + .15, z + depth / 2 + .15, .55);
@@ -81,7 +89,6 @@ export function buildCityArchitecture(building: Readonly<CityBuilding>, add: Cit
       for (const dz of [-depth / 2, 0, depth / 2]) add(new BoxGeometry(Math.hypot(width / 2, rise), .09, .08).rotateZ(side * Math.atan2(rise, width / 2)), 'metal', x - side * width / 4, y + rise / 2 + .05, z + dz);
     }
   };
-  slab(0, 0, 0, w + .32, d + .24, 'stone', .25);
   if (family === 'terraced-apartments') {
     const pitch = (h - .55) / 5;
     for (let n = 0; n < 5; n++) { const width = w - n * .38; const x = -n * .105; room(x, .2 + n * pitch, -.18, width, d - .55, pitch, n, n < 2, true); roof(x, .2 + (n + 1) * pitch - .05, -.18, width, d - .55); }
@@ -100,8 +107,11 @@ export function buildCityArchitecture(building: Readonly<CityBuilding>, add: Cit
     const pitch = (h - .6) / 4;
     for (let n = 0; n < 4; n++) {
       const y = .2 + n * pitch; const rx = w / 2 - n * .08; const rz = d / 2 - .23;
-      add(new CylinderGeometry(1, 1, .14, 32), 'porcelain', 0, y + .07, 0, rx, 1, rz);
-      add(new CylinderGeometry(1, 1, pitch - .16, 32, 1, true), 'window', 0, y + pitch / 2 + .1, 0, rx - .1, 1, rz - .1);
+      const roomId=`${building.id}-room-${roomIndex++}`;
+      add(floorSlab(roomId,[floorEllipse(0,0,rx-.13,rz-.13,64)],y+.14,.14),'wood');
+      const glazing=new CylinderGeometry(1,1,pitch-.16,32,1,true);glazing.userData.roomWall={room:roomId,role:'ellipse',ground:n===0};
+      add(glazing,'window',0,y+pitch/2+.1,0,rx-.1,1,rz-.1);
+      if(n===0)foundationPolygons.push(floorEllipse(0,0,rx-.03,rz-.03,64));
       for (let k = 0; k < 10; k++) { const a = k * Math.PI / 5; box(Math.cos(a) * (rx - .08), y + pitch / 2, Math.sin(a) * (rz - .08), .065, pitch, .065, 'metal'); }
       box(0, y + pitch / 2, -.35, .11, pitch, d * .46, 'wood');
       box(-.62, y + pitch * .46, -.55, 1.45, pitch * .85, .12, 'aqua');
@@ -144,10 +154,11 @@ export function buildCityArchitecture(building: Readonly<CityBuilding>, add: Cit
   } else {
     // Ground lobby is a furnished open-front room; the upper boarding path remains clear.
     room(-.82, .2, 0, 1.25, d - .35, 1.78, 0, true);
-    slab(-.82, .2, d / 2 - .27, 1.05, .6, 'stone');
+    add(floorSlab('station-lobby-threshold',[floorRectangle(-.82,d/2-.27,1.05,.6)],.33,.33,'threshold'),'stone');
     for (const side of [-1, 1]) box(-.82 + side * .45, 1.04, d / 2 - .175, .055, 1.4, .08, 'metal');
     box(-.7, .93, d / 2 - .12, .025, .2, .035, 'metal');
-    add(cityRoundedBox(w, .18, d, .25), 'stone', 0, 2.14, 0);
+    const platform=cityRoundedBox(w,.18,d,.25);platform.name='station-boarding-platform';platform.userData.floor={name:platform.name,kind:'platform'};add(platform,'stone',0,2.14,0);
+    for(const x of [-w*.44,w*.44])for(const z of [-d*.43,d*.43]){box(x,1.07,z,.12,2.14,.12,'metal');foundationPolygons.push(floorRectangle(x,z,.16,.16));}
     for (const z of [-d * .43, d * .43]) for (const side of [-1, 1]) box(side * w * .44, 3.32, z, .12, 2.1, .12, 'metal');
     // Barrel canopy opens both rail ends and the pedestrian side entrance.
     const shape = new Shape(); shape.moveTo(-w / 2, 0); shape.quadraticCurveTo(0, .74, w / 2, 0); shape.lineTo(w / 2, -.08); shape.quadraticCurveTo(0, .65, -w / 2, -.08); shape.closePath();
@@ -160,7 +171,7 @@ export function buildCityArchitecture(building: Readonly<CityBuilding>, add: Cit
   if (family !== 'public-station') {
     const entrance = cityEntrances.find(item => item.building === building.id)!.local;
     const doorZ = d / 2 + .08;
-    slab(0, .11, doorZ - .35, 1.03, 1.0, 'stone');
+    add(floorSlab(`${building.id}-door-threshold`,[floorRectangle(0,doorZ-.35,1.03,1)],.24,.24,'threshold'),'stone');
     for (const side of [-1, 1]) { box(side * .46, .97, doorZ, .065, 1.5, .08, 'metal'); box(side * .1, .86, doorZ + .04, .025, .2, .03, 'metal'); }
     box(0, 1.74, doorZ, 1, .08, .09, 'porcelain');
     box(0, .97, doorZ, .85, 1.43, .015, 'window');
@@ -168,5 +179,6 @@ export function buildCityArchitecture(building: Readonly<CityBuilding>, add: Cit
     // The approach metadata includes the open-air porch in front of the inset facade.
     if (entrance[1] !== .24) throw new Error('Unexpected city threshold height');
   }
+  add(floorSlab(`${building.id}-foundation`,foundationPolygons,.2,.2,'foundation'),'stone');
   return roomViews;
 }

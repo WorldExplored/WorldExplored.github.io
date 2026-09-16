@@ -68,7 +68,8 @@ test('all content states have stable identifiers and availability is one flag', 
 test('static HTML contains identity, evidence and canonical sections', () => {
   assert.ok(bodyHtml, 'The exported document has a semantic body.');
   assert.match(bodyHtml, /<main\b/);
-  assert.match(bodyHtml, /<h1\b[^>]*>Srreyansh Sethi<\/h1>/);
+  const heading=bodyHtml.match(/<h1\b[^>]*>([\s\S]*?)<\/h1>/)?.[1];
+  assert.equal(heading?.replace(/<[^>]+>/g, ''), profile.name);
   for (const required of [profile.name, profile.university, profile.degree, profile.research.title, 'co-developed']) containsText(bodyHtml, required);
   for (const section of profile.sections) sectionBody(section.id);
   for (const item of publicContributions) assert.ok(anchors(sectionBody('work')).some(link => link.href === item.url), item.url);

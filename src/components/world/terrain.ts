@@ -1,4 +1,6 @@
-import { circulationPaths, entranceRiseAt } from './circulation';
+import { circulationPaths } from './circulation';
+import { createGroundRoutes } from './groundRoutes';
+import { coastalBiome } from './coastalBiome';
 import { coastExposure } from './waves';
 import { BRIDGES, BRIDGE_LANDINGS, bridgeHeightAt } from './bridgePlan';
 import { cityInfrastructureFootprints } from './cityInfrastructure';
@@ -16,11 +18,11 @@ export interface PlantPosition { x: number; y: number; z: number; scale: number;
 export interface Island { id: string; x: number; z: number; rx: number; rz: number; phase: number; beach: number; hill: number }
 
 export const ISLANDS: readonly Island[] = [
-  { id: 'main', x: -4, z: -5, rx: 20, rz: 16, phase: .3, beach: 2.8, hill: 2.4 },
-  { id: 'garden', x: 1, z: 23, rx: 22, rz: 10, phase: 1.6, beach: 2.1, hill: 1.1 },
-  { id: 'purdue', x: 26, z: -7, rx: 7.2, rz: 8.6, phase: 2.4, beach: 2.3, hill: .7 },
-  { id: 'beacon', x: -76, z: -36, rx: 5.8, rz: 5.2, phase: 3.2, beach: 1.1, hill: 1.3 },
-  { id: 'city', x: -7, z: -78, rx: 29, rz: 18, phase: 4.1, beach: 3.1, hill: .55 },
+  { id: 'main', x: -4, z: -5, rx: 20, rz: 16, phase: .3, beach: 4.6, hill: 2.4 },
+  { id: 'garden', x: 1, z: 23, rx: 22, rz: 10, phase: 1.6, beach: 3.5, hill: 1.1 },
+  { id: 'purdue', x: 26, z: -7, rx: 7.2, rz: 8.6, phase: 2.4, beach: 3.2, hill: .7 },
+  { id: 'beacon', x: -76, z: -36, rx: 5.8, rz: 5.2, phase: 3.2, beach: 1.8, hill: 1.3 },
+  { id: 'city', x: -7, z: -78, rx: 29, rz: 18, phase: 4.1, beach: 4.4, hill: .55 },
 ];
 export const PLANT_REACH = .95;
 export const FOOTPRINT_RADII: Record<LandmarkId, number> = { work: 5.5, research: 3.8, purdue: 3.05, about: 3.5, contact: 3.2, building: 2.4 };
@@ -56,7 +58,7 @@ export function islandAt(x: number, z: number) {
 export function architectureFootprints(): Footprint[] {
   return world.landmarks.map(item => ({ id: item.id, x: item.position[0], z: item.position[2], radius: FOOTPRINT_RADII[item.id] }));
 }
-export function terrainHeight(x: number, z: number) {
+export function terrainBaseHeight(x: number, z: number) {
   const { island, distance } = islandAt(x, z);
   if (distance < 0) return -.04 - Math.min(5, -distance * .38 + Math.pow(Math.max(0, -distance - 3), 1.4) * .08);
   let height = (island.id === 'beacon' ? 2.6 : .8) * smooth(0, island.beach, distance);
@@ -77,6 +79,20 @@ export function terrainHeight(x: number, z: number) {
     height += (landing.top - .05 - height) * blend * free;
   }
   return height;
+}
+let routeField: ReturnType<typeof createGroundRoutes> | undefined;
+export function groundRouteAt(x:number,z:number) {
+  routeField ??= createGroundRoutes(circulationPaths(),terrainBaseHeight);
+  return routeField(x,z);
+}
+export function terrainHeight(x:number,z:number) {
+  if(landDistance(x,z)<.15)return terrainBaseHeight(x,z);
+  return groundRouteAt(x,z).height;
+}
+export function terrainBaseMeshHeight(x:number,z:number) {
+  const step=.4,ix=Math.floor(x/step),iz=Math.floor(z/step),u=x/step-ix,v=z/step-iz;
+  const a=terrainBaseHeight(ix*step,iz*step),b=terrainBaseHeight((ix+1)*step,iz*step),c=terrainBaseHeight(ix*step,(iz+1)*step),d=terrainBaseHeight((ix+1)*step,(iz+1)*step);
+  return u+v<=1?a*(1-u-v)+b*u+c*v:d*(u+v-1)+b*(1-v)+c*(1-u);
 }
 export function terrainSlope(x: number, z: number) {
   return Math.hypot(terrainHeight(x + .25, z) - terrainHeight(x - .25, z), terrainHeight(x, z + .25) - terrainHeight(x, z - .25)) * 2;
@@ -121,18 +137,20 @@ function plantingIndex(plan: LandscapePlan) {
   return index;
 }
 export function vegetationSuitability(x: number, z: number, reach: number, plan: LandscapePlan) {
-  const coast = smooth(1.1, 3.4, landDistance(x, z) - reach);
-  if (!coast) return 0;
-  let clearance = Infinity;
-  if (reach <= 2) {
-    const cell = plantingIndex(plan).get(`${Math.floor(x / 8)},${Math.floor(z / 8)}`);
-    if (cell) {
-      clearance = circleClearance(x, z, cell.circles);
-      for (const { a, b, halfWidth } of cell.segments) clearance = Math.min(clearance, distanceToSegment(x, z, a, b) - halfWidth);
-    }
-  } else clearance = Math.min(circleClearance(x, z, plan.structures), circleClearance(x, z, plan.rocks), circleClearance(x, z, plan.trees), pathClearance(x, z, plan.paths));
-  const free = smooth(0, .75, clearance - reach);
-  return free ? coast * free * (1 - smooth(.35, .65, terrainSlope(x, z))) : 0;
+  const distance=landDistance(x,z)-reach;
+  if(distance<1.5)return 0;
+  const coast=coastalBiome(x,z,distance,terrainBaseHeight(x,z)).grass;
+  if(coast<.025)return 0;
+  let clearance=Infinity;
+  if(reach<=2){
+    const cell=plantingIndex(plan).get(`${Math.floor(x/8)},${Math.floor(z/8)}`);
+    if(cell){clearance=circleClearance(x,z,cell.circles);if(clearance<=reach)return 0;
+      for(const {a,b,halfWidth} of cell.segments){clearance=Math.min(clearance,distanceToSegment(x,z,a,b)-halfWidth);if(clearance<=reach)return 0;}}
+  }else clearance=Math.min(circleClearance(x,z,plan.structures),circleClearance(x,z,plan.rocks),circleClearance(x,z,plan.trees),pathClearance(x,z,plan.paths));
+  const free=smooth(0,.75,clearance-reach);
+  if(!free)return 0;
+  const slope=Math.hypot(terrainBaseHeight(x+.25,z)-terrainBaseHeight(x-.25,z),terrainBaseHeight(x,z+.25)-terrainBaseHeight(x,z-.25))*2;
+  return coast*free*(1-smooth(.35,.65,slope));
 }
 export function canPlacePlant(x: number, z: number, reach: number, plan: LandscapePlan) { return vegetationSuitability(x, z, reach, plan) > 0; }
 
@@ -151,6 +169,11 @@ export function createLandscapePlan(): LandscapePlan {
       if (circleClearance(x, z, structures) < size + 1 || pathClearance(x, z, paths) < size + 1) continue;
       rocks.push({ id: `coast-rock-${rocks.length}`, x, z, y: terrainHeight(x, z) + .12, radius: size * 1.4, scale, rotation: random() * Math.PI });
     }
+  }
+  for(const [x,z] of [[-4,-85],[6,-81],[-14,-84]]) {
+    const height=2.5,radius=1.25;
+    if(circleClearance(x,z,[...structures,...rocks,...trees])<radius+.15||pathClearance(x,z,paths)<radius+.8)continue;
+    trees.push({id:`courtyard-tree-${trees.length}`,x,z,y:terrainHeight(x,z),radius,height,rotation:random()*Math.PI*2});
   }
   for (let attempt = 0; trees.length < 42 && attempt < 1200; attempt++) {
     const island = ISLANDS[attempt % ISLANDS.length];
@@ -201,15 +224,17 @@ export async function generatePlantPositionsAsync(count: number, plan: Landscape
 /** A shared Cartesian lattice avoids radial seams and overlapping island shelves. */
 export function archipelagoGeometry() {
   const geometry = new BufferGeometry();
-  const positions: number[] = [], colors: number[] = [], uvs: number[] = [], zones: number[] = [], exposures: number[] = [], indices: number[] = [];
+  const positions: number[] = [], colors: number[] = [], uvs: number[] = [], zones: number[] = [], exposures: number[] = [], ecology: number[] = [], paving: number[] = [], indices: number[] = [];
   const step = .4, vertices = new Map<string, number>();
   const vertex = (ix: number, iz: number) => {
     const key = `${ix},${iz}`;
     const existing = vertices.get(key); if (existing !== undefined) return existing;
-    const x = ix * step, z = iz * step, y = terrainHeight(x, z);
+    const x = ix * step, z = iz * step, distance = landDistance(x,z), route=groundRouteAt(x,z);
+    const y=distance<.15?terrainBaseHeight(x,z):route.height;
+    meshHeightSamples.set(key,y);
     const index = positions.length / 3; vertices.set(key, index);
     positions.push(x, y, z); uvs.push(x / 4, z / 4); colors.push(1, 1, 1);
-    const distance = landDistance(x, z);
+    const biome=coastalBiome(x,z,distance,y);ecology.push(biome.grass,biome.inland,biome.town);paving.push(Math.min(2,route.distance));
     zones.push(distance, y, 0); exposures.push(distance > -.8 && distance < .8 ? coastExposure(x, z, distance) : 0);
     return index;
   };
@@ -223,6 +248,8 @@ export function archipelagoGeometry() {
   geometry.setAttribute('uv', new Float32BufferAttribute(uvs, 2));
   geometry.setAttribute('aTerrain', new Float32BufferAttribute(zones, 3));
   geometry.setAttribute('aExposure', new Float32BufferAttribute(exposures, 1));
+  geometry.setAttribute('aEcology',new Float32BufferAttribute(ecology,3));
+  geometry.setAttribute('aPaving',new Float32BufferAttribute(paving,1));
   geometry.setIndex(indices); geometry.computeVertexNormals();
   const normals = geometry.getAttribute('normal'), terrain = geometry.getAttribute('aTerrain');
   for (let i = 0; i < normals.count; i++) terrain.setZ(i, Math.hypot(normals.getX(i), normals.getZ(i)) / Math.max(.01, normals.getY(i)));
@@ -243,58 +270,18 @@ export function terrainMeshHeight(x: number, z: number) {
     : latticeHeight(ix+1,iz+1) * (u + v - 1) + b * (1 - v) + c * (1 - u);
 }
 export function pathHeight(path: LandscapePath, x: number, z: number) {
-  if (!path.bridge) {
-    let base=terrainMeshHeight(x,z)+.045;
-    // The gallery court itself is a raised walking surface; paths cross its slab before descending.
-    if(path.id==='gallery-entrance'||path.id==='conservatory-entrance') {
-      const distance=Math.hypot(Math.max(-12.82-x,0,x+7.18),Math.max(20.72-z,0,z-25.18));
-      const t=Math.max(0,1-distance/.85);base=Math.max(base,base+(1.035-base)*t*t*(3-2*t));
-    }
-    return entranceRiseAt(path,x,z,base);
-  }
-  return bridgeHeightAt(BRIDGES.find(bridge => bridge.id === path.bridgeId)!, x, z);
+  return path.bridge ? bridgeHeightAt(BRIDGES.find(bridge=>bridge.id===path.bridgeId)!,x,z) : terrainMeshHeight(x,z);
 }
-export function pathGeometry(paths: readonly LandscapePath[]) {
-  const positions: number[] = []; const indices: number[] = [];
-  for (const [pathIndex,path] of paths.filter(path => !path.elevated && !path.bridge).entries()) {
-    const samples: PathPoint[] = [];
-    for (let segment = 1; segment < path.points.length; segment++) {
-      const a = path.points[segment - 1]; const b = path.points[segment];
-      const steps = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) * 12));
-      for (let step = 0; step < steps; step++) samples.push({ x: a.x + (b.x - a.x) * step / steps, z: a.z + (b.z - a.z) * step / steps });
-    }
-    samples.push(path.points[path.points.length - 1]);
-    const start = positions.length / 3;
-    for (let index = 0; index < samples.length; index++) {
-      const point = samples[index]; const before = samples[Math.max(0, index - 1)]; const after = samples[Math.min(samples.length - 1, index + 1)];
-      const length = Math.max(.0001, Math.hypot(after.x - before.x, after.z - before.z));
-      const nx = -(after.z - before.z) / length * path.width / 2; const nz = (after.x - before.x) / length * path.width / 2;
-      for (let across = 0; across <= 12; across++) {
-        const offset = 1 - across / 6; const x = point.x + nx * offset; const z = point.z + nz * offset;
-        // Bounded millimeter separation prevents coplanar joins from flickering.
-        positions.push(x, pathHeight(path, x, z)+(pathIndex%3)*.002, z);
-        if (index < samples.length - 1 && across < 12) { const n = start + index * 13 + across; indices.push(n, n + 13, n + 1, n + 1, n + 13, n + 14); }
-      }
+/** Audit samples of the paved ground, never rendered as overlapping ribbons. */
+export function pathGeometry(paths:readonly LandscapePath[]) {
+  const positions:number[]=[],indices:number[]=[];
+  for(const path of paths.filter(p=>!p.bridge&&!p.elevated)) {
+    const start=positions.length/3;
+    for(let i=0;i<path.points.length;i++) {
+      const p=path.points[i],a=path.points[Math.max(0,i-1)],b=path.points[Math.min(path.points.length-1,i+1)];
+      const length=Math.max(.001,Math.hypot(b.x-a.x,b.z-a.z)),nx=-(b.z-a.z)/length,nz=(b.x-a.x)/length;
+      for(let j=0;j<13;j++){const t=(j/12-.5)*path.width,x=p.x+nx*t,z=p.z+nz*t;positions.push(x,terrainMeshHeight(x,z),z);if(i<path.points.length-1&&j<12){const k=start+i*13+j;indices.push(k,k+13,k+1,k+1,k+13,k+14);}}
     }
   }
-  // Close exposed ramp edges down into the same ground lattice used by the terrain.
-  const surfaceCount=positions.length/3;
-  for(let i=0;i<surfaceCount;i+=13) {
-    for(const edge of [0,12]) {
-      const top=(i+edge)*3,x=positions[top],z=positions[top+2];
-      positions.push(x,terrainMeshHeight(x,z)-.025,z);
-    }
-  }
-  // Each path remains independently capped, so disjoint streets never acquire connecting walls.
-  let row=0;
-  for(const path of paths.filter(path=>!path.elevated&&!path.bridge)) {
-    let rows=1;for(let i=1;i<path.points.length;i++)rows+=Math.max(1,Math.ceil(Math.hypot(path.points[i].x-path.points[i-1].x,path.points[i].z-path.points[i-1].z)*12));
-    for(let i=0;i<rows-1;i++)for(const side of [0,1]) {
-      const a=(row+i)*13+side*12,b=a+13,c=surfaceCount+(row+i)*2+side,d=c+2;
-      if(side===0)indices.push(a,c,b,b,c,d);else indices.push(a,b,c,b,d,c);
-    }
-    for(const i of [0,rows-1]) {const a=(row+i)*13,b=a+12,c=surfaceCount+(row+i)*2;indices.push(a,b,c,b,c+1,c);}
-    row+=rows;
-  }
-  const geometry = new BufferGeometry(); geometry.setAttribute('position', new Float32BufferAttribute(positions, 3)); geometry.setIndex(indices); geometry.computeVertexNormals(); geometry.userData.surfaceVertexCount=surfaceCount;geometry.userData.rowStride=13;return geometry;
+  const geometry=new BufferGeometry();geometry.setAttribute('position',new Float32BufferAttribute(positions,3));geometry.setIndex(indices);geometry.computeVertexNormals();geometry.userData.surfaceVertexCount=positions.length/3;geometry.userData.rowStride=13;geometry.userData.auditOnly=true;return geometry;
 }

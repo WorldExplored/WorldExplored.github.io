@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { BoxGeometry, BufferGeometry, CylinderGeometry, MeshStandardMaterial, MeshPhysicalMaterial, SphereGeometry, Vector3 } from 'three';
+import { BoxGeometry, BufferGeometry, CylinderGeometry, ExtrudeGeometry, Shape, MeshStandardMaterial, MeshPhysicalMaterial, SphereGeometry, Vector3 } from 'three';
 import { combine, strut, useResources } from './BuildingKit';
 
 export type InteriorFinish = 'wood' | 'fabric' | 'metal' | 'paper' | 'screen' | 'light' | 'leaf' | 'soil' | 'coolant' | 'pipe';
@@ -9,10 +9,84 @@ export type InteriorGeometry = Record<InteriorFinish, BufferGeometry>;
 const finishes: InteriorFinish[] = ['wood', 'fabric', 'metal', 'paper', 'screen', 'light', 'leaf', 'soil', 'coolant', 'pipe'];
 const timers = new WeakMap<object, ReturnType<typeof setTimeout>>();
 
+export type FloorPoint = readonly [number, number];
+export type FloorPolygon = readonly FloorPoint[];
+export function floorRectangle(x: number, z: number, width: number, depth: number): FloorPoint[] {
+  return [[x-width/2,z-depth/2],[x+width/2,z-depth/2],[x+width/2,z+depth/2],[x-width/2,z+depth/2]];
+}
+export function floorEllipse(x: number, z: number, rx: number, rz = rx, segments = 64): FloorPoint[] {
+  return Array.from({length:segments},(_,i)=>[x+Math.cos(i/segments*Math.PI*2)*rx,z+Math.sin(i/segments*Math.PI*2)*rz]);
+}
+function inPolygon(x: number,z: number,polygon: FloorPolygon) {
+  let inside=false;
+  for(let i=0,j=polygon.length-1;i<polygon.length;j=i++) {
+    const a=polygon[i],b=polygon[j];
+    if((a[1]>z)!==(b[1]>z)&&x<(b[0]-a[0])*(z-a[1])/(b[1]-a[1])+a[0])inside=!inside;
+  }
+  return inside;
+}
+/** Trace the union boundary before extrusion, removing overlapping coplanar slabs. */
+export function floorUnion(polygons: readonly FloorPolygon[]): Shape[] {
+  const edges=polygons.flatMap(p=>p.map((a,i)=>({a,b:p[(i+1)%p.length]})));
+  const boundary=new Map<string,{a:FloorPoint;b:FloorPoint}>();
+  const key=(p:FloorPoint)=>`${Math.round(p[0]*1e7)},${Math.round(p[1]*1e7)}`;
+  const inside=(x:number,z:number)=>polygons.some(p=>inPolygon(x,z,p));
+  for(const edge of edges) {
+    const [ax,az]=edge.a,dx=edge.b[0]-ax,dz=edge.b[1]-az,length=Math.hypot(dx,dz),cuts=[0,1];
+    for(const other of edges) {
+      const ox=other.b[0]-other.a[0],oz=other.b[1]-other.a[1],det=dx*oz-dz*ox;
+      const rx=other.a[0]-ax,rz=other.a[1]-az;
+      if(Math.abs(det)>1e-10) {
+        const t=(rx*oz-rz*ox)/det,u=(rx*dz-rz*dx)/det;
+        if(t>1e-8&&t<1-1e-8&&u>=-1e-8&&u<=1+1e-8)cuts.push(t);
+      } else if(Math.abs(rx*dz-rz*dx)<1e-8) {
+        for(const p of [other.a,other.b]) {const t=((p[0]-ax)*dx+(p[1]-az)*dz)/(length*length);if(t>1e-8&&t<1-1e-8)cuts.push(t);}
+      }
+    }
+    cuts.sort((a,b)=>a-b);
+    for(let i=1;i<cuts.length;i++) {
+      if(cuts[i]-cuts[i-1]<1e-8)continue;
+      const t=(cuts[i]+cuts[i-1])/2,x=ax+dx*t,z=az+dz*t,e=.00001;
+      const left=inside(x-dz/length*e,z+dx/length*e),right=inside(x+dz/length*e,z-dx/length*e);
+      if(left===right)continue;
+      let a:FloorPoint=[ax+dx*cuts[i-1],az+dz*cuts[i-1]],b:FloorPoint=[ax+dx*cuts[i],az+dz*cuts[i]];
+      if(!left)[a,b]=[b,a];boundary.set(`${key(a)}:${key(b)}`,{a,b});
+    }
+  }
+  const loops:FloorPoint[][]=[];
+  while(boundary.size) {
+    const [firstKey,first]=boundary.entries().next().value!;boundary.delete(firstKey);
+    const loop:FloorPoint[]=[first.a,first.b];let next=first.b;
+    while(key(next)!==key(first.a)) {
+      const candidate=[...boundary.entries()].find(([,edge])=>key(edge.a)===key(next));
+      if(!candidate)throw new Error('Floor union boundary is not closed');
+      boundary.delete(candidate[0]);next=candidate[1].b;loop.push(next);
+    }
+    loops.push(loop.slice(0,-1));
+  }
+  const shapes:Shape[]=[],holes:FloorPoint[][]=[];
+  for(const loop of loops) {
+    const area=loop.reduce((sum,p,i)=>{const q=loop[(i+1)%loop.length];return sum+p[0]*q[1]-q[0]*p[1];},0);
+    if(area<0){holes.push(loop);continue;}
+    const shape=new Shape();shape.moveTo(loop[0][0],-loop[0][1]);loop.slice(1).forEach(p=>shape.lineTo(p[0],-p[1]));shape.closePath();shapes.push(shape);
+  }
+  for(const loop of holes) {
+    const owner=shapes.find(shape=>inPolygon(loop[0][0],loop[0][1],shape.getPoints().map(p=>[p.x,-p.y])));
+    if(!owner)throw new Error('Floor courtyard has no enclosing foundation');
+    const hole=new Shape();hole.moveTo(loop[0][0],-loop[0][1]);loop.slice(1).forEach(p=>hole.lineTo(p[0],-p[1]));hole.closePath();owner.holes.push(hole);
+  }
+  return shapes;
+}
+export function floorSlab(name: string, polygons: readonly FloorPolygon[], top: number, depth: number, kind: 'floor'|'foundation'|'threshold'|'balcony' = 'floor') {
+  const geometry=new ExtrudeGeometry(floorUnion(polygons),{depth,bevelEnabled:false,curveSegments:1}).rotateX(-Math.PI/2).translate(0,top-depth,0);
+  geometry.name=name;geometry.userData.floor={name,kind};return geometry;
+}
+
 /** Furniture is built in small assemblies, then merged into one draw per finish. */
 export class InteriorBuilder {
   parts = Object.fromEntries(finishes.map(key => [key, [] as BufferGeometry[]])) as Record<InteriorFinish, BufferGeometry[]>;
   add(finish: InteriorFinish, geometry: BufferGeometry) { this.parts[finish].push(geometry); }
+  floor(name: string, polygons: readonly FloorPolygon[], top: number, thickness = .018) { this.add('wood', floorSlab(name,polygons,top,thickness)); }
   box(finish: InteriorFinish, w: number, h: number, d: number, x: number, y: number, z: number, yaw = 0) {
     this.add(finish, new BoxGeometry(w, h, d).rotateY(yaw).translate(x, y, z));
   }
@@ -53,7 +127,11 @@ export class InteriorBuilder {
     this.box('light', width, .018, .1, x, ceiling - .064, z);
   }
   finish(): InteriorGeometry {
-    return Object.fromEntries(finishes.map(key => [key, this.parts[key].length ? combine(this.parts[key]) : new BufferGeometry()])) as InteriorGeometry;
+    return Object.fromEntries(finishes.map(key => {
+      let offset=0;const floors: Array<{start:number;count:number;name:string;kind:string}>=[];
+      for(const part of this.parts[key]) {const count=part.index?.count??part.getAttribute('position').count;if(part.userData.floor)floors.push({start:offset,count,...part.userData.floor});offset+=count;}
+      const geometry=this.parts[key].length?combine(this.parts[key]):new BufferGeometry();geometry.userData.floors=floors;return [key,geometry];
+    })) as InteriorGeometry;
   }
 }
 

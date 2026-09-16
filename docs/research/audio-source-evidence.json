@@ -1,51 +1,47 @@
 {
-  "verifiedAt": "2026-09-14T20:24:22Z",
-  "track": "Firefly",
-  "creator": "Scott Buckley",
-  "license": "CC BY 4.0",
-  "licenseEvidence": "https://www.scottbuckley.com.au/library/firefly/",
-  "source": "https://www.youtube.com/watch?v=PiPyx9sBCi8",
-  "oEmbed": {
-    "url": "https://www.youtube.com/oembed?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DPiPyx9sBCi8&format=json",
-    "httpStatus": 200,
-    "title": "Scott Buckley - 'Firefly' [Uplifting Corporate CC-BY]",
-    "author_name": "Scott Buckley",
-    "author_url": "https://www.youtube.com/@ScottBuckley"
-  },
-  "embedPages": [
+  "verifiedAt": "2026-09-16T13:55:26.733442+00:00",
+  "method": "HEAD, Origin: https://worldexplored.github.io",
+  "tracks": [
     {
-      "url": "https://www.youtube.com/embed/PiPyx9sBCi8",
-      "httpStatus": 200,
-      "videoFlags": {
-        "playableInEmbed": true
-      },
-      "previewPlayabilityStatus": {
-        "status": "OK",
-        "playableInEmbed": true
-      }
+      "slug": "firefly",
+      "sourceUrl": "https://www.scottbuckley.com.au/library/firefly/",
+      "playbackUrl": "https://www.scottbuckley.com.au/wp-content/audio/sb_firefly.mp3",
+      "headers": "HTTP/2 200 \nlast-modified: Fri, 12 Apr 2013 02:50:37 GMT\naccept-ranges: bytes\ncontent-length: 5912941\ncontent-type: audio/mpeg\ndate: Wed, 16 Sep 2026 13:55:26 GMT\nserver: Apache\n\n",
+      "license": "CC BY 4.0; creator primary page inspected with web tool",
+      "downloadLinkEvidence": "MP3 link on creator primary page resolved using web tool click"
     },
     {
-      "url": "https://www.youtube-nocookie.com/embed/PiPyx9sBCi8",
-      "httpStatus": 200,
-      "videoFlags": {
-        "playableInEmbed": true
-      },
-      "previewPlayabilityStatus": {
-        "status": "OK",
-        "playableInEmbed": true
-      }
+      "slug": "reparateur",
+      "sourceUrl": "https://www.scottbuckley.com.au/library/reparateur/",
+      "playbackUrl": "https://www.scottbuckley.com.au/wp-content/audio/sb_reparateur.mp3",
+      "headers": "HTTP/2 200 \nlast-modified: Sat, 02 Jan 2010 12:17:36 GMT\naccept-ranges: bytes\ncontent-length: 7830631\ncontent-type: audio/mpeg\ndate: Wed, 16 Sep 2026 13:55:26 GMT\nserver: Apache\n\n",
+      "license": "CC BY 4.0; creator primary page inspected with web tool",
+      "downloadLinkEvidence": "MP3 link on creator primary page resolved using web tool click"
+    },
+    {
+      "slug": "electric-dreams",
+      "sourceUrl": "https://www.scottbuckley.com.au/library/electric-dreams/",
+      "playbackUrl": "https://www.scottbuckley.com.au/library/wp-content/uploads/2020/09/sb_electricdreams.mp3",
+      "headers": "HTTP/2 200 \nlast-modified: Fri, 11 Sep 2020 19:09:30 GMT\naccept-ranges: bytes\ncontent-length: 11667530\ncontent-type: audio/mpeg\ndate: Wed, 16 Sep 2026 13:55:26 GMT\nserver: Apache\n\n",
+      "license": "CC BY 4.0; creator primary page inspected with web tool",
+      "downloadLinkEvidence": "MP3 link on creator primary page resolved using web tool click"
+    },
+    {
+      "slug": "meanwhile",
+      "sourceUrl": "https://www.scottbuckley.com.au/library/meanwhile/",
+      "playbackUrl": "https://www.scottbuckley.com.au/library/wp-content/uploads/2025/01/Meanwhile.mp3",
+      "headers": "HTTP/2 200 \nlast-modified: Fri, 17 Jan 2025 06:10:30 GMT\naccept-ranges: bytes\ncontent-length: 13036146\ncontent-type: audio/mpeg\ndate: Wed, 16 Sep 2026 13:55:26 GMT\nserver: Apache\n\n",
+      "license": "CC BY 4.0; creator primary page inspected with web tool",
+      "downloadLinkEvidence": "MP3 link on creator primary page resolved using web tool click"
+    },
+    {
+      "slug": "hymn-to-the-dawn",
+      "sourceUrl": "https://www.scottbuckley.com.au/library/hymn-to-the-dawn/",
+      "playbackUrl": "https://www.scottbuckley.com.au/library/wp-content/uploads/2022/11/HymnToTheDawn.mp3",
+      "headers": "HTTP/2 200 \nlast-modified: Fri, 18 Nov 2022 15:24:59 GMT\naccept-ranges: bytes\ncontent-length: 16737414\ncontent-type: audio/mpeg\ndate: Wed, 16 Sep 2026 13:55:26 GMT\nserver: Apache\n\n",
+      "license": "CC BY 4.0; creator primary page inspected with web tool",
+      "downloadLinkEvidence": "MP3 link on creator primary page resolved using web tool click"
     }
   ],
-  "browserPlaybackVerified": false,
-  "mediaDownloaded": false,
-  "nativePlayback": {
-    "url": "https://www.scottbuckley.com.au/wp-content/audio/sb_firefly.mp3",
-    "sourcePage": "https://www.scottbuckley.com.au/library/firefly/",
-    "verifiedAt": "2026-09-14",
-    "httpStatus": 200,
-    "contentType": "audio/mpeg",
-    "contentLength": 5912941,
-    "acceptRanges": "bytes",
-    "rehosted": false
-  }
+  "cors": "No Access-Control-Allow-Origin returned. Native HTMLAudioElement has no crossorigin attribute and uses a no-CORS media request. No Web Audio or decoded byte access is used. Deployed-browser playback still requires runtime verification."
 }

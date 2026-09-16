@@ -72,13 +72,13 @@ export function createCirculationGraph() {
   const edge=(id:string,from:CirculationNode,to:CirculationNode,via:PathPoint[]=[],width=1.2,mode:CirculationEdge['mode']='walk')=>{
     const e:CirculationEdge={id,from:from.id,to:to.id,mode,width,points:[from,...via,to],startY:from.y,endY:to.y};edges.push(e);return e;
   };
-  const work=node('work',-8,2.51,'entrance',1.085), research=node('research',2.67,-5.15,'entrance',1.07);
+  const work=node('work',-8,2.51,'entrance',1.105), research=node('research',2.67,-5.15,'entrance',1.07);
   const west=node('main-west',-14.8,3.2),center=node('main-center',-5.5,5.4),lab=node('research-plaza',2.67,-3.75);
   const gardenNorth=node('garden-bridge-north',-6,7,'landing',.95), gardenSouth=node('garden-bridge-south',-6,18,'landing',1.4);
   const purdueWest=node('purdue-bridge-west',12,-7,'landing',.95),purdueEast=node('purdue-bridge-east',21.7,-7,'landing',.95);
   const purdue=node('purdue',24.28,-7,'entrance',1.03);
   const gallery=node('about',-8.805,21.86,'entrance',1.06),glasshouse=node('about-conservatory',-11.95,24.64,'entrance',1.06);
-  const garden=node('garden-court',-5.5,24.1,'park'),contact=node('contact',12,24.95,'entrance',1.04);
+  const garden=node('garden-court',-5.5,24.1,'park'),contact=node('contact',12,24.95,'entrance',1.06);
   const mainDock=node('main-dock-land',-8,-18.5,'dock',1.06),mainBoat=node('main-dock-boarding',-8,-24.45,'dock',1.06);
   edge('work-entrance',work,center,[{x:-8,z:3.6}]);edge('main-west-walk',work,west,[{x:-9.6,z:4.3}]);
   edge('main-lab-walk',center,lab,[{x:-1,z:3.2},{x:1,z:-2.6}]);edge('research-entrance',lab,research);
@@ -111,14 +111,38 @@ export function createCirculationGraph() {
   }
   for(const entry of citySecondaryEntrances){const [x,y,z]=entry.world;const n=node('station-lobby',x,z,'entrance',y),p=node('station-lobby-plaza',x+.65,z+2,'landing');edge('station-lobby-threshold',n,p,[{x:x+.65,z}],.8);const e=edge('station-lobby-walk',p,cityEast,[],.95);e.points=routeCityWalk(p,cityEast);}
   edge('city-dock',cityDock,cityBoat,[{x:-12,z:-60}],1.1,'dock');edge('water-taxi',mainBoat,cityBoat,[],1,'boat');
-  const beacon=node('building',-76,-34.77,'entrance',2.93),beaconCourt=node('beacon-court',-74.1,-34,'park');
+  const beacon=node('building',-76,-34.805,'entrance',2.86),beaconCourt=node('beacon-court',-74.1,-34,'park');
   const overlook=node('beacon-overlook',-73.5,-33.3,'park');
   edge('beacon-entrance',beacon,beaconCourt,[{x:-76,z:-33.9}],.85);edge('beacon-court-walk',beaconCourt,overlook,[],.85);
   cached={nodes,edges};return cached;
 }
 
+function roundedRoute(points: PathPoint[], city: boolean, tight: boolean) {
+  if(points.length<3||tight)return points;
+  const result:PathPoint[]=[points[0]];
+  for(let i=1;i<points.length-1;i++){
+    const a=points[i-1],b=points[i],c=points[i+1];
+    const ab=Math.hypot(b.x-a.x,b.z-a.z),bc=Math.hypot(c.x-b.x,c.z-b.z);
+    let cut=Math.min(city?.42:.85,ab*.24,bc*.24);
+    let arc:PathPoint[]=[];
+    for(let attempt=0;attempt<4;attempt++){
+      const p={x:b.x+(a.x-b.x)*cut/Math.max(.001,ab),z:b.z+(a.z-b.z)*cut/Math.max(.001,ab)};
+      const q={x:b.x+(c.x-b.x)*cut/Math.max(.001,bc),z:b.z+(c.z-b.z)*cut/Math.max(.001,bc)};
+      arc=Array.from({length:9},(_,j)=>{const t=j/8,u=1-t;return{x:u*u*p.x+2*u*t*b.x+t*t*q.x,z:u*u*p.z+2*u*t*b.z+t*t*q.z};});
+      if(!city||arc.every(point=>cityGroundClear(point.x,point.z,.57)))break;
+      cut*=.35;if(attempt===3)arc=[b];
+    }
+    result.push(...arc);
+  }
+  result.push(points.at(-1)!);return result;
+}
+let renderedPaths:LandscapePath[]|undefined;
 export function circulationPaths(): LandscapePath[] {
-  return createCirculationGraph().edges.filter(edge=>edge.mode==='walk'||edge.mode==='bridge').map(edge=>({...edge,points:edge.points.flatMap((p,i)=>{if(i===edge.points.length-1)return [{x:p.x,z:p.z}];const q=edge.points[i+1],count=Math.max(1,Math.ceil(Math.hypot(q.x-p.x,q.z-p.z)/.35));return Array.from({length:count},(_,j)=>({x:p.x+(q.x-p.x)*j/count,z:p.z+(q.z-p.z)*j/count}));})}));
+  if(renderedPaths)return renderedPaths;
+  renderedPaths=createCirculationGraph().edges.filter(edge=>edge.mode==='walk'||edge.mode==='bridge').map(edge=>{
+    const points=roundedRoute(edge.points,edge.points[0].z< -50,edge.bridge||edge.id==='gallery-entrance'||edge.id==='fountain-plaza');
+    return {...edge,points:points.flatMap((p,i)=>{if(i===points.length-1)return [{x:p.x,z:p.z}];const q=points[i+1],count=Math.max(1,Math.ceil(Math.hypot(q.x-p.x,q.z-p.z)/.35));return Array.from({length:count},(_,j)=>({x:p.x+(q.x-p.x)*j/count,z:p.z+(q.z-p.z)*j/count}));})};
+  });return renderedPaths;
 }
 export function entranceRiseAt(path: LandscapePath,x:number,z:number,base:number) {
   let height=base;

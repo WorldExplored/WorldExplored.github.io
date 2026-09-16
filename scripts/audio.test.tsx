@@ -1,35 +1,108 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { AudioControl } from '../src/components/AudioControl';
 import { audio, isApprovedAudioSource } from '../src/content/audio';
+import { AudioPlaylist, AUDIO_PREFERENCES_KEY, adjacentTrack, readAudioPreferences, shuffledOrder } from '../src/components/audioPlaylist';
 
-test('audio has no source or autoplay before intentional activation', () => {
+class TestMedia extends EventTarget {
+  src = ''; volume = 1; muted = false; paused = true; calls = 0; loads = 0;
+  mode: 'success' | 'failure' | 'blocked' | 'pending' = 'success';
+  get currentSrc() { return this.src; }
+  getAttribute(name: string) { return name === 'src' && this.src ? this.src : null; }
+  removeAttribute(name: string) { if (name === 'src') this.src = ''; }
+  load() { this.loads++; }
+  pause() { this.paused = true; }
+  play() { this.calls++; this.paused = false; if (this.mode === 'failure') return Promise.reject(new Error('media unavailable')); if (this.mode === 'blocked') return Promise.reject(new DOMException('gesture required', 'NotAllowedError')); if (this.mode === 'success') this.dispatchEvent(new Event('playing')); return Promise.resolve(); }
+  emit(name: string) { this.dispatchEvent(new Event(name)); }
+}
+function setup(reducedMotion = false, stored: string | null = null) {
+  const media = new TestMedia(); let now = 0, id = 0; const timers = new Map<number, { at: number; run: () => void }>(); const saved = new Map<string, string>(); if (stored) saved.set(AUDIO_PREFERENCES_KEY, stored);
+  const player = new AudioPlaylist(media as unknown as HTMLAudioElement, audio.playlist, () => {}, { random: () => .3, reducedMotion: () => reducedMotion, storage: { getItem: key => saved.get(key) ?? null, setItem: (key, value) => { saved.set(key, value); } }, now: () => now,
+    schedule: (run, delay) => { const next = ++id; timers.set(next, { at: now + delay, run }); return next as unknown as ReturnType<typeof setTimeout>; }, cancel: handle => { timers.delete(handle as unknown as number); } });
+  function tick(ms: number) { const end = now + ms; let guard = 0; while (true) { const next = [...timers.entries()].filter(([, timer]) => timer.at <= end).sort((a, b) => a[1].at - b[1].at)[0]; if (!next) break; assert.ok(++guard < 10000); now = next[1].at; timers.delete(next[0]); next[1].run(); } now = end; }
+  return { media, player, tick, timers, saved };
+}
+
+test('audio renders no remote source, autoplay or embedded player before an intentional gesture', () => {
   const html = renderToStaticMarkup(<AudioControl />);
-  assert.match(html, /Play music/);
-  assert.match(html, /<audio preload="none"/);
-  assert.doesNotMatch(html, /<iframe|<script|src=|autoPlay|autoplay|https:/);
+  assert.match(html, /Play music/); assert.match(html, /<audio preload="none"/);
+  assert.doesNotMatch(html, /<iframe|<script|src=|autoPlay|autoplay|https:|crossorigin/i);
+  const setupResult = setup(); assert.equal(setupResult.media.calls, 0); assert.equal(setupResult.media.src, ''); assert.equal(setupResult.timers.size, 0); setupResult.player.dispose();
 });
 
-test('missing or mismatched source permission renders no control', () => {
-  assert.ok(audio.source);
-  assert.equal(renderToStaticMarkup(<AudioControl source={null} />), '');
-  assert.equal(renderToStaticMarkup(<AudioControl source={{ ...audio.source, sourceUrl: 'https://www.youtube.com/watch?v=aaaaaaaaaaa' }} />), '');
+test('all five tracks require creator-hosted audio and matching primary license evidence', () => {
+  assert.ok(audio.playlist.length >= 5); assert.equal(new Set(audio.playlist.map(track => track.id)).size, audio.playlist.length);
+  assert.ok(audio.playlist.some(track => track.title === 'Firefly'));
+  for (const track of audio.playlist) { assert.ok(isApprovedAudioSource(track)); assert.equal(new URL(track.playbackUrl).origin, new URL(track.creatorUrl).origin); assert.equal(track.license.evidenceUrl, track.sourceUrl); assert.equal(track.license.label, 'CC BY 4.0'); }
+  const source = audio.playlist[0];
+  assert.equal(isApprovedAudioSource({ ...source, playbackUrl: 'https://example.com/music.mp3' }), false);
+  assert.equal(isApprovedAudioSource({ ...source, license: { ...source.license, evidenceUrl: 'https://www.youtube.com/watch?v=123' } }), false);
+  assert.equal(isApprovedAudioSource({ ...source, sourceUrl: 'https://www.scottbuckley.com.au/library/not-this-track/' }), false);
+  assert.equal(renderToStaticMarkup(<AudioControl playlist={null} />), '');
+  assert.equal(renderToStaticMarkup(<AudioControl playlist={[{ ...source, playbackUrl: 'http://example.com/music.mp3' }]} />), '');
 });
 
-test('audio requires matching creator, track, license and YouTube evidence', () => {
-  assert.ok(audio.source);
-  assert.ok(isApprovedAudioSource(audio.source));
-  assert.equal(isApprovedAudioSource({ ...audio.source, videoId: '../bad-id' }), false);
-  assert.equal(isApprovedAudioSource({ ...audio.source, license: { ...audio.source.license, evidenceUrl: 'http://example.com/license' } }), false);
-  assert.equal(isApprovedAudioSource({ ...audio.source, embedding: { ...audio.source.embedding, evidenceUrl: 'https://example.com/embed/PiPyx9sBCi8' } }), false);
+test('shuffled continuous playback visits every track once per cycle and never repeats consecutively', () => {
+  for (let seed = 1; seed < 30; seed++) { let value = seed; const order = shuffledOrder(5, () => { value = (value * 1664525 + 1013904223) >>> 0; return value / 2 ** 32; }); assert.deepEqual([...order].sort(), [0,1,2,3,4]); assert.notEqual(adjacentTrack(order, order[4], 1, new Set()), order[4]); }
+  const { player, media, tick } = setup(); player.play(); const sequence = [player.snapshot.index];
+  for (let index = 0; index < 16; index++) { tick(500); media.emit('ended'); sequence.push(player.snapshot.index); assert.equal(player.snapshot.state, 'playing'); }
+  for (let index = 1; index < sequence.length; index++) assert.notEqual(sequence[index], sequence[index - 1]);
+  assert.equal(new Set(sequence.slice(0,5)).size,5); assert.deepEqual(sequence.slice(0,5), sequence.slice(5,10));
+  const selected = player.snapshot.index; player.move(-1); tick(250); const previous = player.snapshot.index; assert.notEqual(previous, selected); player.move(1); tick(250); assert.equal(player.snapshot.index, selected);
+  player.pause(); player.move(1); assert.equal(player.snapshot.state, 'paused'); assert.equal(media.src, ''); const calls = media.calls; media.emit('ended'); assert.equal(media.calls, calls); player.dispose();
 });
 
-test('native playback uses the secure creator-published audio file', () => {
-  assert.ok(audio.source);
-  const playback = new URL(audio.source.playbackUrl);
-  assert.equal(playback.origin, new URL(audio.source.creatorUrl).origin);
-  assert.equal(playback.pathname, '/wp-content/audio/sb_firefly.mp3');
-  assert.equal(isApprovedAudioSource({ ...audio.source, playbackUrl: 'http://www.scottbuckley.com.au/track.mp3' }), false);
-  assert.equal(isApprovedAudioSource({ ...audio.source, playbackUrl: 'https://example.com/track.mp3' }), false);
+test('gentle transitions ramp volume, while reduced motion transitions immediately', () => {
+  const { player, media, tick } = setup(); player.play(); assert.equal(media.volume, 0); tick(200); assert.ok(media.volume > 0 && media.volume < .25); tick(250); assert.equal(media.volume, .25);
+  const first = player.snapshot.index; player.move(1); tick(100); assert.equal(player.snapshot.index, first); assert.ok(media.volume < .25); tick(150); assert.notEqual(player.snapshot.index, first); tick(450); assert.equal(media.volume, .25); player.dispose();
+  const reduced = setup(true); reduced.player.play(); assert.equal(reduced.media.volume, .25); const current = reduced.player.snapshot.index; reduced.player.move(1); assert.notEqual(reduced.player.snapshot.index, current); assert.equal(reduced.media.volume, .25); reduced.player.dispose();
+  const css = readFileSync(new URL('../src/components/AudioControl.css', import.meta.url), 'utf8'); assert.match(css, /prefers-reduced-motion: reduce/); assert.match(css, /min-height: 44px/);
+});
+
+test('unavailable tracks skip once, all failures stop, and user retry starts a new bounded attempt', async () => {
+  const { player, media, tick, timers } = setup(true); media.mode = 'failure'; player.play();
+  for (let index = 0; index < audio.playlist.length + 2; index++) { await Promise.resolve(); tick(0); }
+  assert.equal(player.snapshot.state, 'unavailable'); assert.equal(media.calls, audio.playlist.length); assert.equal(timers.size, 0);
+  const calls = media.calls; tick(120000); media.emit('ended'); media.emit('error'); assert.equal(media.calls, calls);
+  media.mode = 'success'; player.play(); assert.equal(player.snapshot.state, 'playing'); assert.equal(media.calls, calls + 1); media.emit('ended'); assert.equal(player.snapshot.state, 'playing'); player.dispose();
+});
+
+test('stalled loads time out and stale play rejections cannot restart paused playback', async () => {
+  const { player, media, tick } = setup(true); media.mode = 'pending'; player.play(); const original = player.snapshot.index; tick(20001); assert.notEqual(player.snapshot.index, original); player.pause(); const calls = media.calls; tick(60000); media.emit('error'); media.emit('ended'); assert.equal(media.calls, calls); player.dispose();
+  const blocked = setup(); blocked.media.mode = 'blocked'; blocked.player.play(); await Promise.resolve(); assert.equal(blocked.player.snapshot.state, 'ready'); assert.equal(blocked.media.calls, 1); assert.equal(blocked.timers.size, 0); blocked.media.mode = 'success'; blocked.player.play(); assert.equal(blocked.player.snapshot.state, 'playing'); blocked.player.dispose();
+  const stale = setup(); stale.media.mode = 'failure'; stale.player.play(); stale.player.pause(); await Promise.resolve(); stale.tick(0); assert.equal(stale.player.snapshot.state, 'paused'); assert.equal(stale.media.calls, 1); stale.player.dispose();
+});
+
+test('volume and mute preferences persist, tolerate unavailable storage and survive closing', () => {
+  const { player, media, saved } = setup(false, JSON.stringify({ volume: .73, muted: true })); assert.equal(media.volume, .73); assert.equal(media.muted, true);
+  player.play(); player.setPreferences({ volume: .44, muted: false }); player.close(); assert.equal(player.snapshot.volume, .44); assert.equal(player.snapshot.muted, false); assert.equal(media.src, ''); assert.deepEqual(JSON.parse(saved.get(AUDIO_PREFERENCES_KEY)!), { volume: .44, muted: false }); player.dispose();
+  assert.deepEqual(readAudioPreferences({ getItem: () => { throw Error('denied'); } }), { volume: .25, muted: false });
+  assert.deepEqual(readAudioPreferences({ getItem: () => '{bad' }), { volume: .25, muted: false }); assert.deepEqual(readAudioPreferences({ getItem: () => '{"volume":9,"muted":"true"}' }), { volume: 1, muted: false });
+});
+
+test('default browser timers never receive the playlist instance as their host receiver', context => {
+  const pending = new Set<number>(); let next = 0, scheduled = 0, cancelled = 0;
+  context.mock.method(globalThis, 'setTimeout', function (this: unknown, callback: () => void, delay?: number) {
+    if (this !== undefined && this !== globalThis) throw new TypeError('Illegal invocation');
+    assert.equal(typeof callback, 'function'); assert.ok(Number.isFinite(delay));
+    const handle = ++next; pending.add(handle); scheduled++; return handle as unknown as ReturnType<typeof setTimeout>;
+  });
+  context.mock.method(globalThis, 'clearTimeout', function (this: unknown, handle: ReturnType<typeof setTimeout>) {
+    if (this !== undefined && this !== globalThis) throw new TypeError('Illegal invocation');
+    pending.delete(handle as unknown as number); cancelled++;
+  });
+  const media = new TestMedia();
+  // Deliberately use the production timer defaults, unlike the deterministic scheduler fixtures.
+  const player = new AudioPlaylist(media as unknown as HTMLAudioElement, audio.playlist, () => {}, { now: () => 0 });
+  try {
+    assert.doesNotThrow(() => player.play());
+    assert.equal(player.snapshot.state, 'playing');
+    assert.ok(scheduled >= 2, 'loading watchdog and fade both use native timer wrappers');
+    assert.doesNotThrow(() => player.move(1));
+    assert.doesNotThrow(() => player.pause());
+    assert.equal(pending.size, 0);
+    assert.ok(cancelled >= 2, 'watchdog and transition timers are cancelled through the host wrapper');
+  } finally { player.dispose(); }
 });

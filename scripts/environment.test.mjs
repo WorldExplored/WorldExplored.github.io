@@ -5,18 +5,20 @@ import { create } from '@react-three/test-renderer';
 import { useThree } from '@react-three/fiber';
 import { Matrix4, Ray, SRGBColorSpace, Vector3 } from 'three';
 import { AmbientSystem } from '../src/components/world/AmbientSystem.tsx';
-import { architectureFootprints, canPlacePlant, createLandscapePlan, distanceToSegment, generatePlantPositions, archipelagoGeometry, ISLANDS, islandContour, landDistance, pathGeometry, pathHeight, terrainHeight } from '../src/components/world/terrain.ts';
+import { architectureFootprints, canPlacePlant, createLandscapePlan, distanceToSegment, generatePlantPositions, archipelagoGeometry, ISLANDS, islandContour, landDistance, pathGeometry, pathHeight, terrainBaseHeight, terrainHeight } from '../src/components/world/terrain.ts';
 import { cloudOrigin, cloudPuffTransform, createCloudClusters, rayCloudDistance, updateCloudResponses } from '../src/components/world/clouds.ts';
 import { createSceneRuntime, motionPolicy, world } from '../src/content/world.ts';
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
-test('archipelago preserves architecture bases and bridges connect across real channels', () => {
+test('ungraded architecture bearing planes remain flat and bridges cross real channels', () => {
   const plan = createLandscapePlan();
+  // Final graded foundation contact and finished-floor clearance are sampled
+  // against actual building faces in circulation.test.ts.
   for (const footprint of architectureFootprints()) {
     for (let index = 0; index < 12; index++) {
       const angle = index * Math.PI / 6;
-      assert.ok(Math.abs(terrainHeight(footprint.x + Math.cos(angle) * footprint.radius, footprint.z + Math.sin(angle) * footprint.radius) - (footprint.id === 'building' ? 2.6 : .8)) < 1e-6, footprint.id);
+      assert.ok(Math.abs(terrainBaseHeight(footprint.x + Math.cos(angle) * footprint.radius, footprint.z + Math.sin(angle) * footprint.radius) - (footprint.id === 'building' ? 2.6 : .8)) < 1e-6, footprint.id);
     }
   }
   for (const path of plan.paths.filter(path => !path.elevated)) for (let index = 1; index < path.points.length; index++) {
@@ -227,7 +229,9 @@ test('organic shores and vegetation cover every suitable island without the form
     assert.ok(Math.max(...radii) - Math.min(...radii) > .2);
     if (island.id !== 'beacon') assert.ok(plants.some(p => Math.hypot((p.x-island.x)/island.rx,(p.z-island.z)/island.rz)<.8), island.id);
   }
-  assert.ok(plants.some(p => p.x > 29)); assert.ok(plants.some(p => p.x < -29));
+  assert.ok(plants.some(p => p.x > 29));
+  // The west town beach is intentionally open sand; require planting inland of it.
+  assert.ok(plants.some(p => p.x < -22 && p.z < -60));
   assert.ok(plants.some(p => p.z < -32)); assert.ok(plants.some(p => p.z > 22));
   for (const [x,z] of [[0,-45],[-27,-23],[18,15]]) assert.ok(landDistance(x,z)<0,'Open channels must remain water.');
 });

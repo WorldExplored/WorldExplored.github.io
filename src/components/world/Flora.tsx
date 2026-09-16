@@ -11,29 +11,29 @@ import { BufferGeometry, Color, DoubleSide, Float32BufferAttribute, InstancedMes
 import { createLandscapePlan, distanceToSegment, islandAt, landDistance, seededRandom, terrainHeight, terrainSlope, vegetationSuitability } from './terrain';
 import type { EnvironmentProps } from './Water';
 
-export type FloraKind = 'reeds' | 'beach' | 'shrub' | 'flower' | 'broadleaf';
+export type FloraKind = 'reeds' | 'beach' | 'shrub' | 'flower' | 'broadleaf' | 'sedge' | 'clover' | 'fern';
 export interface FloraSite { x: number; y: number; z: number; scale: number; rotation: number; kind: FloraKind }
-const KINDS: FloraKind[] = ['reeds', 'beach', 'shrub', 'flower', 'broadleaf'];
+const KINDS: FloraKind[] = ['reeds', 'beach', 'shrub', 'flower', 'broadleaf', 'sedge', 'clover', 'fern'];
 
 export function createFloraSites() {
   const random = seededRandom(4621); const plan = createLandscapePlan(); const sites: FloraSite[] = [];
   const anchors: Array<[number,number,number,FloraKind]> = [
     [-16,20,4,'flower'],[-7,24,3,'flower'],[3,22,3,'flower'],[16,25,3,'flower'],[3,23,1.4,'broadleaf'],[-1,-11,1.6,'broadleaf'],[-4,-11,2,'flower'],
-    [-15,1,3,'shrub'],[-4,4,3,'shrub'],[8,-3,2,'shrub'],[3,-13,3,'shrub'],[-23,-69,2,'shrub'],[2,-64,2,'shrub'],
+    [-8,-12,2,'fern'],[2,-14,2,'fern'],[2,-14,2,'clover'],[6,23,3,'clover'],[-4,21,3,'clover'],[-13,-4,3,'clover'],[-4,-85,3,'clover'],[6,-81,3,'clover'],[-14,-84,2,'clover'],[-18,-80,3,'flower'],[5,-80,3,'flower'],[-24,-67,3,'shrub'],[13,-66,3,'clover'],[-15,1,3,'shrub'],[-4,4,3,'shrub'],[8,-3,2,'shrub'],[3,-13,3,'shrub'],[-23,-69,2,'shrub'],[2,-64,2,'shrub'],
   ];
   for (let round = 0; round < 100; round++) for (const [ax,az,radius,kind] of anchors) {
     const angle = random()*Math.PI*2; const r=Math.sqrt(random())*radius; const x=ax+Math.cos(angle)*r; const z=az+Math.sin(angle)*r;
     const reach=kind==='broadleaf'?1.55:kind==='shrub'?1.3:1.0;
-    if(vegetationSuitability(x,z,reach,plan)<.5)continue;
+    if(vegetationSuitability(x,z,reach,plan)<.13)continue;
     sites.push({x,y:terrainHeight(x,z),z,kind,scale:.7+random()*.65,rotation:random()*Math.PI*2});
   }
-  for(let index=0;index<1700;index++) {
+  for(let index=0;index<3200;index++) {
     const x=-34+random()*71;const z=-26+random()*65; const distance=landDistance(x,z);
-    if(distance<.25||distance>2.5||terrainSlope(x,z)>.55)continue;
+    if(distance<.55||distance>3.8||terrainSlope(x,z)>.55)continue;
     if(plan.paths.some(path=>path.points.slice(1).some((point,i)=>distanceToSegment(x,z,path.points[i],point)<path.width/2+.9)))continue;
     if([...plan.structures,...plan.rocks,...plan.trees].some(item=>Math.hypot(x-item.x,z-item.z)<item.radius+.9))continue;
     const island=islandAt(x,z).island;
-    const kind:FloraKind=distance<1.2&&island.id==='garden'&&Math.sin(x*.31+z*.17)>.2?'reeds':'beach';
+    const kind:FloraKind=distance<2.2&&island.id==='garden'&&Math.sin(x*.31+z*.17)>.2?'reeds':distance>2.5?'sedge':'beach';
     // Small continuous ecological patches, separated by open sand.
     if(Math.sin(x*.55+z*.32)+Math.cos(z*.65-x*.19)<.6)continue;
     sites.push({x,y:terrainHeight(x,z),z,kind,scale:.65+random()*.55,rotation:random()*Math.PI*2});
@@ -63,7 +63,20 @@ function floraGeometry(kind:FloraKind) {
       if(ring<7){const n=start+ring*2;indices.push(n,n+1,n+2,n+1,n+3,n+2);}
     }
   }
-  if(kind==='reeds'||kind==='beach')for(let i=0;i<9;i++)leaf(i*2.399,.16+random()*.25,kind==='reeds'?.035:.018,(kind==='reeds'?1.3:.65)+random()*.3,.1,kind==='reeds'?'#608e2b':'#8da94a',(random()-.5)*.25,(random()-.5)*.25);
+  if(kind==='reeds'||kind==='beach'||kind==='sedge')for(let i=0;i<9;i++)leaf(i*2.399,.16+random()*.25,kind==='reeds'?.035:kind==='sedge'?.055:.018,(kind==='reeds'?1.3:kind==='sedge'?.32:.65)+random()*.3,.1,kind==='reeds'?'#608e2b':'#8da94a',(random()-.5)*.25,(random()-.5)*.25);
+  if(kind==='clover')for(let cluster=0;cluster<9;cluster++) {
+    const a=cluster*2.399,r=Math.sqrt(cluster/9)*.5,x=Math.cos(a)*r,z=Math.sin(a)*r;
+    for(let l=0;l<3;l++)leaf(l*Math.PI*2/3,.13,.075,.09,.025,l===0?'#70974c':'#517f37',x,z);
+  }
+  if(kind==='fern')for(let frond=0;frond<7;frond++) {
+    const a=frond*2.399;leaf(a,.65,.016,.42,.20,'#5b8539');
+    for(let level=1;level<8;level++)for(const side of [-1,1]) {
+      const t=level/9,length=.20*Math.sin(t*Math.PI);
+      leaf(a+side*1.12,length,.028,.07,.035,level%2?'#4d853a':'#639c44',Math.sin(a)*t*.65,Math.cos(a)*t*.65);
+      // Lift the paired pinnae along the arching rachis.
+      const vertices=22;for(let j=positions.length-vertices*3;j<positions.length;j+=3)positions[j+1]+=.42*t+Math.sin(t*Math.PI)*.20;
+    }
+  }
   if(kind==='broadleaf')for(let i=0;i<8;i++)leaf(i*2.399,.65+random()*.35,.20,.45+random()*.45,.27,i%2?'#278b32':'#4ba436');
   if(kind==='shrub')for(let i=0;i<26;i++)leaf(i*2.399,.25+random()*.45,.075,.3+random()*.55,.12,i%3?'#31792b':'#5a9d32',(random()-.5)*.4,(random()-.5)*.4);
   if(kind==='flower')for(let bloom=0;bloom<3;bloom++) {
@@ -86,7 +99,7 @@ export function Flora({runtime,paused,quality}:EnvironmentProps) {
       const material=new MeshPhysicalMaterial({vertexColors:true,side:DoubleSide,roughness:kind==='broadleaf'?.46:.78,clearcoat:kind==='broadleaf'?.32:.05,envMapIntensity:.2});
       material.onBeforeCompile=shader=>{
         shader.uniforms.floraTime=uniforms.time;shader.uniforms.floraPointer=uniforms.pointer;shader.uniforms.floraStrength=uniforms.strength;
-        shader.vertexShader=`uniform float floraTime;uniform vec3 floraPointer;uniform float floraStrength;\n${shader.vertexShader}`.replace('#include <begin_vertex>',`#include <begin_vertex>\nvec2 origin=instanceMatrix[3].xz;float phase=origin.x*.7+origin.y*.4;float wind=sin(floraTime*${[.8,1.3,.48,1.1,.36][index]}+phase)*.08+sin(floraTime*.43-phase)*.025;transformed.x+=wind*position.y*position.y;vec2 away=origin-floraPointer.xz;float wake=(1.-smoothstep(.2,2.4,length(away)))*floraStrength;transformed.xz+=away/max(.1,length(away))*wake*position.y*.25;`);
+        shader.vertexShader=`uniform float floraTime;uniform vec3 floraPointer;uniform float floraStrength;\n${shader.vertexShader}`.replace('#include <begin_vertex>',`#include <begin_vertex>\nvec2 origin=instanceMatrix[3].xz;float phase=origin.x*.7+origin.y*.4;float wind=sin(floraTime*${[.8,1.3,.48,1.1,.36,1.1,.5,.6][index]}+phase)*.08+sin(floraTime*.43-phase)*.025;transformed.x+=wind*position.y*position.y;vec2 away=origin-floraPointer.xz;float wake=(1.-smoothstep(.2,2.4,length(away)))*floraStrength;transformed.xz+=away/max(.1,length(away))*wake*position.y*.25;`);
       };
       material.customProgramCacheKey=()=>`coastal-flora-${kind}`;
       const mesh=new InstancedMesh(geometry,material,entries.length);mesh.name=`flora-${kind}`;mesh.frustumCulled=false;
@@ -96,8 +109,9 @@ export function Flora({runtime,paused,quality}:EnvironmentProps) {
     return {batches,uniforms,timer:undefined as ReturnType<typeof setTimeout>|undefined};
   },[]);
   useEffect(()=>{clearTimeout(flora.timer);return()=>{flora.timer=setTimeout(()=>flora.batches.forEach(b=>{b.geometry.dispose();b.material.dispose();b.mesh.dispose();}),0);};},[flora]);
-  useFrame(()=>{
-    flora.batches.forEach(batch=>{batch.mesh.count=Math.ceil(batch.maximum*(quality==='high'?1:quality==='medium'?.7:.4));});
+  useFrame(({camera})=>{
+    const detail=camera.position.y>95?.5:camera.position.y>65?.75:1;
+    flora.batches.forEach(batch=>{batch.mesh.count=Math.ceil(batch.maximum*(quality==='high'?1:quality==='medium'?.7:.4)*detail);});
     if(paused)return;flora.uniforms.time.value=runtime.current.elapsed;flora.uniforms.pointer.value.fromArray(runtime.current.pointerWorld);flora.uniforms.strength.value=runtime.current.pointerActive?1:0;
   });
   return <group name="coastal-flora" dispose={null}>{flora.batches.map(batch=><primitive key={batch.mesh.uuid} object={batch.mesh}/>)}</group>;

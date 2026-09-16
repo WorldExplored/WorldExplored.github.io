@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { world } from '../../content/world';
 import { useFrame } from '@react-three/fiber';
 import { BoxGeometry, BufferGeometry, CapsuleGeometry, CatmullRomCurve3, CylinderGeometry, ExtrudeGeometry, Group, InstancedMesh, Mesh, MeshPhysicalMaterial, Object3D, Shape, SphereGeometry, TorusGeometry, TubeGeometry, Vector3 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -9,9 +10,13 @@ import { cityDocks, cityFerryDistance, cityTurbines, createCityFerryRoute, write
 import { terrainHeight } from './terrain';
 import { GardenFountain } from './GardenFountain';
 import type { EnvironmentProps } from './Water';
+import { createTownInteractionState, type TownInteractionState } from './townInteractionState';
+import { TownInteractions } from './TownInteractions';
+import { createTownMechanisms } from './TownMechanisms';
 
-function createCityLife(stationRoute: CityTransitRoute) {
+export function createCityLife(stationRoute: CityTransitRoute) {
   const root = new Group(); root.name = 'operating-city-infrastructure';
+  const mechanisms = createTownMechanisms(stationRoute); root.add(mechanisms.root);
   const geometryResources = new Set<BufferGeometry>();
   const materials = {
     white: new MeshPhysicalMaterial({ color: '#f3fff6', roughness: .4, metalness: .03, clearcoat: .3, clearcoatRoughness: .2 }),
@@ -68,6 +73,7 @@ function createCityLife(stationRoute: CityTransitRoute) {
   add('city-public-infrastructure', merged(fixed), materials.white);
   add('city-dock-guide-stripes', merged(water), materials.aqua);
 
+  const solarHeading = Math.atan2(-world.lighting.sunPosition[0], -world.lighting.sunPosition[2]);
   const panels: Array<{ x: number; y: number; z: number; yaw: number; width: number; depth: number; phase: number }> = [];
   const solarSupports:BufferGeometry[]=[];
   for (const mount of cityRoofMounts) {
@@ -103,11 +109,21 @@ function createCityLife(stationRoute: CityTransitRoute) {
   wake.castShadow = false;
   const dummy = new Object3D(); const ferryPosition = new Vector3(); const ferryTangent = new Vector3();
   let disposeTimer: ReturnType<typeof setTimeout> | undefined;
-  const update = (time: number, stationRoute: CityTransitRoute) => {
-    for (let index = 0; index < rotors.length; index++) rotors[index].rotation.z = time * cityTurbines[index].rate + cityTurbines[index].phase;
+  let displayedTime = 0; let detail = 1;
+  const idleControls = createTownInteractionState();
+  const update = (elapsed: number, stationRoute: CityTransitRoute, controls: TownInteractionState = idleControls, paused = false) => {
+    if (!paused) displayedTime = elapsed;
+    const time = displayedTime;
+    mechanisms.update(time, controls, paused, detail);
+    for (let index = 0; index < rotors.length; index++) {
+      rotors[index].rotation.z = time * cityTurbines[index].rate + cityTurbines[index].phase;
+      rotors[index].rotation.y = index === 0 ? controls.states.wind.amount * .32 : 0;
+    }
     for (let index = 0; index < panels.length; index++) {
       const panel = panels[index];
-      dummy.position.set(panel.x, panel.y, panel.z); dummy.rotation.set(-.13 + Math.sin(time * .13 + panel.phase) * .055, panel.yaw, 0, 'YXZ'); dummy.scale.set(panel.width, 1, panel.depth); dummy.updateMatrix();
+      const response = controls.states.solar.amount;
+      const heading = Math.max(-.6, Math.min(.6, solarHeading - panel.yaw));
+      dummy.position.set(panel.x, panel.y, panel.z); dummy.rotation.set((-.13 + Math.sin(time * .13 + panel.phase) * .055) * (1 - response) - .16 * response, panel.yaw + heading * response, 0, 'YXZ'); dummy.scale.set(panel.width, 1, panel.depth); dummy.updateMatrix();
       frames.setMatrixAt(index, dummy.matrix); cells.setMatrixAt(index, dummy.matrix);
     }
     frames.instanceMatrix.needsUpdate = true; cells.instanceMatrix.needsUpdate = true;
@@ -118,7 +134,7 @@ function createCityLife(stationRoute: CityTransitRoute) {
       dummy.position.set(lift.x,lift.base+.485+eased*(lift.height-.8),lift.z); dummy.rotation.set(0,lift.yaw,0); dummy.scale.set(1, 1, 1); dummy.updateMatrix(); pods.setMatrixAt(index, dummy.matrix);
     }
     pods.instanceMatrix.needsUpdate = true;
-    materials.station.emissiveIntensity = .03 + cityStationActivity(stationRoute, time) * .6;
+    materials.station.emissiveIntensity = .03 + cityStationActivity(stationRoute, time) * .6 + controls.states.station.amount * .8;
     writeCityFerryPose(ferryRoute, time, ferryPosition, ferryTangent);
     ferry.position.copy(ferryPosition); ferry.rotation.y = Math.atan2(ferryTangent.x, ferryTangent.z);
     const speed = ((cityFerryDistance(ferryRoute, time + .02) - cityFerryDistance(ferryRoute, time) + ferryRoute.length) % ferryRoute.length) / .02;
@@ -126,13 +142,14 @@ function createCityLife(stationRoute: CityTransitRoute) {
     wake.visible = wakeStrength > .015; materials.wake.opacity = .22 * wakeStrength;
   };
   update(0, stationRoute);
-  return { root, update, setQuality(quality: EnvironmentProps['quality']) { ferry.visible = quality !== 'low'; pods.visible = quality === 'high'; }, retain() { clearTimeout(disposeTimer); return () => { disposeTimer = setTimeout(() => { geometryResources.forEach(geometry => geometry.dispose()); Object.values(materials).forEach(material => material.dispose()); }, 0); }; } };
+  return { root, update, setQuality(quality: EnvironmentProps['quality']) { detail = quality === 'high' ? 1 : quality === 'medium' ? .65 : .35; ferry.visible = quality !== 'low'; pods.visible = quality === 'high'; }, retain() { clearTimeout(disposeTimer); return () => { disposeTimer = setTimeout(() => { mechanisms.dispose(); geometryResources.forEach(geometry => geometry.dispose()); root.traverse(object => { if (object instanceof InstancedMesh) object.dispose(); }); Object.values(materials).forEach(material => material.dispose()); }, 0); }; } };
 }
 
 export function CityLife({ runtime, paused, quality, route }: EnvironmentProps & { route: CityTransitRoute }) {
   const [city] = useState(() => createCityLife(route));
+  const [controls] = useState(createTownInteractionState);
   useEffect(() => city.retain(), [city]);
   useEffect(() => city.setQuality(quality), [city, quality]);
-  useFrame(() => { if (!paused) city.update(runtime.current.elapsed, route); });
-  return <><primitive object={city.root} dispose={null} /><GardenFountain runtime={runtime} paused={paused} quality={quality} /></>;
+  useFrame((_, delta) => { controls.advance(delta, paused); city.update(runtime.current.elapsed, route, controls, paused); });
+  return <><primitive object={city.root} dispose={null} /><GardenFountain runtime={runtime} paused={paused} quality={quality} controls={controls} /><TownInteractions controls={controls} /></>;
 }

@@ -147,5 +147,5 @@ export function WorldCanvas(props: WorldProps) {
       document.removeEventListener('pointerleave', leave); document.removeEventListener('focusin', focus); document.removeEventListener('pointerover', focus);
     };
   }, []);
-  return <div className="canvas-host" aria-hidden="true" data-quality={tier} data-environment={stage === 5 && plantsReady ? 'complete' : 'initializing'} data-motion={props.paused ? 'stopped' : 'active'} style={{ background: world.lighting.horizon }}><canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block', touchAction: 'none' }} /></div>;
+  return <div className="canvas-host" data-quality={tier} data-environment={stage === 5 && plantsReady ? 'complete' : 'initializing'} data-motion={props.paused ? 'stopped' : 'active'} style={{ background: world.lighting.horizon }}><canvas aria-hidden="true" ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block', touchAction: 'none' }} /></div>;
 }

@@ -10,7 +10,10 @@ import { useFrame } from '@react-three/fiber';
 import { BufferGeometry, CatmullRomCurve3, Color, DataTexture, DoubleSide, Float32BufferAttribute, InstancedBufferAttribute, InstancedMesh, LinearFilter, LinearMipmapLinearFilter, MeshPhysicalMaterial, Object3D, Points, PointsMaterial, Raycaster, RepeatWrapping, ShaderMaterial, SRGBColorSpace, SphereGeometry, TubeGeometry, Vector2, Vector3 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { world, type SceneRuntime } from '../../content/world';
-import { createLandscapePlan, generatePlantPositions, generatePlantPositionsAsync, archipelagoGeometry, pathGeometry, seededRandom, vegetationSuitability, landDistance, terrainMeshHeight, terrainSlope, type LandscapePlan, type PlantPosition } from './terrain';
+import { createLandscapePlan, generatePlantPositions, generatePlantPositionsAsync, archipelagoGeometry, seededRandom, vegetationSuitability, landDistance, terrainMeshHeight, terrainSlope, type LandscapePlan, type PlantPosition } from './terrain';
+import { createTownLandscape } from './TownLandscape';
+import { createShoreDetails } from './ShoreDetails';
+import { createCoastalRocks } from './coastalRocks';
 import { updateCloudResponses } from './clouds';
 import { shorelineWaveGLSL } from './waves';
 import { makeClouds, writeCloudMatrices } from './CloudSurface';
@@ -124,8 +127,8 @@ function makePlants(plan: LandscapePlan, flowers: boolean, prepared?: PlantPosit
   const colors = new Float32Array(maximum * 3);
   const transform = new Object3D();
   const tint = new Color();
-  const dark = new Color(world.colors.grassDark);
-  const light = new Color(world.colors.grassLight);
+  const dark = new Color('#42632f');
+  const light = new Color('#839548');
   const random = seededRandom(flowers ? 713 : 914);
   const occupied = new Uint16Array(160 * 160);
   for (let index = 0; index < maximum; index++) {
@@ -149,7 +152,7 @@ function makePlants(plan: LandscapePlan, flowers: boolean, prepared?: PlantPosit
   return { mesh, geometry, material, positions, occupied };
 }
 
-function meadowTexture() {
+function mineralTexture() {
   const size = 512;
   const pixels = new Uint8Array(size * size * 4);
   const random = seededRandom(1723);
@@ -158,13 +161,6 @@ function meadowTexture() {
     pixels[offset] = Math.min(255, value); pixels[offset + 1] = Math.min(255, value); pixels[offset + 2] = Math.min(255, value); pixels[offset + 3] = 255;
   }
   for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) pixel(x, y, 176 + random() * 38);
-  // Dense curved fibers give the ground the same fine scale as the foreground blades.
-  for (let blade = 0; blade < 24000; blade++) {
-    const x = Math.floor(random() * size); const y = Math.floor(random() * size);
-    const length = 3 + Math.floor(random() * 9); const lean = (random() - .5) * 5;
-    const shade = 145 + random() * 108;
-    for (let step = 0; step < length; step++) pixel(x + Math.round(lean * (step / length) ** 2), y + step, shade + step / length * 8);
-  }
   const texture = new DataTexture(pixels, size, size);
   // Pixel values describe display-referred fiber colors; Three decodes them before lighting.
   texture.colorSpace = SRGBColorSpace;
@@ -227,7 +223,6 @@ function treeGeometry() {
 
 function makeLandscape(plan: LandscapePlan) {
   const ground = archipelagoGeometry();
-  const path = pathGeometry(plan.paths);
   const diagnostics = process.env.NODE_ENV !== 'production' && typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('vegetation');
   if (diagnostics) {
     const positions = ground.getAttribute('position'); const colors = ground.getAttribute('color'); const tint = new Color();
@@ -236,14 +231,14 @@ function makeLandscape(plan: LandscapePlan) {
       tint.set(landDistance(x, z) < 1.1 ? '#199ed4' : suitable <= 0 ? '#ec7354' : suitable < .95 ? '#ffdb52' : '#38ff62'); colors.setXYZ(index,tint.r,tint.g,tint.b);
     }
   }
-  const texture = meadowTexture();
+  const texture = mineralTexture();
   const material = new MeshPhysicalMaterial({ color: '#ffffff', specularIntensity: .32, vertexColors: true, map: texture, roughness: .94, clearcoat: 0, envMapIntensity: .2 });
   const shoreTime = { value: 0 };
   material.onBeforeCompile = shader => {
     shader.uniforms.uShoreTime = shoreTime;
     if (diagnostics) return;
-    shader.vertexShader = `attribute vec3 aTerrain; attribute float aExposure; varying float shoreExposure; varying vec3 vTerrain; varying vec2 groundXZ;\n${shader.vertexShader}`.replace('#include <begin_vertex>', '#include <begin_vertex>\n vTerrain = aTerrain; shoreExposure = aExposure; groundXZ = position.xz;');
-    shader.fragmentShader = `uniform float uShoreTime; varying float shoreExposure; varying vec3 vTerrain; varying vec2 groundXZ;
+    shader.vertexShader = `attribute vec3 aTerrain; attribute vec3 aEcology; attribute float aPaving; varying vec3 ecology; varying float paving; attribute float aExposure; varying float shoreExposure; varying vec3 vTerrain; varying vec2 groundXZ;\n${shader.vertexShader}`.replace('#include <begin_vertex>', '#include <begin_vertex>\n vTerrain = aTerrain; ecology=aEcology; paving=aPaving; shoreExposure = aExposure; groundXZ = position.xz;');
+    shader.fragmentShader = `uniform float uShoreTime; varying vec3 ecology; varying float paving; varying float shoreExposure; varying vec3 vTerrain; varying vec2 groundXZ;
       ${shorelineWaveGLSL}
       float groundHash(vec2 p) { return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453); }
       float groundNoise(vec2 p) { vec2 c=floor(p), f=fract(p); f=f*f*(3.-2.*f); return mix(mix(groundHash(c),groundHash(c+vec2(1.,0.)),f.x),mix(groundHash(c+vec2(0.,1.)),groundHash(c+1.),f.x),f.y); }
@@ -253,44 +248,38 @@ function makeLandscape(plan: LandscapePlan) {
       float slope = vTerrain.z;
       float grain = groundNoise(groundXZ*39.);
       float broad = groundNoise(groundXZ*.62);
-      float grass = smoothstep(1.8,3.5,coast + (broad-.5)*.48) * smoothstep(.42,.72,elevation);
-      float wet = 1.-smoothstep(.10,.62,elevation);
+      float grass = ecology.x * (1.-smoothstep(.48,.86,slope));
+      float pathMask=1.-smoothstep(-.06,.10,paving);
+      float wet = 1.-smoothstep(.09,.40,elevation);
       float depth = max(0.,-elevation);
       float stone = smoothstep(.65,1.3,slope) * smoothstep(.5,1.2,elevation);
-      vec3 drySand = vec3(.75,.66,.43) * (.96 + grain*.06);
-      vec3 wetSand = vec3(.24,.30,.22) * (.96 + grain*.05);
+      vec3 drySand = vec3(.53,.43,.27) * (.90 + grain*.16);
+      vec3 wetSand = vec3(.19,.19,.14) * (.96 + grain*.05);
       vec3 sand = mix(drySand,wetSand,wet*.9);
-      float ripple = sin(groundXZ.x*16. + sin(groundXZ.y*2.3)*.7)*.014;
+      float ripple = sin(groundXZ.x*13. + groundXZ.y*7. + sin(groundXZ.y*2.3)*2.7)*.0025;
       sand += ripple*(1.-grass);
       vec3 seabed = mix(vec3(.55,.74,.60),vec3(.16,.43,.38),smoothstep(.4,3.5,depth));
       sand = mix(sand,seabed,smoothstep(0.,.6,depth));
       float wash = shoreWave(coast,groundXZ,uShoreTime,shoreExposure).y;
-      sand = mix(sand,vec3(.88,.97,.91),wash*.65);
-      vec3 meadow = mix(vec3(.033,.22,.007),vec3(.095,.32,.014),broad*.58);
-      meadow *= texture2D(map,vMapUv).rgb * .8 + .25;
-      vec3 soil = vec3(.20,.18,.075);
-      meadow = mix(meadow,soil,smoothstep(.43,.85,slope)*.5);
-      diffuseColor.rgb *= mix(mix(sand,meadow,grass),vec3(.28,.34,.29)*( .9 + broad*.2),stone);
+      sand = mix(sand,vec3(.73,.84,.80),wash*.22);
+      vec3 soil = mix(vec3(.22,.16,.095),vec3(.33,.25,.14),broad);
+      vec3 groundcover=mix(vec3(.055,.16,.026),vec3(.13,.25,.050),broad);
+      vec3 inland=mix(soil,groundcover,grass);
+      vec3 townGravel=vec3(.29,.28,.22)*(.91+grain*.12);
+      inland=mix(inland,mix(townGravel,groundcover,grass),ecology.z);
+      vec3 surface=mix(sand,inland,ecology.y);
+      surface=mix(surface,vec3(.23,.26,.22)*(.9+broad*.2),stone);
+      vec3 pavingColor=mix(vec3(.32,.30,.23),vec3(.25,.29,.28),ecology.z);
+      float joints=max(1.-smoothstep(.012,.025,abs(fract(groundXZ.x*.9)-.5)),1.-smoothstep(.012,.025,abs(fract(groundXZ.y*.9)-.5)));
+      pavingColor*=.96+grain*.08-joints*.055*ecology.z;
+      surface=mix(surface,pavingColor,pathMask);
+      diffuseColor.rgb *= surface;
       `).replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n roughnessFactor = mix(.94,.32,wet*(1.-grass)*(1.-smoothstep(.2,1.,depth)));');
   };
-  material.customProgramCacheKey = () => 'coastal-material-zones-v1';
-  const pathMaterial = new MeshPhysicalMaterial({ name: 'matte-limestone-path', color: '#d5d4bd', roughness: .89, metalness: 0, clearcoat: 0, side: DoubleSide, forceSinglePass: true, flatShading: true });
-  const rockGeometry = new SphereGeometry(1, 16, 12);
-  const rockVertices = rockGeometry.getAttribute('position');
-  for (let index = 0; index < rockVertices.count; index++) {
-    const x = rockVertices.getX(index); const y = rockVertices.getY(index); const z = rockVertices.getZ(index);
-    const relief = 1 + .10 * Math.sin(x * 8 + z * 3) * Math.cos(y * 7 - z * 4) + .06 * Math.cos(z * 9 + x * 3);
-    rockVertices.setXYZ(index, x * relief, y * relief, z * relief);
-  }
-  rockGeometry.computeVertexNormals();
-  const rockMaterial = new MeshPhysicalMaterial({ color: '#9dafa0', roughness: .88, clearcoat: .06, clearcoatRoughness: .7 });
-  const rocks = new InstancedMesh(rockGeometry, rockMaterial, plan.rocks.length);
-  rocks.name = 'shoreline-rocks';
-  rocks.castShadow = true;
-  rocks.receiveShadow = true;
-  const transform = new Object3D();
-  plan.rocks.forEach((rock, index) => { transform.position.set(rock.x, rock.y, rock.z); transform.scale.fromArray(rock.scale); transform.rotation.set(0, rock.rotation, .08); transform.updateMatrix(); rocks.setMatrixAt(index, transform.matrix); });
-  rocks.computeBoundingSphere();
+  material.customProgramCacheKey = () => 'coastal-biome-graded-ground-v2';
+  const rockResources=createCoastalRocks(plan.rocks),rocks=rockResources.root;
+  const shoreDetails=createShoreDetails(plan),townLandscape=createTownLandscape(plan);
+  const transform=new Object3D();
   const shellGeometry = new SphereGeometry(1, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2);
   const shellVertices = shellGeometry.getAttribute('position');
   for (let i = 0; i < shellVertices.count; i++) {
@@ -351,10 +340,10 @@ function makeLandscape(plan: LandscapePlan) {
     }
   });
   trunks.computeBoundingSphere(); crowns.computeBoundingSphere();
-  return { ground, path, material, pathMaterial, rocks, trunks, crowns, shells, canopyWind, shoreTime, dispose() {
-    [ground, path, rockGeometry, trunkGeometry, crownGeometry, shellGeometry].forEach(geometry => geometry.dispose());
-    [material, pathMaterial, rockMaterial, trunkMaterial, crownMaterial, shellMaterial].forEach(value => value.dispose());
-    texture.dispose(); shells.dispose(); rocks.dispose(); trunks.dispose(); crowns.dispose();
+  return { ground, material, rocks, trunks, crowns, shells, shoreDetails, townLandscape, canopyWind, shoreTime, dispose() {
+    [ground, trunkGeometry, crownGeometry, shellGeometry].forEach(geometry => geometry.dispose());
+    [material, trunkMaterial, crownMaterial, shellMaterial].forEach(value => value.dispose());
+    texture.dispose(); shoreDetails.dispose(); townLandscape.dispose(); shells.dispose(); rockResources.dispose(); trunks.dispose(); crowns.dispose();
   } };
 }
 
@@ -405,8 +394,7 @@ function TerrainSystem({ runtime, paused, quality }: EnvironmentProps) {
   useEffect(() => { landscape.canopyWind.strength.value = quality === 'low' ? 0 : 1; }, [landscape, quality]);
   return <group dispose={null}>
     <mesh geometry={landscape.ground} material={landscape.material} receiveShadow name="archipelago-land" />
-    <mesh geometry={landscape.path} material={landscape.pathMaterial} receiveShadow name="island-paths" />
-    <primitive object={landscape.shells} /><primitive object={landscape.rocks} /><primitive object={landscape.trunks} /><primitive object={landscape.crowns} />
+    <primitive object={landscape.shells} /><primitive object={landscape.shoreDetails.root} /><primitive object={landscape.townLandscape.root} /><primitive object={landscape.rocks} /><primitive object={landscape.trunks} /><primitive object={landscape.crowns} />
   </group>;
 }
 function PlantSystem({ runtime, paused, quality, positions, onReady }: EnvironmentProps & { positions?: PlantPosition[]; onReady?: () => void }) {

@@ -35,7 +35,7 @@ export function Landmark({ config, runtime, paused, onNavigate, children }: { co
   const clearHover = () => {
     if (runtime.current.hovered === config.id) { runtime.current.hovered = null; invalidate(); }
   };
-  const delegates = (event: { intersections?: { object: Object3D }[] }) => config.id === 'about' && intersectsSculpture(event);
+  const delegates = (event: { intersections?: { object: Object3D }[] }) => (config.id === 'about' && intersectsSculpture(event)) || (config.id === 'building' && (event.intersections?.some(hit => hit.object.name === 'lighthouse-lantern-hit') ?? false));
   const enter = (event: ThreeEvent<PointerEvent>) => {
     if (!delegates(event)) event.stopPropagation();
     cancelExit();

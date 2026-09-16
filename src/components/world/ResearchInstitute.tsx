@@ -1,7 +1,7 @@
 'use client';
 
 import { BoxGeometry, CylinderGeometry, ExtrudeGeometry, Path, Shape, SphereGeometry, type BufferGeometry } from 'three';
-import { FurnishedInterior, InteriorBuilder } from './InteriorKit';
+import { FurnishedInterior, InteriorBuilder, floorSlab, floorRectangle, floorEllipse } from './InteriorKit';
 import { combine, roundedBox, usePalette, useResources, type ModelProps } from './BuildingKit';
 
 const box = (width: number, height: number, depth: number, x: number, y: number, z: number) => new BoxGeometry(width, height, depth).translate(x, y, z);
@@ -24,7 +24,7 @@ function ring(radius: number, thickness: number, height: number, y: number, door
 /** A single-storey laboratory, glazed growing room and enclosed observatory. */
 export function makeResearchInterior() {
   const room = new InteriorBuilder();
-  room.box('wood', 2.97, .014, 3.12, -1.215, 1.067, -.015);
+  room.floor('research-lab-wood-floor',[floorRectangle(-1.215,-.015,2.97,3.12)],1.074,.014);
   // Window-side benches flank a clear central entrance aisle.
   room.table(-2.19, 1.077, .79, .72, 1.13, .59);
   room.box('paper', .3, .035, .38, -2.2, 1.712, .63);
@@ -137,8 +137,8 @@ export function ResearchInstitute(props: ModelProps) {
       plants.push(new SphereGeometry(0.22, 10, 6).scale(width / 0.44, 0.65, 0.55).translate(x, 1.35, z));
     }
     return {
-      foundation: box(5.98, 0.16, 4.0, 0, 0.91, 0),
-      floor: box(5.76, 0.07, 3.82, 0, 1.025, 0),
+      foundation: floorSlab('research-foundation',[floorRectangle(-1.215,-.015,3.41,3.53),floorEllipse(1.58,-.73,1.08),floorRectangle(1.68,1.1,2.29,1.64),floorRectangle(.51,-.73,.3,.88),floorRectangle(.51,1.05,.3,.88)],.99,.19,'foundation'),
+      floor: floorSlab('research-room-floors',[floorRectangle(-1.215,-.015,3.05,3.17),floorEllipse(1.58,-.73,.895),floorRectangle(1.68,1.1,2.01,1.36),floorRectangle(.52,-.73,.55,.75),floorRectangle(.52,1.05,.55,.74)],1.059,.069),
       walls: combine(walls),
       glazing: combine(panes),
       frames: combine(frames),
@@ -151,13 +151,14 @@ export function ResearchInstitute(props: ModelProps) {
       domeShutter: new SphereGeometry(1.082, 8, 20, -.32, .64, 0, Math.PI / 2).translate(1.58, 3.12, -0.73),
       entry: combine([
         roundedBox(1.25, 0.12, 0.46, 0.04).translate(-1.33, 2.61, 1.74),
-        box(1.13, 0.08, 0.28, -1.33, 1.03, 1.85),
+        floorSlab('research-door-threshold',[floorRectangle(-1.33,1.85,1.13,.28)],1.07,.27,'threshold'),
         box(0.055, 0.24, 0.065, -1.23, 1.72, 1.765),
       ]),
       service: combine([
         box(0.045, 1.21, 0.62, -2.925, 1.665, -0.94),
         box(0.2, 0.27, 0.02, -2.22, 1.47, -1.782),
       ]),
+      planterFootings: floorSlab('research-planter-footings',[floorRectangle(-2.35,1.8,.64,.28),floorRectangle(-.22,1.8,.55,.28)],1.055,.255,'threshold'),
       planters: combine(planters),
       plants: combine(plants),
     };
@@ -174,6 +175,7 @@ export function ResearchInstitute(props: ModelProps) {
     <mesh name="research-window-divisions" geometry={geometry.frames} material={material.edge} castShadow />
     <mesh name="research-entry" geometry={geometry.entry} material={material.edge} castShadow />
     <mesh name="research-service-and-lab-bench" geometry={geometry.service} material={material.navy} />
+    <mesh name="research-planter-footings" geometry={geometry.planterFootings} material={material.paving} receiveShadow />
     <mesh name="research-planters" geometry={geometry.planters} material={material.porcelain} castShadow />
     <mesh name="research-planting" geometry={geometry.plants} material={material.green} castShadow />
   </group>;

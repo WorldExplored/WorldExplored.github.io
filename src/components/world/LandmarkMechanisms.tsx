@@ -5,6 +5,7 @@ import { useFrame } from '@react-three/fiber';
 import { BoxGeometry, BufferGeometry, CapsuleGeometry, CatmullRomCurve3, CylinderGeometry, DoubleSide, ExtrudeGeometry, Group, MathUtils, Mesh, MeshPhysicalMaterial, Quaternion, Shape, SphereGeometry, TorusGeometry, TubeGeometry, Vector3 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { world, type LandmarkId, type SceneRuntime } from '@/content/world';
+import { lighthouseSignal } from './lighthouseSignal';
 
 const TAU = Math.PI * 2;
 type Motion = (time: number, response: number) => void;
@@ -77,14 +78,13 @@ export function createLandmarkMechanism(id: LandmarkId) {
       motion.push((time, response) => { wheel.rotation.z = (index ? -.12 : .085) * time + index * .8; mount.rotation.y = (index ? -.48 : .48) + Math.sin(time * .13 + index) * .06 + response * (index ? -.1 : .1); });
       supports.push(bar(new Vector3(x, 3.3, -.6), new Vector3(x, 6.55, -.15), .15));
     }
-    mesh(root, 'work-compute-supports', join(supports), 'white');
-    mesh(root, 'work-exchanger-roof-mount', new CylinderGeometry(.52,.68,.7,24).translate(.25,3.55,-.15), 'white');
+    supports.push(new CylinderGeometry(.52,.68,.7,24).translate(.25,3.55,-.15));
     const exchanger = armature('work-heat-exchanger', [.25, 5.25, -.15]);
     mesh(exchanger, 'work-exchanger-core', new CylinderGeometry(.44, .56, 2.7, 24), 'solar');
     mesh(exchanger, 'work-exchanger-fins', join(Array.from({ length: 9 }, (_, index) => new CylinderGeometry(.8, .8, .055, 32).translate(0, -1.1 + index * .28, 0))), 'white');
     motion.push(time => { exchanger.rotation.y = time * .19; });
     const loops = [-1, 1].map(side => new CatmullRomCurve3(Array.from({ length: 12 }, (_, index) => { const angle = index / 12 * TAU; return new Vector3(side * (4.8 + Math.cos(angle) * .05), 3.8 + Math.sin(angle) * 1.2, Math.cos(angle) * .65); }), true));
-    mesh(root, 'work-cooling-service-couplings', join([-1,1].flatMap(side=>[-.5,.5].map(z=>bar(new Vector3(side*4.3,3.2,z),new Vector3(side*4.8,3.2,z),.09)))), 'white');
+    supports.push(...[-1,1].flatMap(side=>[-.5,.5].map(z=>bar(new Vector3(side*4.3,3.2,z),new Vector3(side*4.8,3.2,z),.09))));
     mesh(root, 'work-transparent-cooling-conduits', join(loops.map(curve => new TubeGeometry(curve, 80, .12, 10, true))), 'glass');
     const capsules: Mesh[] = [];
     for (let index = 0; index < 4; index++) {
@@ -92,7 +92,8 @@ export function createLandmarkMechanism(id: LandmarkId) {
     }
     const tangent = new Vector3(); const up = new Vector3(0, 1, 0);
     motion.push(time => capsules.forEach((capsule, index) => { const curve = loops[index % 2]; const t = (time * .065 + Math.floor(index / 2) * .5) % 1; curve.getPointAt(t, capsule.position); curve.getTangentAt(t, tangent); capsule.quaternion.setFromUnitVectors(up, tangent); }));
-    mesh(root, 'work-service-rail', pipe([new Vector3(-3.6, 2.38, 2.25), new Vector3(0, 2.38, 2.6), new Vector3(3.6, 2.38, 2.25)], .045), 'white');
+    supports.push(pipe([new Vector3(-3.6, 2.38, 2.25), new Vector3(0, 2.38, 2.6), new Vector3(3.6, 2.38, 2.25)], .045));
+    mesh(root, 'work-compute-supports-and-service-rail', join(supports), 'white');
     const carriage = mesh(root, 'work-service-carriage', pod(.72, .23).rotateZ(Math.PI / 2), 'aqua');
     motion.push(time => { carriage.position.set(Math.sin(time * .23) * 3.35, 2.64, 2.6 - Math.pow(Math.sin(time * .23), 2) * .3); });
   }
@@ -128,9 +129,15 @@ export function createLandmarkMechanism(id: LandmarkId) {
   }
 
   if (id === 'building') {
+    materials.white.roughness = .55; materials.white.clearcoat = .1;
+    materials.gold.metalness = .7; materials.gold.roughness = .4; materials.gold.clearcoat = .08;
+    mesh(root, 'lighthouse-lamp-bearing', join([new CylinderGeometry(.32,.36,.11,24).translate(0,5.54,0),new CylinderGeometry(.065,.08,.31,16).translate(0,5.74,0)]), 'gold');
+    mesh(root, 'lighthouse-lens-support-cage', join([bar(new Vector3(-.36,5.58,0),new Vector3(-.36,6.37,0),.025),bar(new Vector3(.36,5.58,0),new Vector3(.36,6.37,0),.025),bar(new Vector3(-.36,6.37,0),new Vector3(.36,6.37,0),.025)]), 'gold');
     const fresnel = armature('lighthouse-rotating-fresnel-lens', [0, 6, 0]);
-    mesh(fresnel, 'lighthouse-fresnel-ridges', join(Array.from({ length: 9 }, (_, index) => { const y = (index - 4) * .065; const radius = .31 - Math.abs(index - 4) * .026; return new CylinderGeometry(radius, radius + .018, .06, 12).translate(0, y, 0); })), 'glass');
-    mesh(fresnel, 'lighthouse-lens-prism', new BoxGeometry(.12, .43, .23), 'aqua');
+    mesh(fresnel, 'lighthouse-fresnel-ridges', join(Array.from({ length: 15 }, (_, index) => { const y = (index - 7) * .038; const radius = .305 - Math.abs(index - 7) * .017; return new TorusGeometry(radius,.021,6,36).rotateX(Math.PI/2).translate(0,y,0); })), 'glass');
+    mesh(fresnel, 'lighthouse-lens-prism', new SphereGeometry(.105,20,12), 'aqua');
+    mesh(fresnel, 'lighthouse-lamp-reflector', new SphereGeometry(.24,24,16,0,TAU,0,Math.PI/2).rotateZ(-Math.PI/2).translate(.07,0,0), 'gold');
+    mesh(fresnel, 'lighthouse-lamp-wiring', bar(new Vector3(0,-.25,0),new Vector3(0,-.08,0),.018), 'black');
     motion.push((time, response) => { fresnel.rotation.y = time * .52 + response * .25; });
     mesh(root, 'lighthouse-sensor-mast', new CylinderGeometry(.024, .03, .62, 10).translate(0, 7.28, 0), 'white');
     const vane = armature('lighthouse-weather-vane', [0, 7.51, 0]);
@@ -146,7 +153,7 @@ export function createLandmarkMechanism(id: LandmarkId) {
     root.userData.response = response;
   };
   update(0, 0, 0);
-  return { root, update, dispose() { geometries.forEach(geometry => geometry.dispose()); Object.values(materials).forEach(material => material.dispose()); } };
+  return { root, update, setSignal(intensity: number) { if (id === 'building') materials.aqua.emissiveIntensity = world.lighting.lampEnabled ? .18 + Math.max(0, Math.min(1,intensity)) * 1.4 : 0; }, dispose() { geometries.forEach(geometry => geometry.dispose()); Object.values(materials).forEach(material => material.dispose()); } };
 }
 
 export function LandmarkMechanisms({ id, active, paused, runtime }: { id: LandmarkId; active: boolean; paused: boolean; runtime: MutableRefObject<SceneRuntime> }) {
@@ -154,8 +161,9 @@ export function LandmarkMechanisms({ id, active, paused, runtime }: { id: Landma
   const mounted = useRef(false);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; assembly.dispose(); }; }, [assembly]);
   useFrame((_, delta) => {
-    if (paused || !mounted.current) return;
-    assembly.update(runtime.current.elapsed, active ? 1 : runtime.current.hovered === id ? .5 : 0, delta);
+    if (!mounted.current) return;
+    if (!paused) assembly.update(runtime.current.elapsed, active ? 1 : runtime.current.hovered === id ? .5 : 0, delta);
+    if (id === 'building') assembly.setSignal(lighthouseSignal(runtime.current).intensity);
   });
   return <primitive object={assembly.root} dispose={null} />;
 }

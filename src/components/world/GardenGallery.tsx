@@ -1,8 +1,8 @@
 'use client';
 
 import { BoxGeometry, BufferGeometry, CylinderGeometry, ExtrudeGeometry, Shape, SphereGeometry, Vector3 } from 'three';
-import { FurnishedInterior, InteriorBuilder } from './InteriorKit';
-import { combine, platform, strut, surface, usePalette, useResources, type ModelProps } from './BuildingKit';
+import { FurnishedInterior, InteriorBuilder, floorSlab, floorRectangle } from './InteriorKit';
+import { combine, strut, surface, usePalette, useResources, type ModelProps } from './BuildingKit';
 
 function box(width: number, height: number, depth: number, x: number, y: number, z: number) {
   return new BoxGeometry(width, height, depth).translate(x, y, z);
@@ -10,8 +10,8 @@ function box(width: number, height: number, depth: number, x: number, y: number,
 
 export function makeGalleryInterior() {
   const room = new InteriorBuilder();
-  room.box('wood', 4.85, .018, .7, 0, 1.069, -1.7);
-  room.box('wood', .96, .018, 2.53, -1.95, 1.069, .01);
+  room.floor('about-gallery-wood-floor',[floorRectangle(0,-1.675,4.85,.63)],1.078);
+  room.floor('about-conservatory-wood-floor',[floorRectangle(-1.95,.01,.96,2.53)],1.078);
   for (const x of [-1.37, -.45, 1.99]) {
     room.shelf(x, 1.079, -1.91, .65, 1.38, .17);
     room.add('paper', new CylinderGeometry(.085, .065, .19, 12).translate(x, 2.572, -1.91));
@@ -36,16 +36,6 @@ export function makeGalleryInterior() {
 export function GardenGallery(props: ModelProps) {
   const material = usePalette(props, 'about');
   const geometry = useResources(() => {
-    const outline = new Shape();
-    outline.moveTo(-2.78, -1.9);
-    outline.lineTo(-2.5, -2.25);
-    outline.lineTo(2.5, -2.25);
-    outline.lineTo(2.78, -1.9);
-    outline.lineTo(2.78, 1.65);
-    outline.quadraticCurveTo(2.78, 2.15, 2.28, 2.15);
-    outline.lineTo(-2.28, 2.15);
-    outline.quadraticCurveTo(-2.78, 2.15, -2.78, 1.65);
-    outline.closePath();
 
     // The rear gallery and glazed western wing enclose two sides of an open court.
     const walls = [
@@ -121,8 +111,9 @@ export function GardenGallery(props: ModelProps) {
 
 
     return {
-      foundation: combine([platform(outline), new CylinderGeometry(.48, .55, .46, 32).translate(0, 1.22, 0)]),
-      floors: combine([box(5.2, 0.07, 0.94, 0, 1.025, -1.69), box(1.28, 0.07, 2.82, -1.95, 1.025, 0.08)]),
+      foundation: floorSlab('about-foundation',[floorRectangle(0,-1.69,5.22,.96),floorRectangle(-1.95,.12,1.3,2.86)],.99,.19,'foundation'),
+      courtSupports: combine([new CylinderGeometry(.48,.55,.65,32).translate(0,1.125,0),box(.18,.26,.16,2.05,.93,-.06),box(.18,.26,.16,2.05,.93,.76),box(.69,.26,.75,1.86,.93,1.48)]),
+      floors: floorSlab('about-room-floors',[floorRectangle(0,-1.675,4.86,.63),floorRectangle(-1.95,.01,.98,2.73)],1.059,.069),
       walls: combine(walls),
       galleryRoof: combine([box(5.3, 0.14, 1.12, 0, 3.35, -1.66), box(5.34, 0.07, 0.1, 0, 3.27, -1.09)]),
       glass: combine(glass),
@@ -130,7 +121,7 @@ export function GardenGallery(props: ModelProps) {
       conservatoryRoof,
       doors: combine(doors),
       entrance: combine(doorFrames),
-      thresholds: combine([box(1.14, 0.06, 0.4, -1.95, 1.03, 1.64), box(0.88, 0.04, 0.3, 1.195, 1.04, -1.14)]),
+      thresholds: floorSlab('about-door-thresholds',[floorRectangle(-1.95,1.64,1.14,.4),floorRectangle(1.195,-1.14,.88,.3)],1.06,.26,'threshold'),
       furnishings: combine(furnishings),
       planting: combine(plants),
     };
@@ -138,6 +129,7 @@ export function GardenGallery(props: ModelProps) {
   return <group name="about-gallery-conservatory" dispose={null}>
     <FurnishedInterior name="about-interior" build={makeGalleryInterior} />
     <mesh name="about-court-foundation" geometry={geometry.foundation} material={material.paving} receiveShadow />
+    <mesh name="about-court-furniture-footings" geometry={geometry.courtSupports} material={material.paving} receiveShadow />
     <mesh name="about-gallery-floors" geometry={geometry.floors} material={material.paving} receiveShadow />
     <mesh name="about-enclosing-walls" geometry={geometry.walls} material={material.porcelain} castShadow receiveShadow />
     <mesh name="about-gallery-roof" geometry={geometry.galleryRoof} material={material.porcelain} castShadow receiveShadow />

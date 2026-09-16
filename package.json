@@ -2,7 +2,7 @@
   "name": "srreyansh-sethi-portfolio",
   "version": "0.5.0",
   "private": true,
-  "description": "Srreyansh Sethi — ML systems, GPU performance and research.",
+  "description": "Srreyansh Sethi \u2014 ML systems, GPU performance and research.",
   "author": "Srreyansh Sethi",
   "license": "MIT",
   "repository": {
@@ -25,7 +25,7 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "check": "npm run lint && npm run typecheck && npm run build",
-    "test": "node --import tsx --test scripts/content.test.mjs scripts/world.test.tsx scripts/objects.test.tsx scripts/audio.test.tsx scripts/environment.test.mjs scripts/preferences.test.mjs scripts/rendering.test.ts scripts/camera.test.tsx scripts/clouds-hover.test.tsx scripts/city.test.tsx scripts/coastal.test.tsx scripts/wildlife.test.tsx scripts/mechanisms.test.tsx scripts/flora.test.tsx scripts/surf.test.tsx scripts/city-life.test.tsx scripts/bridges.test.ts scripts/startup.test.tsx scripts/seaweed.test.tsx scripts/rover.test.tsx scripts/fish-species.test.tsx scripts/city-architecture.test.ts scripts/interiors.test.tsx scripts/fountain.test.tsx scripts/station-access.test.tsx scripts/circulation.test.ts scripts/city-service.test.ts",
+    "test": "node --import tsx --test scripts/content.test.mjs scripts/world.test.tsx scripts/objects.test.tsx scripts/audio.test.tsx scripts/environment.test.mjs scripts/preferences.test.mjs scripts/rendering.test.ts scripts/camera.test.tsx scripts/clouds-hover.test.tsx scripts/city.test.tsx scripts/coastal.test.tsx scripts/wildlife.test.tsx scripts/mechanisms.test.tsx scripts/flora.test.tsx scripts/surf.test.tsx scripts/city-life.test.tsx scripts/bridges.test.ts scripts/startup.test.tsx scripts/seaweed.test.tsx scripts/rover.test.tsx scripts/fish-species.test.tsx scripts/city-architecture.test.ts scripts/interiors.test.tsx scripts/fountain.test.tsx scripts/station-access.test.tsx scripts/circulation.test.ts scripts/city-service.test.ts scripts/navigation.test.tsx scripts/floor-containment.test.tsx scripts/biome.test.ts scripts/lighthouse.test.tsx scripts/town-interactions.test.tsx",
     "sync:github": "node scripts/sync-github.mjs"
   },
   "dependencies": {

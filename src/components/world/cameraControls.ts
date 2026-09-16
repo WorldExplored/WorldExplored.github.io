@@ -3,49 +3,62 @@ import { createCityInfrastructureObstacles } from './cityInfrastructure';
 import { MathUtils, Ray, Vector3 } from 'three';
 import { landmarkFor, world, type CameraPose, type LandmarkId } from '../../content/world';
 import { cityBuildings, createCityTransitRoute } from './city';
-import { architectureFootprints, createLandscapePlan, terrainHeight } from './terrain';
+import { architectureFootprints, createLandscapePlan, terrainHeight, terrainMeshHeight } from './terrain';
 
 export const CAMERA_LIMITS = { minDistance: 8, maxDistance: 220, minPolarAngle: .28, maxPolarAngle: 1.43, minY: 3.5 };
+export const CAMERA_WORLD_BOUNDS = Object.freeze({ minX: -220, maxX: 190, minZ: -230, maxZ: 170, maxY: 230 });
+export const CAMERA_TARGET_BOUNDS = Object.freeze({ minX: -110, maxX: 80, minZ: -120, maxZ: 60, minY: -20, maxY: 24 });
+
+/** Mouse lines, page scrolling and trackpad pixels share one logarithmic zoom unit. */
+export function normalizedWheelZoom(delta: number, mode: number, viewportHeight: number) {
+  if (!Number.isFinite(delta)) return 0;
+  const pixels = delta * (mode === 1 ? 16 : mode === 2 ? viewportHeight : 1);
+  return MathUtils.clamp(pixels * .0011, -.32, .32);
+}
+
 export interface CameraObstacle { x: number; z: number; radius: number; top: number }
 const HEIGHTS: Record<LandmarkId, number> = { work: 11.6, research: 7, purdue: 4.3, about: 5, contact: 6.5, building: 7.8 };
 const CLEARANCE = 1.15;
 
+let obstacleCache: CameraObstacle[] | undefined;
+/** The world layout is immutable; share its conservative collision envelopes across flights. */
 export function cameraObstacles(): CameraObstacle[] {
-  return [
+  return obstacleCache ??= Object.freeze([
     ...BRIDGES.flatMap(bridge => bridge.samples.filter((_,i) => i % 4 === 0).map(({point}) => ({ x: point.x, z: point.z, radius: bridge.width/2 + CLEARANCE, top: point.y + bridge.railHeight + CLEARANCE }))),
     ...createCityInfrastructureObstacles().map(item => ({ x: item.x, z: item.z, radius: item.radius + CLEARANCE, top: item.base + item.height + CLEARANCE })),
     ...architectureFootprints().map(item => ({ x: item.x, z: item.z, radius: item.radius + CLEARANCE, top: terrainHeight(item.x, item.z) + HEIGHTS[item.id as LandmarkId] + CLEARANCE })),
     ...cityBuildings.map(item => ({ x: item.x, z: item.z, radius: item.radius + CLEARANCE, top: terrainHeight(item.x, item.z) + item.height + CLEARANCE })),
     ...createCityTransitRoute().curve.getPoints(100).map(point => ({ x: point.x, z: point.z, radius: 1.5, top: point.y + 2.2 })),
     ...createLandscapePlan().trees.map(item => ({ x: item.x, z: item.z, radius: item.radius + CLEARANCE, top: item.y + item.height + CLEARANCE })),
-  ];
+  ].map(obstacle => Object.freeze(obstacle))) as CameraObstacle[];
 }
 
 /** Keep the entire near plane clear of terrain and conservative structure envelopes. */
 export function constrainCameraPose(position: Vector3, target: Vector3, obstacles: readonly CameraObstacle[]) {
-  target.set(MathUtils.clamp(target.x, -110, 80), MathUtils.clamp(target.y, -20, 24), MathUtils.clamp(target.z, -120, 60));
-  let dx = position.x - target.x;
-  let dy = position.y - target.y;
-  let dz = position.z - target.z;
-  let radius = MathUtils.clamp(Math.hypot(dx, dy, dz), CAMERA_LIMITS.minDistance, CAMERA_LIMITS.maxDistance);
-  const theta = Math.atan2(dx, dz);
-  let phi = MathUtils.clamp(Math.atan2(Math.hypot(dx, dz), dy), CAMERA_LIMITS.minPolarAngle, CAMERA_LIMITS.maxPolarAngle);
-  // Raising the orbit over an obstruction preserves the user's bearing and avoids wedging at corners.
-  for (let iteration = 0; iteration < 5; iteration++) {
-    const horizontal = radius * Math.sin(phi);
-    position.set(target.x + horizontal * Math.sin(theta), target.y + radius * Math.cos(phi), target.z + horizontal * Math.cos(theta));
-    let floor = Math.max(CAMERA_LIMITS.minY, terrainHeight(position.x, position.z) + CLEARANCE);
-    for (const obstacle of obstacles) {
-      if (Math.hypot(position.x - obstacle.x, position.z - obstacle.z) < obstacle.radius) floor = Math.max(floor, obstacle.top);
-    }
-    if (position.y >= floor) break;
-    dy = floor - target.y + .001;
-    radius = Math.max(radius, dy / Math.cos(CAMERA_LIMITS.minPolarAngle));
-    phi = Math.max(CAMERA_LIMITS.minPolarAngle, Math.min(phi, Math.acos(MathUtils.clamp(dy / radius, -1, 1))));
+  const bounds = CAMERA_WORLD_BOUNDS, limits = CAMERA_TARGET_BOUNDS;
+  if (!Number.isFinite(position.x + position.y + position.z + target.x + target.y + target.z)) {
+    position.fromArray(world.overview.position); target.fromArray(world.overview.target);
   }
-  dx = radius * Math.sin(phi) * Math.sin(theta);
-  dz = radius * Math.sin(phi) * Math.cos(theta);
-  position.set(target.x + dx, target.y + radius * Math.cos(phi), target.z + dz);
+  target.set(MathUtils.clamp(target.x, limits.minX, limits.maxX), MathUtils.clamp(target.y, limits.minY, limits.maxY), MathUtils.clamp(target.z, limits.minZ, limits.maxZ));
+  const dx = position.x - target.x, dy = position.y - target.y, dz = position.z - target.z;
+  const theta = Math.atan2(dx, dz), bearingX = Math.sin(theta), bearingZ = Math.cos(theta);
+  let radius = MathUtils.clamp(Math.hypot(dx, dy, dz), CAMERA_LIMITS.minDistance, CAMERA_LIMITS.maxDistance);
+  let phi = MathUtils.clamp(Math.atan2(Math.hypot(dx, dz), dy), CAMERA_LIMITS.minPolarAngle, CAMERA_LIMITS.maxPolarAngle);
+  for (let iteration = 0; iteration < 8; iteration++) {
+    const sx = Math.sin(phi) * bearingX, sz = Math.sin(phi) * bearingZ, sy = Math.cos(phi);
+    // Limit distance along the chosen bearing; clipping axes independently would tilt the orbit.
+    let maximum = Math.min(CAMERA_LIMITS.maxDistance, (bounds.maxY - target.y) / sy);
+    if (Math.abs(sx) > 1e-9) maximum = Math.min(maximum, ((sx > 0 ? bounds.maxX : bounds.minX) - target.x) / sx);
+    if (Math.abs(sz) > 1e-9) maximum = Math.min(maximum, ((sz > 0 ? bounds.maxZ : bounds.minZ) - target.z) / sz);
+    radius = MathUtils.clamp(radius, CAMERA_LIMITS.minDistance, maximum);
+    position.set(target.x + radius * sx, target.y + radius * sy, target.z + radius * sz);
+    let floor = Math.max(CAMERA_LIMITS.minY, terrainMeshHeight(position.x, position.z) + CLEARANCE);
+    for (const obstacle of obstacles) if (Math.hypot(position.x - obstacle.x, position.z - obstacle.z) < obstacle.radius) floor = Math.max(floor, obstacle.top);
+    if (position.y >= floor) return;
+    const rise = floor - target.y + .001;
+    radius = Math.max(radius, rise / Math.cos(CAMERA_LIMITS.minPolarAngle));
+    phi = Math.max(CAMERA_LIMITS.minPolarAngle, Math.min(phi, Math.acos(MathUtils.clamp(rise / radius, -1, 1))));
+  }
 }
 
 /** Clip a fast wheel/pan step before it can cross a structure between rendered frames. */
@@ -76,15 +89,15 @@ export function intersectTerrainRay(ray: Ray, result: Vector3) {
   if (ray.direction.y >= -.015) return false;
   const far = Math.min(300, -ray.origin.y / ray.direction.y + 1.5);
   let near = 0;
-  // Bracket the first visible surface, including steep shoreline transitions.
+  // Sample the cached triangles actually rendered by the ground mesh, including graded paths.
   for (let distance = 1.5; distance <= far + 1.5; distance += 1.5) {
     let end = Math.min(distance, far);
     ray.at(end, result);
-    if (result.y <= Math.max(0, terrainHeight(result.x, result.z))) {
+    if (result.y <= Math.max(0, terrainMeshHeight(result.x, result.z))) {
       for (let iteration = 0; iteration < 14; iteration++) {
         const middle = (near + end) / 2;
         ray.at(middle, result);
-        if (result.y > Math.max(0, terrainHeight(result.x, result.z))) near = middle;
+        if (result.y > Math.max(0, terrainMeshHeight(result.x, result.z))) near = middle;
         else end = middle;
       }
       ray.at((near + end) / 2, result);

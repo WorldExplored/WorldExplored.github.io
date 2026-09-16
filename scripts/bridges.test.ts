@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { DoubleSide, Mesh, MeshBasicMaterial, Raycaster, Vector3 } from 'three';
 import { BRIDGES, bridgeHeightAt } from '../src/components/world/bridgePlan';
 import { createBridges } from '../src/components/world/Bridges';
-import { architectureFootprints, archipelagoGeometry, terrainHeight } from '../src/components/world/terrain';
+import { architectureFootprints, archipelagoGeometry, terrainHeight, terrainMeshHeight } from '../src/components/world/terrain';
 import { world } from '../src/content/world';
 
 const insideLanding = (x:number,z:number,bridge:typeof BRIDGES[number]) => bridge.landings.some(p=>Math.hypot(x-p.x,z-p.z)<=p.radius+.03);
@@ -31,7 +31,11 @@ test('actual bridge deck vertices clear final terrain triangles and every landma
           assert.ok(Math.abs(separation-bridge.railHeight)<.065,`${bridge.id} detached rail ${separation}`);
         }
       }
-      for(const landing of bridge.landings)assert.ok(Math.abs(terrainHeight(landing.x,landing.z)-(landing.top-.05))<1e-6);
+      for(const landing of bridge.landings){
+        // The approach is now the graded ground itself, meeting the pad top.
+        const sample=bridge.samples[landing===bridge.landings[0]?0:96],side=sample.normal;
+        for(const offset of [-.45,0,.45])assert.ok(Math.abs(terrainMeshHeight(landing.x+side.x*offset,landing.z+side.z*offset)-landing.top)<.005,`${bridge.id}: ground does not meet landing width`);
+      }
       for(const [i,landing] of bridge.landings.entries()){
         mesh.geometry.computeBoundingBox();
         const endpoint=bridge.samples[i?96:0].point;
