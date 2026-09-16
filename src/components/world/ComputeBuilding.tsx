@@ -1,13 +1,13 @@
 'use client';
 
-import { BoxGeometry, type BufferGeometry } from 'three';
+import { BoxGeometry, CylinderGeometry, type BufferGeometry } from 'three';
+import { FurnishedInterior, InteriorBuilder } from './InteriorKit';
 import { combine, roundedBox, usePalette, useResources, type ModelProps } from './BuildingKit';
 
 function makeComputeBuilding() {
   const walls: BufferGeometry[] = [];
   const frames: BufferGeometry[] = [];
   const windows: BufferGeometry[] = [];
-  const backing: BufferGeometry[] = [];
   const service: BufferGeometry[] = [];
   const planting: BufferGeometry[] = [];
   const solar: BufferGeometry[] = [];
@@ -20,19 +20,18 @@ function makeComputeBuilding() {
     for (const [y, height] of [[1.28, 0.44], [3.04, 0.3], [4.78, 0.3]]) {
       walls.push(box(2.85, height, 4.7, x, y, 0));
     }
-    walls.push(box(0.22, 3.86, 4.7, side * 1.52, 2.99, 0));
+    // Open connections from the atrium to both occupied wings.
+    for (const z of [-1.85, 1.85]) walls.push(box(0.22, 3.86, 0.22, side * 1.52, 2.99, z));
     for (const z of [-2.135, 2.135]) walls.push(box(0.22, 3.86, 0.43, side * 4.19, 2.99, z));
     for (const z of [-0.67, 0.67]) walls.push(box(0.22, 3.86, 0.18, side * 4.19, 2.99, z));
     // Solid rear walls and service recesses give the building a distinct back.
     walls.push(box(2.85, 3.86, 0.22, x, 2.99, -2.24));
     for (const [y, height] of [[2.195, 1.39], [3.91, 1.44]]) {
       windows.push(box(2.41, height, 0.08, x, y, 2.28));
-      backing.push(box(2.41, height, 0.06, x, y, 2.19));
       for (const offset of [-0.81, 0, 0.81]) frames.push(box(0.045, height, 0.13, x + offset, y, 2.32));
       // Side windows occupy real openings between structural piers.
       for (const z of [-1.34, 0, 1.34]) {
         windows.push(box(0.08, height, 1.16, side * 4.315, y, z));
-        backing.push(box(0.06, height, 1.16, side * 4.25, y, z));
         frames.push(box(0.12, height, 0.045, side * 4.4, y, z - 0.59));
         frames.push(box(0.12, height, 0.045, side * 4.4, y, z + 0.59));
       }
@@ -58,8 +57,6 @@ function makeComputeBuilding() {
     box(2.72, 1.71, 0.08, 0, 4.105, 2.35),
     box(0.37, 2.1, 0.08, -1.165, 2.11, 2.35),
     box(0.37, 2.1, 0.08, 1.165, 2.11, 2.35),
-    box(0.08, 3.9, 4.31, -1.4, 3.01, 0.095),
-    box(0.08, 3.9, 4.31, 1.4, 3.01, 0.095),
   ]);
   frames.push(box(2.9, 0.085, 0.14, 0, 3.205, 2.4), box(2.9, 0.1, 0.14, 0, 4.94, 2.4));
   for (const x of [-0.97, 0, 0.97]) frames.push(box(0.055, 1.73, 0.13, x, 4.085, 2.4));
@@ -93,22 +90,65 @@ function makeComputeBuilding() {
     box(2.23, 0.11, 0.68, 0, 3.275, 2.57),
   ]);
   return {
-    walls: combine(walls), frames: combine(frames), windows: combine(windows), backing: combine(backing),
+    walls: combine(walls), frames: combine(frames), windows: combine(windows),
     service: combine(service), planting: combine(planting), solar: combine(solar), hardware: combine(hardware),
     floors: combine(floors), roof, atrium, doors, entry,
   };
+}
+
+export function makeComputeInterior() {
+  const room = new InteriorBuilder();
+  for (const x of [-2.875, 2.875]) {
+    for (const floor of [1.135, 3.215]) {
+      room.box('wood', 2.59, .018, 4.05, x, floor, 0);
+      for (const dx of [-.59, .59]) {
+        room.table(x + dx, floor + .01, 1.56, 1.03, .48, .64);
+        room.monitor(x + dx, floor + .69, 1.56, Math.PI);
+        room.chair(x + dx, floor + .01, .98);
+      }
+      room.plant(x + .82, floor + .01, -.35, .86);
+      room.lamp(x, floor + 1.62, .8, 1.42);
+      room.shelf(x - .28, floor + .01, -1.88, 1.55, 1.02, .24);
+    }
+  }
+  for (const x of [-3.7, 3.7]) {
+    room.box('metal', .53, 1.38, .58, x, 1.83, -.85);
+    for (let row = 0; row < 7; row++) {
+      room.box('screen', .43, .12, .02, x, 1.26 + row * .175, -.547);
+      room.box('light', .06, .025, .025, x + .15, 1.28 + row * .175, -.531);
+    }
+    for (const dx of [-.35, .35]) {
+      room.add('pipe', new CylinderGeometry(.065, .065, 1.34, 10).translate(x + dx, 1.84, -.75));
+      room.add('coolant', new CylinderGeometry(.026, .026, 1.3, 8).translate(x + dx, 1.84, -.75));
+      room.rod('pipe', [x + dx, 2.5, -.75], [x, 2.5, -.75], .07);
+      room.rod('coolant', [x + dx, 2.5, -.75], [x, 2.5, -.75], .028);
+    }
+  }
+  // The lobby stays clear between the double doors and stair approach.
+  room.table(.77, 1.135, .75, .52, .44, .62);
+  room.monitor(.77, 1.81, .68);
+  room.plant(.82, 1.135, -.28, 1.1);
+  room.lamp(0, 4.94, .4, 1.18);
+  for (const x of [-1.31, -.49]) {
+    for (const i of [0, 3, 6, 10]) {
+      const y = 1.135 + (i + 1) * .188;
+      room.rod('metal', [x, y, 1.2 - i * .26], [x, y + .66, 1.2 - i * .26], .018);
+    }
+    room.rod('wood', [x, 1.98, 1.2], [x, 3.86, -1.4], .025);
+  }
+  return room.finish();
 }
 
 export function ComputeBuilding(props: ModelProps) {
   const geometry = useResources(makeComputeBuilding);
   const materials = usePalette(props, 'work');
   return <group name="work-compute-building" dispose={null}>
+    <FurnishedInterior name="work-interior" build={makeComputeInterior} />
     <mesh name="work-exterior-walls" geometry={geometry.walls} material={materials.porcelain} castShadow receiveShadow />
     <mesh name="work-roof" geometry={geometry.roof} material={materials.porcelain} castShadow receiveShadow />
     <mesh name="work-entry-threshold-and-lintel" geometry={geometry.entry} material={materials.porcelain} castShadow receiveShadow />
     <mesh name="work-floors-and-atrium-stair" geometry={geometry.floors} material={materials.paving} receiveShadow />
     <mesh name="work-window-frames" geometry={geometry.frames} material={materials.edge} castShadow receiveShadow />
-    <mesh name="work-window-recesses" geometry={geometry.backing} material={materials.windowBacking} />
     <mesh name="work-wing-windows" geometry={geometry.windows} material={materials.glass} />
     <mesh name="work-atrium-glazing" geometry={geometry.atrium} material={materials.glass} />
     <mesh name="work-entry-doors" geometry={geometry.doors} material={materials.glass} />

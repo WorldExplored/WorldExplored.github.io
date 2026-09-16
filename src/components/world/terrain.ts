@@ -1,13 +1,14 @@
+import { circulationPaths, entranceRiseAt } from './circulation';
 import { coastExposure } from './waves';
 import { BRIDGES, BRIDGE_LANDINGS, bridgeHeightAt } from './bridgePlan';
 import { cityInfrastructureFootprints } from './cityInfrastructure';
-import { BufferGeometry, CatmullRomCurve3, Float32BufferAttribute, Vector3 } from 'three';
+import { BufferGeometry, Float32BufferAttribute } from 'three';
 import { cityBuildings, createCityTransitRoute } from './city';
 import { world, type LandmarkId } from '../../content/world';
 
 export interface Footprint { id: string; x: number; z: number; radius: number }
 export interface PathPoint { x: number; z: number }
-export interface LandscapePath { bridgeId?: string; points: PathPoint[]; width: number; bridge?: boolean; elevated?: boolean }
+export interface LandscapePath { id?: string; startY?: number; endY?: number; bridgeId?: string; points: PathPoint[]; width: number; bridge?: boolean; elevated?: boolean }
 export interface LandscapeRock extends Footprint { y: number; scale: [number, number, number]; rotation: number }
 export interface LandscapeTree extends Footprint { y: number; height: number; rotation: number }
 export interface LandscapePlan { structures: Footprint[]; paths: LandscapePath[]; rocks: LandscapeRock[]; trees: LandscapeTree[] }
@@ -22,7 +23,7 @@ export const ISLANDS: readonly Island[] = [
   { id: 'city', x: -7, z: -78, rx: 29, rz: 18, phase: 4.1, beach: 3.1, hill: .55 },
 ];
 export const PLANT_REACH = .95;
-export const FOOTPRINT_RADII: Record<LandmarkId, number> = { work: 5.5, research: 3.8, purdue: 1.8, about: 3.5, contact: 3.2, building: 2.4 };
+export const FOOTPRINT_RADII: Record<LandmarkId, number> = { work: 5.5, research: 3.8, purdue: 3.05, about: 3.5, contact: 3.2, building: 2.4 };
 
 export function seededRandom(seed: number) {
   return () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
@@ -137,21 +138,7 @@ export function canPlacePlant(x: number, z: number, reach: number, plan: Landsca
 
 export function createLandscapePlan(): LandscapePlan {
   const structures = [...architectureFootprints(), ...cityInfrastructureFootprints, ...cityBuildings.map(item => ({ id: item.id, x: item.x, z: item.z, radius: item.radius }))];
-  const point = (id: LandmarkId): PathPoint => { const item = world.landmarks.find(landmark => landmark.id === id)!; return { x: item.position[0], z: item.position[2] }; };
-  const paths: LandscapePath[] = [
-    { width: 1.25, points: [{ x: -8, z: 3 }, { x: -3, z: 3 }, { x: 1, z: -3.8 }, { x: 2.67, z: -5.15 }] },
-    { width: 1.25, points: [{ x: 2.67, z: -5.15 }, { x: 7.5, z: -4.1 }, { x: 10, z: -5.5 }, { x: 12, z: -7 }] },
-    { width: 1.2, points: [point('about'), { x: -5.5, z: 24.1 }, { x: 5, z: 26 }, { x: 12, z: 25.05 }] },
-    { width: 1.25, points: [point('work'), { x: -6, z: 7 }] },
-    { width: 1.25, points: [{ x: -6, z: 18 }, { x: -4, z: 21.5 }, { x: -5.5, z: 24.1 }] },
-    { width: 1.25, points: [{ x: 21.7, z: -7 }, point('purdue')] },
-    ...BRIDGES.map(bridge => ({ width: bridge.width, bridge: true, bridgeId: bridge.id, points: bridge.samples.map(({point}) => ({x: point.x,z: point.z})) })),
-  ];
-  for (const path of paths) {
-    if (path.bridge) continue;
-    const curve = new CatmullRomCurve3(path.points.map(point => new Vector3(point.x, 0, point.z)));
-    path.points = curve.getPoints(20).map(point => ({ x: point.x, z: point.z }));
-  }
+  const paths: LandscapePath[] = circulationPaths();
   paths.push({ width: 2.2, elevated: true, points: createCityTransitRoute().curve.getPoints(80).map(point => ({ x: point.x, z: point.z })) });
   const rocks: LandscapeRock[] = []; const trees: LandscapeTree[] = []; const random = seededRandom(627);
   // A few coastal outcrops, with adjacent fragments rather than a necklace of stones.
@@ -241,25 +228,39 @@ export function archipelagoGeometry() {
   for (let i = 0; i < normals.count; i++) terrain.setZ(i, Math.hypot(normals.getX(i), normals.getZ(i)) / Math.max(.01, normals.getY(i)));
   return geometry;
 }
+const meshHeightSamples = new Map<string,number>();
+function latticeHeight(ix:number,iz:number) {
+  const key=`${ix},${iz}`;let value=meshHeightSamples.get(key);
+  if(value===undefined){value=terrainHeight(ix*.4,iz*.4);meshHeightSamples.set(key,value);}
+  return value;
+}
 /** Height on the same two triangles used by the ground lattice. */
 export function terrainMeshHeight(x: number, z: number) {
   const step = .4, ix = Math.floor(x / step), iz = Math.floor(z / step);
   const u = x / step - ix, v = z / step - iz;
-  const b = terrainHeight((ix + 1) * step, iz * step), c = terrainHeight(ix * step, (iz + 1) * step);
-  return u + v <= 1 ? terrainHeight(ix * step, iz * step) * (1 - u - v) + b * u + c * v
-    : terrainHeight((ix + 1) * step, (iz + 1) * step) * (u + v - 1) + b * (1 - v) + c * (1 - u);
+  const b = latticeHeight(ix+1,iz), c = latticeHeight(ix,iz+1);
+  return u + v <= 1 ? latticeHeight(ix,iz) * (1 - u - v) + b * u + c * v
+    : latticeHeight(ix+1,iz+1) * (u + v - 1) + b * (1 - v) + c * (1 - u);
 }
 export function pathHeight(path: LandscapePath, x: number, z: number) {
-  if (!path.bridge) return terrainMeshHeight(x, z) + .045;
+  if (!path.bridge) {
+    let base=terrainMeshHeight(x,z)+.045;
+    // The gallery court itself is a raised walking surface; paths cross its slab before descending.
+    if(path.id==='gallery-entrance'||path.id==='conservatory-entrance') {
+      const distance=Math.hypot(Math.max(-12.82-x,0,x+7.18),Math.max(20.72-z,0,z-25.18));
+      const t=Math.max(0,1-distance/.85);base=Math.max(base,base+(1.035-base)*t*t*(3-2*t));
+    }
+    return entranceRiseAt(path,x,z,base);
+  }
   return bridgeHeightAt(BRIDGES.find(bridge => bridge.id === path.bridgeId)!, x, z);
 }
 export function pathGeometry(paths: readonly LandscapePath[]) {
   const positions: number[] = []; const indices: number[] = [];
-  for (const path of paths.filter(path => !path.elevated && !path.bridge)) {
+  for (const [pathIndex,path] of paths.filter(path => !path.elevated && !path.bridge).entries()) {
     const samples: PathPoint[] = [];
     for (let segment = 1; segment < path.points.length; segment++) {
       const a = path.points[segment - 1]; const b = path.points[segment];
-      const steps = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) * 4));
+      const steps = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) * 12));
       for (let step = 0; step < steps; step++) samples.push({ x: a.x + (b.x - a.x) * step / steps, z: a.z + (b.z - a.z) * step / steps });
     }
     samples.push(path.points[path.points.length - 1]);
@@ -268,12 +269,32 @@ export function pathGeometry(paths: readonly LandscapePath[]) {
       const point = samples[index]; const before = samples[Math.max(0, index - 1)]; const after = samples[Math.min(samples.length - 1, index + 1)];
       const length = Math.max(.0001, Math.hypot(after.x - before.x, after.z - before.z));
       const nx = -(after.z - before.z) / length * path.width / 2; const nz = (after.x - before.x) / length * path.width / 2;
-      for (let across = 0; across <= 4; across++) {
-        const offset = 1 - across / 2; const x = point.x + nx * offset; const z = point.z + nz * offset;
-        positions.push(x, pathHeight(path, x, z) + .025, z);
-        if (index < samples.length - 1 && across < 4) { const n = start + index * 5 + across; indices.push(n, n + 5, n + 1, n + 1, n + 5, n + 6); }
+      for (let across = 0; across <= 12; across++) {
+        const offset = 1 - across / 6; const x = point.x + nx * offset; const z = point.z + nz * offset;
+        // Bounded millimeter separation prevents coplanar joins from flickering.
+        positions.push(x, pathHeight(path, x, z)+(pathIndex%3)*.002, z);
+        if (index < samples.length - 1 && across < 12) { const n = start + index * 13 + across; indices.push(n, n + 13, n + 1, n + 1, n + 13, n + 14); }
       }
     }
   }
-  const geometry = new BufferGeometry(); geometry.setAttribute('position', new Float32BufferAttribute(positions, 3)); geometry.setIndex(indices); geometry.computeVertexNormals(); return geometry;
+  // Close exposed ramp edges down into the same ground lattice used by the terrain.
+  const surfaceCount=positions.length/3;
+  for(let i=0;i<surfaceCount;i+=13) {
+    for(const edge of [0,12]) {
+      const top=(i+edge)*3,x=positions[top],z=positions[top+2];
+      positions.push(x,terrainMeshHeight(x,z)-.025,z);
+    }
+  }
+  // Each path remains independently capped, so disjoint streets never acquire connecting walls.
+  let row=0;
+  for(const path of paths.filter(path=>!path.elevated&&!path.bridge)) {
+    let rows=1;for(let i=1;i<path.points.length;i++)rows+=Math.max(1,Math.ceil(Math.hypot(path.points[i].x-path.points[i-1].x,path.points[i].z-path.points[i-1].z)*12));
+    for(let i=0;i<rows-1;i++)for(const side of [0,1]) {
+      const a=(row+i)*13+side*12,b=a+13,c=surfaceCount+(row+i)*2+side,d=c+2;
+      if(side===0)indices.push(a,c,b,b,c,d);else indices.push(a,b,c,b,d,c);
+    }
+    for(const i of [0,rows-1]) {const a=(row+i)*13,b=a+12,c=surfaceCount+(row+i)*2;indices.push(a,b,c,b,c+1,c);}
+    row+=rows;
+  }
+  const geometry = new BufferGeometry(); geometry.setAttribute('position', new Float32BufferAttribute(positions, 3)); geometry.setIndex(indices); geometry.computeVertexNormals(); geometry.userData.surfaceVertexCount=surfaceCount;geometry.userData.rowStride=13;return geometry;
 }

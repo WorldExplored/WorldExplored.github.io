@@ -21,7 +21,7 @@ export function createFloraSites() {
     [-16,20,4,'flower'],[-7,24,3,'flower'],[3,22,3,'flower'],[16,25,3,'flower'],[3,23,1.4,'broadleaf'],[-1,-11,1.6,'broadleaf'],[-4,-11,2,'flower'],
     [-15,1,3,'shrub'],[-4,4,3,'shrub'],[8,-3,2,'shrub'],[3,-13,3,'shrub'],[-23,-69,2,'shrub'],[2,-64,2,'shrub'],
   ];
-  for (let round = 0; round < 70; round++) for (const [ax,az,radius,kind] of anchors) {
+  for (let round = 0; round < 100; round++) for (const [ax,az,radius,kind] of anchors) {
     const angle = random()*Math.PI*2; const r=Math.sqrt(random())*radius; const x=ax+Math.cos(angle)*r; const z=az+Math.sin(angle)*r;
     const reach=kind==='broadleaf'?1.55:kind==='shrub'?1.3:1.0;
     if(vegetationSuitability(x,z,reach,plan)<.5)continue;

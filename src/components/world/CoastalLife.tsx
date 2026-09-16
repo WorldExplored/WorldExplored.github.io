@@ -1,77 +1,139 @@
 'use client';
 
 import { measureConstruction } from './renderDiagnostics';
-
 // Frame callbacks update persistent Three.js objects outside React rendering.
-/* eslint-disable react-hooks/immutability */
-
 import { useEffect, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { BufferGeometry, Color, Float32BufferAttribute, DoubleSide, InstancedMesh, MeshPhysicalMaterial, Object3D, SphereGeometry, Vector3 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { EnvironmentProps } from './Water';
-import { createSchoolFish, FISH_PER_SCHOOL, SCHOOL_COUNT, stepSchoolFish } from './fishSchools';
+import { createSchoolFish, FISH_SPECIES, stepSchoolFish } from './fishSchools';
 
 export function createFishHomes(): [number, number][] { return createSchoolFish().map(fish => [fish.position.x, fish.position.z]); }
 
-function finGeometry(vertices: number[]) {
+function finGeometry(vertices: number[], color: string) {
   const geometry = new BufferGeometry(); geometry.setAttribute('position', new Float32BufferAttribute(vertices, 3));
-  geometry.setAttribute('uv', new Float32BufferAttribute(new Float32Array(vertices.length / 3 * 2), 2));
+  const colors = []; const tint = new Color(color);
+  for (let i = 0; i < vertices.length / 3; i++) colors.push(tint.r, tint.g, tint.b);
+  geometry.setAttribute('color', new Float32BufferAttribute(colors, 3));
   geometry.setIndex(Array.from({ length: vertices.length / 3 }, (_, index) => index)); geometry.computeVertexNormals(); return geometry;
 }
-function fishBody(variant: number) {
-  const lengths = [.29, .26, .35]; const heights = [.063, .105, .07]; const widths = [.075, .085, .065];
-  const body = new SphereGeometry(1, 16, 10); const position = body.attributes.position;
-  for (let index = 0; index < position.count; index++) {
-    const x = position.getX(index); const taper = .78 + .22 * (x + 1) / 2;
-    position.setXYZ(index, x * lengths[variant], position.getY(index) * heights[variant] * taper, position.getZ(index) * widths[variant] * taper);
-  }
-  body.computeVertexNormals();
-  const fins = finGeometry([-.15,.035,0, -.08,heights[variant]+.07,0, .10,.04,0, .015,-.015,.04, -.10,-.025,.16, -.13,-.015,.035, .015,-.015,-.04, -.13,-.015,-.035, -.10,-.025,-.16]);
-  const geometry = mergeGeometries([body, fins])!; body.dispose(); fins.dispose(); return geometry;
+// A ring is [longitudinal position, vertical radius, lateral radius, vertical offset].
+// These profiles alter anatomy, rather than scaling one sphere into several colors.
+const PROFILES: readonly (readonly number[][])[] = [
+  [[-.21,.018,.025,0],[-.14,.092,.054,0],[-.025,.127,.077,.005],[.095,.103,.065,.012],[.18,.054,.041,0],[.205,.018,.021,-.014]],
+  [[-.40,.018,.018,0],[-.25,.044,.040,0],[-.03,.068,.057,.009],[.23,.055,.047,.005],[.36,.027,.024,-.01],[.40,.009,.014,-.012]],
+  [[-.26,.027,.022,0],[-.15,.155,.055,.006],[-.015,.218,.078,.01],[.12,.18,.069,.008],[.22,.076,.046,-.018],[.245,.018,.024,-.04]],
+  [[-.29,.025,.038,0],[-.19,.040,.065,.005],[-.02,.065,.135,.008],[.16,.055,.16,.008],[.27,.030,.097,-.012],[.30,.012,.051,-.016]],
+];
+function bodyTint(variant: number, x: number, angle: number) {
+  const dorsal = Math.cos(angle); const color = new Color();
+  if (variant === 0) return color.set(dorsal < -.35 ? '#d9e2b5' : Math.abs(Math.sin((x + .2) * 27)) < .40 ? '#235c66' : '#55b4a2');
+  if (variant === 1) return color.set(dorsal > .58 ? '#47727d' : dorsal < -.3 ? '#eef2df' : '#b8d9dd');
+  if (variant === 2) return color.set(dorsal > .1 ? '#e99125' : '#f3ce51');
+  const mottled = Math.sin(x * 79 + angle * 4) * Math.cos(angle * 7 - x * 42);
+  return color.set(dorsal < -.25 ? '#858574' : mottled > .25 ? '#666d54' : '#354b48');
 }
-
+export function createFishBodyGeometry(variant: number) {
+  const profile = PROFILES[variant]; const radial = variant === 3 ? 12 : 16; const vertices: number[] = []; const colors: number[] = []; const indices: number[] = [];
+  profile.forEach(([x, height, width, offset], ring) => {
+    for (let side = 0; side <= radial; side++) {
+      const angle = side / radial * Math.PI * 2; const y = Math.cos(angle);
+      // The bottom dweller has a broad head and a nearly flat ventral plane.
+      vertices.push(x, (variant === 3 && y < 0 ? y * .32 : y) * height + offset, Math.sin(angle) * width);
+      const tint = bodyTint(variant, x, angle); colors.push(tint.r, tint.g, tint.b);
+      if (ring && side) { const a = ring * (radial + 1) + side; indices.push(a, a - 1, a - radial - 2, a, a - radial - 2, a - radial - 1); }
+    }
+  });
+  // Close both small mouth and tail peduncle faces.
+  for (let side = 1; side < radial - 1; side++) { indices.push(0, side + 1, side); const last = (profile.length - 1) * (radial + 1); indices.push(last, last + side, last + side + 1); }
+  const body = new BufferGeometry(); body.setAttribute('position', new Float32BufferAttribute(vertices, 3)); body.setAttribute('color', new Float32BufferAttribute(colors, 3)); body.setIndex(indices); body.computeVertexNormals();
+  const dorsalVertices = [
+    [-.14,.06,0,-.10,.185,0,.055,.12,0, -.07,-.08,0,-.09,-.17,0,.07,-.08,0],
+    [-.18,.045,0,-.11,.17,0,.055,.065,0, -.25,-.03,0,-.20,-.09,0,-.12,-.04,0],
+    [-.20,.09,0,-.17,.29,0,.07,.19,0, -.19,-.08,0,-.15,-.27,0,.07,-.18,0],
+    [-.21,.035,0,-.14,.13,0,.09,.065,0, -.10,.063,0,.03,.15,0,.16,.065,0],
+  ][variant];
+  const fin = finGeometry(dorsalVertices, ['#397c78','#537b88','#9e6636','#425753'][variant]);
+  const geometry = mergeGeometries([body, fin])!; body.dispose(); fin.dispose();
+  geometry.name = `fish-body-${FISH_SPECIES[variant].id}`;
+  geometry.userData = { species: FISH_SPECIES[variant].id, profile: profile.map(ring => [...ring]), radialSegments: radial, pattern: FISH_SPECIES[variant].pattern, anatomy: ['rounded reef body and short triangular dorsal', 'long spindle and swept dorsal', 'deep disk with tall dorsal and anal sails', 'flat belly, broad head and paired dorsal fins'][variant] };
+  geometry.computeBoundingBox(); return geometry;
+}
+export function createFishTailGeometry(variant: number) {
+  const outlines = [
+    [[0,0],[-.13,.095],[-.12,-.095]],
+    [[0,0],[-.23,.145],[-.12,.024],[-.07,0],[-.12,-.024],[-.23,-.145]],
+    [[0,0],[-.16,.14],[-.20,.07],[-.20,-.07],[-.16,-.14]],
+    [[0,0],[-.10,.062],[-.20,.052],[-.225,0],[-.20,-.052],[-.10,-.062]],
+  ][variant];
+  const vertices: number[] = [];
+  for (let i = 1; i < outlines.length - 1; i++) vertices.push(outlines[0][0],outlines[0][1],0,outlines[i][0],outlines[i][1],0,outlines[i+1][0],outlines[i+1][1],0);
+  const geometry = finGeometry(vertices, ['#5aa78d','#577f8b','#a56724','#526450'][variant]);
+  geometry.name = `fish-tail-${FISH_SPECIES[variant].id}`; geometry.userData = { outline: outlines, topology: ['triangular fan','deep fork','wide scalloped fan','rounded paddle'][variant] }; return geometry;
+}
+export function createFishPectoralGeometry(variant: number, side: number) {
+  const shapes = [
+    [0,0,0,-.10,-.045,side*.10,-.07,0,side*.025],
+    [0,0,0,-.17,-.025,side*.13,-.12,0,side*.035],
+    [0,0,0,-.11,-.09,side*.14,-.14,.01,side*.045],
+    [0,0,0,-.18,-.025,side*.24,-.25,-.018,side*.17,0,0,0,-.25,-.018,side*.17,-.16,0,side*.025],
+  ];
+  const geometry = finGeometry(shapes[variant], ['#69b99c','#93afb4','#e5b442','#57694e'][variant]); geometry.name = `fish-pectoral-${FISH_SPECIES[variant].id}-${side}`; return geometry;
+}
 function createCoastalLife() {
-  const fishMaterial = new MeshPhysicalMaterial({ color: '#ffffff', roughness: .3, clearcoat: 1, clearcoatRoughness: .22, metalness: .10, side: DoubleSide });
   const states = createSchoolFish();
-  const bodies = [0, 1, 2].map(variant => {
-    const mesh = new InstancedMesh(fishBody(variant), fishMaterial, states.length / 3); mesh.name = variant === 0 ? 'shallow-water-fish' : `shallow-water-fish-${variant}`; mesh.frustumCulled = false; mesh.raycast = () => {}; return mesh;
+  const batches = FISH_SPECIES.map((kind, variant) => {
+    const members = states.filter(fish => fish.variant === variant);
+    const material = new MeshPhysicalMaterial({ color: '#ffffff', vertexColors: true, roughness: variant === 1 ? .29 : .56, metalness: variant === 1 ? .38 : .03, clearcoat: variant === 1 ? .32 : .08, side: DoubleSide });
+    function mesh(geometry: BufferGeometry, name: string, mat = material) {
+      const result = new InstancedMesh(geometry, mat, members.length); result.name = `fish-${kind.id}-${name}`; result.frustumCulled = false; result.raycast = () => {}; result.userData.species = kind.id; return result;
+    }
+    const body = mesh(createFishBodyGeometry(variant), 'body'); const tail = mesh(createFishTailGeometry(variant), 'tail');
+    const fins = [-1, 1].map(side => mesh(createFishPectoralGeometry(variant, side), `pectoral-${side}`));
+    const eyeX = [.15,.30,.175,.195][variant]; const eyeY = [.035,.025,.035,.052][variant]; const eyeZ = [.041,.030,.048,.09][variant];
+    const eyeParts = [-1,1].map(side => new SphereGeometry(variant === 1 ? .010 : .013, 8, 6).translate(eyeX, eyeY, side * eyeZ));
+    const eyeGeometry = mergeGeometries(eyeParts)!; eyeParts.forEach(part => part.dispose());
+    const eyeMaterial = new MeshPhysicalMaterial({ color: '#122a2a', roughness: .6 }); const eyes = mesh(eyeGeometry, 'eyes', eyeMaterial);
+    const glintMaterial = new MeshPhysicalMaterial({ color: '#d9ffff', emissive: '#81c9d4', emissiveIntensity: .10, transparent: true, opacity: .32, depthWrite: false });
+    const glints = variant === 1 ? mesh(new SphereGeometry(1, 8, 6).scale(.17,.007,.02), 'glints', glintMaterial) : null;
+    const meshes = [body, tail, ...fins, eyes, ...(glints ? [glints] : [])];
+    return { kind, variant, members, body, tail, fins, eyes, glints, meshes, materials: [material, eyeMaterial, glintMaterial] };
   });
-  const tailGeometry = finGeometry([0,0,0, -.16,0,-.10, -.105,0,0, 0,0,0, -.105,0,0, -.16,0,.10]);
-  const tails = new InstancedMesh(tailGeometry, fishMaterial, states.length); tails.name = 'school-fish-tails'; tails.frustumCulled = false; tails.raycast = () => {};
-  const eyeParts = [-1,1].map(side => new SphereGeometry(.013, 8, 6).translate(.20, .018, side * .055));
-  const eyeGeometry = mergeGeometries(eyeParts)!; eyeParts.forEach(part => part.dispose());
-  const eyeMaterial = new MeshPhysicalMaterial({ color: '#183d43', roughness: .7 });
-  const eyes = new InstancedMesh(eyeGeometry, eyeMaterial, states.length); eyes.name = 'school-fish-eyes'; eyes.frustumCulled = false; eyes.raycast = () => {};
-  const glintGeometry = new SphereGeometry(1, 10, 6).scale(.12, .012, .017);
-  const glintMaterial = new MeshPhysicalMaterial({ color: '#d9ffff', emissive: '#81c9d4', emissiveIntensity: .16, transparent: true, opacity: .45, depthWrite: false });
-  const glints = new InstancedMesh(glintGeometry, glintMaterial, states.length); glints.name = 'school-fish-glints'; glints.frustumCulled = false; glints.raycast = () => {};
-  const color = new Color();
-  states.forEach((fish, index) => {
-    color.set(['#70b6b0', '#b8d8d7', '#bba460'][fish.variant]); color.multiplyScalar(.87 + fish.member % 3 * .065);
-    bodies[fish.variant].setColorAt(fish.member * 3 + Math.floor(fish.schoolIndex / 3), color); tails.setColorAt(index, color);
-  });
-  const meshes = [...bodies, tails, eyes, glints];
-  return { bodies, tails, eyes, glints, meshes, states, transform: new Object3D(), detail: new Object3D(), disturbance: { camera: new Vector3(), pointer: null as readonly number[] | null, ripple: { x: 0, z: 0, serial: 0 } }, timer: undefined as ReturnType<typeof setTimeout> | undefined,
-    dispose() { meshes.forEach(mesh => { mesh.geometry.dispose(); mesh.dispose(); }); fishMaterial.dispose(); eyeMaterial.dispose(); glintMaterial.dispose(); } };
+  const meshes = batches.flatMap(batch => batch.meshes);
+  return { batches, meshes, transform: new Object3D(), detail: new Object3D(), disturbance: { camera: new Vector3(), pointer: null as readonly number[] | null, ripple: { x: 0, z: 0, serial: 0 } }, timer: undefined as ReturnType<typeof setTimeout> | undefined,
+    dispose() { meshes.forEach(mesh => { mesh.geometry.dispose(); mesh.dispose(); }); batches.forEach(batch => batch.materials.forEach(material => material.dispose())); } };
 }
 
 export function CoastalLife({ runtime, paused, quality }: EnvironmentProps) {
-  const life = useMemo(() => measureConstruction('fish-bridges', () => createCoastalLife()), []);
+  const life = useMemo(() => measureConstruction('fish-bridges', createCoastalLife), []);
   useEffect(() => { clearTimeout(life.timer); return () => { life.timer = setTimeout(() => life.dispose(), 0); }; }, [life]);
   useFrame(({ camera }, delta) => {
-    const state = runtime.current; const count = FISH_PER_SCHOOL[quality] * SCHOOL_COUNT;
-    life.bodies.forEach(mesh => { mesh.count = count / 3; }); life.tails.count = life.eyes.count = life.glints.count = count;
+    const state = runtime.current;
     life.disturbance.camera.copy(camera.position); life.disturbance.pointer = state.pointerActive ? state.pointerWorld : null; life.disturbance.ripple = state.ripple;
-    life.states.forEach((fish, index) => {
-      stepSchoolFish(fish, delta, life.disturbance, quality, paused);
-      const scale = .82 + fish.member % 4 * .11; const tailBeat = Math.sin(fish.time * (7 + fish.variant) + fish.member * 2.39) * (.11 + fish.scatterOut * .12);
-      life.transform.position.copy(fish.position); life.transform.rotation.set(0, fish.heading, fish.jumpPitch + Math.sin(fish.time * .8 + fish.member) * .025); life.transform.scale.setScalar(scale); life.transform.updateMatrix();
-      life.bodies[fish.variant].setMatrixAt(fish.member * 3 + Math.floor(fish.schoolIndex / 3), life.transform.matrix); life.eyes.setMatrixAt(index, life.transform.matrix);
-      life.detail.position.set(-[.24, .22, .30][fish.variant], 0, 0); life.detail.rotation.set(0, tailBeat, 0); life.detail.scale.set(1, 1, 1); life.detail.updateMatrix(); life.detail.matrix.premultiply(life.transform.matrix); life.tails.setMatrixAt(index, life.detail.matrix);
-      life.detail.position.set(0, [.065, .103, .07][fish.variant], 0); life.detail.rotation.set(0, 0, 0); life.detail.scale.setScalar(.02 + fish.glint * .70); life.detail.updateMatrix(); life.detail.matrix.premultiply(life.transform.matrix); life.glints.setMatrixAt(index, life.detail.matrix);
-    });
-    life.meshes.forEach(mesh => { mesh.instanceMatrix.needsUpdate = true; });
+    for (const batch of life.batches) {
+      let visible = 0; const { kind, variant } = batch;
+      for (const fish of batch.members) {
+        stepSchoolFish(fish, delta, life.disturbance, quality, paused);
+        if (fish.member >= kind.population[quality]) continue;
+        const index = visible++; const scale = .86 + fish.member % 4 * .055;
+        const beat = fish.time * (kind.tailRate + fish.scatterOut * 5) + fish.member * 2.39;
+        const tailBeat = Math.sin(beat) * (.24 + fish.scatterOut * .16);
+        const bodyYaw = Math.sin(beat - .6) * (variant === 3 ? .018 : .038);
+        life.transform.position.copy(fish.position); life.transform.rotation.set(fish.bank, fish.heading + bodyYaw, fish.jumpPitch + Math.sin(fish.time * .8 + fish.member) * .016, 'YXZ'); life.transform.scale.setScalar(scale); life.transform.updateMatrix();
+        batch.body.setMatrixAt(index, life.transform.matrix); batch.eyes.setMatrixAt(index, life.transform.matrix);
+        life.detail.position.set(-kind.tailLength, 0, 0); life.detail.rotation.set(0, tailBeat, 0); life.detail.scale.setScalar(1); life.detail.updateMatrix(); life.detail.matrix.premultiply(life.transform.matrix); batch.tail.setMatrixAt(index, life.detail.matrix);
+        batch.fins.forEach((fin, sideIndex) => {
+          const side = sideIndex === 0 ? -1 : 1;
+          life.detail.position.set([.08,.11,.07,.12][variant], variant === 3 ? .005 : -.015, side * [.047,.037,.052,.105][variant]);
+          life.detail.rotation.set(side * (.18 + Math.sin(beat * .63) * .27), 0, 0); life.detail.scale.setScalar(1); life.detail.updateMatrix(); life.detail.matrix.premultiply(life.transform.matrix); fin.setMatrixAt(index, life.detail.matrix);
+        });
+        if (batch.glints) {
+          life.detail.position.set(0, .061, 0); life.detail.rotation.set(0,0,0); life.detail.scale.setScalar(.02 + fish.glint * .7); life.detail.updateMatrix(); life.detail.matrix.premultiply(life.transform.matrix); batch.glints.setMatrixAt(index, life.detail.matrix);
+        }
+      }
+      batch.meshes.forEach(mesh => { mesh.count = visible; mesh.instanceMatrix.needsUpdate = true; });
+    }
   });
   return <group dispose={null} name="coastal-life">{life.meshes.map(mesh => <primitive key={mesh.name} object={mesh}/>)}</group>;
 }

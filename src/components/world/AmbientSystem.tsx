@@ -274,7 +274,7 @@ function makeLandscape(plan: LandscapePlan) {
       `).replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n roughnessFactor = mix(.94,.32,wet*(1.-grass)*(1.-smoothstep(.2,1.,depth)));');
   };
   material.customProgramCacheKey = () => 'coastal-material-zones-v1';
-  const pathMaterial = new MeshPhysicalMaterial({ color: '#e9fff1', roughness: .34, clearcoat: .65, clearcoatRoughness: .3 });
+  const pathMaterial = new MeshPhysicalMaterial({ name: 'matte-limestone-path', color: '#d5d4bd', roughness: .89, metalness: 0, clearcoat: 0, side: DoubleSide, forceSinglePass: true, flatShading: true });
   const rockGeometry = new SphereGeometry(1, 16, 12);
   const rockVertices = rockGeometry.getAttribute('position');
   for (let index = 0; index < rockVertices.count; index++) {

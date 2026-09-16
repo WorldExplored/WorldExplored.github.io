@@ -1,6 +1,7 @@
 import { CatmullRomCurve3, Vector3 } from 'three';
 
 export type CityArchetype = 'residential' | 'garden-office' | 'dome' | 'pavilion' | 'transit-hall';
+export type CityFamily = 'terraced-apartments' | 'narrow-mixed-use' | 'split-wings' | 'rounded-housing' | 'courtyard-block' | 'arched-apartments' | 'greenhouse-residences' | 'split-level-homes' | 'waterfront-rowhouses' | 'winter-glasshouse' | 'civic-gallery' | 'stacked-maisonettes' | 'public-station';
 export interface CityBuilding {
   id: string;
   x: number;
@@ -11,6 +12,7 @@ export interface CityBuilding {
   depth: number;
   rotation: number;
   archetype: CityArchetype;
+  family: CityFamily;
 }
 
 export const CITY_BASE_Y = .8;
@@ -27,12 +29,45 @@ const layouts: Array<[string, CityArchetype, number, number, number, number, num
   ['winter-garden', 'dome', -11, -69.5, 6, 4, 3.6, .08],
   ['waterfront-gallery', 'pavilion', 0, -69, 4.8, 3.2, 3.3, .08],
   ['waterfront-east', 'dome', 8, -68, 4.2, 3.4, 3.5, -.15],
-  ['transit-garden', 'transit-hall', -5, -68, 3.2, 2.8, 4.2, Math.PI / 2],
+  ['transit-garden', 'transit-hall', -5, -68, 3.2, 2.8, 4.8, Math.PI / 2],
 ];
 
-export const cityBuildings: readonly Readonly<CityBuilding>[] = Object.freeze(layouts.map(([id, archetype, x, z, width, depth, height, rotation]) => Object.freeze({
-  id, archetype, x, z, width, depth, height, rotation, radius: Math.hypot(width / 2, depth / 2) + .65,
+const families: readonly CityFamily[] = ['terraced-apartments', 'narrow-mixed-use', 'split-wings', 'rounded-housing', 'courtyard-block', 'arched-apartments', 'greenhouse-residences', 'split-level-homes', 'waterfront-rowhouses', 'winter-glasshouse', 'civic-gallery', 'stacked-maisonettes', 'public-station'];
+
+export const cityBuildings: readonly Readonly<CityBuilding>[] = Object.freeze(layouts.map(([id, archetype, x, z, width, depth, height, rotation], index) => Object.freeze({
+  id, archetype, family: families[index], x, z, width, depth, height, rotation, radius: Math.hypot(width / 2, depth / 2) + .65,
 })));
+
+export type CityPoint = readonly [number, number, number];
+export function cityLocalToWorld(building: Readonly<CityBuilding>, point: CityPoint): CityPoint {
+  const [x, y, z] = point; const c = Math.cos(building.rotation); const s = Math.sin(building.rotation);
+  return [building.x + x * c + z * s, CITY_BASE_Y + y, building.z - x * s + z * c];
+}
+
+// These are the actual open doorway thresholds, shared by architecture and circulation.
+export const cityEntrances = Object.freeze(cityBuildings.map(building => {
+  const local: CityPoint = building.family === 'public-station' ? [1.6, 2.32, 0] : [0, .24, building.depth / 2 + .08];
+  return Object.freeze({ building: building.id, local, world: cityLocalToWorld(building, local), width: building.family === 'public-station' ? 1.1 : .86, yaw: building.rotation + (building.family === 'public-station' ? Math.PI / 2 : 0) });
+}));
+
+export function cityEntranceLocal(building: Readonly<CityBuilding>): CityPoint {
+  return cityEntrances.find(entrance => entrance.building === building.id)!.local;
+}
+export function cityEntranceWorld(building: Readonly<CityBuilding>) {
+  const [x, y, z] = cityLocalToWorld(building, cityEntranceLocal(building));
+  return { x, y, z };
+}
+
+export const citySecondaryEntrances = Object.freeze(cityBuildings.filter(building => building.family === 'public-station').map(building => {
+  const local: CityPoint = [-.82, .33, building.depth / 2 - .05];
+  return Object.freeze({ building: building.id, local, world: cityLocalToWorld(building, local), width: .86, yaw: building.rotation });
+}));
+
+// Equipment sits on deliberately flat service roofs; curved and planted roofs have no panels.
+export const cityRoofMounts = Object.freeze(cityBuildings.filter(building => ['terraced-apartments', 'narrow-mixed-use', 'courtyard-block'].includes(building.family)).map(building => {
+  const local: CityPoint = [building.family === 'terraced-apartments' ? -.42 : 0, building.height - .2, -.35];
+  return Object.freeze({ building: building.id, local, world: cityLocalToWorld(building, local), yaw: building.rotation, width: building.width * .46, depth: building.depth * .4 });
+}));
 
 export interface CityTransitRoute { curve: CatmullRomCurve3; length: number; speed: number; duration: number; station: number }
 

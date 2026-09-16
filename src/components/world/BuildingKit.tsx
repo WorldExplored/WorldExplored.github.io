@@ -152,17 +152,17 @@ export function curvedWall(roof: Surface, edge: number, start: number, end: numb
 
 export function usePalette({ active, paused, runtime }: ModelProps, id: LandmarkId) {
   const [materials] = useState(() => ({
-    porcelain: new MeshPhysicalMaterial({ color: world.colors.porcelain, emissive: '#d7f8ff', emissiveIntensity: 0, roughness: 0.18, metalness: 0.015, clearcoat: 1, clearcoatRoughness: 0.065, envMapIntensity: 1.25, side: DoubleSide }),
-    edge: new MeshPhysicalMaterial({ name: 'architectural-trim', color: '#e4fbff', roughness: 0.32, metalness: 0.015, clearcoat: 0.9, clearcoatRoughness: 0.3, envMapIntensity: 1.15 }),
-    glass: new MeshPhysicalMaterial({ color: world.colors.glass, emissive: world.colors.cyan, emissiveIntensity: 0, roughness: 0.045, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.025, envMapIntensity: 1.5, transparent: true, opacity: 0.38, depthWrite: false, side: DoubleSide }),
-    facade: new MeshPhysicalMaterial({ color: '#47b9c9', roughness: 0.2, metalness: 0.025, clearcoat: 1, clearcoatRoughness: 0.14, envMapIntensity: 1, side: DoubleSide }),
-    windowBacking: new MeshPhysicalMaterial({ color: '#309dad', roughness: 0.13, metalness: 0.025, clearcoat: 1, clearcoatRoughness: 0.05, envMapIntensity: 1.3, side: DoubleSide }),
-    cyan: new MeshPhysicalMaterial({ color: world.colors.cyan, emissive: world.colors.cyan, emissiveIntensity: 0, roughness: 0.15, metalness: 0.02, clearcoat: 1, clearcoatRoughness: 0.06 }),
-    green: new MeshPhysicalMaterial({ color: '#429a08', roughness: 0.72, metalness: 0, clearcoat: 0.12, clearcoatRoughness: 0.45 }),
-    paving: new MeshPhysicalMaterial({ color: '#dcebd9', roughness: 0.48, metalness: 0, clearcoat: 0.3 }),
-    navy: new MeshPhysicalMaterial({ color: '#123a4a', roughness: 0.25, metalness: 0.035, clearcoat: 0.85, envMapIntensity: 1.1 }),
-    black: new MeshPhysicalMaterial({ color: '#202523', roughness: 0.27, metalness: 0.015, clearcoat: 0.85 }),
-    gold: new MeshPhysicalMaterial({ color: '#ddb858', roughness: 0.24, metalness: 0.12, clearcoat: 1, clearcoatRoughness: 0.09 }),
+    porcelain: new MeshPhysicalMaterial({ name: 'painted-ceramic-shell', color: world.colors.porcelain, emissive: '#d7f8ff', emissiveIntensity: 0, roughness: .36, metalness: .015, clearcoat: .28, clearcoatRoughness: .24, envMapIntensity: .75, side: DoubleSide }),
+    edge: new MeshPhysicalMaterial({ name: 'satin-aluminum-trim', color: '#a8babc', roughness: .43, metalness: .65, clearcoat: .08, envMapIntensity: .7 }),
+    glass: new MeshPhysicalMaterial({ name: 'clear-aqua-glazing', color: '#b5e7e8', emissive: world.colors.cyan, emissiveIntensity: 0, roughness: .055, metalness: 0, clearcoat: .45, clearcoatRoughness: .08, envMapIntensity: .7, transparent: true, opacity: .18, depthWrite: false, side: DoubleSide, thickness: .07, ior: 1.46 }),
+    facade: new MeshPhysicalMaterial({ name: 'architectural-window-glass', color: '#b4e3e5', roughness: .08, metalness: 0, clearcoat: .35, envMapIntensity: .65, transparent: true, opacity: .19, depthWrite: false, side: DoubleSide, thickness: .055, ior: 1.46 }),
+    windowBacking: new MeshPhysicalMaterial({ name: 'service-window-glass', color: '#9ecfd3', roughness: .15, metalness: 0, clearcoat: .2, envMapIntensity: .55, transparent: true, opacity: .24, depthWrite: false, side: DoubleSide }),
+    cyan: new MeshPhysicalMaterial({ name: 'molded-aqua-shell', color: world.colors.cyan, emissive: world.colors.cyan, emissiveIntensity: 0, roughness: .23, metalness: .02, clearcoat: .62, clearcoatRoughness: .16 }),
+    green: new MeshPhysicalMaterial({ name: 'matte-roof-planting', color: '#429a08', roughness: .88, metalness: 0, clearcoat: 0, envMapIntensity: .12 }),
+    paving: new MeshPhysicalMaterial({ name: 'limestone-foundation', color: '#c9c8b6', roughness: .9, metalness: 0, clearcoat: 0, envMapIntensity: .15 }),
+    navy: new MeshPhysicalMaterial({ name: 'painted-navy-metal', color: '#123a4a', roughness: .48, metalness: .25, clearcoat: .1, envMapIntensity: .5 }),
+    black: new MeshPhysicalMaterial({ name: 'dark-composite', color: '#202523', roughness: .72, metalness: .03, clearcoat: 0 }),
+    gold: new MeshPhysicalMaterial({ name: 'brushed-brass', color: '#b99a4c', roughness: .43, metalness: .72, clearcoat: .08, envMapIntensity: .65 }),
   }));
   const animated = useRef<typeof materials | null>(null);
   useEffect(() => {

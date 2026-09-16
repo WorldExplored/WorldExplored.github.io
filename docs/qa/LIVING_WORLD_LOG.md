@@ -46,3 +46,44 @@ The interface coordinates stayed stable through hydration/core readiness. Mobile
 ## Limits
 
 The world remains stylized. Fine machinery, wildlife and underwater plants require approaching them. The narrow mobile overview fits the primary islands at a smaller scale. Foreground vegetation and hills may occlude portions of buildings from some free-camera angles. Measurements use one desktop browser and a network fixture rather than physical mobile hardware. Local visual evidence is retained in the private release report; Pages verification is recorded with the release handoff.
+
+
+## Inhabited-world extension — 2026-09-16
+
+Built on stabilization release `910a3a1491564cb9c90fcc46139ab98b6a393ba8`. All five main buildings now have visible furnished rooms. The compute atrium is enclosed with transparent framed glazing; lab rooms, gallery/conservatory, reception and the enlarged academic hall have purpose-specific furnishings. The city has thirteen distinct silhouettes and thirty-one furnished window groups. Nine static finish batches retain a bounded draw budget.
+
+Four fish species use distinct body, tail and fin geometry with independent habitat and swimming parameters. The new open-basin fountain uses transparent animated streams, droplets, ripples and splash detail. Physical transmission was removed after profiling revealed an extra full-world render; reflected highlights and transparency remain. Materials now separate wood, fabric, stone, metal, glazing and selected glossy shells.
+
+An explicit circulation graph connects actual primary entrances, both bridge approaches, city housing, parks, station, streets and existing ferry docks. The lighthouse has a local entrance/court/overlook route. Ground path tops follow actual terrain triangles, with closed sides and raised entrance transitions. The gallery route clears its sculpture, bench and planter. The station has fifteen uniform steps between measured ground and platform elevations, closed risers, continuous rails and a top landing. Its raised canopy and attached arrival lights preserve platform headroom.
+
+Existing service pods now travel on visible guides behind two residences and meet grounded docks. The full 22-second cycle was sampled 441 times against actual building geometry: minimum clearance 0.306 m; rotating solar panels clear roofs by more than 0.053 m. No new freely flying machine was added. The garden rover retains its charging post and bounded route.
+
+### Final production measurements
+
+Individual quiet local trials with the final exported build; milliseconds. Interface means first contentful paint.
+
+| Trial | Interface | Core frame | Camera ready | Successful first drag | Full environment | Longest task through completion |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Original baseline cold | 128 | 2403 | — | — | 2403 | 1741 |
+| Original baseline warm | 92 | 2317 | — | — | 2317 | 1709 |
+| Final cold, 1440×900 | 68 | 943 | 952 | Not attempted | 2394 | 277 |
+| Final warm, 1440×900 | 68 | 767 | 777 | 1067 | 2291 | 254 |
+| Final cold network throttle, 390×844 | 388 | 1500 | 1509 | 1800 | 2944 | 241 |
+
+The network fixture adds 100 ms latency and limits each response to 6 Mbps, with desktop CPU and no CPU throttle. Cold JavaScript transfer is 432,329 bytes with gzip; decoded JavaScript is approximately 1.484 MB. Warm transfer is zero. The largest local chunk took 26.6 ms. Original baseline transfer was uncompressed, so transfer-size differences are not a code-size improvement.
+
+Final cold construction measures: coast field 15 ms, terrain/trees/paths 185 ms, city 22 ms, clouds 99 ms, flora sites 14 ms and wildlife 32 ms. Deterministic terrain-lattice samples and validated authored city routes remove repeated procedural work. The identity and navigation coordinates remain stable between initial layout and scene-ready; mobile font loading changes name width by five pixels without moving its origin. No ordinary-load fallback-document flash was observed.
+
+### Final checks and evidence
+
+- `npm run check` passes ESLint, strict TypeScript and the production static export. `npm test` passes all 143 tests.
+- New tests cover species silhouettes and long swimming simulations; furnished interiors; city material batches and bounds; final path triangles and entrance connections; station stair endpoints/headroom; fountain resource retention and reduced-motion poses; and complete service-lift/solar geometry cycles. Existing bridge, bird, crab, camera, input, content and rendering checks remain passing.
+- Path validation samples 72,878 top vertices and 133,416 triangles at four interior points each, with minimum terrain clearance greater than 0.016 m. Bridge checks continue to inspect actual final deck/rail/landing geometry.
+- Close-up evidence includes five furnished landmark interiors, twenty exterior views, both bridges from six positions, four station stair angles, city room depth and streets, grayscale fish silhouettes, species habitats, fountain motion, and the complete island/city path network. The private inspector imports repository geometry; dense foreground scenery is omitted for structural visibility, and water is hidden only for below-deck inspection. It is excluded from the export.
+- Responsive checks cover 1920×1080, 1440×900, 1024×768, 768×1024 and 390×844. No horizontal overflow; desktop/tablet dock links are approximately 91×75 px. Keyboard activation, Escape with focus return, mobile panel scrolling and Back/Forward were checked in the production browser. Touch ownership, pinch and cancellation remain covered by input tests; no physical phone was used.
+
+The scene is stylized, and fine fish/interior details require approaching them. A few close path junctions retain visible paving seams. Glass and fountain highlights use economical transparency/reflection rather than full-scene physical refraction. Local browser measurements do not establish performance on every mobile GPU.
+
+- Final uninterrupted production observation lasted 133 seconds: 726 diagnostic samples, one renderer/configuration, no context loss, black frame, scene error or unhandled error. Observed samples ranged from 54 to 60 fps, ending at 57 fps, 340 render calls and 1,679,038 triangles at high quality. Console clean.
+- Reduced-motion screenshots were byte-identical across 105 seconds and About navigation remained immediate. Private export fixtures verified Research content with WebGL unavailable and native Purdue hash navigation with JavaScript absent. No OS preferences were changed.
+- All 32 exported files returned HTTP 200. The private screenshot report includes the raw startup, renderer, console and route evidence.

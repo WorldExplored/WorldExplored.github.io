@@ -146,7 +146,7 @@ test('all six landmarks have finite geometry and localized lighting at every qua
         const material = mesh.material as MeshPhysicalMaterial;
         calls += material.transparent && material.side === DoubleSide && !material.forceSinglePass ? 2 : 1;
       }
-      assert.ok(triangles < 180000 && calls < 140);
+      assert.ok(triangles < 100000 && calls < 185);
       const contact = renderer.scene.findByProps({ name: 'model-contact' });
       const contactMaterials = contact.findAll(node => node.instance.type === 'Mesh').map(node => (node.instance as Mesh).material as MeshPhysicalMaterial);
       const unrelated = renderer.scene.findByProps({ name: 'model-work' }).findAll(node => node.instance.type === 'Mesh').map(node => (node.instance as Mesh).material as MeshPhysicalMaterial);
@@ -188,7 +188,7 @@ test('disabled lamp illumination stays off during selection', async () => {
 
 test('landmarks fit their planting footprints and preserve the intended hierarchy', async () => {
   const runtime = { current: createSceneRuntime() };
-  const limits: Record<LandmarkId, number> = { work: 5.5, research: 3.8, purdue: 1.8, about: 3.5, contact: 3.2, building: 2.4 };
+  const limits: Record<LandmarkId, number> = { work: 5.5, research: 3.8, purdue: 3.05, about: 3.5, contact: 3.2, building: 2.4 };
   const heightLimits: Record<LandmarkId, number> = { work: 11.6, research: 7, purdue: 4.3, about: 5, contact: 6.5, building: 7.8 };
   const bounds: Record<string, { radius: number; width: number; depth: number; top: number; bottom: number; triangles: number }> = {};
   for (const landmark of world.landmarks) {
@@ -226,39 +226,23 @@ test('landmarks fit their planting footprints and preserve the intended hierarch
   console.log(JSON.stringify({ landmarkBounds: bounds }));
 });
 
-test('architectural surfaces use smooth low-metalness clearcoat and transparent glass', async () => {
+test('architecture separates diffuse natural finishes, satin metal and clear glazing', async () => {
   const runtime = { current: createSceneRuntime() };
   const renderer = await create(<group>{world.landmarks.map(({ id }) => <LandmarkModel key={id} id={id} runtime={runtime} active={false} paused={false} quality="low" />)}</group>);
   try {
-    let glass = 0;
-    for (const node of renderer.scene.findAll(item => item.instance.type === 'Mesh')) {
-      const mesh = node.instance as Mesh;
-      if (mesh.name === 'signal-light-sweep') continue;
-      const material = mesh.material as MeshPhysicalMaterial;
-      assert.ok(material.metalness <= 0.15, 'Surfaces must read as porcelain, glass, or coated plastic.');
-      if (material.name === 'architectural-trim') {
-        assert.ok(material.roughness >= 0.3 && material.clearcoatRoughness >= 0.25, 'Thin trim must avoid subpixel clearcoat highlights.');
-      }
-      const color = material.color.getHexString();
-      if (color === '429a08') {
-        assert.ok(material.roughness >= 0.6 && material.clearcoat <= 0.2, 'Roof planting must retain a natural diffuse surface.');
-      } else if (color === 'dcebd9') {
-        assert.ok(material.roughness >= 0.4, 'Terrace paving must remain readable beneath the glazing.');
-      } else {
-        assert.ok(material.clearcoat >= 0.8);
-        assert.ok(material.roughness <= 0.35);
-      }
-      assert.equal(material.flatShading, false);
-      assert.ok(material.envMapIntensity >= 1);
-      if (material.transparent) {
-        glass++;
-        assert.ok(material.opacity >= 0.2 && material.opacity <= 0.45);
-        assert.equal(material.depthWrite, false);
-        assert.equal(material.transmission, 0);
-        assert.equal(mesh.castShadow, false);
-      }
+    let glass=0,wood=0,fabric=0,metal=0,stone=0;
+    for(const node of renderer.scene.findAll(item=>item.instance.type==='Mesh')) {
+      const mesh=node.instance as Mesh,material=mesh.material as MeshPhysicalMaterial;
+      if(mesh.name==='signal-light-sweep')continue;
+      assert.ok(Number.isFinite(material.roughness)&&material.roughness>=0&&material.roughness<=1);
+      if(mesh.name.endsWith('-wood')){wood++;assert.ok(material.roughness>=.7&&material.metalness===0);}
+      if(mesh.name.endsWith('-fabric')){fabric++;assert.ok(material.roughness>=.9&&material.metalness===0);}
+      if(material.name==='satin-aluminum-trim'||mesh.name.endsWith('-metal')){metal++;assert.ok(material.metalness>=.5&&material.roughness>=.35);}
+      if(material.name==='limestone-foundation'){stone++;assert.ok(material.roughness>=.8&&material.clearcoat<=.1);}
+      if(material.name==='matte-roof-planting')assert.ok(material.roughness>=.8&&material.clearcoat===0);
+      if(material.transparent){glass++;assert.ok(material.opacity>=.15&&material.opacity<=.45);assert.equal(material.depthWrite,false);assert.equal(mesh.castShadow,false);}
     }
-    assert.ok(glass >= 6, 'Atrium, conservatories, reception and lantern must retain distinct glazed surfaces.');
+    assert.ok(glass>=6&&wood>=5&&fabric>=5&&metal>=5&&stone>=5,'All five furnished landmarks preserve visibly different finish families.');
   } finally { await renderer.unmount(); }
 });
 

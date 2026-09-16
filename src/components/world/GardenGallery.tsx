@@ -1,10 +1,36 @@
 'use client';
 
 import { BoxGeometry, BufferGeometry, CylinderGeometry, ExtrudeGeometry, Shape, SphereGeometry, Vector3 } from 'three';
+import { FurnishedInterior, InteriorBuilder } from './InteriorKit';
 import { combine, platform, strut, surface, usePalette, useResources, type ModelProps } from './BuildingKit';
 
 function box(width: number, height: number, depth: number, x: number, y: number, z: number) {
   return new BoxGeometry(width, height, depth).translate(x, y, z);
+}
+
+export function makeGalleryInterior() {
+  const room = new InteriorBuilder();
+  room.box('wood', 4.85, .018, .7, 0, 1.069, -1.7);
+  room.box('wood', .96, .018, 2.53, -1.95, 1.069, .01);
+  for (const x of [-1.37, -.45, 1.99]) {
+    room.shelf(x, 1.079, -1.91, .65, 1.38, .17);
+    room.add('paper', new CylinderGeometry(.085, .065, .19, 12).translate(x, 2.572, -1.91));
+    room.add('fabric', new SphereGeometry(.09, 10, 8).scale(1, .65, 1).translate(x + .18, 2.536, -1.91));
+  }
+  room.box('wood', .04, .55, .24, .42, 1.354, -1.85);
+  room.box('wood', .39, .045, .27, .42, 1.647, -1.85);
+  room.add('metal', new SphereGeometry(.12, 12, 8).scale(.7, 1.25, .7).translate(.42, 1.82, -1.85));
+  room.lamp(-.8, 3.23, -1.71, 1.25); room.lamp(1.72, 3.23, -1.71, .5);
+  // Shelving hugs the west wall; a continuous passage leads into the gallery.
+  room.table(-2.28, 1.079, -.22, .28, 1.52, .55);
+  for (const z of [-.77, -.22, .33]) room.plant(-2.28, 1.66, z, .63);
+  room.box('wood', .23, .055, .65, -1.6, 1.46, .49);
+  room.box('fabric', .22, .045, .6, -1.6, 1.51, .49);
+  for (const z of [.24, .74]) room.box('metal', .035, .35, .035, -1.6, 1.255, z);
+  room.box('wood', .04, .34, .65, -1.475, 1.66, .49);
+  room.plant(-2.26, 1.079, 1.15, .66);
+  room.lamp(-1.95, 3.31, .04, .46);
+  return room.finish();
 }
 
 export function GardenGallery(props: ModelProps) {
@@ -92,8 +118,7 @@ export function GardenGallery(props: ModelProps) {
       plants.push(new SphereGeometry(0.16, 8, 5).scale(1, 1.3, 0.75).translate(1.86 + Math.sin(angle) * 0.19, 1.42 + index % 2 * 0.09, 1.48 + Math.cos(angle) * 0.2));
     }
     // A planter inside the conservatory makes its glazed enclosure legible.
-    furnishings.push(new CylinderGeometry(0.2, 0.15, 0.28, 12).translate(-1.96, 1.2, -0.66));
-    plants.push(new SphereGeometry(0.28, 10, 6).scale(0.85, 1.65, 0.85).translate(-1.96, 1.74, -0.66));
+
 
     return {
       foundation: combine([platform(outline), new CylinderGeometry(.48, .55, .46, 32).translate(0, 1.22, 0)]),
@@ -111,6 +136,7 @@ export function GardenGallery(props: ModelProps) {
     };
   });
   return <group name="about-gallery-conservatory" dispose={null}>
+    <FurnishedInterior name="about-interior" build={makeGalleryInterior} />
     <mesh name="about-court-foundation" geometry={geometry.foundation} material={material.paving} receiveShadow />
     <mesh name="about-gallery-floors" geometry={geometry.floors} material={material.paving} receiveShadow />
     <mesh name="about-enclosing-walls" geometry={geometry.walls} material={material.porcelain} castShadow receiveShadow />

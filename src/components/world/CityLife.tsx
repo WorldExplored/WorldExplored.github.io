@@ -4,17 +4,18 @@ import { useEffect, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { BoxGeometry, BufferGeometry, CapsuleGeometry, CatmullRomCurve3, CylinderGeometry, ExtrudeGeometry, Group, InstancedMesh, Mesh, MeshPhysicalMaterial, Object3D, Shape, SphereGeometry, TorusGeometry, TubeGeometry, Vector3 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { cityBuildings, cityStationActivity, type CityTransitRoute } from './city';
+import { cityBuildings, cityLocalToWorld, cityRoofMounts, cityStationActivity, type CityTransitRoute } from './city';
 import { cityDocks, cityFerryDistance, cityTurbines, createCityFerryRoute, writeCityFerryPose } from './cityInfrastructure';
 import { terrainHeight } from './terrain';
+import { GardenFountain } from './GardenFountain';
 import type { EnvironmentProps } from './Water';
 
 function createCityLife(stationRoute: CityTransitRoute) {
   const root = new Group(); root.name = 'operating-city-infrastructure';
   const geometryResources = new Set<BufferGeometry>();
   const materials = {
-    white: new MeshPhysicalMaterial({ color: '#f3fff6', roughness: .25, metalness: .03, clearcoat: .9, clearcoatRoughness: .2 }),
-    aqua: new MeshPhysicalMaterial({ color: '#3fdee6', roughness: .22, metalness: .025, clearcoat: 1 }),
+    white: new MeshPhysicalMaterial({ color: '#f3fff6', roughness: .4, metalness: .03, clearcoat: .3, clearcoatRoughness: .2 }),
+    aqua: new MeshPhysicalMaterial({ color: '#3fdee6', roughness: .45, metalness: .25, clearcoat: .12 }),
     solar: new MeshPhysicalMaterial({ color: '#236986', roughness: .24, metalness: .07, clearcoat: .9 }),
     wake: new MeshPhysicalMaterial({ color: '#c1fffa', roughness: .3, metalness: 0, clearcoat: .8, transparent: true, opacity: .22, depthWrite: false }),
     station: new MeshPhysicalMaterial({ color: '#d0fff8', emissive: '#68eeed', emissiveIntensity: 0, roughness: .25, metalness: .02, clearcoat: .9 }),
@@ -61,35 +62,35 @@ function createCityLife(stationRoute: CityTransitRoute) {
   // Boarding fingers reach the taxi's two safe offshore stops.
   fixed.push(new BoxGeometry(.3, .16, 1.05).translate(-12.7, .98, -60));
   fixed.push(new BoxGeometry(2.2, .16, .5).translate(-8, .98, -24.45));
-  const channelY = terrainHeight(-17, -70) + .15;
-  fixed.push(new BoxGeometry(6.1, .16, .75).translate(-16.2, channelY, -70));
-  water.push(new BoxGeometry(5.9, .035, .56).translate(-16.2, channelY + .1, -70));
-  fixed.push(new CylinderGeometry(.84, .9, .22, 36).translate(-16.2, channelY + .05, -70));
   // Public station rail and canopy lights align with the existing transit hall.
   fixed.push(new BoxGeometry(2.2, .09, .75).translate(-5, 3.08, -67.15));
+  for (const index of [-1, 0, 1]) fixed.push(new BoxGeometry(.025, .12, .025).translate(-5 + index * .64, 5.26, -66.87));
   add('city-public-infrastructure', merged(fixed), materials.white);
-  add('city-garden-water-channel', merged(water), materials.aqua);
+  add('city-dock-guide-stripes', merged(water), materials.aqua);
 
   const panels: Array<{ x: number; y: number; z: number; yaw: number; width: number; depth: number; phase: number }> = [];
-  for (const building of cityBuildings) {
-    if (building.archetype !== 'residential' && building.archetype !== 'garden-office') continue;
-    const office = building.archetype === 'garden-office'; const height = building.height - .28;
-    const count = Math.floor((height - .35) / .84); const step = Math.floor((count - 1) / 3);
-    const scale = office ? 1 - step * .14 : .82; const tx = office ? step * .18 : .06; const tz = office ? -step * .12 : -.12;
-    for (let index = 0; index < 3; index++) {
-      const x = tx + (index - 1) * building.width * scale * .25; const z = tz - building.depth * .08;
-      panels.push({ x: building.x + x * Math.cos(building.rotation) + z * Math.sin(building.rotation), y: terrainHeight(building.x, building.z) + height + .14, z: building.z - x * Math.sin(building.rotation) + z * Math.cos(building.rotation), yaw: building.rotation, width: building.width * scale * .21, depth: building.depth * .29, phase: building.x * .06 });
-    }
+  const solarSupports:BufferGeometry[]=[];
+  for (const mount of cityRoofMounts) {
+    panels.push({x:mount.world[0],y:mount.world[1]+.20,z:mount.world[2],yaw:mount.yaw,width:mount.width,depth:mount.depth,phase:mount.world[0]*.06});
+    solarSupports.push(new BoxGeometry(.1,.22,.1).translate(mount.world[0],mount.world[1]+.09,mount.world[2]));
   }
+  const supports=add('solar-roof-supports',merged(solarSupports),materials.white);supports.geometry.userData.mounts=cityRoofMounts.map(mount=>mount.building);
   const frames = instance('city-articulated-solar-frames', panels.length, new BoxGeometry(1, .055, 1), materials.aqua);
   const cells = instance('city-articulated-solar-cells', panels.length, merged([new BoxGeometry(.88, .014, .39).translate(0, .036, -.235), new BoxGeometry(.88, .014, .39).translate(0, .036, .235)]), materials.solar);
-  const pods = instance('city-maintenance-pods', 2, merged([new CapsuleGeometry(.18, .45, 4, 12).rotateZ(Math.PI / 2), new TorusGeometry(.29, .035, 6, 16).rotateY(Math.PI / 2).translate(-.22, 0, 0), new TorusGeometry(.29, .035, 6, 16).rotateY(Math.PI / 2).translate(.22, 0, 0)]), materials.white);
-  const fountain = add('city-flowing-garden-fountain', merged(Array.from({ length: 4 }, (_, index) => {
-    const angle = index * Math.PI / 2;
-    const curve = new CatmullRomCurve3(Array.from({ length: 13 }, (_, step) => { const t = step / 12; return new Vector3(Math.cos(angle) * t * .65, Math.sin(t * Math.PI) * 1.05, Math.sin(angle) * t * .65); }));
-    return new TubeGeometry(curve, 24, .035, 6, false);
-  })), materials.aqua); fountain.position.set(-16.2, channelY + .18, -70);
-  const station = add('city-station-arrival-lights', merged([-1, 0, 1].map(index => new BoxGeometry(.42, .04, .07).translate(-5 + index * .64, 4.02, -66.87))), materials.station);
+  const pods = instance('city-maintenance-pods', 2, merged([new CapsuleGeometry(.18, .45, 4, 12).rotateZ(Math.PI / 2), new TorusGeometry(.29, .035, 6, 16).rotateY(Math.PI / 2).translate(-.22, 0, 0), new TorusGeometry(.29, .035, 6, 16).rotateY(Math.PI / 2).translate(.22, 0, 0), ...[-1,1].flatMap(side=>[new BoxGeometry(.16,.10,.12).translate(side*.34,0,.19),new TorusGeometry(.065,.023,6,12).rotateY(Math.PI/2).translate(side*.4,0,.22)])]), materials.white);
+  // Captive service lifts have a visible ground dock and fixed rails behind two buildings.
+  const lifts=cityBuildings.filter(building=>['residence-west','residence-east'].includes(building.id)).map(building=>{
+    const [x,base,z]=cityLocalToWorld(building,[0,0,-building.depth/2-.75]);
+    return {x,z,base,yaw:building.rotation,height:building.height-.4};
+  });
+  const guides:BufferGeometry[]=[];
+  for(const lift of lifts){
+    const frame=new Object3D();frame.position.set(lift.x,lift.base,lift.z);frame.rotation.y=lift.yaw;frame.updateMatrix();
+    for(const side of [-1,1])guides.push(new BoxGeometry(.045,lift.height,.06).translate(side*.4,lift.height/2,.22).applyMatrix4(frame.matrix));
+    guides.push(new BoxGeometry(1.1,.16,1).translate(0,.08,0).applyMatrix4(frame.matrix));
+  }
+  add('city-service-lift-guides-and-docks',merged(guides),materials.aqua);
+  const station = add('city-station-arrival-lights', merged([-1, 0, 1].map(index => new BoxGeometry(.42, .04, .07).translate(-5 + index * .64, 5.18, -66.87))), materials.station);
   station.castShadow = false;
 
   const ferryRoute = createCityFerryRoute();
@@ -113,11 +114,10 @@ function createCityLife(stationRoute: CityTransitRoute) {
     for (let index = 0; index < 2; index++) {
       const phase = (time + index * 9) % 22; const travel = Math.min(1, Math.max(0, (phase - 3) / 16));
       const eased = (1 - Math.cos(travel * Math.PI * 2)) / 2;
-      dummy.position.set(index ? 2.2 : -18.8, (index ? 4.7 : 4) + eased * 4, index ? -84.45 : -81.7); dummy.rotation.set(0, index ? -.22 : -.16, 0); dummy.scale.set(1, 1, 1); dummy.updateMatrix(); pods.setMatrixAt(index, dummy.matrix);
+      const lift=lifts[index];
+      dummy.position.set(lift.x,lift.base+.485+eased*(lift.height-.8),lift.z); dummy.rotation.set(0,lift.yaw,0); dummy.scale.set(1, 1, 1); dummy.updateMatrix(); pods.setMatrixAt(index, dummy.matrix);
     }
     pods.instanceMatrix.needsUpdate = true;
-    fountain.rotation.y = time * .15;
-    fountain.scale.y = 1 + Math.sin(time * 1.6) * .055;
     materials.station.emissiveIntensity = .03 + cityStationActivity(stationRoute, time) * .6;
     writeCityFerryPose(ferryRoute, time, ferryPosition, ferryTangent);
     ferry.position.copy(ferryPosition); ferry.rotation.y = Math.atan2(ferryTangent.x, ferryTangent.z);
@@ -134,5 +134,5 @@ export function CityLife({ runtime, paused, quality, route }: EnvironmentProps &
   useEffect(() => city.retain(), [city]);
   useEffect(() => city.setQuality(quality), [city, quality]);
   useFrame(() => { if (!paused) city.update(runtime.current.elapsed, route); });
-  return <primitive object={city.root} dispose={null} />;
+  return <><primitive object={city.root} dispose={null} /><GardenFountain runtime={runtime} paused={paused} quality={quality} /></>;
 }

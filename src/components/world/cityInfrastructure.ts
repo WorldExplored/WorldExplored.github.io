@@ -15,7 +15,7 @@ export const cityDocks = Object.freeze([
 
 export const cityInfrastructureFootprints = Object.freeze([
   ...cityTurbines.map(turbine => Object.freeze({ id: `turbine-${turbine.x}`, x: turbine.x, z: turbine.z, radius: 2.45, height: turbine.height + 2.5 })),
-  Object.freeze({ id: 'garden-water-channel', x: -16.2, z: -70, radius: 3.15, height: 1.6 }),
+  Object.freeze({ id: 'garden-fountain', x: -16.2, z: -70, radius: 1.3, height: 1.6 }),
   ...cityDocks.map(dock => Object.freeze({ id: `${dock.id}-dock`, x: dock.x, z: dock.z, radius: 4.3, height: 1.65 })),
 ]);
 

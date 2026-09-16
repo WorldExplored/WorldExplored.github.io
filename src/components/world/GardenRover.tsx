@@ -19,7 +19,7 @@ export interface RoverRoute { points: PathPoint[]; distances: number[]; length: 
 export interface RoverState { mode: RoverMode; elapsed: number; distance: number; speed: number; heading: number; wheelAngle: number; charge: number; cycles: number; turning: boolean; position: Vector3 }
 
 export function createRoverRoute(plan = createLandscapePlan()): RoverRoute {
-  const path = plan.paths.find(candidate => !candidate.bridge && candidate.points[0].z > 22 && candidate.points.some(point => point.x > 6));
+  const path = plan.paths.find(candidate => candidate.id === 'garden-spine');
   if (!path) throw new Error('The garden service path is missing.');
   const points = path.points.filter(point => point.x >= -3 && point.x <= 7).map(point => ({ ...point }));
   if (points.length < 2) throw new Error('The garden service path is too short.');

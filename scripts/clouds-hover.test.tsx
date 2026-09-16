@@ -170,7 +170,7 @@ for (const config of world.landmarks) test(`${config.id}: a pointer held for thr
   await f.renderer.fireEvent(f.proxy, 'pointerOver', { pointerType: 'mouse' });
   const start = performance.now();
   let movements = 0;
-  while (performance.now() - start < 3050) {
+  while (performance.now() - start < 3050 || movements <= 50) {
     await wait(40);
     const child = children[movements % 2];
     // Cross moving child surfaces while the fixed proxy remains the event owner.

@@ -67,7 +67,8 @@ test('all visible building vertices obey the exported collision footprints and h
     }
     assert.equal(seen.size, cityBuildings.length);
     assert.ok([...counts.values()].every(count => count > 1000), 'Each archetype includes inspectable architectural detail.');
-    assert.ok(meshesIn(item.scene).length <= 20, 'The city keeps static architecture merged by material.');
+    assert.ok(meshesIn(item.scene).filter(mesh=>mesh.name.startsWith('eco-city-')).length<=9,'Static architecture is merged by its nine distinct material families.');
+    assert.ok(meshesIn(item.scene).length<=34,'Furnished city, station and animated water retain a bounded combined draw budget.');
   } finally { await item.renderer.unmount(); }
 });
 

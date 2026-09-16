@@ -25,7 +25,7 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "check": "npm run lint && npm run typecheck && npm run build",
-    "test": "node --import tsx --test scripts/content.test.mjs scripts/world.test.tsx scripts/objects.test.tsx scripts/audio.test.tsx scripts/environment.test.mjs scripts/preferences.test.mjs scripts/rendering.test.ts scripts/camera.test.tsx scripts/clouds-hover.test.tsx scripts/city.test.tsx scripts/coastal.test.tsx scripts/wildlife.test.tsx scripts/mechanisms.test.tsx scripts/flora.test.tsx scripts/surf.test.tsx scripts/city-life.test.tsx scripts/bridges.test.ts scripts/startup.test.tsx scripts/seaweed.test.tsx scripts/rover.test.tsx",
+    "test": "node --import tsx --test scripts/content.test.mjs scripts/world.test.tsx scripts/objects.test.tsx scripts/audio.test.tsx scripts/environment.test.mjs scripts/preferences.test.mjs scripts/rendering.test.ts scripts/camera.test.tsx scripts/clouds-hover.test.tsx scripts/city.test.tsx scripts/coastal.test.tsx scripts/wildlife.test.tsx scripts/mechanisms.test.tsx scripts/flora.test.tsx scripts/surf.test.tsx scripts/city-life.test.tsx scripts/bridges.test.ts scripts/startup.test.tsx scripts/seaweed.test.tsx scripts/rover.test.tsx scripts/fish-species.test.tsx scripts/city-architecture.test.ts scripts/interiors.test.tsx scripts/fountain.test.tsx scripts/station-access.test.tsx scripts/circulation.test.ts scripts/city-service.test.ts",
     "sync:github": "node scripts/sync-github.mjs"
   },
   "dependencies": {
