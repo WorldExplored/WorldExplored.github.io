@@ -152,7 +152,7 @@ export function curvedWall(roof: Surface, edge: number, start: number, end: numb
 
 export function usePalette({ active, paused, runtime }: ModelProps, id: LandmarkId) {
   const [materials] = useState(() => ({
-    porcelain: new MeshPhysicalMaterial({ name: 'painted-ceramic-shell', color: world.colors.porcelain, emissive: '#d7f8ff', emissiveIntensity: 0, roughness: .36, metalness: .015, clearcoat: .28, clearcoatRoughness: .24, envMapIntensity: .75, side: DoubleSide }),
+    porcelain: new MeshPhysicalMaterial({ name: 'painted-ceramic-shell', color: world.colors.porcelain, emissive: '#d7f8ff', emissiveIntensity: 0, roughness: .42, metalness: .015, clearcoat: .2, clearcoatRoughness: .28, envMapIntensity: .68, side: DoubleSide }),
     edge: new MeshPhysicalMaterial({ name: 'satin-aluminum-trim', color: '#a8babc', roughness: .43, metalness: .65, clearcoat: .08, envMapIntensity: .7 }),
     glass: new MeshPhysicalMaterial({ name: 'clear-aqua-glazing', color: '#b5e7e8', emissive: world.colors.cyan, emissiveIntensity: 0, roughness: .055, metalness: 0, clearcoat: .45, clearcoatRoughness: .08, envMapIntensity: .7, transparent: true, opacity: .18, depthWrite: false, side: DoubleSide, thickness: .07, ior: 1.46 }),
     facade: new MeshPhysicalMaterial({ name: 'architectural-window-glass', color: '#b4e3e5', roughness: .08, metalness: 0, clearcoat: .35, envMapIntensity: .65, transparent: true, opacity: .19, depthWrite: false, side: DoubleSide, thickness: .055, ior: 1.46 }),

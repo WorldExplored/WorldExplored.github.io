@@ -14,7 +14,7 @@ export const FISH_SPECIES: readonly FishSpecies[] = [
   { id: 'reef', population: { high: 10, medium: 6, low: 4 }, band: 3.2, depth: .62, speed: .12, turnRate: 4.6, routeSpan: .105, spacing: .30, escape: 1.25, escapeOut: .75, recovery: 2.3, tailRate: 10, tailLength: .18, halfHeight: .22, radius: .48, pattern: 'three dark vertical bars and pale belly' },
   { id: 'silver', population: { high: 8, medium: 5, low: 3 }, band: 5.2, depth: .75, speed: .19, turnRate: 2.4, routeSpan: .18, spacing: .57, escape: 1.7, escapeOut: .35, recovery: 1.7, tailRate: 7.8, tailLength: .39, halfHeight: .20, radius: .76, pattern: 'silver flank with slate dorsal stripe' },
   { id: 'sunfish', population: { high: 7, medium: 4, low: 2 }, band: 3.8, depth: .9, speed: .075, turnRate: 1.9, routeSpan: .10, spacing: .45, escape: .75, escapeOut: .95, recovery: 1.8, tailRate: 5.5, tailLength: .23, halfHeight: .33, radius: .61, pattern: 'amber shoulders and yellow belly with dark fin tips' },
-  { id: 'bottom', population: { high: 6, medium: 4, low: 2 }, band: 4.2, depth: 0, speed: .046, turnRate: 1.4, routeSpan: .07, spacing: .51, escape: .52, escapeOut: .23, recovery: 3, tailRate: 4.2, tailLength: .26, halfHeight: .19, radius: .64, pattern: 'mottled charcoal back and sand-colored edges' },
+  { id: 'bottom', population: { high: 6, medium: 4, low: 2 }, band: 4.2, depth: 0, speed: .046, turnRate: 3.2, routeSpan: .07, spacing: .51, escape: .52, escapeOut: .23, recovery: 3, tailRate: 4.2, tailLength: .26, halfHeight: .19, radius: .64, pattern: 'mottled charcoal back and sand-colored edges' },
 ];
 // Maximum members; actual tier populations belong to each species.
 export const FISH_PER_SCHOOL = { high: 10, medium: 6, low: 4 } satisfies Record<QualityTier, number>;
@@ -42,14 +42,14 @@ export function fishBridgeClearance(x: number, z: number) {
 export function createFishSchools(): FishSchool[] {
   const random = seededRandom(81153); const schools: FishSchool[] = []; const point = new Vector3();
   // Reef schools start beside the planted coves; silver schools use the outer channels.
-  const ownership = [0, 1, 0, 1, 0, 1, 4, 0, 1];
+  const ownership = ['main', 'garden', 'main', 'garden', 'main', 'garden', 'city', 'experience-meadow', 'garden'];
   const species = [0, 1, 2, 3, 0, 2, 1, 3, 0];
   const preferred = [4.8, 2.9, .45, 1.5, 1.0, .4, 1.2, 4.7, 3.7];
   for (let schoolIndex = 0; schoolIndex < SCHOOL_COUNT; schoolIndex++) {
-    const island = ISLANDS[ownership[schoolIndex]]; const kind = FISH_SPECIES[species[schoolIndex]];
-    for (let attempt = 0; attempt < 600; attempt++) {
+    const island = ISLANDS.find(candidate => candidate.id === ownership[schoolIndex])!; const kind = FISH_SPECIES[species[schoolIndex]];
+    for (let attempt = 0; attempt < 1200; attempt++) {
       const angle = attempt === 0 ? preferred[schoolIndex] : random() * TAU;
-      if (schools.some(school => school.island === island && Math.abs(Math.atan2(Math.sin(angle - school.angle), Math.cos(angle - school.angle))) < .55)) continue;
+      if (schools.some(school => school.island === island && Math.abs(Math.atan2(Math.sin(angle - school.angle), Math.cos(angle - school.angle))) < .47)) continue;
       let safe = true;
       const extent = kind.routeSpan + .035 + (2.1 + 2 * kind.spacing) / Math.min(island.rx, island.rz);
       // Validate the entire route and disturbance envelope, including the full body radius.
@@ -60,7 +60,7 @@ export function createFishSchools(): FishSchool[] {
       if (safe) { schools.push({ island, angle, phase: random() * TAU, speed: kind.speed, species: species[schoolIndex] }); break; }
     }
   }
-  if (schools.length !== SCHOOL_COUNT) throw new Error('The shoreline has insufficient clear water for fish schools.');
+  if (schools.length !== SCHOOL_COUNT) throw new Error(`The shoreline has insufficient clear water for fish schools (${schools.length}/${SCHOOL_COUNT}: ${schools.map(school => school.island.id).join(', ')}).`);
   return schools;
 }
 function formationAngle(fish: SchoolFish, time: number) {

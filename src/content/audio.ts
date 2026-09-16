@@ -21,9 +21,9 @@ export const audio: { playlist: readonly LicensedAudioSource[]; labels: Record<A
   playlist: [
     track('firefly', 'Firefly', 'wp-content/audio/sb_firefly.mp3'),
     track('reparateur', 'Reparateur', 'wp-content/audio/sb_reparateur.mp3'),
-    track('electric-dreams', 'Electric Dreams', 'library/wp-content/uploads/2020/09/sb_electricdreams.mp3'),
-    track('meanwhile', 'Meanwhile', 'library/wp-content/uploads/2025/01/Meanwhile.mp3'),
-    track('hymn-to-the-dawn', 'Hymn to the Dawn', 'library/wp-content/uploads/2022/11/HymnToTheDawn.mp3'),
+    track('air', 'Air', 'wp-content/audio/sb_air.mp3'),
+    track('a-new-year', 'A New Year', 'library/wp-content/uploads/2018/01/sb_anewyear.mp3'),
+    track('origami', 'Origami', 'library/wp-content/uploads/2025/10/Origami.mp3'),
   ],
   labels: { loading: 'Loading', ready: 'Ready', playing: 'Playing', paused: 'Paused', buffering: 'Buffering', ended: 'Finished', unavailable: 'Tracks unavailable' },
   ui: { label: 'Music', play: 'Play music', pause: 'Pause music', mute: 'Mute', unmute: 'Unmute',

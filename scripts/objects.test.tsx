@@ -130,10 +130,10 @@ test('touch keeps scrolling uncaptured and keyboard commands remain bounded and 
   } finally { await f.cleanup(); }
 });
 
-test('all six landmarks have finite geometry and localized lighting at every quality tier', async () => {
+test('all eight landmarks have finite geometry and localized lighting at every quality tier', async () => {
   for (const quality of ['high', 'medium', 'low'] as QualityTier[]) {
     const runtime = { current: createSceneRuntime() };
-    const ids: LandmarkId[] = ['work', 'research', 'purdue', 'about', 'contact', 'building'];
+    const ids: LandmarkId[] = ['work', 'experience', 'research', 'purdue', 'history', 'about', 'contact', 'building'];
     const render = (paused = false) => <group>{ids.map(id => <group key={id} name={`model-${id}`}><LandmarkModel id={id} runtime={runtime} active={false} paused={paused} quality={quality} /></group>)}</group>;
     const renderer = await create(render());
     try {
@@ -146,7 +146,7 @@ test('all six landmarks have finite geometry and localized lighting at every qua
         const material = mesh.material as MeshPhysicalMaterial;
         calls += material.transparent && material.side === DoubleSide && !material.forceSinglePass ? 2 : 1;
       }
-      assert.ok(triangles < 100000 && calls < 185, `${triangles} triangles, ${calls} calls exceed the architecture budget`);
+      assert.ok(triangles < 125000 && calls < 250, `${triangles} triangles, ${calls} calls exceed the architecture budget`);
       const contact = renderer.scene.findByProps({ name: 'model-contact' });
       const contactMaterials = contact.findAll(node => node.instance.type === 'Mesh').map(node => (node.instance as Mesh).material as MeshPhysicalMaterial);
       const unrelated = renderer.scene.findByProps({ name: 'model-work' }).findAll(node => node.instance.type === 'Mesh').map(node => (node.instance as Mesh).material as MeshPhysicalMaterial);
@@ -188,8 +188,8 @@ test('disabled lamp illumination stays off during selection', async () => {
 
 test('landmarks fit their planting footprints and preserve the intended hierarchy', async () => {
   const runtime = { current: createSceneRuntime() };
-  const limits: Record<LandmarkId, number> = { work: 5.5, research: 3.8, purdue: 3.05, about: 3.5, contact: 3.2, building: 2.4 };
-  const heightLimits: Record<LandmarkId, number> = { work: 11.6, research: 7, purdue: 4.3, about: 5, contact: 6.5, building: 7.8 };
+  const limits: Record<LandmarkId, number> = { work: 5.5, experience: 5.4, research: 3.8, purdue: 3.05, history: 7, about: 3.5, contact: 3.2, building: 2.4 };
+  const heightLimits: Record<LandmarkId, number> = { work: 11.6, experience: 7.8, research: 7, purdue: 4.3, history: 8.8, about: 5, contact: 6.5, building: 7.8 };
   const bounds: Record<string, { radius: number; width: number; depth: number; top: number; bottom: number; triangles: number }> = {};
   for (const landmark of world.landmarks) {
     const renderer = await create(<LandmarkModel id={landmark.id} runtime={runtime} active={false} paused={false} quality="high" />);

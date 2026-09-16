@@ -263,7 +263,7 @@ function makeLandscape(plan: LandscapePlan) {
       float wash = shoreWave(coast,groundXZ,uShoreTime,shoreExposure).y;
       sand = mix(sand,vec3(.73,.84,.80),wash*.22);
       vec3 soil = mix(vec3(.22,.16,.095),vec3(.33,.25,.14),broad);
-      vec3 groundcover=mix(vec3(.055,.16,.026),vec3(.13,.25,.050),broad);
+      vec3 groundcover=mix(vec3(.07,.22,.024),vec3(.18,.38,.045),broad);
       vec3 inland=mix(soil,groundcover,grass);
       vec3 townGravel=vec3(.29,.28,.22)*(.91+grain*.12);
       inland=mix(inland,mix(townGravel,groundcover,grass),ecology.z);
@@ -301,7 +301,7 @@ function makeLandscape(plan: LandscapePlan) {
   shells.count = shellCount; shells.computeBoundingSphere();
   const trunkGeometry = treeGeometry();
   const crownGeometry = foliageGeometry();
-  const trunkMaterial = new MeshPhysicalMaterial({ color: '#627848', roughness: .94, envMapIntensity: .12 });
+  const trunkMaterial = new MeshPhysicalMaterial({ color: '#765238', roughness: .96, envMapIntensity: .1 });
   const crownMaterial = new MeshPhysicalMaterial({ color: '#327d27', vertexColors: true, side: DoubleSide, roughness: .73, clearcoat: .08, clearcoatRoughness: .4, envMapIntensity: .15 });
   const canopyWind = { time: { value: 0 }, strength: { value: 1 } };
   crownMaterial.userData.canopyWind = canopyWind;

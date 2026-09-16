@@ -7,6 +7,7 @@ import { ResearchInstitute } from '../src/components/world/ResearchInstitute';
 import { CampusHall } from '../src/components/world/CampusHall';
 import { GardenGallery } from '../src/components/world/GardenGallery';
 import { ReceptionTerminal } from '../src/components/world/ReceptionTerminal';
+import { ExperienceStudio, HistoryMuseum } from '../src/components/world/CivicLandmarks';
 import { createSceneRuntime, world } from '../src/content/world';
 import { buildCityArchitecture } from '../src/components/world/CityArchitecture';
 import { createCirculationGraph, circulationPaths, STATION_ACCESS } from '../src/components/world/circulation';
@@ -40,14 +41,14 @@ test('all primary and city entrances connect through actual bridge, dock and fer
     assert.ok(Math.hypot(edge.points.at(-1)!.x-b.x,edge.points.at(-1)!.z-b.z)<1e-5, `${edge.id}: rendered end does not match connected node`);
   }
   const walk = reachable('work', false), all = reachable('work', true);
-  for (const id of ['research','about','about-conservatory','contact','purdue','garden-bridge-north','garden-bridge-south','purdue-bridge-west','purdue-bridge-east','main-dock-boarding']) assert.ok(walk.has(id), `Primary walking network misses ${id}`);
+  for (const id of ['experience','research','about','about-conservatory','contact','purdue','garden-bridge-north','garden-bridge-south','purdue-bridge-west','purdue-bridge-east','main-dock-boarding']) assert.ok(walk.has(id), `Primary walking network misses ${id}`);
   assert.ok(!walk.has('city-dock-boarding'), 'Ferry crossing must not be mislabeled as a walk');
   for (const building of cityBuildings) {
     assert.ok(all.has(building.id), `City entrance ${building.id} is disconnected`);
     const expected = cityEntranceWorld(building), actual = nodes.get(building.id)!;
     assert.ok(Math.hypot(actual.x-expected.x,actual.z-expected.z)<1e-6 && Math.abs(actual.y!-expected.y)<1e-6, `${building.id}: graph does not terminate at actual architectural doorway`);
   }
-  for (const id of ['city-dock-boarding','city-park','city-waterfront','station-bottom','station-lobby']) assert.ok(all.has(id), `Network misses ${id}`);
+  for (const id of ['history','history-court','city-dock-boarding','city-park','city-waterfront','station-bottom','station-lobby']) assert.ok(all.has(id), `Network misses ${id}`);
   const secondary = citySecondaryEntrances[0].world, lobby = nodes.get('station-lobby')!;
   assert.ok(Math.hypot(lobby.x-secondary[0],lobby.z-secondary[2])<1e-6 && Math.abs(lobby.y!-secondary[1])<1e-6);
   assert.deepEqual([...reachable('building', false)].sort(), ['beacon-court','beacon-overlook','building']);
@@ -118,7 +119,7 @@ test('all graded route endpoints meet their thresholds across the full path widt
   }
   // Architectural threshold surfaces, not the centre of the corresponding boxes.
   // Surface height includes rounded trim; graded approach must meet within 5mm.
-  const expected: Record<string,number>={work:1.105,research:1.07,purdue:1.03,about:1.06,'about-conservatory':1.06,contact:1.06,building:2.86};
+  const expected: Record<string,number>={work:1.105,experience:1.03,research:1.07,purdue:1.03,history:1.03,about:1.06,'about-conservatory':1.06,contact:1.06,building:2.86};
   for(const [id,y] of Object.entries(expected)) {
     const node=createCirculationGraph().nodes.find(n=>n.id===id)!;
     assert.ok(Math.abs(node.y!-y)<.005, `${id}: path endpoint y=${node.y} differs from modeled threshold top ${y}`);
@@ -180,7 +181,7 @@ test('graded ground supports actual foundations and stays below finished floors'
       }
     }
   };
-  for(const [id,Component]of Object.entries({work:ComputeBuilding,research:ResearchInstitute,purdue:CampusHall,about:GardenGallery,contact:ReceptionTerminal})){
+  for(const [id,Component]of Object.entries({work:ComputeBuilding,experience:ExperienceStudio,research:ResearchInstitute,purdue:CampusHall,history:HistoryMuseum,about:GardenGallery,contact:ReceptionTerminal})){
     const renderer=await create(createElement(Component,{active:false,paused:true,quality:'high',runtime:{current:createSceneRuntime()}}));
     try{
       const landmark=world.landmarks.find(l=>l.id===id)!,c=Math.cos(landmark.rotationY??0),s=Math.sin(landmark.rotationY??0);

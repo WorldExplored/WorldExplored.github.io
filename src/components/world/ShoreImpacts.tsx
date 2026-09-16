@@ -16,7 +16,7 @@ const GRAVITY = 9;
 export function createShoreImpactSites() {
   const sites: ShoreImpactSite[] = [];
   // The first four sites survive medium quality, including the offshore beacon.
-  const islands = ['beacon', 'main', 'garden', 'city', 'beacon', 'purdue', 'main', 'city'];
+  const islands = ['beacon', 'main', 'garden', 'city', 'beacon', 'purdue', 'experience-meadow', 'city'];
   for (const id of islands) {
     const island = ISLANDS.find(item => item.id === id)!;
     let best: { x: number; z: number; nx: number; nz: number; exposure: number; score: number } | null = null;

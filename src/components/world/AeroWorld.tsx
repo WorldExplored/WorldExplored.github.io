@@ -111,7 +111,7 @@ export function AeroWorld(props: WorldProps & { runtime: MutableRefObject<SceneR
     <Sky />
     <fog attach="fog" args={[world.lighting.fogColor, world.lighting.fogNear, world.lighting.fogFar]} />
     <hemisphereLight args={[world.lighting.ambientSky, world.lighting.ambientGround, world.lighting.ambientIntensity]} />
-    <directionalLight position={sunlightPosition} intensity={world.lighting.sunIntensity} color={world.lighting.sunColor} castShadow={world.quality[tier].shadows} shadow-mapSize={[2048, 2048]} shadow-camera-left={-55} shadow-camera-right={80} shadow-camera-top={45} shadow-camera-bottom={-22} shadow-camera-near={100} shadow-camera-far={340} shadow-normalBias={0.08} shadow-bias={-0.0001} />
+    <directionalLight position={sunlightPosition} intensity={world.lighting.sunIntensity} color={world.lighting.sunColor} castShadow={world.quality[tier].shadows} shadow-mapSize={[2048, 2048]} shadow-camera-left={-52} shadow-camera-right={76} shadow-camera-top={42} shadow-camera-bottom={-20} shadow-camera-near={105} shadow-camera-far={330} shadow-normalBias={0.025} shadow-bias={-0.00015} />
     {reflections}
 
     {stage >= 1 && <EcoCity runtime={runtime} paused={stopped} quality={tier} />}

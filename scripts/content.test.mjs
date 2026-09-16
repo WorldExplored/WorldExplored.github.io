@@ -59,8 +59,8 @@ test('authored source snapshot is complete, distinct and accurately attributed',
 });
 
 test('all content states have stable identifiers and availability is one flag', () => {
-  assert.deepEqual(profile.sections.map(item => item.id), ['work', 'research', 'purdue', 'about', 'contact', 'building']);
-  assert.deepEqual(profile.sections.filter(item => item.dock).map(item => item.id), ['work', 'research', 'purdue', 'about', 'contact']);
+  assert.deepEqual(profile.sections.map(item => item.id), ['work', 'experience', 'research', 'purdue', 'history', 'about', 'contact', 'building']);
+  assert.deepEqual(profile.sections.filter(item => item.dock).map(item => item.id), ['work', 'experience', 'research', 'purdue', 'history', 'about', 'contact']);
   assert.equal(typeof profile.showAvailability, 'boolean');
   assert.equal(profile.building, 'Building something impactful...');
 });
@@ -70,7 +70,7 @@ test('static HTML contains identity, evidence and canonical sections', () => {
   assert.match(bodyHtml, /<main\b/);
   const heading=bodyHtml.match(/<h1\b[^>]*>([\s\S]*?)<\/h1>/)?.[1];
   assert.equal(heading?.replace(/<[^>]+>/g, ''), profile.name);
-  for (const required of [profile.name, profile.university, profile.degree, profile.research.title, 'co-developed']) containsText(bodyHtml, required);
+  for (const required of [profile.name, profile.university, profile.degree, ...profile.research.map(item => item.title), 'co-developed']) containsText(bodyHtml, required);
   for (const section of profile.sections) sectionBody(section.id);
   for (const item of publicContributions) assert.ok(anchors(sectionBody('work')).some(link => link.href === item.url), item.url);
   assert.ok(!bodyHtml.includes('<dialog'));
@@ -84,8 +84,10 @@ test('essential portfolio content is rendered in semantic sections without WebGL
   for (const item of featured) {
     for (const value of [item.heading, item.problem, item.contribution, item.status]) containsText(sectionBody('work'), value);
   }
-  for (const value of [profile.research.title, profile.research.venue, profile.research.attribution, profile.research.description, profile.research.role]) containsText(sectionBody('research'), value);
+  for (const item of profile.experience) for (const value of [item.company, item.role, item.dates, item.location, ...item.details]) containsText(sectionBody('experience'), value);
+  for (const item of profile.research) for (const value of [item.title, item.venue, item.attribution, item.description, item.role]) containsText(sectionBody('research'), value);
   for (const value of [profile.university, profile.degree, profile.graduation]) containsText(sectionBody('purdue'), value);
+  for (const item of profile.history) for (const value of [item.organization, item.role, item.school, item.dates, item.description].filter(Boolean)) containsText(sectionBody('history'), value);
   containsText(sectionBody('about'), profile.about);
   if (profile.showAvailability) containsText(sectionBody('contact'), profile.availability);
   for (const href of [profile.links.email, profile.links.github, profile.links.linkedin]) assert.ok(anchors(sectionBody('contact')).some(link => link.href === href));
@@ -109,8 +111,8 @@ test('one whole-card collection contains only open or merged work, with no repea
 
 test('every spatial landmark has one matching semantic link and destination section', () => {
   const controls = anchors(bodyHtml).filter(link => link['data-landmark']);
-  assert.equal(world.landmarks.length, 6);
-  assert.equal(controls.length, 6);
+  assert.equal(world.landmarks.length, 8);
+  assert.equal(controls.length, 8);
   assert.deepEqual(new Set(controls.map(link => link['data-landmark'])), new Set(world.landmarks.map(item => item.id)));
   for (const landmark of world.landmarks) {
     const control = controls.find(link => link['data-landmark'] === landmark.id);
@@ -122,6 +124,24 @@ test('every spatial landmark has one matching semantic link and destination sect
 
 test('the unannounced-project teaser appears once in rendered HTML', () => {
   assert.equal(plainText(sectionBody('building')).split(profile.building).length - 1, 1);
+});
+
+test('experience and history preserve stated chronology without invented organizations or outcomes', () => {
+  assert.deepEqual(profile.experience.map(item => item.company), ['Zero-True', 'Equiwiz']);
+  assert.deepEqual(profile.history.map(item => item.organization), ['Computer Science Club', 'High School Artificial Intelligence Club', 'Game Development Club']);
+  assert.equal(profile.history.length, 3);
+  assert.equal(profile.history[2].dates, '');
+  assert.equal(profile.history[2].description, '');
+  for (const milestone of ['Open-source ML systems work', 'Purdue University', 'Ukrainian Resilience', 'AI Reinforcement Learning Traffic System Implementations and Limitations', 'Zero-True internship', 'Equiwiz internship']) {
+    assert.ok(profile.historyMilestones.some(item => item.title === milestone), milestone);
+  }
+  for (const item of profile.historyMilestones) for (const value of [item.date, item.title, item.description]) containsText(sectionBody('history'), value);
+  assert.match(plainText(sectionBody('history')), /Python maze navigation/);
+  assert.match(plainText(sectionBody('history')), /hackathons/);
+  assert.match(profile.research[1].description, /Ninety-nine simulation runs/);
+  assert.match(profile.research[1].role, /real-world validation/);
+  assert.doesNotMatch(plainText(sectionBody('experience')), /increased|improved|reduced|percent|%/i);
+  assert.doesNotMatch(plainText(sectionBody('history')), /oversaw|spearheaded|led a team|increased|improved|percent|%/i);
 });
 
 test('external destinations use HTTPS and new tabs have safe rel attributes', () => {
@@ -179,7 +199,7 @@ test('canonical sections avoid duplicate presentations and unrelated links', () 
   assert.equal((bodyHtml.match(/<h1\b/g) ?? []).length, 1);
   assert.doesNotMatch(bodyHtml, /<header\b|surface-attachment/);
   for (const section of profile.sections) assert.equal((bodyHtml.match(new RegExp(`id="${section.id}"`, 'g')) ?? []).length, 1);
-  assert.equal(anchors(bodyHtml).filter(link => link.href === profile.links.paper).length, 1);
+  assert.equal(anchors(sectionBody('research')).filter(link => profile.research.some(item => item.url === link.href)).length, 2);
   assert.equal(anchors(sectionBody('contact')).length, 3);
   assert.ok(!anchors(sectionBody('contact')).some(link => link.href === profile.links.paper));
   assert.doesNotMatch(plainText(bodyHtml), /Pause motion|Still view|Guided view|Free Explore|Minimize|Aero Research Habitat|Click the water|Drag a bubble|field guide/i);

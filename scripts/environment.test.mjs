@@ -5,7 +5,7 @@ import { create } from '@react-three/test-renderer';
 import { useThree } from '@react-three/fiber';
 import { Matrix4, Ray, SRGBColorSpace, Vector3 } from 'three';
 import { AmbientSystem } from '../src/components/world/AmbientSystem.tsx';
-import { architectureFootprints, canPlacePlant, createLandscapePlan, distanceToSegment, generatePlantPositions, archipelagoGeometry, ISLANDS, islandContour, landDistance, pathGeometry, pathHeight, terrainBaseHeight, terrainHeight } from '../src/components/world/terrain.ts';
+import { architectureFootprints, canPlacePlant, createLandscapePlan, distanceToSegment, generatePlantPositions, archipelagoGeometry, ISLANDS, islandContour, islandDistance, landDistance, pathGeometry, pathHeight, terrainBaseHeight, terrainHeight } from '../src/components/world/terrain.ts';
 import { cloudOrigin, cloudPuffTransform, createCloudClusters, rayCloudDistance, updateCloudResponses } from '../src/components/world/clouds.ts';
 import { createSceneRuntime, motionPolicy, world } from '../src/content/world.ts';
 
@@ -224,7 +224,7 @@ test('organic shores and vegetation cover every suitable island without the form
     for (let sample = 0; sample < 192; sample++) {
       const angle = sample / 192 * Math.PI * 2; const contour = islandContour(island, angle);
       const x = island.x + Math.cos(angle) * island.rx * contour; const z = island.z + Math.sin(angle) * island.rz * contour;
-      assert.ok(Math.abs(landDistance(x, z)) < 1e-10, island.id); radii.push(contour);
+      assert.ok(Math.abs(islandDistance(island, x, z)) < 1e-10, island.id); radii.push(contour);
     }
     assert.ok(Math.max(...radii) - Math.min(...radii) > .2);
     if (island.id !== 'beacon') assert.ok(plants.some(p => Math.hypot((p.x-island.x)/island.rx,(p.z-island.z)/island.rz)<.8), island.id);

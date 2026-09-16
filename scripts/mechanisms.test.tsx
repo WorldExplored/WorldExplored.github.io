@@ -10,8 +10,10 @@ Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 const ids: LandmarkId[] = ['work', 'research', 'contact', 'building'];
 const moving: Record<LandmarkId, string[]> = {
   work: ['work-ring-mount-0', 'work-compute-wheel-0', 'work-compute-wheel-1', 'work-coolant-capsule-0', 'work-service-carriage'],
+  experience: [],
   research: ['research-tracking-solar-panel-0', 'research-observation-instrument'],
   purdue: [],
+  history: [],
   about: [],
   contact: ['contact-articulated-signal-petal-0', 'contact-outward-signal-pulse'],
   building: ['lighthouse-rotating-fresnel-lens', 'lighthouse-weather-vane'],

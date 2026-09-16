@@ -21,6 +21,7 @@ export function createCityLife(stationRoute: CityTransitRoute) {
   const materials = {
     white: new MeshPhysicalMaterial({ color: '#f3fff6', roughness: .4, metalness: .03, clearcoat: .3, clearcoatRoughness: .2 }),
     aqua: new MeshPhysicalMaterial({ color: '#3fdee6', roughness: .45, metalness: .25, clearcoat: .12 }),
+    glass: new MeshPhysicalMaterial({ color: '#a4f3f4', roughness: .08, metalness: 0, clearcoat: .7, transparent: true, opacity: .28, depthWrite: false, thickness: .06, ior: 1.45 }),
     solar: new MeshPhysicalMaterial({ color: '#236986', roughness: .24, metalness: .07, clearcoat: .9 }),
     wake: new MeshPhysicalMaterial({ color: '#c1fffa', roughness: .3, metalness: 0, clearcoat: .8, transparent: true, opacity: .22, depthWrite: false }),
     station: new MeshPhysicalMaterial({ color: '#d0fff8', emissive: '#68eeed', emissiveIntensity: 0, roughness: .25, metalness: .02, clearcoat: .9 }),
@@ -83,6 +84,7 @@ export function createCityLife(stationRoute: CityTransitRoute) {
   const supports=add('solar-roof-supports',merged(solarSupports),materials.white);supports.geometry.userData.mounts=cityRoofMounts.map(mount=>mount.building);
   const frames = instance('city-articulated-solar-frames', panels.length, new BoxGeometry(1, .055, 1), materials.aqua);
   const cells = instance('city-articulated-solar-cells', panels.length, merged([new BoxGeometry(.88, .014, .39).translate(0, .036, -.235), new BoxGeometry(.88, .014, .39).translate(0, .036, .235)]), materials.solar);
+  frames.castShadow = false; cells.castShadow = false;
   const pods = instance('city-maintenance-pods', 2, merged([new CapsuleGeometry(.18, .45, 4, 12).rotateZ(Math.PI / 2), new TorusGeometry(.29, .035, 6, 16).rotateY(Math.PI / 2).translate(-.22, 0, 0), new TorusGeometry(.29, .035, 6, 16).rotateY(Math.PI / 2).translate(.22, 0, 0), ...[-1,1].flatMap(side=>[new BoxGeometry(.16,.10,.12).translate(side*.34,0,.19),new TorusGeometry(.065,.023,6,12).rotateY(Math.PI/2).translate(side*.4,0,.22)])]), materials.white);
   // Captive service lifts have a visible ground dock and fixed rails behind two buildings.
   const lifts=cityBuildings.filter(building=>['residence-west','residence-east'].includes(building.id)).map(building=>{
@@ -104,7 +106,22 @@ export function createCityLife(stationRoute: CityTransitRoute) {
   const hull = merged([-1, 1].map(side => new CapsuleGeometry(.2, 1.75, 4, 16).rotateX(Math.PI / 2).translate(side * .45, .06, 0)));
   const roof = new CapsuleGeometry(.43, .83, 4, 18).rotateX(Math.PI / 2).scale(1, .2, 1).translate(0, .82, 0);
   const glazing = new CapsuleGeometry(.39, .75, 4, 18).rotateX(Math.PI / 2).scale(1, .62, 1).translate(0, .5, 0);
-  add('city-water-taxi-shell', merged([merged([hull, roof, new BoxGeometry(.95, .12, 1.7).translate(0, .2, 0)]), glazing], true), [materials.white, materials.aqua], ferry);
+  add('city-water-taxi-shell', merged([merged([hull, roof, new BoxGeometry(.95, .12, 1.7).translate(0, .2, 0)]), glazing], true), [materials.white, materials.glass], ferry);
+  const cabin = [
+    new BoxGeometry(.78, .08, .32).translate(0, .29, .34),
+    new BoxGeometry(.78, .08, .32).translate(0, .29, -.34),
+    new BoxGeometry(.48, .2, .18).translate(0, .42, -.43),
+    new BoxGeometry(.34, .13, .08).rotateX(-.35).translate(0, .62, -.35),
+  ];
+  const rails: BufferGeometry[] = [];
+  for (const side of [-1, 1]) {
+    rails.push(new BoxGeometry(.035, .035, 1.42).translate(side * .54, .5, 0));
+    for (const z of [-.62, 0, .62]) rails.push(new CylinderGeometry(.018, .018, .3, 8).translate(side * .54, .35, z));
+  }
+  rails.push(new TorusGeometry(.14, .018, 6, 18).rotateY(Math.PI / 2).translate(0, .57, -.5));
+  rails.push(new CylinderGeometry(.04, .055, .35, 10).rotateX(Math.PI / 2).translate(0, .08, -.96));
+  add('city-water-taxi-seating-and-console', merged(cabin), materials.aqua, ferry);
+  add('city-water-taxi-rails-and-electric-drive', merged(rails), materials.white, ferry);
   const wake = add('city-water-taxi-wake', merged([-1, 1].map(side => new TubeGeometry(new CatmullRomCurve3([new Vector3(side * .38, .03, -.6), new Vector3(side * .75, .03, -1.5), new Vector3(side * 1.15, .03, -2.55)]), 24, .028, 5, false))), materials.wake, ferry);
   wake.castShadow = false;
   const dummy = new Object3D(); const ferryPosition = new Vector3(); const ferryTangent = new Vector3();

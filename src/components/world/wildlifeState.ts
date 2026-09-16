@@ -163,8 +163,9 @@ export function validCrabPosition(point: Vector3, plan: LandscapePlan) {
 }
 export function createCrabRoutes(plan = createLandscapePlan()): CrabRoute[] {
   const random = seededRandom(5778); const routes: CrabRoute[] = []; const point = new Vector3();
+  const habitats = ['main', 'experience-meadow', 'garden', 'purdue'].map(id => ISLANDS.find(island => island.id === id)!);
   for (let attempt = 0; routes.length < 10 && attempt < 1000; attempt++) {
-    const island = ISLANDS[attempt % 3];
+    const island = habitats[attempt % habitats.length];
     const route = { island, angle: random() * TAU, extent: .05 + random() * .035, band: 1.15 + random() * .25, phase: random() * TAU };
     if (Array.from({ length: 41 }, (_, index) => validCrabPosition(writeCrabPosition(route, index / 20 - 1, point), plan)).every(Boolean) && routes.every(other => {
       const a=writeCrabPosition(other,0,new Vector3()), b=writeCrabPosition(route,0,new Vector3());

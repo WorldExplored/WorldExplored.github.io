@@ -33,18 +33,17 @@ export function CampusHall(props: ModelProps) {
   const material = usePalette(props, 'purdue');
   const geometry = useResources(() => {
     const box = (w: number, h: number, d: number, x: number, y: number, z: number) => new BoxGeometry(w,h,d).translate(x,y,z);
-    const walls: BufferGeometry[] = [box(4.4,2.25,.15,0,2.15,-1.51),box(1.46,.25,.15,-1.47,1.14,1.51),box(1.46,.25,.15,1.47,1.14,1.51),box(4.4,.31,.15,0,3.15,1.51)];
+    const walls: BufferGeometry[] = [box(4.12,2.25,.15,0,2.15,-1.51),box(1.46,.25,.15,-1.47,1.14,1.51),box(1.46,.25,.15,1.47,1.14,1.51),box(4.4,.31,.15,0,3.15,1.51)];
     const windows: BufferGeometry[] = [], frames: BufferGeometry[] = [];
     for (const side of [-1,1]) {
       walls.push(box(.15,.25,3.08,side*2.13,1.14,0),box(.15,.31,3.08,side*2.13,3.15,0));
-      for (const z of [-1.45,0,1.45]) frames.push(box(.13,2.0,.1,side*2.15,2.12,z));
-      for (const z of [-.73,.73]) windows.push(box(.045,1.77,1.34,side*2.15,2.12,z));
-      windows.push(box(1.26,1.77,.045,side*1.43,2.12,1.53));
-      for (const x of [.73,2.13]) frames.push(box(.1,2.0,.1,side*x,2.12,1.55));
-      frames.push(box(.045,1.78,.07,side*1.43,2.12,1.565));
+      for (const z of [-1.45,0,1.45]) frames.push(box(.13,1.74,.1,side*2.15,2.12,z));
+      for (const z of [-.73,.73]) windows.push(box(.045,1.72,1.34,side*2.15,2.12,z));
+      windows.push(box(1.26,1.72,.045,side*1.43,2.12,1.53));
+      for (const x of [.73,2.13]) frames.push(box(.1,1.74,.1,side*x,2.12,1.55));
+      frames.push(box(.045,1.72,.07,side*1.43,2.12,1.565));
     }
-    // Solid corner piers, transparent bays, and a raised central clerestory.
-    for (const x of [-2.13,2.13]) walls.push(box(.16,2.25,.16,x,2.15,-1.48));
+    // The rear wall terminates at the structural side frames, avoiding coplanar corner shells.
     return {
       base:floorSlab('purdue-foundation',[floorRectangle(0,0,4.44,3.19)],1.005,.205,'foundation'), walls:combine(walls), windows:combine(windows), frames:combine(frames),
       roof:combine([box(4.72,.16,3.55,0,3.36,0),box(1.65,.12,2.82,0,3.92,-.1)]),

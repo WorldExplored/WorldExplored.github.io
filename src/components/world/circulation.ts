@@ -10,6 +10,7 @@ export { STATION_ACCESS } from './stationPlan';
 
 function cityGroundClear(x: number, z: number, margin: number) {
   if (landDistance(x,z) < 1.9) return false;
+  if (Math.hypot(x - 21, z + 72) < 6.25 + margin) return false;
   for (const b of cityBuildings) {
     const dx=x-b.x,dz=z-b.z,c=Math.cos(b.rotation),s=Math.sin(b.rotation);
     const lx=dx*c-dz*s,lz=dx*s+dz*c;
@@ -73,6 +74,7 @@ export function createCirculationGraph() {
     const e:CirculationEdge={id,from:from.id,to:to.id,mode,width,points:[from,...via,to],startY:from.y,endY:to.y};edges.push(e);return e;
   };
   const work=node('work',-8,2.51,'entrance',1.105), research=node('research',2.67,-5.15,'entrance',1.07);
+  const experience=node('experience',-26.62,1.18,'entrance',1.03);
   const west=node('main-west',-14.8,3.2),center=node('main-center',-5.5,5.4),lab=node('research-plaza',2.67,-3.75);
   const gardenNorth=node('garden-bridge-north',-6,7,'landing',.95), gardenSouth=node('garden-bridge-south',-6,18,'landing',1.4);
   const purdueWest=node('purdue-bridge-west',12,-7,'landing',.95),purdueEast=node('purdue-bridge-east',21.7,-7,'landing',.95);
@@ -81,6 +83,7 @@ export function createCirculationGraph() {
   const garden=node('garden-court',-5.5,24.1,'park'),contact=node('contact',12,24.95,'entrance',1.06);
   const mainDock=node('main-dock-land',-8,-18.5,'dock',1.06),mainBoat=node('main-dock-boarding',-8,-24.45,'dock',1.06);
   edge('work-entrance',work,center,[{x:-8,z:3.6}]);edge('main-west-walk',work,west,[{x:-9.6,z:4.3}]);
+  edge('experience-entrance',experience,west,[{x:-22.5,z:2.9},{x:-18,z:3.2}],1.2);
   edge('main-lab-walk',center,lab,[{x:-1,z:3.2},{x:1,z:-2.6}]);edge('research-entrance',lab,research);
   edge('main-garden-approach',center,gardenNorth);edge('research-purdue-approach',lab,purdueWest,[{x:8.4,z:-3.8},{x:10.5,z:-5}]);
   edge('purdue-entrance',purdueEast,purdue,[],1.25);
@@ -92,9 +95,12 @@ export function createCirculationGraph() {
   edge('main-dock',mainDock,mainBoat,[],1.1,'dock');
   for(const bridge of BRIDGES){const ends=bridge.id==='garden'?[gardenNorth,gardenSouth]:[purdueWest,purdueEast];const e=edge(`bridge-${bridge.id}`,ends[0],ends[1],[],bridge.width,'bridge');e.bridge=true;e.bridgeId=bridge.id;e.points=bridge.samples.map(p=>({x:p.point.x,z:p.point.z}));}
   const cityWest=node('city-west-street',-19.5,-74.7),cityCenter=node('city-center-street',-5,-74.2),cityEast=node('city-east-street',13,-72);
+  const history=node('history',19.96,-68.4,'entrance',1.03),historyCourt=node('history-court',17.5,-69.2,'park');
   const waterfront=node('city-waterfront',-15.5,-65.4,'park'),cityDock=node('city-dock-land',-12,-65,'dock',1.06),cityBoat=node('city-dock-boarding',-12.7,-60,'dock',1.06);
   const hubs=[cityWest,cityCenter,cityEast,waterfront];
   for(const [a,b] of [[cityWest,cityCenter],[cityCenter,cityEast],[cityWest,waterfront],[waterfront,cityDock]]){const e=edge(`${a.id}-${b.id}`,a,b,[],1.05);e.points=routeCityWalk(a,b,1.05);}
+  edge('history-threshold',history,historyCourt,[],1.35);
+  edge('history-promenade',historyCourt,cityEast,[{x:16.2,z:-70},{x:14.5,z:-71.2}],1.35);
   const park=node('city-park',-16.2,-68.51,'park');const parkEdge=edge('city-park-walk',park,cityWest,[],.5);parkEdge.points=routeCityWalk(park,cityWest,.5);
   edge('fountain-plaza',park,park,Array.from({length:47},(_,i)=>({x:-16.2+Math.sin((i+1)/48*Math.PI*2)*1.49,z:-70+Math.cos((i+1)/48*Math.PI*2)*1.49})),.5);
   for(const building of cityBuildings){

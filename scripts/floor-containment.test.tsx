@@ -7,6 +7,7 @@ import { ResearchInstitute } from '../src/components/world/ResearchInstitute';
 import { CampusHall } from '../src/components/world/CampusHall';
 import { GardenGallery } from '../src/components/world/GardenGallery';
 import { ReceptionTerminal } from '../src/components/world/ReceptionTerminal';
+import { ExperienceStudio, HistoryMuseum } from '../src/components/world/CivicLandmarks';
 import { createSceneRuntime, world } from '../src/content/world';
 import { cityBuildings } from '../src/components/world/city';
 import { buildCityArchitecture } from '../src/components/world/CityArchitecture';
@@ -20,15 +21,19 @@ const disk=(x:number,z:number,cx:number,cz:number,rx:number,rz=rx)=>((x-cx)/rx)*
 // These limits come from enclosing wall faces, independently of floor constructors.
 const rooms:Record<string,(x:number,z:number)=>boolean>={
   work:(x,z)=>(Math.abs(x)>=1.63-eps&&Math.abs(x)<=4.08+eps&&z>=-2.13-eps&&z<=2.24+eps)||rect(x,z,-1.64,1.64,-1.9,2.18)||rect(x,z,-1.37,1.37,2.18,2.31),
+  experience:(x,z)=>rect(x,z,-3.825,3.825,-2.64,2.64),
   research:(x,z)=>rect(x,z,-2.75,.32,-1.61,1.58)||disk(x,z,1.58,-.73,.91)||rect(x,z,.665,2.695,.41,1.79)||rect(x,z,.24,.81,-1.12,-.34)||rect(x,z,.24,.81,.68,1.42),
   purdue:(x,z)=>rect(x,z,-2.055,2.055,-1.435,1.435)||rect(x,z,-.725,.725,1.435,1.515),
+  history:(x,z)=>rect(x,z,-5.275,5.275,-3.55,3.55),
   about:(x,z)=>rect(x,z,-2.44,2.44,-2,-1.36)||rect(x,z,-2.45,-1.45,-1.36,1.38),
   contact:(x,z)=>disk(x,z,0,0,1.55)||rect(x,z,1.14,2.24,-1.265,.765),
 };
 const foundations:Record<string,(x:number,z:number)=>boolean>={
   work:(x,z)=>rect(x,z,-4.325,4.325,-2.375,2.375)||rect(x,z,-1.555,1.555,-2.375,2.455),
+  experience:(x,z)=>rect(x,z,-4.225,4.225,-3.06,3.06),
   research:(x,z)=>rect(x,z,-2.925,.495,-1.785,1.755)||disk(x,z,1.58,-.73,1.085)||rect(x,z,.53,2.83,.275,1.925)||rect(x,z,.36,.67,-1.18,-.28)||rect(x,z,.36,.67,.61,1.49),
   purdue:(x,z)=>rect(x,z,-2.225,2.225,-1.6,1.6),
+  history:(x,z)=>rect(x,z,-5.6,5.6,-3.85,3.85),
   about:(x,z)=>rect(x,z,-2.615,2.615,-2.185,-1.195)||rect(x,z,-2.605,-1.295,-1.315,1.555),
   contact:(x,z)=>disk(x,z,0,0,1.72)||rect(x,z,1.12,2.38,-1.405,.905),
 };
@@ -43,8 +48,8 @@ function assertContained(geometry:BufferGeometry,accept:(x:number,z:number)=>boo
   for(let i=0;i<p.length;i+=3){const tri=p.slice(i,i+3);if(tri.length<3)continue;const x=tri.reduce((n,v)=>n+v[0],0)/3,z=tri.reduce((n,v)=>n+v[2],0)/3;assert.ok(accept(x,z),`${name}: face bridges an open courtyard at ${x},${z}`);}
 }
 
-test('all five landmarks have inset finished floors and foundations matching their actual wall footprint',async()=>{
-  const components={work:ComputeBuilding,research:ResearchInstitute,purdue:CampusHall,about:GardenGallery,contact:ReceptionTerminal};
+test('all seven inhabited landmarks have inset finished floors and foundations matching their actual wall footprint',async()=>{
+  const components={work:ComputeBuilding,experience:ExperienceStudio,research:ResearchInstitute,purdue:CampusHall,history:HistoryMuseum,about:GardenGallery,contact:ReceptionTerminal};
   for(const [id,Component] of Object.entries(components)){
     const renderer=await create(<Component active={false} paused quality="high" runtime={{current:createSceneRuntime()}}/>);
     try{

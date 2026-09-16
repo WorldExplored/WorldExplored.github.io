@@ -9,8 +9,19 @@ export function SectionContent({ id }: { id: SectionId }) {
       <ul className="tags" aria-label={profile.ui.topics}>{item.tags.map(tag => <li key={tag}>{tag}</li>)}</ul>
     </a>)}</div>
   </>;
-  if (id === 'research') return <article className="research-paper"><p className="venue">{profile.research.venue}</p><h3>{profile.research.title}</h3><p className="byline">{profile.research.attribution}</p><p>{profile.research.description}</p><p>{profile.research.role}</p><a className="primary-link" href={profile.links.paper} target="_blank" rel="noopener noreferrer">{profile.ui.paper}</a></article>;
+  if (id === 'experience') return <div className="timeline">{profile.experience.map(item => <article className="timeline-entry" key={item.company}>
+    <div className="timeline-marker" aria-hidden="true" /><div><p className="venue">{item.dates} · {item.location}</p><h3>{item.company}</h3><p className="byline">{item.role}</p><ul>{item.details.map(detail => <li key={detail}>{detail}</li>)}</ul></div>
+  </article>)}</div>;
+  if (id === 'research') return <div className="research-collection">{profile.research.map(item => <article className="research-paper" key={item.title}><p className="venue">{item.venue}</p><h3><a className="paper-title-link" href={item.url} target="_blank" rel="noopener noreferrer">{item.title}</a></h3><p className="byline">{item.attribution}</p><p>{item.description}</p><p>{item.role}</p><ul className="tags" aria-label={profile.ui.topics}>{item.tags.map(tag => <li key={tag}>{tag}</li>)}</ul></article>)}</div>;
   if (id === 'purdue') return <div className="education"><h3>{profile.university}</h3><p>{profile.degree}</p><p className="graduation">{profile.graduation}</p></div>;
+  if (id === 'history') return <div className="timeline history-timeline">
+    {profile.historyMilestones.map(item => <article className="timeline-entry" key={`${item.date}-${item.title}`}>
+      <div className="timeline-marker" aria-hidden="true" /><div><p className="venue">{item.date}</p><h3><a className="timeline-link" href={item.href} {...(item.href.startsWith('http') ? { target: '_blank', rel: 'noopener noreferrer' } : {})}>{item.title}</a></h3><p>{item.description}</p></div>
+    </article>)}
+    {profile.history.map(item => <article className="timeline-entry" key={item.organization}>
+      <div className="timeline-marker" aria-hidden="true" /><div>{item.dates && <p className="venue">{item.dates}</p>}<h3>{item.organization}</h3><p className="byline">{item.role} · {item.school}</p>{item.description && <p>{item.description}</p>}</div>
+    </article>)}
+  </div>;
   if (id === 'about') return <div className="about-copy"><p className="lead-copy">{profile.about}</p></div>;
   if (id === 'contact') return <div className="contact-copy"><ContactLinks />{profile.showAvailability && <p className="availability"><span aria-hidden="true" className="status-light" />{profile.availability}</p>}</div>;
   return null;

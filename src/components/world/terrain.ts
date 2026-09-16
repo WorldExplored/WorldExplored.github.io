@@ -19,13 +19,15 @@ export interface Island { id: string; x: number; z: number; rx: number; rz: numb
 
 export const ISLANDS: readonly Island[] = [
   { id: 'main', x: -4, z: -5, rx: 20, rz: 16, phase: .3, beach: 4.6, hill: 2.4 },
+  { id: 'experience-meadow', x: -27, z: -2, rx: 11, rz: 10.5, phase: .9, beach: 4.2, hill: 2.15 },
   { id: 'garden', x: 1, z: 23, rx: 22, rz: 10, phase: 1.6, beach: 3.5, hill: 1.1 },
   { id: 'purdue', x: 26, z: -7, rx: 7.2, rz: 8.6, phase: 2.4, beach: 3.2, hill: .7 },
   { id: 'beacon', x: -76, z: -36, rx: 5.8, rz: 5.2, phase: 3.2, beach: 1.8, hill: 1.3 },
   { id: 'city', x: -7, z: -78, rx: 29, rz: 18, phase: 4.1, beach: 4.4, hill: .55 },
+  { id: 'museum-meadow', x: 21, z: -72, rx: 14, rz: 12.5, phase: 5.2, beach: 3.8, hill: 1.35 },
 ];
 export const PLANT_REACH = .95;
-export const FOOTPRINT_RADII: Record<LandmarkId, number> = { work: 5.5, research: 3.8, purdue: 3.05, about: 3.5, contact: 3.2, building: 2.4 };
+export const FOOTPRINT_RADII: Record<LandmarkId, number> = { work: 5.5, experience: 5.4, research: 3.8, purdue: 3.05, history: 7, about: 3.5, contact: 3.2, building: 2.4 };
 
 export function seededRandom(seed: number) {
   return () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
@@ -160,8 +162,8 @@ export function createLandscapePlan(): LandscapePlan {
   paths.push({ width: 2.2, elevated: true, points: createCityTransitRoute().curve.getPoints(80).map(point => ({ x: point.x, z: point.z })) });
   const rocks: LandscapeRock[] = []; const trees: LandscapeTree[] = []; const random = seededRandom(627);
   // A few coastal outcrops, with adjacent fragments rather than a necklace of stones.
-  for (const [islandIndex, angle] of [[0, 3.55], [0, 5.15], [1, .55], [3, 2.7], [3, 4.1]] as const) {
-    const island = ISLANDS[islandIndex];
+  for (const [islandId, angle] of [['main', 3.55], ['main', 5.15], ['garden', .55], ['beacon', 2.7], ['beacon', 4.1]] as const) {
+    const island = ISLANDS.find(candidate => candidate.id === islandId)!;
     for (let fragment = 0; fragment < 3; fragment++) {
       const a = angle + (fragment - 1) * .08; const radius = islandContour(island, a);
       const x = island.x + Math.cos(a) * island.rx * radius; const z = island.z + Math.sin(a) * island.rz * radius;
@@ -175,7 +177,7 @@ export function createLandscapePlan(): LandscapePlan {
     if(circleClearance(x,z,[...structures,...rocks,...trees])<radius+.15||pathClearance(x,z,paths)<radius+.8)continue;
     trees.push({id:`courtyard-tree-${trees.length}`,x,z,y:terrainHeight(x,z),radius,height,rotation:random()*Math.PI*2});
   }
-  for (let attempt = 0; trees.length < 42 && attempt < 1200; attempt++) {
+  for (let attempt = 0; trees.length < 54 && attempt < 1800; attempt++) {
     const island = ISLANDS[attempt % ISLANDS.length];
     if (island.id === 'beacon') continue;
     const a = random() * Math.PI * 2; const r = Math.sqrt(random()) * islandContour(island, a);
