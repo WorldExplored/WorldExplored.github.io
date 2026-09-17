@@ -8,7 +8,7 @@ export type GullMode = 'gliding' | 'flapping' | 'circling' | 'approach' | 'perch
 export interface GullPerch { id: string; position: Vector3; heading: number; capacity: 1; owner: number | null; resident?: boolean }
 export interface GullState {
   index: number; position: Vector3; velocity: Vector3; anchor: Vector3; perch: GullPerch;
-  fold: number; flap: number; mode: GullMode; age: number; time: number; phase: number; radius: number; speed: number; heading: number; aspect: number;
+  fold: number; flap: number; mode: GullMode; age: number; time: number; phase: number; radius: number; speed: number; heading: number; aspect: number; bank: number;
   start: Vector3; end: Vector3; duration: number; waypoints: Vector3[]; corridor: Vector3[]; routeTime: number; resident: boolean; returnAt: number;
 }
 interface Flock { birds: GullState[]; perches: GullPerch[]; obstacles: CameraObstacle[]; routes: Vector3[][] }
@@ -46,11 +46,12 @@ export function createGullStates(perches = createGullPerches()): GullState[] {
   const homes = [[-76,17,-36],[-12,14,7],[10,17,-4],[-24,21,-20],[22,16,15],[-14,17,29],[-3,28,-77],[17,30,-87],[-25,25,-75],[-37,18,4],[1,20,37],[30,21,-22],[-15,24,-43],[-53,18,-29],[-78,20,-58],[-37,28,-91],[22,26,-59],[-42,20,29]];
   const obstacles = cameraObstacles();
   const birds: GullState[] = homes.map((home,index) => {
-    const state: GullState = { index, anchor: new Vector3(...home), position: new Vector3(), velocity: new Vector3(), perch: perches[0], phase: random()*TAU, radius: 4.5+random()*2.5, aspect: .6+index*.013, speed: .12+index*.003, heading: 0, fold: index===0?1:0, flap: 0, mode: index===0?'perched':(['gliding','flapping','circling'] as const)[index%3], age: index*.73, time: 0, start: new Vector3(), end: new Vector3(), duration: 0, waypoints: [], corridor: [], routeTime: 0, resident: index===0, returnAt: 20+index*2.1 };
+    const state: GullState = { index, anchor: new Vector3(...home), position: new Vector3(), velocity: new Vector3(), perch: perches[0], phase: random()*TAU, radius: 4.5+random()*2.5, aspect: .6+index*.013, speed: .12+index*.003, heading: 0, bank: 0, fold: index===0?1:0, flap: 0, mode: index===0?'perched':(['gliding','flapping','circling'] as const)[index%3], age: index*.73, time: 0, start: new Vector3(), end: new Vector3(), duration: 0, waypoints: [], corridor: [], routeTime: 0, resident: index===0, returnAt: 20+index*2.1 };
     let floor=home[1];
     for(let i=0;i<96;i++) { orbit(state,i/96*TAU/state.speed,temporary); floor=Math.max(floor,gullFlightFloor(temporary.x,temporary.z,obstacles)+1); }
     state.anchor.y=floor;
     orbit(state,0,state.position);
+    const ahead=orbit(state,.01,new Vector3()).sub(state.position);state.heading=Math.atan2(-ahead.x,-ahead.z);
     if(state.resident){state.position.copy(perches[0].position);perches[0].owner=index;state.heading=perches[0].heading;}
     return state;
   });
@@ -113,6 +114,15 @@ export function startGullTakeoff(state: GullState) {
   state.waypoints=state.corridor.slice(0,-1).reverse().map(p=>p.clone());beginSegment(state);
 }
 
+export const GULL_TURN_RATE = .85;
+function turnGull(state: GullState, target: number, dt: number) {
+  const difference=Math.atan2(Math.sin(target-state.heading),Math.cos(target-state.heading));
+  const turn=Math.max(-GULL_TURN_RATE*dt,Math.min(GULL_TURN_RATE*dt,difference));
+  state.heading+=turn;
+  const targetBank=state.mode==='perched'?0:Math.max(-.26,Math.min(.26,-turn/dt*.24));
+  state.bank+=(targetBank-state.bank)*(1-Math.exp(-3*dt));
+}
+
 /** Reserved landing columns and prevalidated flight corridors avoid shared destinations. */
 export function stepGull(state: GullState, delta: number, camera: Vector3, pointer: readonly number[] | null, paused = false) {
   if(paused)return;
@@ -121,6 +131,7 @@ export function stepGull(state: GullState, delta: number, camera: Vector3, point
   const targetFold=state.mode==='perched'||(state.mode==='approach'&&state.waypoints.length===0)||(state.mode==='takeoff'&&state.position.y<state.perch.position.y+2)?1:0;
   state.fold+=(targetFold-state.fold)*(1-Math.exp(-3*dt));state.flap+=((state.mode==='flapping'||state.mode==='takeoff'?1:0)-state.flap)*(1-Math.exp(-2.5*dt));
   if(state.mode==='perched'){
+    turnGull(state,state.perch.heading,dt);
     const pointerClose=pointer&&new Vector3(...pointer).distanceToSquared(state.position)<6.25;
     if(camera.distanceToSquared(state.position)<9||pointerClose||(!state.resident&&state.age>22+state.index))startGullTakeoff(state);
     return;
@@ -130,7 +141,7 @@ export function stepGull(state: GullState, delta: number, camera: Vector3, point
     state.position.lerpVectors(state.start,state.end,ease(Math.min(1,state.age/state.duration)));
     if(state.age>=state.duration){
       if(state.waypoints.length)beginSegment(state);
-      else if(state.mode==='approach'){state.mode='perched';state.age=0;state.heading=state.perch.heading;state.velocity.set(0,0,0);return;}
+      else if(state.mode==='approach'){state.mode='perched';state.age=0;state.velocity.set(0,0,0);return;}
       else{state.corridor=[];state.mode='gliding';state.age=0;state.returnAt=state.time+35+state.index;}
     }
   }else{
@@ -144,8 +155,8 @@ export function stepGull(state: GullState, delta: number, camera: Vector3, point
     state.position.copy(previous);state.age-=dt;if(!['approach','takeoff'].includes(state.mode))state.routeTime-=dt;
   }
   state.velocity.copy(state.position).sub(previous).divideScalar(dt);
-  if(state.mode==='approach'&&state.waypoints.length===0){state.heading+=(state.perch.heading-state.heading)*(1-Math.exp(-3*dt));}
-  else if(state.velocity.x**2+state.velocity.z**2>.001){const heading=Math.atan2(-state.velocity.x,-state.velocity.z);state.heading+=Math.atan2(Math.sin(heading-state.heading),Math.cos(heading-state.heading))*(1-Math.exp(-5*dt));}
+  if(state.mode==='approach'&&state.waypoints.length===0){turnGull(state,state.perch.heading,dt);}
+  else if(state.velocity.x**2+state.velocity.z**2>.001){const heading=Math.atan2(-state.velocity.x,-state.velocity.z);turnGull(state,heading,dt);}
 }
 
 export interface CrabRoute { island: Island; angle: number; extent: number; band: number; phase: number }

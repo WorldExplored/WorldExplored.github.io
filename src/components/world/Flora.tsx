@@ -43,20 +43,28 @@ export function createFloraSites() {
   return sites;
 }
 
-function floraGeometry(kind:FloraKind) {
+export function floraGeometry(kind:FloraKind) {
   const positions:number[]=[];const colors:number[]=[];const indices:number[]=[];const random=seededRandom(940+KINDS.indexOf(kind));const tint=new Color();
   function leaf(angle:number,length:number,width:number,height:number,lean:number,color:string,offsetX=0,offsetZ=0) {
     const start=positions.length/3;tint.set(color);
     for(let segment=0;segment<=10;segment++) {
-      const t=segment/10;const breadth=Math.pow(Math.sin(t*Math.PI),.8)*width;
-      for(const side of [-1,1]) {
-        const x=side*breadth;const z=t*length;const y=height*t+Math.sin(t*Math.PI)*lean;
+      const t=segment/10;
+      const serration=kind==='fern'||kind==='shrub'?1+.06*Math.sin(segment*Math.PI*.8):1;
+      const breadth=Math.pow(Math.sin(t*Math.PI),.8)*width*serration;
+      for(let rib=0;rib<=4;rib++) {
+        const side=rib/2-1;
+        const x=side*breadth,z=t*length;
+        const fold=Math.sin(t*Math.PI)*width*(.14*(1-Math.abs(side))-.16*side*side);
+        const y=height*t+Math.sin(t*Math.PI)*lean+fold;
         positions.push(offsetX+x*Math.cos(angle)+z*Math.sin(angle),y,offsetZ-x*Math.sin(angle)+z*Math.cos(angle));
-        colors.push(tint.r*(.8+t*.2),tint.g*(.85+t*.15),tint.b);
+        const vein=rib===2||Math.abs(Math.sin(t*31-Math.abs(side)*2.2))<.22;
+        const light=(.72+t*.22)+(vein?.12:0);
+        colors.push(tint.r*light,tint.g*light,tint.b*light);
       }
-      if(segment<10){const n=start+segment*2;indices.push(n,n+1,n+2,n+1,n+3,n+2);}
+      if(segment<10)for(let rib=0;rib<4;rib++){const n=start+segment*5+rib;indices.push(n,n+1,n+5,n+1,n+6,n+5);}
     }
   }
+
   function petal(cx:number,cy:number,cz:number,angle:number,color:string) {
     const start=positions.length/3;tint.set(color);
     for(let ring=0;ring<=7;ring++){
@@ -76,15 +84,16 @@ function floraGeometry(kind:FloraKind) {
       const t=level/9,length=.20*Math.sin(t*Math.PI);
       leaf(a+side*1.12,length,.028,.07,.035,level%2?'#4d853a':'#639c44',Math.sin(a)*t*.65,Math.cos(a)*t*.65);
       // Lift the paired pinnae along the arching rachis.
-      const vertices=22;for(let j=positions.length-vertices*3;j<positions.length;j+=3)positions[j+1]+=.42*t+Math.sin(t*Math.PI)*.20;
+      const vertices=55;for(let j=positions.length-vertices*3;j<positions.length;j+=3)positions[j+1]+=.42*t+Math.sin(t*Math.PI)*.20;
     }
   }
-  if(kind==='broadleaf')for(let i=0;i<8;i++)leaf(i*2.399,.65+random()*.35,.20,.45+random()*.45,.27,i%2?'#278b32':'#4ba436');
-  if(kind==='shrub')for(let i=0;i<26;i++)leaf(i*2.399,.25+random()*.45,.075,.3+random()*.55,.12,i%3?'#31792b':'#5a9d32',(random()-.5)*.4,(random()-.5)*.4);
+  if(kind==='broadleaf')for(let i=0;i<8;i++)leaf(i*2.399,.65+random()*.35,.20,.45+random()*.45,.27,i%2?'#287843':'#58a432');
+  if(kind==='shrub')for(let i=0;i<26;i++)leaf(i*2.399,.25+random()*.45,.075,.3+random()*.55,.12,i%3?'#286c3f':'#4e9147',(random()-.5)*.4,(random()-.5)*.4);
   if(kind==='flower')for(let bloom=0;bloom<3;bloom++) {
     const x=(bloom-1)*.25;const z=Math.sin(bloom*2.1)*.23;const y=.55+bloom*.12;
     leaf(bloom,.01,.012,y,0,'#438832',x,z);
-    for(let p=0;p<9;p++)petal(x,y,z,p/9*Math.PI*2,bloom===0?'#fffdf0':bloom===1?'#f6ac83':'#ffc85d');
+    const petals=bloom===0?12:bloom===1?5:8;
+    for(let p=0;p<petals;p++)petal(x,y,z,p/petals*Math.PI*2,bloom===0?'#fffdf0':bloom===1?'#ea91ac':'#f2c552');
     const center=positions.length/3;tint.set('#dba526');positions.push(x,y+.025,z);colors.push(tint.r,tint.g,tint.b);
     for(let p=0;p<=12;p++){const a=p/12*Math.PI*2;positions.push(x+Math.cos(a)*.025,y+.028,z+Math.sin(a)*.025);colors.push(tint.r,tint.g,tint.b);if(p<12)indices.push(center,center+p+1,center+p+2);}
     for(let l=0;l<3;l++)leaf(l*2.399,.25,.06,y*.6,.08,'#408f30',x,z);
@@ -98,7 +107,7 @@ export function Flora({runtime,paused,quality}:EnvironmentProps) {
     const uniforms={time:{value:0},pointer:{value:new Vector3(10000,0,10000)},strength:{value:0}};
     const batches=KINDS.map((kind,index)=>{
       const entries=sites.filter(site=>site.kind===kind);const geometry=floraGeometry(kind);
-      const material=new MeshPhysicalMaterial({vertexColors:true,side:DoubleSide,roughness:kind==='broadleaf'?.46:.78,clearcoat:kind==='broadleaf'?.32:.05,envMapIntensity:.2});
+      const material=new MeshPhysicalMaterial({vertexColors:true,side:DoubleSide,roughness:kind==='broadleaf'?.46:.78,clearcoat:kind==='broadleaf'?.18:.02,envMapIntensity:.2});
       material.onBeforeCompile=shader=>{
         shader.uniforms.floraTime=uniforms.time;shader.uniforms.floraPointer=uniforms.pointer;shader.uniforms.floraStrength=uniforms.strength;
         shader.vertexShader=`uniform float floraTime;uniform vec3 floraPointer;uniform float floraStrength;\n${shader.vertexShader}`.replace('#include <begin_vertex>',`#include <begin_vertex>\nvec2 origin=instanceMatrix[3].xz;float phase=origin.x*.7+origin.y*.4;float wind=sin(floraTime*${[.8,1.3,.48,1.1,.36,1.1,.5,.6][index]}+phase)*.08+sin(floraTime*.43-phase)*.025;transformed.x+=wind*position.y*position.y;vec2 away=origin-floraPointer.xz;float wake=(1.-smoothstep(.2,2.4,length(away)))*floraStrength;transformed.xz+=away/max(.1,length(away))*wake*position.y*.25;`);

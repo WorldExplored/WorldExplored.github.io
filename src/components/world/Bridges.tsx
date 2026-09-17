@@ -4,6 +4,7 @@ import { useEffect, useMemo } from 'react';
 import { BoxGeometry, BufferGeometry, Curve, CylinderGeometry, Float32BufferAttribute, Group, Mesh, MeshPhysicalMaterial, TubeGeometry, Vector3 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { BRIDGES, type BridgePlan } from './bridgePlan';
+import { applySurface } from './surfaceMaterials';
 import { terrainHeight } from './terrain';
 
 class RailCurve extends Curve<Vector3> {
@@ -14,10 +15,11 @@ class RailCurve extends Curve<Vector3> {
   }
 }
 export function bridgeDeckGeometry(bridge: BridgePlan) {
-  const positions:number[]=[],indices:number[]=[];
+  const positions:number[]=[],indices:number[]=[],uvs:number[]=[];
   for (const {point,normal} of bridge.samples) {
     for (const [side,below] of [[-1,0],[1,0],[-1,1],[1,1]]) {
-      positions.push(point.x+normal.x*side*bridge.width/2,point.y-below*bridge.thickness,point.z+normal.z*side*bridge.width/2);
+      const x=point.x+normal.x*side*bridge.width/2,z=point.z+normal.z*side*bridge.width/2;
+      positions.push(x,point.y-below*bridge.thickness,z); uvs.push(x*.32,z*.32);
     }
   }
   for(let i=0;i<bridge.samples.length-1;i++) {
@@ -26,12 +28,12 @@ export function bridgeDeckGeometry(bridge: BridgePlan) {
   }
   const last=(bridge.samples.length-1)*4;
   indices.push(0,2,1,1,2,3,last,last+1,last+2,last+1,last+3,last+2);
-  const geometry=new BufferGeometry();geometry.setAttribute('position',new Float32BufferAttribute(positions,3));geometry.setIndex(indices);geometry.computeVertexNormals();return geometry;
+  const geometry=new BufferGeometry();geometry.setAttribute('position',new Float32BufferAttribute(positions,3));geometry.setAttribute('uv',new Float32BufferAttribute(uvs,2));geometry.setIndex(indices);geometry.computeVertexNormals();return geometry;
 }
 export function createBridges() {
   const root=new Group();root.name='coastal-bridges';
-  const shell=new MeshPhysicalMaterial({color:'#eef8f2',roughness:.32,clearcoat:.55});
-  const rail=new MeshPhysicalMaterial({color:'#fcfffa',roughness:.24,metalness:.12,clearcoat:.7});
+  const shell=applySurface(new MeshPhysicalMaterial({color:'#dde9e1',roughness:.8,clearcoat:.08}),'mineral');
+  const rail=new MeshPhysicalMaterial({color:'#2699b8',roughness:.24,metalness:.5,clearcoat:.45});
   const base=new MeshPhysicalMaterial({color:'#aabcbc',roughness:.8});
   const add=(geometry:BufferGeometry,material:MeshPhysicalMaterial,name:string)=>{const mesh=new Mesh(geometry,material);mesh.name=name;mesh.castShadow=true;mesh.receiveShadow=true;mesh.raycast=()=>{};root.add(mesh);return mesh;};
   for(const bridge of BRIDGES) {

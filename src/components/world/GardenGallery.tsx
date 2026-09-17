@@ -1,145 +1,90 @@
 'use client';
 
-import { BoxGeometry, BufferGeometry, CylinderGeometry, ExtrudeGeometry, Shape, SphereGeometry, Vector3 } from 'three';
+import { CylinderGeometry, ExtrudeGeometry, Shape, SphereGeometry, Vector3, type BufferGeometry } from 'three';
 import { FurnishedInterior, InteriorBuilder, floorSlab, floorRectangle } from './InteriorKit';
-import { combine, strut, surface, usePalette, useResources, type ModelProps } from './BuildingKit';
-
-function box(width: number, height: number, depth: number, x: number, y: number, z: number) {
-  return new BoxGeometry(width, height, depth).translate(x, y, z);
-}
+import { combine, stroke, usePalette, useResources, type ModelProps } from './BuildingKit';
+import { architecturalSurface as surface, architecturalBox as box, doorway, windowBay, type ShellParts } from './LandmarkShellKit';
 
 export function makeGalleryInterior() {
-  const room = new InteriorBuilder();
-  room.floor('about-gallery-wood-floor',[floorRectangle(0,-1.675,4.85,.63)],1.078);
-  room.floor('about-conservatory-wood-floor',[floorRectangle(-1.95,.01,.96,2.53)],1.078);
-  for (const x of [-1.37, -.45, 1.99]) {
-    room.shelf(x, 1.079, -1.91, .65, 1.38, .17);
-    room.add('paper', new CylinderGeometry(.085, .065, .19, 12).translate(x, 2.572, -1.91));
-    room.add('fabric', new SphereGeometry(.09, 10, 8).scale(1, .65, 1).translate(x + .18, 2.536, -1.91));
+  const room = new InteriorBuilder(), floor = 1.078;
+  room.floor('about-continuous-gallery-floor',[floorRectangle(-.48,-2.075,5.86,1.43),floorRectangle(-2.42,.01,1.98,2.74)],floor);
+  for (const x of [-2.6,-1.1,.4,1.9]) {
+    room.shelf(x,floor,-2.61,.95,1.5,.23);
+    room.add('paper',new CylinderGeometry(.09,.07,.2,12).translate(x,2.68,-2.61));
+    room.add('fabric',new SphereGeometry(.1,12,8).scale(.8,1.25,.8).translate(x+.27,2.69,-2.61));
   }
-  room.box('wood', .04, .55, .24, .42, 1.354, -1.85);
-  room.box('wood', .39, .045, .27, .42, 1.647, -1.85);
-  room.add('metal', new SphereGeometry(.12, 12, 8).scale(.7, 1.25, .7).translate(.42, 1.82, -1.85));
-  room.lamp(-.8, 3.23, -1.71, 1.25); room.lamp(1.72, 3.23, -1.71, .5);
-  // Shelving hugs the west wall; a continuous passage leads into the gallery.
-  room.table(-2.28, 1.079, -.22, .28, 1.52, .55);
-  for (const z of [-.77, -.22, .33]) room.plant(-2.28, 1.66, z, .63);
-  room.box('wood', .23, .055, .65, -1.6, 1.46, .49);
-  room.box('fabric', .22, .045, .6, -1.6, 1.51, .49);
-  for (const z of [.24, .74]) room.box('metal', .035, .35, .035, -1.6, 1.255, z);
-  room.box('wood', .04, .34, .65, -1.475, 1.66, .49);
-  room.plant(-2.26, 1.079, 1.15, .66);
-  room.lamp(-1.95, 3.31, .04, .46);
+  room.table(-3.12,floor,-.22,.38,2.0,.68);
+  for (const z of [-.91,-.24,.43]) room.plant(-3.12,floor+.73,z,.88);
+  room.plant(-3.04,floor,1.05,1.2);
+  // Low seating faces into the open sculpture court, leaving both door approaches clear.
+  room.box('wood',.37,.07,.78,-1.63,1.44,.26);
+  room.box('fabric',.35,.055,.75,-1.63,1.5,.26);
+  room.box('wood',.06,.42,.8,-1.44,1.64,.26);
+  for(const z of [-.03,.55]) room.box('metal',.045,.33,.045,-1.63,1.24,z);
+  room.lamp(-2.46,3.52,-.2,1.4);
+  room.lamp(.45,3.97,-2.02,2.0);
   return room.finish();
 }
 
-export function GardenGallery(props: ModelProps) {
-  const material = usePalette(props, 'about');
-  const geometry = useResources(() => {
+export function makeGardenGallery() {
+  const parts: ShellParts = { walls: [], glass: [], frames: [] };
+  const floor=1.06, spring=3.6;
+  for(const x of [-2.48,-.45,1.58]) windowBay(parts,x,-2.89,2.03,floor,4.02,0,.55);
+  windowBay(parts,2.52,-2.09,1.6,floor,4.02,Math.PI/2,.45);
+  windowBay(parts,-3.5,-2.09,1.6,floor,4.02,Math.PI/2,.45);
+  windowBay(parts,-.39,-1.29,2.34,floor,4.02,0,.32);
+  doorway(parts,1.195,-1.29,.84,floor,4.02);
+  windowBay(parts,2.15,-1.29,.58,floor,4.02,0,.3);
+  for(const x of [-3.5,-1.38]) for(const z of [-.63,.7]) windowBay(parts,x,z,1.33,floor,spring,Math.PI/2,.2);
+  doorway(parts,-1.95,1.46,.88,floor,spring);
+  windowBay(parts,-2.96,1.46,1.08,floor,spring,0,.2);
+  const roofPoint=(u:number,v:number)=>new Vector3(-3.62+u*2.36,3.61+Math.sin(u*Math.PI)*.83,-1.39+v*3.01);
+  const conservatoryRoof=surface(roofPoint,32,8,.045);
+  const ribs:BufferGeometry[]=[];
+  for(const z of [-1.32,-.62,.08,.78,1.48]) {
+    ribs.push(stroke(t=>roofPoint(t,(z+1.39)/3.01),.043,28));
+    for(const x of [-3.49,-1.39]) ribs.push(box(.085,2.54,.085,x,2.33,z));
+  }
+  for(const u of [0,.25,.5,.75,1]) ribs.push(stroke(t=>roofPoint(u,t),.033,2));
+  const gable=new Shape();gable.moveTo(-3.62,3.6);
+  for(let i=0;i<=32;i++){const p=roofPoint(i/32,0);gable.lineTo(p.x,p.y);}
+  gable.lineTo(-1.26,3.6);gable.closePath();
+  parts.glass.push(new ExtrudeGeometry(gable,{depth:.04,bevelEnabled:false}).translate(0,0,1.46));
+  // Gallery and conservatory share a full-width internal opening beneath the attached rear roof.
+  const columns:BufferGeometry[]=[];
+  for(const x of [-3.48,-1.38,2.51]) columns.push(box(.15,2.97,.15,x,2.545,-2.82));
+  const planters:BufferGeometry[]=[box(.62,.32,1.42,2.08,1.22,.2)];
+  const planting:BufferGeometry[]=[];
+  for(let i=0;i<5;i++) planting.push(new SphereGeometry(.2,12,8).scale(.9,1.55,1).translate(2.08,1.58,-.35+i*.27));
+  return {
+    foundation:floorSlab('about-foundation',[floorRectangle(-.48,-2.09,6.16,1.78),floorRectangle(-2.44,.12,2.34,2.86)],.99,.22,'foundation'),
+    floors:floorSlab('about-room-floors',[floorRectangle(-.48,-2.075,5.86,1.43),floorRectangle(-2.42,.01,1.98,2.74)],1.059,.069),
+    walls:combine(parts.walls),glass:combine(parts.glass),frames:combine(parts.frames),ribs:combine(ribs),columns:combine(columns),conservatoryRoof,
+    galleryRoof:combine([box(6.4,.18,1.99,-.48,4.12,-2.12),box(6.4,.1,.16,-.48,4.25,-1.17)]),
+    thresholds:floorSlab('about-door-thresholds',[floorRectangle(-1.95,1.64,1.14,.4),floorRectangle(1.195,-1.14,.88,.3)],1.06,.26,'threshold'),
+    canopy:box(1.16,.11,.7,1.195,3.28,-1.07),
+    courtSupports:combine([new CylinderGeometry(.48,.55,.65,32).translate(0,1.125,0),box(.7,.28,1.5,2.08,.92,.2)]),
+    planters:combine(planters),planting:combine(planting),
+  };
+}
 
-    // The rear gallery and glazed western wing enclose two sides of an open court.
-    const walls = [
-      box(5.2, 0.62, 0.16, 0, 1.37, -2.08),
-      box(5.2, 0.37, 0.16, 0, 3.095, -2.08),
-      box(0.48, 1.23, 0.16, -2.36, 2.295, -2.08),
-      box(0.48, 1.23, 0.16, 2.36, 2.295, -2.08),
-      box(0.16, 2.22, 0.94, 2.52, 2.17, -1.69),
-      box(0.16, 2.22, 0.94, -2.52, 2.17, -1.69),
-      box(1.94, 0.47, 0.14, -0.2, 1.295, -1.29),
-      box(0.93, 2.22, 0.14, 2.065, 2.17, -1.29),
-      box(3.73, 0.4, 0.14, 0.665, 3.08, -1.29),
-      box(0.14, 0.38, 2.79, -2.52, 1.25, 0.065),
-      box(0.14, 0.38, 2.79, -1.38, 1.25, 0.065),
-      box(0.14, 1.91, 0.16, -2.52, 2.015, 1.46),
-      box(0.14, 1.91, 0.16, -1.38, 2.015, 1.46),
-      box(1.28, 0.15, 0.16, -1.95, 2.945, 1.46),
-    ];
-    const glass: BufferGeometry[] = [
-      box(4.24, 1.23, 0.06, 0, 2.295, -2.08),
-      box(1.94, 1.36, 0.06, -0.2, 2.21, -1.29),
-      box(0.06, 1.52, 2.65, -2.52, 2.2, 0.035),
-      box(0.06, 1.52, 2.65, -1.38, 2.2, 0.035),
-    ];
-    const frames = [];
-    for (const x of [-2.12, -1.06, 0, 1.06, 2.12]) frames.push(box(0.045, 1.28, 0.085, x, 2.295, -2.08));
-    for (const z of [-1.25, -0.37, 0.51, 1.39]) {
-      for (const x of [-2.52, -1.38]) frames.push(box(0.08, 1.56, 0.055, x, 2.2, z));
-    }
-    for (const x of [-1.17, -0.2, 0.77]) frames.push(box(0.045, 1.4, 0.085, x, 2.21, -1.29));
-
-    // A shallow barrel roof meets the enclosed gallery at its rear edge.
-    const roofPoint = (u: number, v: number) => new Vector3(-2.63 + u * 1.36, 3.01 + Math.sin(u * Math.PI) * 0.5, -1.38 + v * 2.98);
-    const conservatoryRoof = surface(roofPoint, 24, 4, 0.06);
-    const roofFrame = [];
-    for (const v of [0, 0.25, 0.5, 0.75, 1]) {
-      for (let index = 0; index < 24; index++) roofFrame.push(strut(roofPoint(index / 24, v), roofPoint((index + 1) / 24, v), 0.038));
-    }
-    for (const u of [0, 0.5, 1]) roofFrame.push(strut(roofPoint(u, 0), roofPoint(u, 1), 0.043));
-    const gable = new Shape();
-    gable.moveTo(-2.63, 3.01);
-    for (let index = 1; index <= 24; index++) {
-      const point = roofPoint(index / 24, 0);
-      gable.lineTo(point.x, point.y);
-    }
-    gable.closePath();
-    for (const z of [-1.41, 1.46]) glass.push(new ExtrudeGeometry(gable, { depth: 0.06, bevelEnabled: false }).translate(0, 0, z));
-
-    const doorFrames = [
-      box(0.055, 1.81, 0.12, -2.43, 1.965, 1.51),
-      box(0.055, 1.81, 0.12, -1.47, 1.965, 1.51),
-      box(1.015, 0.055, 0.12, -1.95, 2.855, 1.51),
-      box(0.055, 1.81, 0.12, 0.82, 1.965, -1.25),
-      box(0.055, 1.81, 0.12, 1.57, 1.965, -1.25),
-      box(0.805, 0.055, 0.12, 1.195, 2.855, -1.25),
-      box(0.025, 0.3, 0.06, -1.61, 1.96, 1.58),
-      box(0.025, 0.3, 0.06, 1.4, 1.96, -1.17),
-    ];
-    const doors = [box(0.9, 1.77, 0.06, -1.95, 1.945, 1.51), box(0.69, 1.77, 0.06, 1.195, 1.945, -1.25)];
-    const furnishings: BufferGeometry[] = [
-      box(0.43, 0.09, 1.1, 2.05, 1.49, 0.35),
-      box(0.08, 0.5, 1.1, 2.25, 1.735, 0.35),
-      box(0.14, 0.38, 0.12, 2.05, 1.25, -0.06),
-      box(0.14, 0.38, 0.12, 2.05, 1.25, 0.76),
-      box(0.67, 0.23, 0.73, 1.86, 1.175, 1.48),
-    ];
-    const plants: BufferGeometry[] = [box(0.58, 0.04, 0.64, 1.86, 1.31, 1.48)];
-    for (let index = 0; index < 5; index++) {
-      const angle = index * 2.4;
-      plants.push(new SphereGeometry(0.16, 8, 5).scale(1, 1.3, 0.75).translate(1.86 + Math.sin(angle) * 0.19, 1.42 + index % 2 * 0.09, 1.48 + Math.cos(angle) * 0.2));
-    }
-    // A planter inside the conservatory makes its glazed enclosure legible.
-
-
-    return {
-      foundation: floorSlab('about-foundation',[floorRectangle(0,-1.69,5.22,.96),floorRectangle(-1.95,.12,1.3,2.86)],.99,.19,'foundation'),
-      courtSupports: combine([new CylinderGeometry(.48,.55,.65,32).translate(0,1.125,0),box(.18,.26,.16,2.05,.93,-.06),box(.18,.26,.16,2.05,.93,.76),box(.69,.26,.75,1.86,.93,1.48)]),
-      floors: floorSlab('about-room-floors',[floorRectangle(0,-1.675,4.86,.63),floorRectangle(-1.95,.01,.98,2.73)],1.059,.069),
-      walls: combine(walls),
-      galleryRoof: combine([box(5.3, 0.14, 1.12, 0, 3.35, -1.66), box(5.34, 0.07, 0.1, 0, 3.27, -1.09)]),
-      glass: combine(glass),
-      frames: combine([...frames, ...roofFrame]),
-      conservatoryRoof,
-      doors: combine(doors),
-      entrance: combine(doorFrames),
-      thresholds: floorSlab('about-door-thresholds',[floorRectangle(-1.95,1.64,1.14,.4),floorRectangle(1.195,-1.14,.88,.3)],1.06,.26,'threshold'),
-      furnishings: combine(furnishings),
-      planting: combine(plants),
-    };
-  });
+export function GardenGallery(props:ModelProps) {
+  const material=usePalette(props,'about'),geometry=useResources(makeGardenGallery);
   return <group name="about-gallery-conservatory" dispose={null}>
-    <FurnishedInterior name="about-interior" build={makeGalleryInterior} />
-    <mesh name="about-court-foundation" geometry={geometry.foundation} material={material.paving} receiveShadow />
-    <mesh name="about-court-furniture-footings" geometry={geometry.courtSupports} material={material.paving} receiveShadow />
-    <mesh name="about-gallery-floors" geometry={geometry.floors} material={material.paving} receiveShadow />
-    <mesh name="about-enclosing-walls" geometry={geometry.walls} material={material.porcelain} castShadow receiveShadow />
-    <mesh name="about-gallery-roof" geometry={geometry.galleryRoof} material={material.porcelain} castShadow receiveShadow />
-    <mesh name="about-glazed-walls" geometry={geometry.glass} material={material.glass} />
-    <mesh name="about-conservatory-roof-frames" geometry={geometry.frames} material={material.edge} castShadow />
-    <mesh name="about-barrel-glass-roof" geometry={geometry.conservatoryRoof} material={material.glass} />
-    <mesh name="about-entrance-doors" geometry={geometry.doors} material={material.glass} />
-    <mesh name="about-entrance-frames" geometry={geometry.entrance} material={material.navy} />
-    <mesh name="about-entrance-thresholds" geometry={geometry.thresholds} material={material.edge} receiveShadow />
-    <mesh name="about-court-bench-planters" geometry={geometry.furnishings} material={material.porcelain} castShadow receiveShadow />
-    <mesh name="about-court-planting" geometry={geometry.planting} material={material.green} castShadow />
+    <FurnishedInterior name="about-interior" build={makeGalleryInterior}/>
+    <mesh name="about-court-foundation" geometry={geometry.foundation} material={material.paving} receiveShadow/>
+    <mesh name="about-gallery-floors" geometry={geometry.floors} material={material.paving} receiveShadow/>
+    <mesh name="about-enclosing-walls" geometry={geometry.walls} material={material.porcelain} castShadow receiveShadow/>
+    <mesh name="about-gallery-roof" geometry={geometry.galleryRoof} material={material.porcelain} castShadow receiveShadow/>
+    <mesh name="about-glazed-walls" geometry={geometry.glass} material={material.glass}/>
+    <mesh name="about-window-frames" geometry={geometry.frames} material={material.navy} castShadow/>
+    <mesh name="about-conservatory-ribs" geometry={geometry.ribs} material={material.edge} castShadow/>
+    <mesh name="about-gallery-roof-columns" geometry={geometry.columns} material={material.edge} castShadow/>
+    <mesh name="about-vaulted-conservatory-glass" geometry={geometry.conservatoryRoof} material={material.glass}/>
+    <mesh name="about-entrance-thresholds" geometry={geometry.thresholds} material={material.paving} receiveShadow/>
+    <mesh name="about-gallery-entry-canopy" geometry={geometry.canopy} material={material.cyan} castShadow/>
+    <mesh name="about-court-furniture-footings" geometry={geometry.courtSupports} material={material.paving} receiveShadow/>
+    <mesh name="about-court-planters" geometry={geometry.planters} material={material.porcelain} castShadow/>
+    <mesh name="about-court-planting" geometry={geometry.planting} material={material.green} castShadow/>
   </group>;
 }

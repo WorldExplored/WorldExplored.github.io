@@ -12,11 +12,22 @@ import { createSchoolFish, FISH_SPECIES, stepSchoolFish } from './fishSchools';
 export function createFishHomes(): [number, number][] { return createSchoolFish().map(fish => [fish.position.x, fish.position.z]); }
 
 function finGeometry(vertices: number[], color: string) {
-  const geometry = new BufferGeometry(); geometry.setAttribute('position', new Float32BufferAttribute(vertices, 3));
-  const colors = []; const tint = new Color(color);
-  for (let i = 0; i < vertices.length / 3; i++) colors.push(tint.r, tint.g, tint.b);
-  geometry.setAttribute('color', new Float32BufferAttribute(colors, 3));
-  geometry.setIndex(Array.from({ length: vertices.length / 3 }, (_, index) => index)); geometry.computeVertexNormals(); return geometry;
+  const positions:number[]=[],colors:number[]=[],tint=new Color(color),steps=6;
+  // Thin fin membranes carry converging rays and a slight camber, not opaque flat triangles.
+  for(let face=0;face<vertices.length;face+=9){
+    const a=new Vector3(...vertices.slice(face,face+3)),b=new Vector3(...vertices.slice(face+3,face+6)),c=new Vector3(...vertices.slice(face+6,face+9));
+    function write(u:number,v:number){
+      const point=a.clone().multiplyScalar(1-u-v).addScaledVector(b,u).addScaledVector(c,v);
+      point.z+=Math.sin((u+v)*Math.PI)*.004;
+      positions.push(point.x,point.y,point.z);
+      const ray=.68+.25*Math.cos(Math.atan2(v,u)*29)**2;colors.push(tint.r*ray,tint.g*ray,tint.b*ray);
+    }
+    for(let row=0;row<steps;row++)for(let col=0;col<steps-row;col++){
+      write(row/steps,col/steps);write((row+1)/steps,col/steps);write(row/steps,(col+1)/steps);
+      if(col<steps-row-1){write((row+1)/steps,col/steps);write((row+1)/steps,(col+1)/steps);write(row/steps,(col+1)/steps);}
+    }
+  }
+  const geometry = new BufferGeometry();geometry.setAttribute('position',new Float32BufferAttribute(positions,3));geometry.setAttribute('color',new Float32BufferAttribute(colors,3));geometry.setIndex(Array.from({length:positions.length/3},(_,i)=>i));geometry.computeVertexNormals();return geometry;
 }
 // A ring is [longitudinal position, vertical radius, lateral radius, vertical offset].
 // These profiles alter anatomy, rather than scaling one sphere into several colors.
@@ -44,7 +55,10 @@ export function createFishBodyGeometry(variant: number) {
       const angle = side / radial * Math.PI * 2; const y = Math.cos(angle);
       // The bottom dweller has a broad head and a nearly flat ventral plane.
       vertices.push(x, (variant === 3 && y < 0 ? y * .32 : y) * height + offset, Math.sin(angle) * width);
-      const tint = bodyTint(variant, x, angle); colors.push(tint.r, tint.g, tint.b);
+      const tint = bodyTint(variant, x, angle);
+      const scaleRidge=.94+.06*Math.cos(x*180+Math.sin(angle*18)*.8)**2;
+      const gillX=[.12,.27,.14,.21][variant];const gill=Math.abs(x-gillX)<.011&&Math.abs(Math.sin(angle))>.65?.64:1;
+      colors.push(tint.r*scaleRidge*gill,tint.g*scaleRidge*gill,tint.b*scaleRidge*gill);
       if (ring && side) { const a = ring * (radial + 1) + side; indices.push(a, a - 1, a - radial - 2, a, a - radial - 2, a - radial - 1); }
     }
   });

@@ -106,3 +106,8 @@ One controller owns canvas gestures: left drag or one finger orbits, right drag 
 Town responses have bounded state and physical mechanisms: fountain patterns, station route illumination, solar alignment, greenhouse vents, a harbor buoy and a wind turbine. Use stable generous hitboxes independent of animated child geometry, reject drag-generated clicks, and give every action a focusable keyboard equivalent. Activation is reversible and returns to rest; reduced motion shows a stable response without continuous animation. Do not add click instructions or reveal private project details.
 
 Keep geometry assertions, input and playlist tests, browser observations and deployed-site checks distinct. Review floor edges, shore materials, planting, junctions, lighthouse details and town responses from close and overview positions across desktop, tablet and mobile. Passing automated checks does not establish visual acceptance, successful audio delivery or production verification; record those only after observing the actual browser or deployed build.
+
+
+## Coastal future overhaul
+
+The current authoritative visual direction is `docs/research/WORLD_ART_DIRECTION.md`. Research is a major layered institution, not subordinate by accident. Architecture uses distinct structural silhouettes and reachable planted circulation. Use the shared cobalt/aqua/deep-glass palette with scanned mineral and timber detail; keep nature richer and rougher than enamel technology. Music is intentionally unmounted until a user-approved playlist exists; retain its implementation. QA output is transient under ignored `.tmp/qa`, not a committed screenshot archive.

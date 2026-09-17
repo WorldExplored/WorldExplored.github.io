@@ -50,7 +50,9 @@ test('selected city windows reveal real occupied depth with no opaque facade bac
         const glass = ray.intersectObjects(glazing, false)[0];
         const interior = ray.intersectObjects(opaque, false)[0];
         assert.ok(glass && glass.distance < .8, `${building.id} visible transparent opening`);
-        assert.ok(interior && interior.distance > glass.distance + .25, `${building.id} has depth behind glass, found ${interior?.distance}`);
+        const wall=ray.intersectObjects(opaque.filter(mesh=>mesh.geometry.userData.roomWall),false)[0];
+        assert.ok(!wall || wall.distance>glass.distance+.25,`${building.id} glazing cannot have an opaque wall pasted immediately behind it`);
+        assert.ok(interior && interior.distance>glass.distance+.025,`${building.id} furniture remains behind glazing`);
         assert.ok(interior.distance < .5 + room.depth + .6, `${building.id} room has real rear geometry`);
         const inside = new Vector3(...room.target); inside.y = room.floor + 1.1;
         ray.set(inside, new Vector3(0, -1, 0));
@@ -134,4 +136,64 @@ test('station canopy provides full standing headroom across the boarding platfor
       assert.ok(ray.intersectObjects(canopy, false)[0].distance >= 1.85);
     }
   } finally { item.dispose(); }
+});
+
+test('every occupied upper floor connects to a served lift through a covered corridor and clear rear aperture', () => {
+  let checked=0;
+  for(const building of cityBuildings) {
+    const plans: import('../src/components/world/CityArchitecture').CityLiftPlan[]=[],meshes:Mesh[]=[];
+    const material=new MeshBasicMaterial({side:DoubleSide}),matrix=new Object3D();
+    buildCityArchitecture(building,(geometry,_finish,x=0,y=0,z=0,sx=1,sy=1,sz=1,rotation=0)=>{
+      matrix.position.set(x,y,z);matrix.scale.set(sx,sy,sz);matrix.rotation.set(0,rotation,0);matrix.updateMatrix();geometry.applyMatrix4(matrix.matrix);
+      const mesh=new Mesh(geometry,material);mesh.updateMatrixWorld();meshes.push(mesh);
+    },plan=>plans.push(plan));
+    try {
+      const floors=meshes.filter(mesh=>mesh.geometry.userData.roomAccess);
+      for(const mesh of floors) {
+        const room=mesh.geometry.userData.roomAccess;
+        if(room.floor<.5)continue;
+        checked++;
+        const lift=plans.find(plan=>plan.floors.some(floor=>Math.abs(floor-room.floor)<1e-5));
+        assert.ok(lift,`${room.room} has no served lift stop`);
+        const cover=meshes.find(mesh=>mesh.geometry.userData.circulation?.rooms.includes(room.room));
+        assert.ok(cover,`${room.room} lacks a covered connection to its lift`);
+        const landing=meshes.find(mesh=>Math.abs((mesh.geometry.userData.liftLanding?.floor??Infinity)-room.floor)<1e-5)!;
+        const ray=new Raycaster(new Vector3(),new Vector3(0,-1,0));
+        const galleryZ=lift.z+.70;
+        for(let t=0;t<=1.0001;t+=.05) {
+          // Shared wings join laterally first, then approach their inset rear door.
+          ray.ray.origin.set(room.rear[0]*t,room.floor+.15,galleryZ);
+          assert.ok(ray.intersectObject(landing).length,`${room.room}: transverse gallery gap`);
+          ray.ray.origin.set(room.rear[0],room.floor+.15,galleryZ+(room.rear[1]-.055-galleryZ)*t);
+          assert.ok(ray.intersectObject(landing).length,`${room.room}: rear corridor gap`);
+        }
+        // The rear route has a genuinely open aperture at standing height.
+        ray.set(new Vector3(room.rear[0],room.floor+.65,room.rear[1]-.08),new Vector3(0,0,1));ray.far=.20;
+        assert.equal(ray.intersectObjects(meshes).length,0,`${room.room}: blocked rear doorway`);
+      }
+    } finally {meshes.forEach(mesh=>mesh.geometry.dispose());material.dispose();}
+  }
+  assert.ok(checked>30,'All modeled upper rooms are audited, including both wings and conservatory');
+});
+
+test('balcony planting is integrated into reachable terraces and all room floors contain furnishings', () => {
+  let balconies=0,occupied=0;
+  for(const building of cityBuildings) {
+    const geometries: import('three').BufferGeometry[]=[];
+    buildCityArchitecture(building,geometry=>geometries.push(geometry));
+    try {
+      const rooms=geometries.filter(g=>g.userData.roomAccess);
+      for(const room of rooms) {
+        const access=room.userData.roomAccess;
+        assert.ok(geometries.some(g=>Math.abs((g.userData.furniture?.floor??Infinity)-(access.floor+.015))<.025),`${access.room}: empty occupied floor`);
+        occupied++;
+      }
+      for(const planter of geometries.filter(g=>g.userData.reachableGarden)) {
+        const tag=planter.userData.reachableGarden;
+        assert.ok(geometries.some(g=>g.userData.floor?.name===`${tag.room}-balcony`));
+        assert.ok(rooms.some(g=>g.userData.roomAccess.room===tag.room));balconies++;
+      }
+    } finally {geometries.forEach(g=>g.dispose());}
+  }
+  assert.ok(balconies>=20 && occupied>=40);
 });

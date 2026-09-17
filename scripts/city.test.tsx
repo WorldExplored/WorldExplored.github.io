@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { StrictMode } from 'react';
 import { create } from '@react-three/test-renderer';
-import { Vector3, type BufferGeometry, type Material, type Mesh, type Object3D } from 'three';
+import { PerspectiveCamera, Vector3, type BufferGeometry, type Material, type Mesh, type Object3D } from 'three';
 import { EcoCity } from '../src/components/world/EcoCity';
 import { CITY_BASE_Y, cityBuildings, createCityTransitRoute, writeCityTransitPose } from '../src/components/world/city';
 import { landDistance, terrainBaseHeight } from '../src/components/world/terrain';
@@ -160,4 +160,44 @@ test('background-building hover stays local across child surfaces and never owns
     await item.renderer.fireEvent(owner,'pointerOut',{});await new Promise(resolve=>setTimeout(resolve,150));await item.renderer.advanceFrames(60,1/60);
     assert.ok(materials().every(material=>material.emissiveIntensity<.001));
   }finally{await item.renderer.unmount();}
+});
+
+
+test('city furniture constructs only near the camera, retains shells, and uses stable LOD hysteresis', async () => {
+  const camera=new PerspectiveCamera(43,1.6,.1,500);camera.position.set(42,29,76);
+  const runtime={current:createSceneRuntime()};
+  const render=(quality:QualityTier='high')=><EcoCity runtime={runtime} quality={quality} paused />;
+  const renderer=await create(render(),{camera});const root=renderer.scene.instance;
+  const interiors=()=>{const result:Object3D[]=[];root.traverse(object=>{if(object.type==='Group'&&object.name.startsWith('city-interior-'))result.push(object);});return result;};
+  const building=cityBuildings[0],shell=root.getObjectByName(`city-building-${building.id}`)!;
+  const structure=meshesIn(shell);
+  try {
+    await renderer.advanceFrames(3,1/60);
+    assert.equal(interiors().length,0,'Overview does not allocate or render room furniture');
+    assert.ok(structure.length>0 && structure.every(mesh=>mesh.visible),'Shell and circulation stay present before furniture loads');
+    camera.position.set(building.x,5,building.z+10);
+    await renderer.advanceFrames(1,1/60);
+    assert.equal(interiors().length,1,'Only one nearest interior is built per frame');
+    await renderer.advanceFrames(20,1/60);
+    const interior=root.getObjectByName(`city-interior-${building.id}`)!;
+    assert.ok(interior?.visible && meshesIn(interior).length>=4,'Approaching constructs occupied furniture batches');
+    assert.ok(structure.every(mesh=>meshesIn(shell).includes(mesh)),'Loading does not rebuild walls, doors, floors, landings or lift');
+    const batches=meshesIn(interior),disposals=new Map(batches.map(mesh=>[mesh.geometry,0]));
+    for(const geometry of disposals.keys())geometry.addEventListener('dispose',()=>disposals.set(geometry,disposals.get(geometry)!+1));
+    camera.position.set(building.x,5,building.z+62);await renderer.advanceFrames(1,1/60);
+    assert.equal(interior.visible,true,'Visible high-tier rooms survive the 55–70m hysteresis band');
+    camera.position.set(building.x,5,building.z+74);await renderer.advanceFrames(1,1/60);
+    assert.equal(interior.visible,false,'Far detail stops submitting draws');
+    camera.position.set(building.x,5,building.z+62);await renderer.advanceFrames(1,1/60);
+    assert.equal(interior.visible,false,'Hidden rooms do not flicker back on inside the exit band');
+    camera.position.set(building.x,5,building.z+50);await renderer.advanceFrames(1,1/60);
+    assert.equal(interior.visible,true);assert.deepEqual(meshesIn(interior),batches,'Reapproach reuses the same GPU resources');
+    await renderer.update(render('low'));await renderer.advanceFrames(1,1/60);
+    assert.equal(interior.visible,false,'Mobile detail has a smaller visibility radius');
+    camera.position.set(building.x,5,building.z+20);await renderer.advanceFrames(1,1/60);
+    assert.equal(interior.visible,true,'Mobile close views retain complete rooms');
+    assert.ok([...disposals.values()].every(count=>count===0));
+    await renderer.unmount();await new Promise(resolve=>setTimeout(resolve,10));
+    assert.ok([...disposals.values()].every(count=>count===1),'Deferred furniture is disposed once with the city');
+  } catch(error) {await renderer.unmount();throw error;}
 });

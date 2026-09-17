@@ -5,6 +5,7 @@ import { useThree, type RootState } from '@react-three/fiber';
 import { act, create, type ReactThreeTest } from '@react-three/test-renderer';
 import { type BufferGeometry, type Mesh, type MeshPhysicalMaterial, DoubleSide, Raycaster, Vector3 } from 'three';
 import { ReflectiveObject, type RotationCommand } from '../src/components/world/ReflectiveObject';
+import { LANDMARK_HIT_BOUNDS } from '../src/components/world/Landmark';
 import { LandmarkModel } from '../src/components/world/LandmarkModels';
 import { createSceneRuntime, world, type LandmarkId, type QualityTier } from '../src/content/world';
 
@@ -188,8 +189,6 @@ test('disabled lamp illumination stays off during selection', async () => {
 
 test('landmarks fit their planting footprints and preserve the intended hierarchy', async () => {
   const runtime = { current: createSceneRuntime() };
-  const limits: Record<LandmarkId, number> = { work: 5.5, experience: 5.4, research: 3.8, purdue: 3.05, history: 7, about: 3.5, contact: 3.2, building: 2.4 };
-  const heightLimits: Record<LandmarkId, number> = { work: 11.6, experience: 7.8, research: 7, purdue: 4.3, history: 8.8, about: 5, contact: 6.5, building: 7.8 };
   const bounds: Record<string, { radius: number; width: number; depth: number; top: number; bottom: number; triangles: number }> = {};
   for (const landmark of world.landmarks) {
     const renderer = await create(<LandmarkModel id={landmark.id} runtime={runtime} active={false} paused={false} quality="high" />);
@@ -212,17 +211,18 @@ test('landmarks fit their planting footprints and preserve the intended hierarch
           radius = Math.max(radius, Math.hypot(point.x, point.z));
         }
       }
-      const limit = limits[landmark.id];
+      const limit = LANDMARK_HIT_BOUNDS[landmark.id].radius;
       assert.ok(radius <= limit, `${landmark.id} radius ${radius} exceeds ${limit}`);
       assert.ok(Math.abs(min.y - 0.8) < 0.06, `${landmark.id} must meet the island floor`);
-      assert.ok(max.y <= heightLimits[landmark.id], `${landmark.id} exceeds its camera envelope`);
+      assert.ok(max.y <= LANDMARK_HIT_BOUNDS[landmark.id].top, `${landmark.id} exceeds its camera envelope`);
       bounds[landmark.id] = { radius, width: max.x - min.x, depth: max.z - min.z, top: max.y, bottom: min.y, triangles };
     } finally { await renderer.unmount(); }
   }
-  assert.ok(bounds.purdue.top <= 4.3);
-  assert.ok(bounds.work.radius > bounds.research.radius && bounds.research.radius > bounds.purdue.radius);
-  assert.ok(bounds.work.top > bounds.research.top && bounds.research.top > bounds.purdue.top);
-  assert.ok(bounds.work.triangles > bounds.research.triangles && bounds.research.triangles > bounds.purdue.triangles);
+  assert.ok(bounds.purdue.top <= 4.8);
+  // Hierarchy follows occupied architecture, not removed rooftop hoops or tessellation density.
+  assert.ok(bounds.work.width > bounds.research.width && bounds.research.width > bounds.purdue.width);
+  assert.ok(bounds.research.top > bounds.purdue.top && bounds.work.top > bounds.purdue.top);
+  assert.ok(bounds.work.width > 8 && bounds.research.top > 7 && bounds.purdue.depth > 4);
   console.log(JSON.stringify({ landmarkBounds: bounds }));
 });
 
@@ -337,7 +337,7 @@ test('the lighthouse beam remains westward, freezes when paused, and darkens whe
 
 test('occupied building volumes have continuous exterior walls, roofs, floors and doors', async () => {
   const runtime={current:createSceneRuntime()};
-  const rooms: Partial<Record<LandmarkId, number[][]>>={work:[[-2.875,2.2,0],[0,2,0],[2.875,3.9,0]],research:[[-1.215,1.9,0],[1.68,1.8,1.1],[1.58,2,-.73]],purdue:[[0,1.8,0]],about:[[0,2,-1.7],[-1.95,2,0]],contact:[[0,2,0]]};
+  const rooms: Partial<Record<LandmarkId, number[][]>>={work:[[-2.875,2.2,0],[0,2,0],[2.875,3.9,0]],experience:[[0,2,0]],research:[[-1.215,1.9,0],[1.68,1.8,1.1],[-2.6,4.8,-1]],purdue:[[0,1.8,0]],history:[[2,2,-.5]],about:[[0,2,-1.7],[-1.95,2,0]],contact:[[0,2,0],[2.85,2,-1.3]]};
   for(const [id,centers] of Object.entries(rooms)){
     const renderer=await create(<LandmarkModel id={id as LandmarkId} runtime={runtime} active={false} paused quality="high"/>);
     try{

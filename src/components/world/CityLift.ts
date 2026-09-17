@@ -13,9 +13,9 @@ export function cityLiftPose(floors: readonly number[], elapsed: number) {
 
 export function createCityLift(plan: CityLiftPlan) {
   const cabin = new Group(); cabin.name = `${plan.building}-lift-cabin`;
-  const metal = new MeshPhysicalMaterial({ color: '#426e72', roughness: .45, metalness: .55 });
-  const stone = new MeshPhysicalMaterial({ color: '#d6cfb4', roughness: .78 });
-  const glass = new MeshPhysicalMaterial({ color: '#81cbd2', transparent: true, opacity: .17, depthWrite: false, roughness: .15 });
+  const metal = new MeshPhysicalMaterial({ color: '#244f64', roughness: .45, metalness: .55 });
+  const stone = new MeshPhysicalMaterial({ color: '#1262c4', roughness: .78 });
+  const glass = new MeshPhysicalMaterial({ color: '#19aebf', transparent: true, opacity: .17, depthWrite: false, roughness: .15 });
   const bars = [];
   for (const x of [-.33, .33]) for (const z of [-.34, .34]) bars.push(new BoxGeometry(.035, 1.24, .035).translate(x, .62, z));
   for (const y of [-.035, 1.24]) bars.push(new BoxGeometry(.72, .07, .76).translate(0, y, 0));
@@ -27,9 +27,17 @@ export function createCityLift(plan: CityLiftPlan) {
   panes.push(new BoxGeometry(.65, 1.12, .015).translate(0, .63, -.33));
   const paneGeometry = mergeGeometries(panes)!; panes.forEach(part => part.dispose()); cabin.add(new Mesh(paneGeometry, glass));
   const doorGeometry = new BoxGeometry(.30, 1.1, .018);
-  const doors = [-1, 1].map(side => { const door = new Mesh(doorGeometry, glass); door.position.set(side * .15, .63, .345); cabin.add(door); return door; });
+  const handleGeometry = new BoxGeometry(.018, .16, .035);
+  const doors = [-1, 1].map(side => {
+    const pivot = new Group(); pivot.position.set(side*.30,.63,.345);
+    const door = new Mesh(doorGeometry, glass); door.position.x=-side*.15;
+    const handle=new Mesh(handleGeometry,metal);handle.position.set(-side*.245,0,.035);
+    pivot.add(door,handle);cabin.add(pivot);return pivot;
+  });
+  let previouslyOpen=false;
   return { cabin, update(time: number) {
     const pose = cityLiftPose(plan.floors, time); cabin.position.set(plan.x, pose.floor, plan.z);
-    doors.forEach((door, index) => { door.position.x = (index ? 1 : -1) * (.15 + pose.open * .13); });
-  }, dispose() { structure.dispose(); floor.geometry.dispose(); paneGeometry.dispose(); doorGeometry.dispose(); metal.dispose(); stone.dispose(); glass.dispose(); } };
+    doors.forEach((door,index)=>{door.rotation.y=(index?1:-1)*pose.open*Math.PI/2;});
+    const open=pose.open>.5,arrived=open && !previouslyOpen;previouslyOpen=open;return {arrived};
+  }, dispose() { structure.dispose(); floor.geometry.dispose(); paneGeometry.dispose(); doorGeometry.dispose(); handleGeometry.dispose(); metal.dispose(); stone.dispose(); glass.dispose(); } };
 }

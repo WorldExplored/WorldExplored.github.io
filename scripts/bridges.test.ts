@@ -4,20 +4,30 @@ import { DoubleSide, Mesh, MeshBasicMaterial, Raycaster, Vector3 } from 'three';
 import { BRIDGES, bridgeHeightAt } from '../src/components/world/bridgePlan';
 import { createBridges } from '../src/components/world/Bridges';
 import { architectureFootprints, archipelagoGeometry, terrainHeight, terrainMeshHeight } from '../src/components/world/terrain';
+import { makeCampusHall } from '../src/components/world/CampusHall';
 import { world } from '../src/content/world';
 
 const insideLanding = (x:number,z:number,bridge:typeof BRIDGES[number]) => bridge.landings.some(p=>Math.hypot(x-p.x,z-p.z)<=p.radius+.03);
 test('actual bridge deck vertices clear final terrain triangles and every landmark footprint', () => {
   const terrain = new Mesh(archipelagoGeometry(),new MeshBasicMaterial({side:DoubleSide}));terrain.updateMatrixWorld();
   const ray = new Raycaster(new Vector3(),new Vector3(0,-1,0));
-  const bridges=createBridges();
+  const bridges=createBridges(),campus=makeCampusHall();
+  campus.base.computeBoundingBox();
+  const campusBounds=campus.base.boundingBox!.clone(),campusConfig=world.landmarks.find(p=>p.id==='purdue')!;
+  // Planting uses a conservative circle; bridge clearance uses the actual rotated hall foundation.
+  const clears=(x:number,z:number,solid:ReturnType<typeof architectureFootprints>[number],margin:number)=>{
+    if(solid.id!=='purdue')return Math.hypot(x-solid.x,z-solid.z)>solid.radius+margin;
+    const yaw=campusConfig.rotationY??0,dx=x-campusConfig.position[0],dz=z-campusConfig.position[2];
+    const localX=dx*Math.cos(yaw)-dz*Math.sin(yaw),localZ=dx*Math.sin(yaw)+dz*Math.cos(yaw);
+    return localX<campusBounds.min.x-margin||localX>campusBounds.max.x+margin||localZ<campusBounds.min.z-margin||localZ>campusBounds.max.z+margin;
+  };
   try {
     for(const bridge of BRIDGES){
       const mesh=bridges.root.getObjectByName(`bridge-${bridge.id}-deck`) as Mesh;
       const vertices=mesh.geometry.attributes.position;
       for(let i=0;i<vertices.count;i++){
         const x=vertices.getX(i),y=vertices.getY(i),z=vertices.getZ(i);
-        for(const solid of architectureFootprints())assert.ok(Math.hypot(x-solid.x,z-solid.z)>solid.radius+.08,`${bridge.id} enters ${solid.id}`);
+        for(const solid of architectureFootprints())assert.ok(clears(x,z,solid,.08),`${bridge.id} enters ${solid.id}`);
         if(insideLanding(x,z,bridge))continue;
         ray.ray.origin.set(x,100,z);const ground=ray.intersectObject(terrain)[0]?.point.y??-5;
         assert.ok(y>ground+.015,`${bridge.id} deck ${i} (${x},${y},${z}) intersects ground ${ground}`);
@@ -47,9 +57,9 @@ test('actual bridge deck vertices clear final terrain triangles and every landma
       const box=object.geometry.boundingBox;object.geometry.computeBoundingBox();const b=box??object.geometry.boundingBox!;
       const center=b.getCenter(new Vector3());
       assert.ok(b.min.y<=terrainHeight(center.x,center.z));
-      for(const solid of architectureFootprints())assert.ok(Math.hypot(center.x-solid.x,center.z-solid.z)>solid.radius+.2);
+      for(const solid of architectureFootprints())assert.ok(clears(center.x,center.z,solid,.2));
     });
-  }finally{bridges.dispose();terrain.geometry.dispose();(terrain.material as MeshBasicMaterial).dispose();}
+  }finally{Object.values(campus).forEach(g=>g.dispose());bridges.dispose();terrain.geometry.dispose();(terrain.material as MeshBasicMaterial).dispose();}
 });
 test('Purdue faces its separated arrival plaza',()=>{
   const config=world.landmarks.find(p=>p.id==='purdue')!;const landing=BRIDGES.find(p=>p.id==='purdue')!.landings[1];

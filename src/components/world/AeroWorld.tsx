@@ -8,6 +8,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import { Environment, Lightformer } from '@react-three/drei';
 import { BackSide, Color, Vector3, Vector2, Raycaster, type DirectionalLight } from 'three';
 import { world, type SceneRuntime, type QualityTier, type WorldProps } from '@/content/world';
+import { SURFACES_READY } from './surfaceMaterials';
 import { CameraDirector } from './CameraDirector';
 import { intersectTerrainRay } from './cameraControls';
 import { Landmark } from './Landmark';
@@ -18,6 +19,7 @@ import { CoastalLife } from './CoastalLife';
 import { Flora } from './Flora';
 import { Wildlife } from './Wildlife';
 import { ShoreImpacts } from './ShoreImpacts';
+import { LighthouseAccess } from './LighthouseAccess';
 import { Bridges } from './Bridges';
 import { GardenRover } from './GardenRover';
 import { Seaweed } from './Seaweed';
@@ -125,11 +127,13 @@ function PointerGround({ runtime }: { runtime: MutableRefObject<SceneRuntime> })
 export function AeroWorld(props: WorldProps & { runtime: MutableRefObject<SceneRuntime>; tier: QualityTier; onTier: (tier: QualityTier) => void; stage?: number; onPlantsReady?: () => void }) {
   const { runtime, tier, onTier, paused, mobile, destination, onNavigate } = props;
   const stopped = paused;
+  const invalidate = useThree(state => state.invalidate);
+  useEffect(() => { const refresh = () => invalidate(); window.addEventListener(SURFACES_READY, refresh); return () => window.removeEventListener(SURFACES_READY, refresh); }, [invalidate]);
   const stage = props.stage ?? 5;
   const reflections = useMemo(() => (<Environment frames={1} resolution={128}>
-      <Lightformer position={[0, 10, 0]} rotation={[Math.PI / 2, 0, 0]} scale={[20, 20, 1]} intensity={2} color="#edffff" />
-      <Lightformer position={[-12, 8, 10]} scale={[7, 18, 1]} intensity={2.4} color="#ffffff" />
-      <Lightformer position={[14, 3, -8]} rotation={[0, Math.PI, 0]} scale={[15, 10, 1]} intensity={2} color="#45c9ef" />
+      <Lightformer position={[0, 10, 0]} rotation={[Math.PI / 2, 0, 0]} scale={[20, 20, 1]} intensity={.65} color="#c2e9ff" />
+      <Lightformer position={[-12, 8, 10]} scale={[7, 18, 1]} intensity={1.5} color="#ffffff" />
+      <Lightformer position={[14, 3, -8]} rotation={[0, Math.PI, 0]} scale={[15, 10, 1]} intensity={.7} color="#128fae" />
     </Environment>), []);
   return <>
     <SceneClock runtime={runtime} paused={stopped} />
@@ -148,6 +152,7 @@ export function AeroWorld(props: WorldProps & { runtime: MutableRefObject<SceneR
     {stage >= 5 && <ShoreImpacts runtime={runtime} paused={stopped} quality={tier} />}
     {stage >= 5 && <NatureResponses runtime={runtime} paused={stopped}/>}
     <Bridges />
+    <LighthouseAccess />
     <Water runtime={runtime} paused={stopped} quality={tier} />
     <AmbientSystem onPlantsReady={props.onPlantsReady} stage={stage} runtime={runtime} paused={stopped} quality={tier} />
     {world.landmarks.map(config => <Landmark key={config.id} config={config} runtime={runtime} paused={stopped} onNavigate={onNavigate}><LandmarkModel id={config.id} active={destination === config.id} runtime={runtime} paused={stopped} quality={tier} /></Landmark>)}

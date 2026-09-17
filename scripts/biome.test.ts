@@ -5,11 +5,11 @@ import { coastalRockGeometry, createCoastalRocks, ROCK_ARCHETYPES } from '../src
 import { coastalBiome } from '../src/components/world/coastalBiome';
 import { archipelagoGeometry, createLandscapePlan, generatePlantPositions, groundRouteAt, islandAt, terrainHeight } from '../src/components/world/terrain';
 
-test('six stone archetypes have distinct angular outlines and planar embedded bases',()=>{
+test('six weathered stone archetypes retain geological outlines, embedded bases and texture coordinates',()=>{
   const signatures=new Set<string>();
   for(let kind=0;kind<ROCK_ARCHETYPES.length;kind++){
     const g=coastalRockGeometry(kind);g.computeBoundingBox();const p=g.attributes.position;
-    assert.equal(g.boundingBox!.min.y,0);assert.ok(g.boundingBox!.max.y>.4);assert.ok(p.count<250);
+    assert.equal(g.boundingBox!.min.y,0);assert.ok(g.boundingBox!.max.y>.4);assert.ok(p.count<=350,'each instanced rock stays below 350 shared vertices');assert.ok(g.index&&g.index.count<=1900);assert.equal(g.attributes.uv.count,p.count);
     const base=new Set<number>();for(let i=0;i<p.count;i++)if(p.getY(i)===0)base.add(p.getX(i));assert.ok(base.size>=6);
     signatures.add(JSON.stringify(g.boundingBox));assert.ok(g.attributes.color);g.dispose();
   }
@@ -23,7 +23,7 @@ test('six stone archetypes have distinct angular outlines and planar embedded ba
 });
 
 test('grass roots use the terrain ecological field and ground carries paving on its own vertices',()=>{
-  const plan=createLandscapePlan();for(const plant of generatePlantPositions(1200,plan)){
+  const plan=createLandscapePlan();assert.ok(plan.trees.length>=24,'Both major islands retain a planted tree layer after clearance checks');for(const plant of generatePlantPositions(1200,plan)){
     const biome=coastalBiome(plant.x,plant.z,islandAt(plant.x,plant.z).distance,terrainHeight(plant.x,plant.z));
     assert.ok(biome.grass>0);assert.ok(groundRouteAt(plant.x,plant.z).distance>plant.reach-.01);
   }

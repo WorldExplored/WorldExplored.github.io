@@ -5,7 +5,7 @@ import { measureConstruction } from './renderDiagnostics';
 /* eslint-disable react-hooks/immutability */
 import { useEffect, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { BufferGeometry, ConeGeometry, CylinderGeometry, Group, InstancedMesh, MeshStandardMaterial, Object3D, SphereGeometry, Vector3 } from 'three';
+import { BufferGeometry, CatmullRomCurve3, CylinderGeometry, Float32BufferAttribute, Group, InstancedMesh, MeshStandardMaterial, Object3D, SphereGeometry, Vector3 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { EnvironmentProps } from './Water';
 import { createCrabStates, createGullStates, stepCrab, stepGull, WILDLIFE_COUNTS, type GullState } from './wildlifeState';
@@ -13,7 +13,7 @@ import { createCrabStates, createGullStates, stepCrab, stepGull, WILDLIFE_COUNTS
 function ellipsoid(x: number, y: number, z: number, sx: number, sy: number, sz: number, turn = 0) {
   return new SphereGeometry(1, 16, 10).scale(sx, sy, sz).rotateY(turn).translate(x, y, z);
 }
-function merge(parts: BufferGeometry[]) { const geometry = mergeGeometries(parts)!; parts.forEach(part => part.dispose()); return geometry; }
+function merge(parts: BufferGeometry[]) { parts.forEach(part=>part.deleteAttribute('uv')); const geometry = mergeGeometries(parts)!; parts.forEach(part => part.dispose()); return geometry; }
 function bone(a: Vector3, b: Vector3, radius: number) {
   const axis = b.clone().sub(a); const geometry = new CylinderGeometry(radius, radius * .7, axis.length(), 7);
   const transform = new Object3D(); transform.position.copy(a).add(b).multiplyScalar(.5); transform.quaternion.setFromUnitVectors(new Vector3(0, 1, 0), axis.normalize()); transform.updateMatrix();
@@ -27,34 +27,77 @@ function mirrored(geometry: BufferGeometry) {
   return copy;
 }
 
+/** A continuous feather surface has a quill ridge and tapered vanes, rather than an oval bead. */
+function feather(length:number,width:number,curve=.035) {
+  const positions:number[]=[],indices:number[]=[];
+  for(let row=0;row<=12;row++)for(let col=0;col<=4;col++){
+    const t=row/12,v=col/2-1;
+    const breadth=width*Math.pow(Math.sin(Math.PI*t),.62)*(1-.25*t);
+    positions.push(t*length,curve*Math.sin(Math.PI*t)+(1-Math.abs(v))*.009*Math.sin(Math.PI*t),v*breadth);
+    if(row&&col){const i=row*5+col;indices.push(i,i-5,i-1,i-1,i-5,i-6);}
+  }
+  const geometry=new BufferGeometry();geometry.setAttribute('position',new Float32BufferAttribute(positions,3));geometry.setIndex(indices);geometry.computeVertexNormals();
+  // Feather thickness keeps surfaces readable from both sides without duplicated material draws.
+  return geometry;
+}
+
+export function gullBodyGeometry() {
+  const profile=new CatmullRomCurve3([new Vector3(-.35,.07,.09),new Vector3(-.21,.16,.19),new Vector3(.02,.18,.175),new Vector3(.24,.135,.12),new Vector3(.39,.06,.045)],false,'catmullrom',.35);
+  const positions:number[]=[],indices:number[]=[];
+  for(let row=0;row<=24;row++){
+    const p=profile.getPoint(row/24);
+    for(let side=0;side<=24;side++){
+      const a=side/24*Math.PI*2;
+      positions.push(Math.sin(a)*p.y,Math.cos(a)*p.z+Math.max(0,-p.x)*.09,p.x);
+      if(row&&side){const i=row*25+side;indices.push(i,i-25,i-1,i-1,i-25,i-26);}
+    }
+  }
+  const body=new BufferGeometry();body.setAttribute('position',new Float32BufferAttribute(positions,3));body.setIndex(indices);body.computeVertexNormals();
+  return body;
+}
+
+export function crabCarapaceGeometry() {
+  const positions:number[]=[],colors:number[]=[],indices:number[]=[];
+  const rings=12,sides=40;
+  for(let ring=0;ring<=rings;ring++)for(let side=0;side<=sides;side++){
+    const r=ring/rings,a=side/sides*Math.PI*2;
+    const rim=1+.026*Math.cos(a*10)*Math.pow(r,6);
+    const x=Math.cos(a)*.178*r*rim,z=Math.sin(a)*.125*r*rim;
+    const groove=Math.exp(-(((Math.abs(x)-.042)/.009)**2))*.008*r;
+    const y=.01+.097*Math.pow(Math.max(0,1-r*r),.58)-groove+.009*Math.cos(a*2)*r;
+    positions.push(x,y,z);const shade=.71+.23*(1-r)+.07*Math.sin(a*8+r*31);colors.push(shade,shade,shade);
+    if(ring&&side){const i=ring*(sides+1)+side;indices.push(i,i-1,i-sides-1,i-1,i-sides-2,i-sides-1);}
+  }
+  const geometry=new BufferGeometry();geometry.setAttribute('position',new Float32BufferAttribute(positions,3));geometry.setAttribute('color',new Float32BufferAttribute(colors,3));geometry.setIndex(indices);geometry.computeVertexNormals();return geometry;
+}
+
 export function createWildlife() {
   const group = new Group(); group.name = 'coastal-wildlife';
-  const materials = [new MeshStandardMaterial({ color: '#f8fbfa', roughness: .65 }), new MeshStandardMaterial({ color: '#b8c6cc', roughness: .7 }), new MeshStandardMaterial({ color: '#263640', roughness: .75 }), new MeshStandardMaterial({ color: '#eaba42', roughness: .58 }), new MeshStandardMaterial({ color: '#c85730', roughness: .48 }), new MeshStandardMaterial({ color: '#ed8a50', roughness: .65 })];
+  const materials = [new MeshStandardMaterial({ side: 2, color: '#f8fbfa', roughness: .65 }), new MeshStandardMaterial({ side: 2, color: '#b8c6cc', roughness: .7 }), new MeshStandardMaterial({ side: 2, color: '#263640', roughness: .75 }), new MeshStandardMaterial({ side: 2, color: '#eaba42', roughness: .58 }), new MeshStandardMaterial({ side: 2, color: '#b84f2e', roughness: .67, vertexColors: true }), new MeshStandardMaterial({ side: 2, color: '#ed8a50', roughness: .65 })];
   const meshes: InstancedMesh[] = [];
   const instances = (name: string, geometry: BufferGeometry, material: number, count: number) => {
     const mesh = new InstancedMesh(geometry, materials[material], count); mesh.name = name; mesh.frustumCulled = false; mesh.castShadow = false; mesh.raycast = () => {};
     group.add(mesh); meshes.push(mesh); return mesh;
   };
   const gullBody = instances('gull-bodies', merge([
-    ellipsoid(0, 0, 0, .19, .18, .39),
-    ...[-1, 0, 1].map(index => ellipsoid(index * .072, .015, .39, .065, .027, .23, index * .12)),
+    gullBodyGeometry(),
+    ...[-2,-1,0,1,2].map(index=>feather(.32,.043,.016).rotateY(-Math.PI/2+index*.045).translate(index*.047,.015,.28)),
   ]), 0, 18);
   const gullHead = instances('gull-heads-and-necks', merge([ellipsoid(0, .15, -.34, .135, .14, .16), ellipsoid(0, .09, -.21, .125, .14, .20)]).translate(0,-.09,.25), 0, 18);
   const gullEyes = instances('gull-eyes', merge([-1, 1].map(side => ellipsoid(side * .119, .185, -.395, .019, .023, .024))).translate(0,-.09,.25), 2, 18);
-  const bill = new ConeGeometry(.059, .23, 12).rotateX(-Math.PI / 2).translate(0, .038, -.315);
+  const bill = merge([feather(.23,.046,.021).rotateY(Math.PI/2).translate(0,.04,-.20),feather(.21,.039,-.011).rotateY(Math.PI/2).translate(0,.032,-.20)]);
   const gullBill = instances('gull-bills', bill, 3, 18);
   const wing = instances('gull-inner-wings', merge([
-    ellipsoid(.39, .02, .035, .47, .062, .225, -.10),
-    ...Array.from({ length: 7 }, (_, index) => ellipsoid(.20 + index * .095, -.004, .14 + index * .017, .14, .034, .18, -.12)),
+    ...Array.from({length:8},(_,index)=>feather(.42-index*.019,.075,.045).rotateY(-1.0+index*.08).translate(.08+index*.081,.01,.015)),
   ]), 1, 18);
-  const primaries = instances('gull-articulated-primaries', merge(Array.from({ length: 5 }, (_, index) => ellipsoid(.20 + index * .078, 0, .025 + index * .063, .33 - index * .028, .022, .052, -.20 - index * .095))), 2, 18);
+  const primaries = instances('gull-articulated-primaries', merge(Array.from({length:6},(_,index)=>feather(.49-index*.043,.044,.028).rotateY(-.11-index*.16).translate(.015+index*.035,0,.012+index*.038))), 2, 18);
   const leftWing = instances('gull-left-inner-wings', mirrored(wing.geometry), 1, 18);
   const leftPrimaries = instances('gull-left-primaries', mirrored(primaries.geometry), 2, 18);
   const gullLegs = instances('gull-perching-feet', merge([-1, 1].flatMap(side => [
     bone(new Vector3(side * .075, -.07, .07), new Vector3(side * .075, -.24, .10), .018),
     ...[-1, 0, 1].map(toe => bone(new Vector3(side * .075, -.24, .10), new Vector3(side * .075 + toe * .038, -.25, -.015), .012)),
   ])), 3, 18);
-  const crabBody = instances('crab-shells', merge([ellipsoid(0, .015, 0, .17, .09, .125), ellipsoid(0, .045, -.012, .14, .065, .10), ...[-1,1].flatMap(side => Array.from({length:4},(_,i) => ellipsoid(side*(.14+Math.sin(i/3*Math.PI)*.028),.026,(i-1.5)*.055,.035,.024,.018)))]), 4, 10);
+  const crabBody = instances('crab-shells', crabCarapaceGeometry(), 4, 10);
   const crabEyes = instances('crab-eyes', merge([-1, 1].flatMap(side => [bone(new Vector3(side * .07, .045, -.07), new Vector3(side * .085, .14, -.11), .012), ellipsoid(side * .085, .14, -.11, .026, .027, .023)])), 2, 10);
   const crabLegs = instances('crab-jointed-legs', merge([bone(new Vector3(), new Vector3(.13, .055, .02), .017), bone(new Vector3(.13, .055, .02), new Vector3(.24, -.08, .06), .012)]), 5, 40);
   const crabClaws = instances('crab-claws', merge([
@@ -72,7 +115,7 @@ export function writeGullPose(life: ReturnType<typeof createWildlife>, bird: Gul
   const pulse = Math.sin(bird.time * (6.8 + index % 3 * .4) + bird.phase);
   const glideAngle = .09 + Math.sin(bird.time * 1.1 + bird.phase) * .055;
   const wingAngle = (glideAngle * (1 - bird.flap) + pulse * .52 * bird.flap) * (1 - bird.fold) - .10 * bird.fold;
-  const bank = perched ? 0 : Math.sin(bird.time * bird.speed + bird.phase) * .14;
+  const bank = bird.bank;
   root.position.copy(bird.position); root.rotation.set(perched ? -.04+Math.sin(bird.time*.7+bird.phase)*.015 : -Math.atan2(bird.velocity.y, Math.max(.5, Math.hypot(bird.velocity.x, bird.velocity.z))) * .45, bird.heading, bank);
   root.scale.setScalar(.91 + index % 4 * .075); root.updateMatrix();
   life.gullBody.setMatrixAt(index, root.matrix);

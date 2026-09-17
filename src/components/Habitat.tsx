@@ -8,7 +8,6 @@ import { readNavigation, serverNavigation, subscribeNavigation, pushDestination,
 import { readPreferences, serverPreferences, subscribePreferences } from './world/preferences';
 import { DockShell, HabitatIcon } from './HabitatIcon';
 import { SectionContent } from './SectionContent';
-import { AudioControl } from './AudioControl';
 import { EnvironmentalAudioControl } from './EnvironmentalAudioControl';
 
 const WorldCanvas = dynamic(() => import('./world/WorldCanvas').then(module => module.WorldCanvas), { ssr: false });
@@ -84,7 +83,6 @@ export function Habitat() {
       target.style.setProperty('--light-x', `${event.clientX - rect.left}px`);
       target.style.setProperty('--light-y', `${event.clientY - rect.top}px`);
     }} aria-label={profile.ui.mainNavigation}><DockShell />{dock.map(section => <a href={`#${section.id}`} data-destination={section.id} key={section.id} onClick={event => navigate(event, section.id)} aria-current={active === section.id ? 'location' : undefined}><HabitatIcon kind={section.id} /><span>{section.label}</span></a>)}</nav>
-    <AudioControl className="audio-control--above" />
     <EnvironmentalAudioControl/>
     <div className="travel-status" role="status" aria-live="polite">{active && !surfaceOpen ? `${profile.ui.travel} ${profile.sections.find(section => section.id === active)?.label}` : ''}</div>
     {diagnostics && <output className="scene-diagnostics" data-scene-diagnostics aria-label="Scene performance diagnostics" />}

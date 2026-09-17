@@ -27,7 +27,7 @@ export const ISLANDS: readonly Island[] = [
   { id: 'museum-meadow', x: 21, z: -72, rx: 14, rz: 12.5, phase: 5.2, beach: 3.8, hill: 1.35 },
 ];
 export const PLANT_REACH = .95;
-export const FOOTPRINT_RADII: Record<LandmarkId, number> = { work: 5.5, experience: 5.4, research: 3.8, purdue: 3.05, history: 7, about: 3.5, contact: 3.2, building: 2.4 };
+export const FOOTPRINT_RADII: Record<LandmarkId, number> = { work: 5.5, experience: 5.4, research: 5.3, purdue: 5.1, history: 7, about: 4.9, contact: 5.0, building: 2.4 };
 
 export function seededRandom(seed: number) {
   return () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
@@ -173,17 +173,17 @@ export function createLandscapePlan(): LandscapePlan {
     }
   }
   for(const [x,z] of [[-4,-85],[6,-81],[-14,-84],[-25,-83],[8,-86],[2,-76],[-18,-88],[-22,-67],[13,-76]]) {
-    const height=2.5,radius=1.25;
+    const height=2.5,radius=height*.63;
     if(circleClearance(x,z,[...structures,...rocks,...trees])<radius+.15||pathClearance(x,z,paths)<radius+.8)continue;
     trees.push({id:`courtyard-tree-${trees.length}`,x,z,y:terrainHeight(x,z),radius,height,rotation:random()*Math.PI*2});
   }
-  for (let attempt = 0; trees.length < 54 && attempt < 1800; attempt++) {
+  for (let attempt = 0; trees.length < 54 && attempt < 7200; attempt++) {
     const island = ISLANDS[attempt % ISLANDS.length];
     if (island.id === 'beacon') continue;
     const a = random() * Math.PI * 2; const r = Math.sqrt(random()) * islandContour(island, a);
     const x = island.x + Math.cos(a) * island.rx * r; const z = island.z + Math.sin(a) * island.rz * r;
-    const height = 2.7 + random() * 1.7; const radius = height * .50;
-    if (landDistance(x, z) < 3 + radius || terrainSlope(x, z) > .4 || circleClearance(x, z, [...structures, ...rocks, ...trees]) < radius + 1 || pathClearance(x, z, paths) < radius + .8) continue;
+    const height = 2.2 + random() * 1.9; const radius = height * .63;
+    if (landDistance(x, z) < 1.8 + radius || terrainSlope(x, z) > .6 || circleClearance(x, z, [...structures, ...rocks, ...trees]) < radius + .25 || pathClearance(x, z, paths) < radius + .3) continue;
     trees.push({ id: `grove-tree-${trees.length}`, x, z, y: terrainHeight(x, z), radius, height, rotation: random() * Math.PI * 2 });
   }
   return { structures, paths, rocks, trees };

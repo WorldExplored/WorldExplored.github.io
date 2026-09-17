@@ -55,77 +55,63 @@ export function createLandmarkMechanism(id: LandmarkId) {
   };
 
   if (id === 'work') {
-    // Roof-mounted exchangers and solar wheels serve the enclosed compute floors.
-    root.position.y = 1.9;
-    const supports: BufferGeometry[] = [];
-    for (const [index, x] of [-1.35, 1.35].entries()) {
-      const mount = armature(`work-ring-mount-${index}`, [x, 6.55, -.15], index ? -.48 : .48);
-      mount.rotation.z = index ? -.13 : .13;
-      const wheel = new Group(); wheel.name = `work-compute-wheel-${index}`; mount.add(wheel);
-      const radius = index ? 2.12 : 2.7;
-      mesh(wheel, `work-wheel-frame-${index}`, join([circle(radius, .105), circle(radius - .38, .045)]), 'white');
-      mesh(wheel, `work-wheel-hub-${index}`, new CylinderGeometry(.22,.22,.32,20).rotateX(Math.PI/2), 'solar');
-      mesh(wheel, `work-wheel-spokes-${index}`, join([0,1,2].map(spoke=>{const angle=spoke*TAU/3;return bar(new Vector3(Math.cos(angle)*.18,Math.sin(angle)*.18,0),new Vector3(Math.cos(angle)*(radius-.37),Math.sin(angle)*(radius-.37),0),.045);})), 'white');
-      const panels: BufferGeometry[] = []; const seams: BufferGeometry[] = [];
-      for (let segment = 0; segment < 12; segment++) {
-        const angle = segment * TAU / 12;
-        panels.push(new TorusGeometry(radius - .19, .16, 4, 5, TAU / 12 * .79).scale(1, 1, .5).rotateZ(angle));
-        const r = radius - .2;
-        seams.push(bar(new Vector3(Math.cos(angle) * (r - .15), Math.sin(angle) * (r - .15), .025), new Vector3(Math.cos(angle) * (r + .15), Math.sin(angle) * (r + .15), .025), .024));
-      }
-      mesh(wheel, `work-segmented-solar-ring-${index}`, join(panels), 'solar');
-      mesh(wheel, `work-ring-data-seams-${index}`, join(seams), 'aqua');
-      motion.push((time, response) => { wheel.rotation.z = (index ? -.12 : .085) * time + index * .8; mount.rotation.y = (index ? -.48 : .48) + Math.sin(time * .13 + index) * .06 + response * (index ? -.1 : .1); });
-      supports.push(bar(new Vector3(x, 3.3, -.6), new Vector3(x, 6.55, -.15), .15));
+    // Two packaged dry coolers stand on real roof sleepers. Fans rotate inside guards;
+    // coolant supply/return pipes descend to the visible rear service equipment.
+    for (const [index,x] of [-2.86,2.86].entries()) {
+      mesh(root,`work-cooler-sleepers-${index}`,join([-.56,.56].map(dx=>new BoxGeometry(.16,.19,1.72).translate(x+dx,5.205,-1.14))),'white');
+      mesh(root,`work-cooler-cabinet-${index}`,new BoxGeometry(1.57,.71,1.62).translate(x,5.61,-1.14),'solar');
+      const frame: BufferGeometry[]=[];
+      for(const dx of [-.82,.82])for(const z of [-1.98,-.3])frame.push(new BoxGeometry(.065,.82,.065).translate(x+dx,5.64,z));
+      for(const y of [5.25,6.04])frame.push(new BoxGeometry(1.7,.065,1.74).translate(x,y,-1.14));
+      mesh(root,`work-cooler-frame-${index}`,join(frame),'white');
+      const louvers: BufferGeometry[]=[];
+      for(let row=0;row<8;row++)for(const z of [-1.968,-.312])louvers.push(new BoxGeometry(1.46,.025,.045).translate(x,5.34+row*.083,z));
+      mesh(root,`work-cooler-fins-${index}`,join(louvers),'black');
+      mesh(root,`work-fan-ring-${index}`,circle(.57,.038).rotateX(Math.PI/2).translate(x,6.09,-1.14),'white');
+      const rotor=armature(`work-cooling-fan-${index}`,[x,6.095,-1.14]);
+      mesh(rotor,`work-fan-hub-${index}`,new CylinderGeometry(.11,.11,.085,16),'white');
+      mesh(rotor,`work-fan-blades-${index}`,join([0,1,2,3,4].map(i=>leaf(.46,.15,.024).translate(.08,0,0).rotateY(i*TAU/5))),'black');
+      const guard: BufferGeometry[]=[];
+      for(let n=-4;n<=4;n++){const dx=n*.115,length=Math.sqrt(.54*.54-dx*dx)*2;guard.push(new BoxGeometry(.012,.012,length).translate(x+dx,6.16,-1.14));}
+      mesh(root,`work-fan-safety-guard-${index}`,join(guard),'white');
+      motion.push((time,response)=>{rotor.rotation.y=time*(2.1+index*.3)+response*.15;});
+      for(const dx of [-.37,.37]) mesh(root,`work-coolant-return-${index}-${dx}`,pipe([new Vector3(x+dx,5.48,-1.75),new Vector3(x+dx,5.4,-2.62),new Vector3(x+dx,2.2,-2.62),new Vector3(x+dx,2.2,-2.39)],.072),'aqua');
     }
-    supports.push(new CylinderGeometry(.52,.68,.7,24).translate(.25,3.55,-.15));
-    const exchanger = armature('work-heat-exchanger', [.25, 5.25, -.15]);
-    mesh(exchanger, 'work-exchanger-core', new CylinderGeometry(.44, .56, 2.7, 24), 'solar');
-    mesh(exchanger, 'work-exchanger-fins', join(Array.from({ length: 9 }, (_, index) => new CylinderGeometry(.8, .8, .055, 32).translate(0, -1.1 + index * .28, 0))), 'white');
-    motion.push(time => { exchanger.rotation.y = time * .19; });
-    const loops = [-1, 1].map(side => new CatmullRomCurve3(Array.from({ length: 12 }, (_, index) => { const angle = index / 12 * TAU; return new Vector3(side * (4.8 + Math.cos(angle) * .05), 3.8 + Math.sin(angle) * 1.2, Math.cos(angle) * .65); }), true));
-    supports.push(...[-1,1].flatMap(side=>[-.5,.5].map(z=>bar(new Vector3(side*4.3,3.2,z),new Vector3(side*4.8,3.2,z),.09))));
-    mesh(root, 'work-transparent-cooling-conduits', join(loops.map(curve => new TubeGeometry(curve, 80, .12, 10, true))), 'glass');
-    const capsules: Mesh[] = [];
-    for (let index = 0; index < 4; index++) {
-      const capsule = mesh(root, `work-coolant-capsule-${index}`, pod(.3, .105), 'aqua'); capsules.push(capsule);
-    }
-    const tangent = new Vector3(); const up = new Vector3(0, 1, 0);
-    motion.push(time => capsules.forEach((capsule, index) => { const curve = loops[index % 2]; const t = (time * .065 + Math.floor(index / 2) * .5) % 1; curve.getPointAt(t, capsule.position); curve.getTangentAt(t, tangent); capsule.quaternion.setFromUnitVectors(up, tangent); }));
-    supports.push(pipe([new Vector3(-3.6, 2.38, 2.25), new Vector3(0, 2.38, 2.6), new Vector3(3.6, 2.38, 2.25)], .045));
-    mesh(root, 'work-compute-supports-and-service-rail', join(supports), 'white');
-    const carriage = mesh(root, 'work-service-carriage', pod(.72, .23).rotateZ(Math.PI / 2), 'aqua');
-    motion.push(time => { carriage.position.set(Math.sin(time * .23) * 3.35, 2.64, 2.6 - Math.pow(Math.sin(time * .23), 2) * .3); });
+    mesh(root,'work-atrium-service-exhaust',join([new CylinderGeometry(.18,.18,.63,16).translate(.8,6.18,-1.78),new CylinderGeometry(.27,.27,.08,20).translate(.8,6.49,-1.78)]),'white');
   }
 
   if (id === 'research') {
-    mesh(root,'research-observatory-mast',new CylinderGeometry(.11,.2,.8,16).translate(-1.3,3.26,-.7),'white');
-    const scanner=armature('research-observation-instrument',[-1.3,3.78,-.7]);
-    mesh(scanner,'research-instrument-gimbal',circle(.36,.045),'white');
-    mesh(scanner,'research-scanner-barrel',pod(.77,.2).rotateX(Math.PI/2),'solar');
-    mesh(scanner,'research-scanner-lens',new SphereGeometry(.17,16,10).scale(1,1,.2).translate(0,0,.4),'aqua');
-    motion.push((time,response)=>{scanner.rotation.y=time*.16;scanner.rotation.x=Math.sin(time*.11)*.14-response*.16;});
+    mesh(root,'research-observatory-mast',join([new CylinderGeometry(.12,.2,.69,16).translate(-1.6,6.92,-2.25),new BoxGeometry(.7,.12,.7).translate(-1.6,6.64,-2.25)]),'white');
+    const scanner=armature('research-observation-instrument',[-1.6,7.37,-2.25]);
+    mesh(scanner,'research-instrument-gimbal',circle(.3,.04),'white');
+    mesh(scanner,'research-scanner-barrel',pod(.68,.17).rotateX(Math.PI/2),'solar');
+    mesh(scanner,'research-scanner-lens',new SphereGeometry(.145,16,10).scale(1,1,.2).translate(0,0,.36),'aqua');
+    motion.push((time,response)=>{scanner.rotation.y=time*.11;scanner.rotation.x=Math.sin(time*.11)*.1-response*.12;});
     for(let index=0;index<2;index++){
-      const panel=armature(`research-tracking-solar-panel-${index}`,[-2.05+index*1.3,3.09,.75]);
-      mesh(panel,`research-panel-frame-${index}`,new BoxGeometry(1.04,.07,.69),'white');
-      mesh(panel,`research-panel-cells-${index}`,new BoxGeometry(.94,.025,.59).translate(0,.05,0),'solar');
-      mesh(root,`research-panel-mount-${index}`,new CylinderGeometry(.06,.09,.24,10).translate(-2.05+index*1.3,2.97,.75),'white');
-      motion.push(time=>{panel.rotation.x=-.2+Math.sin(time*.1+index)*.08;});
+      const x=-2.8+index*1.45,panel=armature(`research-tracking-solar-panel-${index}`,[x,6.87,.45]);
+      mesh(panel,`research-panel-frame-${index}`,new BoxGeometry(1.21,.07,1.06),'white');
+      mesh(panel,`research-panel-cells-${index}`,new BoxGeometry(1.1,.025,.95).translate(0,.05,0),'solar');
+      const seams:BufferGeometry[]=[];for(let i=-2;i<=2;i++)seams.push(new BoxGeometry(.014,.01,.95).translate(i*.19,.069,0));
+      mesh(panel,`research-cell-divisions-${index}`,join(seams),'white');
+      mesh(root,`research-panel-mount-${index}`,join([new CylinderGeometry(.055,.08,.3,10).translate(x,6.74,.45),new BoxGeometry(.53,.065,.67).translate(x,6.6,.45)]),'white');
+      motion.push(time=>{panel.rotation.x=-.19+Math.sin(time*.1+index)*.035;});
     }
   }
 
   if (id === 'contact') {
-    mesh(root, 'contact-signal-pedestal', join([new CylinderGeometry(.22, .4, 1.25, 20).translate(0, 3.95, -.18), circle(.4, .08).rotateX(Math.PI / 2).translate(0, 4.58, -.18)]), 'white');
-    for (let index = 0; index < 3; index++) {
-      const petal = armature(`contact-articulated-signal-petal-${index}`, [0, 4.45, -.18], index * TAU / 3 - .35);
-      mesh(petal, `contact-white-signal-petal-${index}`, leaf(2.55, 1.06, .13), 'white');
-      mesh(petal, `contact-aqua-signal-face-${index}`, leaf(2.12, .72, .025).translate(.2, .105, 0), 'glass');
-      motion.push((time, response) => { petal.rotation.z = .25 + Math.sin(time * .16 + index * 2.1) * .13 + response * .29; petal.rotation.y = index * TAU / 3 - .35 + Math.sin(time * .09) * .1; });
-    }
-    mesh(root, 'contact-signal-core', new SphereGeometry(.36, 24, 16).translate(0, 4.55, -.18), 'aqua');
-    const pulse = mesh(root, 'contact-outward-signal-pulse', circle(.55, .025).rotateX(Math.PI / 2), 'glass');
-    motion.push((time, response) => { const wave = (Math.sin(time * 1.45) + 1) / 2; pulse.position.set(0, 4.73 + wave * .55, -.18); pulse.scale.setScalar(1 + wave * (.5 + response * .65)); });
-    mesh(root, 'contact-arrival-landing', join([new BoxGeometry(1.45, .08, .65).translate(.4, 1.02, 2.24), bar(new Vector3(-.3, 1.06, 2.44), new Vector3(-.3, 1.55, 2.44), .035), bar(new Vector3(1.1, 1.06, 2.44), new Vector3(1.1, 1.55, 2.44), .035)]), 'white');
+    // A compact rooftop communications mast is bolted to the service wing, with
+    // a bounded dish gimbal, feed horn and an actual cable route into the building.
+    const x=2.6,z=-1.35;
+    mesh(root,'contact-mast-base',join([new BoxGeometry(.85,.12,.85).translate(x,3.64,z),new CylinderGeometry(.1,.15,1.8,16).translate(x,4.57,z)]),'white');
+    mesh(root,'contact-mast-braces',join([-.34,.34].map(dx=>bar(new Vector3(x+dx,3.7,z+.32),new Vector3(x,4.38,z),.035))),'black');
+    const dish=armature('contact-tracking-dish',[x,5.25,z],-.5);
+    mesh(dish,'contact-parabolic-reflector',new SphereGeometry(.73,32,20,0,TAU,0,.66).rotateX(-Math.PI/2).translate(0,0,.73),'white');
+    mesh(dish,'contact-dish-rim',circle(Math.sin(.66)*.73,.025).translate(0,0,.153),'aqua');
+    mesh(dish,'contact-feed-struts',join([0,1,2].map(i=>{const angle=i*TAU/3;return bar(new Vector3(Math.cos(angle)*.42,Math.sin(angle)*.42,.153),new Vector3(0,0,.59),.017);})), 'black');
+    mesh(dish,'contact-feed-horn',new CylinderGeometry(.048,.075,.17,12).rotateX(Math.PI/2).translate(0,0,.58),'solar');
+    motion.push((time,response)=>{dish.rotation.y=-.5+Math.sin(time*.095)*.19+response*.1;dish.rotation.x=-.32+Math.sin(time*.075)*.06;});
+    mesh(root,'contact-signal-antenna',join([new CylinderGeometry(.023,.034,1.43,10).translate(3.46,4.28,-2.13),new BoxGeometry(.23,.72,.09).translate(3.46,4.53,-2.13)]),'white');
+    mesh(root,'contact-mast-cable',pipe([new Vector3(x,5.15,z+.13),new Vector3(x+.16,4.55,z+.13),new Vector3(x+.16,3.58,z+.13),new Vector3(3.7,3.58,-2.4),new Vector3(3.7,2.5,-2.4)],.025),'black');
   }
 
   if (id === 'building') {

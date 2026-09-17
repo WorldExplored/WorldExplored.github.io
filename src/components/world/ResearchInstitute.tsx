@@ -1,182 +1,106 @@
 'use client';
 
-import { BoxGeometry, CylinderGeometry, ExtrudeGeometry, Path, Shape, SphereGeometry, type BufferGeometry } from 'three';
-import { FurnishedInterior, InteriorBuilder, floorSlab, floorRectangle, floorEllipse } from './InteriorKit';
-import { combine, roundedBox, usePalette, useResources, type ModelProps } from './BuildingKit';
+import { CylinderGeometry, SphereGeometry, Vector3, type BufferGeometry } from 'three';
+import { FurnishedInterior, InteriorBuilder, floorSlab, floorRectangle } from './InteriorKit';
+import { combine, stroke, usePalette, useResources, type ModelProps } from './BuildingKit';
+import { architecturalSurface as surface, architecturalBox as box, doorway, guardRail, stairFlight, windowBay, type ShellParts } from './LandmarkShellKit';
 
-const box = (width: number, height: number, depth: number, x: number, y: number, z: number) => new BoxGeometry(width, height, depth).translate(x, y, z);
+export const RESEARCH_BUILDING = { floor: 1.075, upper: 3.825, roof: 6.55, entrance: [-1.33, 1.07, 1.85] as const, bounds: [-3.8, 3.8, -3.6, 1.9] as const };
 
-function ring(radius: number, thickness: number, height: number, y: number, doorway = false) {
-  const outline = new Shape();
-  if (doorway) {
-    outline.absarc(0, 0, radius, Math.PI + .43, Math.PI * 3 - .43, false);
-    outline.absarc(0, 0, radius - thickness, Math.PI * 3 - .43, Math.PI + .43, true);
-    outline.closePath();
-    return new ExtrudeGeometry(outline, { depth: height, bevelEnabled: false, curveSegments: 32 }).rotateX(-Math.PI / 2).translate(1.58, y, -.73);
-  }
-  outline.absarc(0, 0, radius, 0, Math.PI * 2, false);
-  const opening = new Path();
-  opening.absarc(0, 0, radius - thickness, 0, Math.PI * 2, true);
-  outline.holes.push(opening);
-  return new ExtrudeGeometry(outline, { depth: height, bevelEnabled: false, curveSegments: 32 }).rotateX(-Math.PI / 2).translate(1.58, y, -0.73);
-}
-
-/** A single-storey laboratory, glazed growing room and enclosed observatory. */
+/** Two occupied laboratory levels flank a daylit stair and a planted upper terrace. */
 export function makeResearchInterior() {
   const room = new InteriorBuilder();
-  room.floor('research-lab-wood-floor',[floorRectangle(-1.215,-.015,2.97,3.12)],1.074,.014);
-  // Window-side benches flank a clear central entrance aisle.
-  room.table(-2.19, 1.077, .79, .72, 1.13, .59);
-  room.box('paper', .3, .035, .38, -2.2, 1.712, .63);
-  room.rod('metal', [-2.2, 1.73, .56], [-2.2, 1.99, .56], .026);
-  room.rod('metal', [-2.2, 1.99, .56], [-2.08, 2.05, .72], .037);
-  room.add('screen', new CylinderGeometry(.043, .043, .12, 10).rotateX(.6).translate(-2.07, 2.025, .72));
-  for (let n = 0; n < 3; n++) {
-    room.add('pipe', new CylinderGeometry(.055, .055, .19, 12).translate(-2.35 + n * .18, 1.79, 1.12));
-    room.add('coolant', new CylinderGeometry(.04, .04, .11, 10).translate(-2.35 + n * .18, 1.755, 1.12));
+  const floor = RESEARCH_BUILDING.floor;
+  room.floor('research-lab-wood-floor', [floorRectangle(0, -.87, 7.1, 4.9)], floor, .016);
+  for (const level of [floor, RESEARCH_BUILDING.upper]) {
+    for (const z of [-2.52, -.85]) {
+      room.table(-2.72, level, z, 1.15, .62, .72);
+      room.monitor(-2.77, level + .78, z - .12);
+      room.chair(-2.72, level, z + .55, Math.PI);
+      for (let vial = 0; vial < 3; vial++) room.add('coolant', new CylinderGeometry(.043, .047, .15, 12).translate(-2.36 + vial * .13, level + .84, z + .15));
+    }
+    room.shelf(-.63, level, -3.08, 1.1, 1.54, .26);
+    room.box('screen', .85, .6, .035, -1.27, level + 1.3, -3.18);
+    room.lamp(-2.1, level + 2.32, -.9, 1.7);
   }
-  room.table(-.22, 1.077, .96, .72, .45, .59); room.monitor(-.22, 1.71, .99, Math.PI); room.chair(-.22, 1.077, .45, 0, .85);
-  room.table(-1.34, 1.077, -1.16, 1.12, .45, .61); room.chair(-1.34, 1.077, -.66, Math.PI, .85);
-  room.box('paper', .32, .027, .23, -1.54, 1.718, -1.15);
-  room.shelf(-2.27, 1.077, -1.28, .64, 1.1, .28);
-  room.box('wood', .055, .72, .65, -.57, 1.437, -1.14);
-  room.plant(-.18, 1.077, -1.42, .75);
-  room.lamp(-1.6, 2.63, .3, 1.05);
-  // Raised observation dais is connected to the lab by four shallow steps.
-  room.add('wood', new CylinderGeometry(.58, .62, .1, 24).translate(1.67, 1.7, -.73));
-  for (let n = 0; n < 4; n++) room.box('wood', .2, .15 * (n + 1), .61, .64 + n * .2, 1.06 + .075 * (n + 1), -.73);
-  room.rod('metal', [1.2, 1.76, -.96], [1.7, 2.58, -.73], .032);
-  room.rod('metal', [2.02, 1.76, -1.03], [1.7, 2.58, -.73], .032);
-  room.rod('metal', [1.7, 1.76, -.28], [1.7, 2.58, -.73], .032);
-  room.add('paper', new CylinderGeometry(.16, .19, .87, 16).rotateZ(-.9).translate(1.7, 2.91, -.73));
-  room.add('screen', new CylinderGeometry(.145, .145, .035, 16).rotateZ(-.9).translate(2.05, 3.19, -.73));
-  room.table(2.18, 1.067, -.73, .3, .44, .57); room.monitor(2.18, 1.68, -.73, -Math.PI / 2);
-  room.lamp(1.6, 2.98, -1.48, .4);
-  // Specimen tables sit along the glazing, leaving the greenhouse's center open.
-  for (const z of [.61, 1.59]) {
-    room.table(1.62, 1.067, z, 1.35, .28, .48);
-    for (const x of [1.1, 1.6, 2.1]) room.plant(x, 1.58, z, .48);
-  }
+  // Specimen benches face the full-height eastern glazing; the circulation aisle stays clear.
+  room.table(2.57, floor, -1.32, .82, 1.7, .72);
+  for (const z of [-1.85, -1.3, -.75]) room.plant(2.6, floor + .76, z, .55);
+  room.table(2.45, RESEARCH_BUILDING.upper, -2.34, 1.25, .6, .7);
+  room.monitor(2.45, RESEARCH_BUILDING.upper + .76, -2.4);
+  room.chair(2.45, RESEARCH_BUILDING.upper, -1.75, Math.PI);
+  room.plant(2.9, floor, .89, 1.2);
+  room.plant(-3.04, floor, 1.14, .9);
+  room.lamp(2.2, 3.52, -.9, 1.4);
   return room.finish();
+}
+
+export function makeResearchBuilding() {
+  const parts: ShellParts = { walls: [], glass: [], frames: [] };
+  const floor = RESEARCH_BUILDING.floor, upper = RESEARCH_BUILDING.upper;
+  // Two continuous structural belts register the occupied levels. Every pane fills a real opening.
+  for (const [bottom, top] of [[floor, 3.65], [upper, 6.4]]) {
+    for (const x of [-2.48, 0, 2.48]) windowBay(parts, x, -3.4, 2.48, bottom, top);
+    for (const x of [-3.68, 3.68]) for (const z of [-2.14, .4]) windowBay(parts, x, z, 2.54, bottom, top, Math.PI / 2, .4);
+  }
+  windowBay(parts, -2.94, 1.66, 1.48, floor, 3.65);
+  doorway(parts, -1.33, 1.66, 1.42, floor, 3.65);
+  windowBay(parts, .32, 1.66, 1.5, floor, 3.65, 0, .22);
+  windowBay(parts, 2.43, 1.66, 2.47, floor, 3.65, 0, .22);
+  // The second level steps back at the east, revealing a usable greenhouse terrace.
+  for (const x of [-2.77, -.94]) windowBay(parts, x, 1.66, 1.82, upper, 6.4, 0, .32);
+  windowBay(parts, 2.33, -1.18, 2.67, upper, 6.4, 0, .12);
+  for (const z of [-.56, .84]) windowBay(parts, -.05, z, 1.4, upper, 6.4, Math.PI / 2, .1);
+  const floors = [floorRectangle(-1.845, -.87, 3.39, 4.9), floorRectangle(2.54, -2.27, 1.98, 2.1), floorRectangle(.71, -3.06, 1.72, .52)];
+  const stair = stairFlight(.72, 1.28, 1.12, floor, upper, 16, .27);
+  const terrace = floorSlab('research-accessible-terrace', [floorRectangle(2.54, .18, 1.98, 2.8)], upper, .18, 'balcony');
+  const roof = combine([box(4.17, .2, 5.43, -1.72, 6.5, -.86), box(3.38, .2, 2.59, 2.11, 6.5, -2.22)]);
+  const glassRoof = surface((u, v) => new Vector3(.25 + u * 3.56, 6.44, -1.25 + v * 3.05), 18, 4, .065);
+  const pergola: BufferGeometry[] = [];
+  for (const z of [-1.23, -.3, .63, 1.55]) pergola.push(stroke(t => new Vector3(.23 + t * 3.6, 6.46, z), .044, 2));
+  for (const x of [.25, 2, 3.8]) pergola.push(box(.09, .1, 3.0, x, 6.46, .24));
+  for (const x of [.3, 3.65]) for (const z of [-1.19, 1.54]) pergola.push(box(.11, 6.44 - upper, .11, x, (6.44 + upper) / 2, z));
+  const planters: BufferGeometry[] = [], planting: BufferGeometry[] = [];
+  for (const z of [-.5, .65]) {
+    planters.push(box(.48, .38, .95, 3.22, upper + .19, z));
+    for (let i = 0; i < 4; i++) planting.push(new SphereGeometry(.15, 10, 8).scale(.85, 1.6, 1.1).translate(3.22, upper + .48, z - .32 + i * .21));
+  }
+  return {
+    foundation: floorSlab('research-foundation', [floorRectangle(0, -.87, 7.58, 5.36)], .99, .22, 'foundation'),
+    floor: floorSlab('research-room-floors', [floorRectangle(0, -.87, 7.1, 4.9)], 1.059, .069),
+    upper: floorSlab('research-upper-laboratories', floors, upper, .18), terrace,
+    walls: combine(parts.walls), glazing: combine(parts.glass), frames: combine(parts.frames), roof, glassRoof, pergola: combine(pergola),
+    steps: stair.steps, stairRails: stair.rails,
+    upperRails: combine([guardRail(-.2, 1.42, -.2, -2.65, upper), guardRail(1.58, 1.42, 1.58, -2.65, upper), guardRail(1.5, 1.53, 3.57, 1.53, upper)]),
+    bands: combine([box(7.59, .18, .24, 0, 3.735, -3.44), box(7.59, .18, .24, 0, 3.735, 1.7), box(.24, .18, 4.9, -3.67, 3.735, -.87), box(.24, .18, 4.9, 3.67, 3.735, -.87), box(.16, .18, 5.39, -3.78, 6.49, -.87), box(7.58, .18, .16, 0, 6.49, -3.57)]),
+    entry: combine([box(2.08, .13, .88, -1.33, 3.27, 1.93), box(.08, 2.18, .08, -2.26, 2.165, 2.24), box(.08, 2.18, .08, -.4, 2.165, 2.24), box(.22, .32, .22, -2.26, .92, 2.24), box(.22, .32, .22, -.4, .92, 2.24)]),
+    threshold: floorSlab('research-door-threshold', [floorRectangle(-1.33, 1.85, 1.46, .42)], 1.07, .27, 'threshold'),
+    planters: combine(planters), planting: combine(planting),
+  };
 }
 
 export function ResearchInstitute(props: ModelProps) {
   const material = usePalette(props, 'research');
-  const geometry = useResources(() => {
-    const walls: BufferGeometry[] = [];
-    const panes: BufferGeometry[] = [];
-    const frames: BufferGeometry[] = [];
-    // Continuous wall bands surround real window openings; the entry interrupts the front band.
-    for (const [left, right] of [[-2.83, -1.8], [-0.86, 0.4]]) {
-      const width = right - left;
-      const x = (left + right) / 2;
-      walls.push(box(width, 0.62, 0.16, x, 1.37, 1.66), box(width, 0.32, 0.16, x, 2.52, 1.66));
-      panes.push(box(width - 0.1, 0.68, 0.055, x, 2.02, 1.66));
-      frames.push(box(width, 0.065, 0.2, x, 1.68, 1.66), box(width, 0.065, 0.2, x, 2.36, 1.66));
-      for (const edge of [left + 0.045, x, right - 0.045]) frames.push(box(0.055, 0.71, 0.19, edge, 2.02, 1.66));
-    }
-    walls.push(box(3.23, 0.62, 0.16, -1.215, 1.37, -1.69), box(3.23, 0.32, 0.16, -1.215, 2.52, -1.69));
-    panes.push(box(3.07, 0.68, 0.055, -1.215, 2.02, -1.69));
-    for (const x of [-2.78, -2.0, -1.22, -0.44, 0.35]) frames.push(box(0.065, 0.71, 0.19, x, 2.02, -1.69));
-    for (const y of [1.68, 2.36]) frames.push(box(3.23, 0.065, 0.2, -1.215, y, -1.69));
-    for (const x of [-2.83, 0.4]) {
-      if (x < 0) {
-        walls.push(box(.16, .62, 3.51, x, 1.37, -.015));
-        panes.push(box(.055, .68, 3.35, x, 2.02, -.015));
-      } else {
-        // Two genuine floor-level connections lead to the cupola and growing room.
-        for (const [z, depth] of [[-1.52, .34], [.06, .4], [1.57, .18]]) walls.push(box(.16, 1.3, depth, x, 1.71, z));
-      }
-      walls.push(box(.16, .32, 3.51, x, 2.52, -.015));
-      for (const z of (x < 0 ? [-1.69, -.85, 0, .85, 1.66] : [-1.69, -.26, .36, 1.66])) frames.push(box(0.19, 0.71, 0.065, x, 2.02, z));
-      for (const y of (x < 0 ? [1.68, 2.36] : [2.36])) frames.push(box(0.2, 0.065, 3.51, x, y, -0.015));
-    }
-    // Door jambs run to the floor and carry a shallow weather hood.
-    for (const x of [-1.8, -0.86]) walls.push(box(0.13, 1.62, 0.23, x, 1.87, 1.67));
-    walls.push(box(1.07, 0.15, 0.23, -1.33, 2.605, 1.67));
-    panes.push(box(0.81, 1.47, 0.065, -1.33, 1.815, 1.685));
-    frames.push(box(0.05, 1.5, 0.09, -1.33, 1.82, 1.735));
-
-    // The growing room is enclosed by thick glazing, a solid plinth and a glazed flat roof.
-    const greenhouseX = 1.68;
-    const greenhouseZ = 1.10;
-    for (const z of [0.35, 1.85]) {
-      walls.push(box(2.15, 0.22, 0.12, greenhouseX, 1.17, z));
-      panes.push(box(2.07, 1.1, 0.055, greenhouseX, 1.83, z));
-      for (const x of [0.605, 1.14, 1.68, 2.22, 2.755]) frames.push(box(0.065, 1.36, 0.095, x, 1.75, z));
-      frames.push(box(2.22, 0.085, 0.13, greenhouseX, 2.4, z));
-    }
-    for (const x of [0.605, 2.755]) {
-      if (x < 1) {
-        for (const [z, depth] of [[.5, .3], [1.65, .4]]) {
-          walls.push(box(.12, .22, depth, x, 1.17, z));
-          panes.push(box(.055, 1.1, depth, x, 1.83, z));
-        }
-        panes.push(box(.055, .22, .8, x, 2.27, 1.05));
-        walls.push(box(.205, 1.32, .06, .5025, 1.72, .65), box(.205, 1.32, .06, .5025, 1.72, 1.45), box(.205, .08, .86, .5025, 2.42, 1.05));
-      }
-      if (x > 1) {
-        walls.push(box(.12, .22, 1.5, x, 1.17, greenhouseZ));
-        panes.push(box(.055, 1.1, 1.45, x, 1.83, greenhouseZ));
-      }
-      frames.push(box(0.13, 0.085, 1.62, x, 2.4, greenhouseZ), box(0.08, 1.36, 0.065, x, 1.75, x > 1 ? greenhouseZ : .35));
-    }
-    panes.push(box(2.15, 0.075, 1.5, greenhouseX, 2.4, greenhouseZ));
-    for (const x of [1.14, 1.68, 2.22]) frames.push(box(0.055, 0.08, 1.53, x, 2.425, greenhouseZ));
-    // Closed drum, glazed clerestory and closed hemispherical roof share the same centre.
-    walls.push(ring(1.07, .16, 1.3, 1.06, true), ring(1.07, .16, .15, 2.36));
-    panes.push(ring(1.065, 0.055, 0.46, 2.51));
-    for (let index = 0; index < 12; index++) {
-      const angle = index / 12 * Math.PI * 2;
-      frames.push(box(0.05, 0.46, 0.075, 0, 0, 0).rotateY(-angle).translate(1.58 + Math.sin(angle) * 1.045, 2.74, -0.73 + Math.cos(angle) * 1.045));
-    }
-    const plants: BufferGeometry[] = [];
-    const planters: BufferGeometry[] = [];
-    for (const [x, z, width] of [[-2.35, 1.80, 0.64], [-0.22, 1.80, 0.55], [2.48, 1.58, 0.3]]) {
-      planters.push(roundedBox(width, 0.25, 0.28, 0.04).translate(x, 1.18, z));
-      plants.push(new SphereGeometry(0.22, 10, 6).scale(width / 0.44, 0.65, 0.55).translate(x, 1.35, z));
-    }
-    return {
-      foundation: floorSlab('research-foundation',[floorRectangle(-1.215,-.015,3.41,3.53),floorEllipse(1.58,-.73,1.08),floorRectangle(1.68,1.1,2.29,1.64),floorRectangle(.51,-.73,.3,.88),floorRectangle(.51,1.05,.3,.88)],.99,.19,'foundation'),
-      floor: floorSlab('research-room-floors',[floorRectangle(-1.215,-.015,3.05,3.17),floorEllipse(1.58,-.73,.895),floorRectangle(1.68,1.1,2.01,1.36),floorRectangle(.52,-.73,.55,.75),floorRectangle(.52,1.05,.55,.74)],1.059,.069),
-      walls: combine(walls),
-      glazing: combine(panes),
-      frames: combine(frames),
-      roof: combine([
-        roundedBox(3.53, 0.18, 3.78, 0.06).translate(-1.215, 2.73, -0.015),
-        box(3.19, 0.045, 3.36, -1.215, 2.8425, -0.015),
-        ring(1.115, .095, .15, 2.97),
-      ]),
-      dome: new SphereGeometry(1.08, 40, 20, .32, Math.PI * 2 - .64, 0, Math.PI / 2).translate(1.58, 3.12, -0.73),
-      domeShutter: new SphereGeometry(1.082, 8, 20, -.32, .64, 0, Math.PI / 2).translate(1.58, 3.12, -0.73),
-      entry: combine([
-        roundedBox(1.25, 0.12, 0.46, 0.04).translate(-1.33, 2.61, 1.74),
-        floorSlab('research-door-threshold',[floorRectangle(-1.33,1.85,1.13,.28)],1.07,.27,'threshold'),
-        box(0.055, 0.24, 0.065, -1.23, 1.72, 1.765),
-      ]),
-      service: combine([
-        box(0.045, 1.21, 0.62, -2.925, 1.665, -0.94),
-        box(0.2, 0.27, 0.02, -2.22, 1.47, -1.782),
-      ]),
-      planterFootings: floorSlab('research-planter-footings',[floorRectangle(-2.35,1.8,.64,.28),floorRectangle(-.22,1.8,.55,.28)],1.055,.255,'threshold'),
-      planters: combine(planters),
-      plants: combine(plants),
-    };
-  });
+  const geometry = useResources(makeResearchBuilding);
   return <group name="research-institute" dispose={null}>
     <FurnishedInterior name="research-interior" build={makeResearchInterior} />
-    <mesh name="research-foundation" geometry={geometry.foundation} material={material.porcelain} receiveShadow />
+    <mesh name="research-foundation" geometry={geometry.foundation} material={material.paving} receiveShadow />
     <mesh name="research-floor" geometry={geometry.floor} material={material.paving} receiveShadow />
+    <mesh name="research-upper-laboratories" geometry={geometry.upper} material={material.paving} receiveShadow />
+    <mesh name="research-accessible-planted-terrace" geometry={geometry.terrace} material={material.paving} receiveShadow />
     <mesh name="research-lab-walls" geometry={geometry.walls} material={material.porcelain} castShadow receiveShadow />
     <mesh name="research-lab-roof" geometry={geometry.roof} material={material.porcelain} castShadow receiveShadow />
-    <mesh name="research-observatory-dome" geometry={geometry.dome} material={material.porcelain} castShadow />
-    <mesh name="research-observatory-shutter" geometry={geometry.domeShutter} material={material.glass} />
-    <mesh name="research-clerestory-and-growing-room" geometry={geometry.glazing} material={material.glass} />
-    <mesh name="research-window-divisions" geometry={geometry.frames} material={material.edge} castShadow />
-    <mesh name="research-entry" geometry={geometry.entry} material={material.edge} castShadow />
-    <mesh name="research-service-and-lab-bench" geometry={geometry.service} material={material.navy} />
-    <mesh name="research-planter-footings" geometry={geometry.planterFootings} material={material.paving} receiveShadow />
+    <mesh name="research-glazed-envelope" geometry={geometry.glazing} material={material.glass} />
+    <mesh name="research-window-divisions" geometry={geometry.frames} material={material.navy} castShadow />
+    <mesh name="research-terrace-glass-roof" geometry={geometry.glassRoof} material={material.glass} />
+    <mesh name="research-supported-terrace-roof" geometry={geometry.pergola} material={material.edge} castShadow />
+    <mesh name="research-stair-to-second-floor" geometry={geometry.steps} material={material.paving} castShadow receiveShadow />
+    <mesh name="research-stair-handrails" geometry={geometry.stairRails} material={material.edge} castShadow />
+    <mesh name="research-gallery-and-terrace-guards" geometry={geometry.upperRails} material={material.edge} castShadow />
+    <mesh name="research-structural-floor-bands" geometry={geometry.bands} material={material.cyan} castShadow />
+    <mesh name="research-supported-entry-canopy" geometry={geometry.entry} material={material.edge} castShadow />
+    <mesh name="research-door-threshold" geometry={geometry.threshold} material={material.paving} receiveShadow />
     <mesh name="research-planters" geometry={geometry.planters} material={material.porcelain} castShadow />
-    <mesh name="research-planting" geometry={geometry.plants} material={material.green} castShadow />
+    <mesh name="research-planting" geometry={geometry.planting} material={material.green} castShadow />
   </group>;
 }

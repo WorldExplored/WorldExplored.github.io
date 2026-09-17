@@ -3,10 +3,11 @@
 // Frame callbacks update retained Three.js resources outside React rendering.
 /* eslint-disable react-hooks/immutability */
 
+import { surfaceTexture } from './surfaceMaterials';
 import { measureConstruction } from './renderDiagnostics';
 import { rockImpactPosition } from './ShoreImpacts';
 import { coastalSoundScene } from './coastalAudio';
-import { barkTexture, treeBranches, treeWoodGeometry } from './TreeGeometry';
+import { barkTexture, leafVeinTexture, treeFoliageGeometry, treeBranches, treeWoodGeometry } from './TreeGeometry';
 
 import { useEffect, useMemo, useState } from 'react';
 import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
@@ -42,7 +43,7 @@ const plantVertex = /* glsl */ `
     local.y -= bend * .045;
     vec4 mv = modelViewMatrix * local;
     vTint = aTint;
-    vLight = .76 + position.y * .29;
+    vLight = .64 + min(position.y,1.) * .5;
     vDistance = length(mv.xyz);
     gl_Position = projectionMatrix * mv;
   }
@@ -68,8 +69,8 @@ function tuftGeometry() {
     const angle = blade * 2.399;
     const cx = Math.cos(angle) * .25;
     const cz = Math.sin(angle) * .25;
-    const height = .55 + (blade % 3) * .15;
-    const width = .018;
+    const height = .25 + (blade % 3) * .10;
+    const width = .024;
     const start = positions.length / 3;
     for (const [x, y, z] of [[-width, 0, 0], [width, 0, 0], [-width * .8, height * .48, .025], [width * .8, height * .48, .025], [-width * .4, height * .83, .08], [width * .4, height * .83, .08], [.04, height, .14]]) {
       positions.push(cx + x * Math.cos(angle) - z * Math.sin(angle), y, cz + x * Math.sin(angle) + z * Math.cos(angle));
@@ -129,8 +130,8 @@ function makePlants(plan: LandscapePlan, flowers: boolean, prepared?: PlantPosit
   const colors = new Float32Array(maximum * 3);
   const transform = new Object3D();
   const tint = new Color();
-  const dark = new Color('#42632f');
-  const light = new Color('#839548');
+  const dark = new Color('#286a35');
+  const light = new Color('#70a847');
   const random = seededRandom(flowers ? 713 : 914);
   const occupied = new Uint16Array(160 * 160);
   for (let index = 0; index < maximum; index++) {
@@ -175,42 +176,6 @@ function mineralTexture() {
   return texture;
 }
 
-function foliageGeometry() {
-  const geometry = new BufferGeometry();
-  const positions: number[] = [];
-  const colors: number[] = [];
-  const indices: number[] = [];
-  const random = seededRandom(1782);
-  const leaf = new Object3D();
-  const point = new Vector3();
-  // Individual curved leaves make an open crown with a fine, irregular edge.
-  for (let index = 0; index < 144; index++) {
-    const azimuth = random() * Math.PI * 2;
-    const y = random() * 2 - 1;
-    const radius = .78 * Math.cbrt(random());
-    const radial = Math.sqrt(1 - y * y) * radius;
-    leaf.position.set(Math.cos(azimuth) * radial, y * radius, Math.sin(azimuth) * radial);
-    leaf.rotation.set((random() - .5) * Math.PI, random() * Math.PI * 2, (random() - .5) * .7);
-    leaf.updateMatrix();
-    const length = .17 + random() * .11;
-    const width = .052 + random() * .026;
-    const shade = .66 + random() * .34;
-    const start = positions.length / 3;
-    const outline = [[0, 0, -.5], [-1, .03, -.16], [-.7, .065, .28], [0, .025, .5], [.7, .065, .28], [1, .03, -.16], [0, .10, 0]];
-    for (const [x, height, z] of outline) {
-      point.set(x * width, height, z * length).applyMatrix4(leaf.matrix);
-      positions.push(point.x, point.y, point.z);
-      colors.push(shade * .92, shade, shade * .88);
-    }
-    for (let edge = 0; edge < 6; edge++) indices.push(start + 6, start + edge, start + (edge + 1) % 6);
-  }
-  geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
-  geometry.setAttribute('color', new Float32BufferAttribute(colors, 3));
-  geometry.setIndex(indices);
-  geometry.computeVertexNormals();
-  return geometry;
-}
-
 function makeLandscape(plan: LandscapePlan) {
   const ground = archipelagoGeometry();
   const diagnostics = process.env.NODE_ENV !== 'production' && typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('vegetation');
@@ -224,11 +189,19 @@ function makeLandscape(plan: LandscapePlan) {
   const texture = mineralTexture();
   const material = new MeshPhysicalMaterial({ color: '#ffffff', specularIntensity: .32, vertexColors: true, map: texture, roughness: .94, clearcoat: 0, envMapIntensity: .2 });
   const shoreTime = { value: 0 };
+  const sandColor = surfaceTexture('sand', 'color') ?? texture;
+  const forestColor = surfaceTexture('forest', 'color') ?? texture;
+  const groundNormal = surfaceTexture('sand', 'normal') ?? texture;
+  material.normalMap = groundNormal; material.normalScale.set(.14, .14);
+  material.roughnessMap = surfaceTexture('sand', 'arm');
+  material.aoMap = material.roughnessMap; material.aoMapIntensity = .3;
   material.onBeforeCompile = shader => {
     shader.uniforms.uShoreTime = shoreTime;
+    shader.uniforms.uSandColor = { value: sandColor };
+    shader.uniforms.uForestColor = { value: forestColor };
     if (diagnostics) return;
     shader.vertexShader = `attribute vec3 aTerrain; attribute vec3 aEcology; attribute float aPaving; varying vec3 ecology; varying float paving; attribute float aExposure; varying float shoreExposure; varying vec3 vTerrain; varying vec2 groundXZ;\n${shader.vertexShader}`.replace('#include <begin_vertex>', '#include <begin_vertex>\n vTerrain = aTerrain; ecology=aEcology; paving=aPaving; shoreExposure = aExposure; groundXZ = position.xz;');
-    shader.fragmentShader = `uniform float uShoreTime; varying vec3 ecology; varying float paving; varying float shoreExposure; varying vec3 vTerrain; varying vec2 groundXZ;
+    shader.fragmentShader = `uniform sampler2D uSandColor; uniform sampler2D uForestColor; uniform float uShoreTime; varying vec3 ecology; varying float paving; varying float shoreExposure; varying vec3 vTerrain; varying vec2 groundXZ;
       ${shorelineWaveGLSL}
       float groundHash(vec2 p) { return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453); }
       float groundNoise(vec2 p) { vec2 c=floor(p), f=fract(p); f=f*f*(3.-2.*f); return mix(mix(groundHash(c),groundHash(c+vec2(1.,0.)),f.x),mix(groundHash(c+vec2(0.,1.)),groundHash(c+1.),f.x),f.y); }
@@ -244,7 +217,10 @@ function makeLandscape(plan: LandscapePlan) {
       float wet = 1.-smoothstep(.09,.40,elevation);
       float depth = max(0.,-elevation);
       float stone = smoothstep(.65,1.3,slope) * smoothstep(.5,1.2,elevation);
-      vec3 drySand = vec3(.53,.43,.27) * (.90 + grain*.16);
+      vec3 sandScan = texture2D(uSandColor,groundXZ*.27).rgb;
+      vec3 forestScan = texture2D(uForestColor,mat2(.8,-.6,.6,.8)*groundXZ*.22).rgb;
+      float sandRelief = dot(sandScan,vec3(.333));
+      vec3 drySand = mix(vec3(.52,.39,.21),vec3(.74,.62,.38),sandRelief) * (.94 + grain*.10);
       vec3 wetSand = vec3(.19,.19,.14) * (.96 + grain*.05);
       vec3 sand = mix(drySand,wetSand,wet*.9);
       float ripple = sin(groundXZ.x*13. + groundXZ.y*7. + sin(groundXZ.y*2.3)*2.7)*.0025;
@@ -254,20 +230,20 @@ function makeLandscape(plan: LandscapePlan) {
       float wash = shoreWave(coast,groundXZ,uShoreTime,shoreExposure).y;
       sand = mix(sand,vec3(.73,.84,.80),wash*.22);
       vec3 soil = mix(vec3(.22,.16,.095),vec3(.33,.25,.14),broad);
-      vec3 groundcover=mix(vec3(.07,.22,.024),vec3(.18,.38,.045),broad);
+      vec3 groundcover=mix(vec3(.018,.115,.035),vec3(.07,.29,.065),broad) * (.7+dot(forestScan,vec3(.333))*1.2);
       vec3 inland=mix(soil,groundcover,grass);
-      vec3 townGravel=mix(vec3(.19,.22,.095),vec3(.27,.29,.14),broad)*(.91+grain*.12);
+      vec3 townGravel=mix(vec3(.055,.12,.068),vec3(.15,.22,.095),broad)*(.91+grain*.12);
       inland=mix(inland,mix(townGravel,groundcover,grass),ecology.z);
       vec3 surface=mix(sand,inland,ecology.y);
       surface=mix(surface,vec3(.23,.26,.22)*(.9+broad*.2),stone);
-      vec3 pavingColor=mix(vec3(.32,.30,.23),vec3(.16,.215,.215),ecology.z);
-      float joints=max(1.-smoothstep(.012,.025,abs(fract(groundXZ.x*.9)-.5)),1.-smoothstep(.012,.025,abs(fract(groundXZ.y*.9)-.5)));
-      pavingColor*=.96+grain*.08-joints*.055*ecology.z;
+      vec3 pavingColor=mix(vec3(.43,.48,.43),vec3(.37,.50,.49),ecology.z);
+      // Mineral aggregate has no world-aligned road grid. Joints belong to built decks only.
+      pavingColor*=.92+grain*.12+sandRelief*.12;
       surface=mix(surface,pavingColor,pathMask);
       diffuseColor.rgb *= surface;
       `).replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n roughnessFactor = mix(.94,.32,wet*(1.-grass)*(1.-smoothstep(.2,1.,depth)));');
   };
-  material.customProgramCacheKey = () => 'coastal-biome-graded-ground-v3';
+  material.customProgramCacheKey = () => 'coastal-pbr-promenade-v4';
   const rockResources=createCoastalRocks(plan.rocks),rocks=rockResources.root;
   const shoreDetails=createShoreDetails(plan),townLandscape=createTownLandscape(plan);
   const transform=new Object3D();
@@ -292,9 +268,10 @@ function makeLandscape(plan: LandscapePlan) {
   shells.count = shellCount; shells.computeBoundingSphere();
   const trunkGeometries = [0, 1, 2].map(treeWoodGeometry);
   const bark = barkTexture();
-  const crownGeometry = foliageGeometry();
+  const crownGeometry = treeFoliageGeometry();
+  const leafVeins = leafVeinTexture();
   const trunkMaterial = new MeshPhysicalMaterial({ color: '#8c7055', vertexColors: true, bumpMap: bark, bumpScale: .028, roughness: .93, envMapIntensity: .13 });
-  const crownMaterial = new MeshPhysicalMaterial({ color: '#49822a', vertexColors: true, side: DoubleSide, roughness: .73, clearcoat: .08, clearcoatRoughness: .4, envMapIntensity: .15 });
+  const crownMaterial = new MeshPhysicalMaterial({ color: '#438d36', bumpMap: leafVeins, bumpScale: .007, roughnessMap: leafVeins, vertexColors: true, side: DoubleSide, roughness: .73, clearcoat: .08, clearcoatRoughness: .4, envMapIntensity: .15 });
   const canopyWind = { time: { value: 0 }, strength: { value: 1 }, pointer: { value: new Vector3(10000,0,10000) }, pointerStrength: { value: 0 } };
   crownMaterial.userData.canopyWind = canopyWind;
   crownMaterial.onBeforeCompile = shader => {
@@ -344,7 +321,7 @@ function makeLandscape(plan: LandscapePlan) {
   return { ground, material, rocks, trunks, crowns, shells, shoreDetails, townLandscape, canopyWind, shoreTime, plan, dispose() {
     [ground, ...trunkGeometries, crownGeometry, shellGeometry].forEach(geometry => geometry.dispose());
     [material, trunkMaterial, crownMaterial, shellMaterial].forEach(value => value.dispose());
-    bark.dispose(); texture.dispose(); shoreDetails.dispose(); townLandscape.dispose(); shells.dispose(); rockResources.dispose(); woodMeshes.forEach(mesh => mesh.dispose()); crowns.dispose();
+    bark.dispose(); leafVeins.dispose(); texture.dispose(); shoreDetails.dispose(); townLandscape.dispose(); shells.dispose(); rockResources.dispose(); woodMeshes.forEach(mesh => mesh.dispose()); crowns.dispose();
   } };
 }
 

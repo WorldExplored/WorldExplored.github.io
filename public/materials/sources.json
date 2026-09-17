@@ -1,0 +1,78 @@
+{
+  "license": "https://polyhaven.com/license",
+  "processing": "1K JPEG sources resized to 512\u00d7512 WebP. Mineral albedo neutralized and lightened for pearlescent aggregate; timber albedo brightened and desaturated. Color maps sRGB; OpenGL normals and packed AO/roughness/metal linear.",
+  "files": [
+    {
+      "file": "public/materials/sand-color.webp",
+      "asset": "coast_sand_rocks_02",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/coast_sand_rocks_02/coast_sand_rocks_02_diff_1k.jpg",
+      "license": "CC0-1.0"
+    },
+    {
+      "file": "public/materials/sand-normal.webp",
+      "asset": "coast_sand_rocks_02",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/coast_sand_rocks_02/coast_sand_rocks_02_nor_gl_1k.jpg",
+      "license": "CC0-1.0"
+    },
+    {
+      "file": "public/materials/sand-arm.webp",
+      "asset": "coast_sand_rocks_02",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/coast_sand_rocks_02/coast_sand_rocks_02_arm_1k.jpg",
+      "license": "CC0-1.0"
+    },
+    {
+      "file": "public/materials/forest-color.webp",
+      "asset": "forrest_ground_01",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/forrest_ground_01/forrest_ground_01_diff_1k.jpg",
+      "license": "CC0-1.0"
+    },
+    {
+      "file": "public/materials/forest-normal.webp",
+      "asset": "forrest_ground_01",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/forrest_ground_01/forrest_ground_01_nor_gl_1k.jpg",
+      "license": "CC0-1.0"
+    },
+    {
+      "file": "public/materials/forest-arm.webp",
+      "asset": "forrest_ground_01",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/forrest_ground_01/forrest_ground_01_arm_1k.jpg",
+      "license": "CC0-1.0"
+    },
+    {
+      "file": "public/materials/cedar-color.webp",
+      "asset": "wood_floor_deck",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/wood_floor_deck/wood_floor_deck_diff_1k.jpg",
+      "license": "CC0-1.0"
+    },
+    {
+      "file": "public/materials/cedar-normal.webp",
+      "asset": "wood_floor_deck",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/wood_floor_deck/wood_floor_deck_nor_gl_1k.jpg",
+      "license": "CC0-1.0"
+    },
+    {
+      "file": "public/materials/cedar-arm.webp",
+      "asset": "wood_floor_deck",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/wood_floor_deck/wood_floor_deck_arm_1k.jpg",
+      "license": "CC0-1.0"
+    },
+    {
+      "file": "public/materials/mineral-color.webp",
+      "asset": "concrete_wall_006",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/concrete_wall_006/concrete_wall_006_diff_1k.jpg",
+      "license": "CC0-1.0"
+    },
+    {
+      "file": "public/materials/mineral-normal.webp",
+      "asset": "concrete_wall_006",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/concrete_wall_006/concrete_wall_006_nor_gl_1k.jpg",
+      "license": "CC0-1.0"
+    },
+    {
+      "file": "public/materials/mineral-arm.webp",
+      "asset": "concrete_wall_006",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/concrete_wall_006/concrete_wall_006_arm_1k.jpg",
+      "license": "CC0-1.0"
+    }
+  ]
+}

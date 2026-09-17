@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { CoastalAudio, COASTAL_BELL_EVENT, type CoastalAudioPreferences } from './world/coastalAudio';
+import { CoastalAudio, COASTAL_BELL_EVENT, TECHNOLOGY_SOUND_EVENT, type TechnologySoundEvent, type CoastalAudioPreferences } from './world/coastalAudio';
 
 const STORAGE = 'portfolio-ambience-v1';
 function readPreferences(): CoastalAudioPreferences {
@@ -11,6 +11,13 @@ function readPreferences(): CoastalAudioPreferences {
   } catch {}
   return { volume: .34, muted: false };
 }
+/** The subscription only reads an existing gesture-created engine. */
+export function subscribeToTechnologySounds(target: EventTarget, currentEngine: () => CoastalAudio | null) {
+  const listener = (event: Event) => currentEngine()?.technology((event as CustomEvent<TechnologySoundEvent>).detail);
+  target.addEventListener(TECHNOLOGY_SOUND_EVENT, listener);
+  return () => target.removeEventListener(TECHNOLOGY_SOUND_EVENT, listener);
+}
+
 export function EnvironmentalAudioControl() {
   const engine = useRef<CoastalAudio | null>(null);
   const [active, setActive] = useState(false), [started, setStarted] = useState(false), [loading, setLoading] = useState(false);
@@ -23,8 +30,9 @@ export function EnvironmentalAudioControl() {
       engine.current ??= new CoastalAudio(latest.current); setStarted(true);
       void engine.current.bell().then(struck => { if (struck) setBellCount(value => value + 1); }).catch(() => setError('Bell audio unavailable. Try again.'));
     };
+    const unsubscribeTechnology = subscribeToTechnologySounds(window, () => engine.current);
     window.addEventListener(COASTAL_BELL_EVENT, bell);
-    return () => { window.removeEventListener(COASTAL_BELL_EVENT, bell); engine.current?.dispose(); };
+    return () => { unsubscribeTechnology(); window.removeEventListener(COASTAL_BELL_EVENT, bell); engine.current?.dispose(); };
   }, []);
   const persist = (next: CoastalAudioPreferences) => {
     setPreferences(next); try { localStorage.setItem(STORAGE, JSON.stringify(next)); } catch {}

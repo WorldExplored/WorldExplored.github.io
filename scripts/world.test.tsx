@@ -105,7 +105,7 @@ test('paused navigation arrives immediately and keeps its pose frozen', async t 
   await advance(fixture.renderer, 100);
   assert.deepEqual(fixture.arrivals, [{ id: 'purdue', serial: 1 }]);
   assert.ok(fixture.getRoot().camera.position.distanceTo(expected) < 1e-8);
-  assert.deepEqual(fixture.getRoot().camera.quaternion.toArray(), rotation.toArray());
+  assert.ok(fixture.getRoot().camera.quaternion.toArray().every((value,index)=>Math.abs(value-rotation.toArray()[index])<1e-12), 'Paused rotation remains unchanged within floating-point normalization precision');
 });
 
 test('each landmark routes clicks to its semantic destination and ignores drags', async t => {

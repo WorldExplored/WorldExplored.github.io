@@ -7,19 +7,38 @@ import { Matrix4, Ray, SRGBColorSpace, Vector3 } from 'three';
 import { AmbientSystem } from '../src/components/world/AmbientSystem.tsx';
 import { architectureFootprints, canPlacePlant, createLandscapePlan, distanceToSegment, generatePlantPositions, archipelagoGeometry, ISLANDS, islandContour, islandDistance, landDistance, pathGeometry, pathHeight, terrainBaseHeight, terrainHeight } from '../src/components/world/terrain.ts';
 import { cloudOrigin, cloudPuffTransform, createCloudClusters, rayCloudDistance, updateCloudResponses } from '../src/components/world/clouds.ts';
+import { makeResearchBuilding } from '../src/components/world/ResearchInstitute.tsx';
+import { makeGardenGallery } from '../src/components/world/GardenGallery.tsx';
+import { makeReceptionTerminal } from '../src/components/world/ReceptionTerminal.tsx';
+import { makeComputeBuilding } from '../src/components/world/ComputeBuilding.tsx';
+import { makeExperienceStudio, makeHistoryMuseum } from '../src/components/world/CivicLandmarks.tsx';
+import { makeCampusHall } from '../src/components/world/CampusHall.tsx';
 import { createSceneRuntime, motionPolicy, world } from '../src/content/world.ts';
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
-test('ungraded architecture bearing planes remain flat and bridges cross real channels', () => {
+test('ungraded terrain bears actual architecture foundations and bridges cross real channels', () => {
   const plan = createLandscapePlan();
   // Final graded foundation contact and finished-floor clearance are sampled
   // against actual building faces in circulation.test.ts.
+  const builders={work:makeComputeBuilding,experience:makeExperienceStudio,research:makeResearchBuilding,purdue:makeCampusHall,history:makeHistoryMuseum,about:makeGardenGallery,contact:makeReceptionTerminal};
   for (const footprint of architectureFootprints()) {
-    for (let index = 0; index < 12; index++) {
-      const angle = index * Math.PI / 6;
-      assert.ok(Math.abs(terrainBaseHeight(footprint.x + Math.cos(angle) * footprint.radius, footprint.z + Math.sin(angle) * footprint.radius) - (footprint.id === 'building' ? 2.6 : .8)) < 1e-6, footprint.id);
+    if (footprint.id === 'building') {
+      for(let i=0;i<12;i++)assert.ok(Math.abs(terrainBaseHeight(footprint.x+Math.cos(i*Math.PI/6)*footprint.radius,footprint.z+Math.sin(i*Math.PI/6)*footprint.radius)-2.6)<1e-6,'Lighthouse bearing');
+      continue;
     }
+    // Planting circles reserve motion/foliage clearance; bearing is measured on the
+    // actual foundation. Slabs embed into small variations near the coast.
+    const geometry=builders[footprint.id](),config=world.landmarks.find(p=>p.id===footprint.id),yaw=config.rotationY??0;
+    try {
+      const foundation=Object.values(geometry).find(g=>g.userData.floor?.kind==='foundation');
+      foundation.computeBoundingBox();const bottom=foundation.boundingBox.min.y,p=foundation.attributes.position;
+      for(let i=0;i<p.count;i++) {
+        const x=footprint.x+p.getX(i)*Math.cos(yaw)+p.getZ(i)*Math.sin(yaw);
+        const z=footprint.z-p.getX(i)*Math.sin(yaw)+p.getZ(i)*Math.cos(yaw);
+        assert.ok(terrainBaseHeight(x,z)>=bottom-.001,`${footprint.id} foundation has no bearing at ${x},${z}`);
+      }
+    } finally { Object.values(geometry).forEach(g=>g.dispose()); }
   }
   for (const path of plan.paths.filter(path => !path.elevated)) for (let index = 1; index < path.points.length; index++) {
     const a = path.points[index - 1];

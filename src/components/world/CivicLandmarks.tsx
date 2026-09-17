@@ -1,8 +1,9 @@
 'use client';
 
-import { BoxGeometry, CylinderGeometry, SphereGeometry, Vector3, type BufferGeometry } from 'three';
-import { combine, roundedBox, stroke, surface, usePalette, useResources, type ModelProps } from './BuildingKit';
+import { ExtrudeGeometry, Shape, Vector3, type BufferGeometry } from 'three';
+import { combine, roundedBox, stroke, usePalette, useResources, type ModelProps } from './BuildingKit';
 import { FurnishedInterior, InteriorBuilder, floorRectangle, floorSlab } from './InteriorKit';
+import { architecturalSurface as surface, architecturalBox as box, doorway, guardRail, stairFlight, windowBay, type ShellParts } from './LandmarkShellKit';
 
 function createExperienceInterior() {
   const b = new InteriorBuilder(); const floor = 1.075;
@@ -20,59 +21,56 @@ function createExperienceInterior() {
   return b.finish();
 }
 
+export function makeExperienceStudio() {
+  const parts: ShellParts = { walls: [], glass: [], frames: [] };
+  const bottom = 1.075, top = 4.6;
+  for (const x of [-2.86, 2.86]) windowBay(parts, x, 2.88, 2.28, bottom, top, 0, .26);
+  doorway(parts, 0, 2.88, 2.28, bottom, top);
+  for (const side of [-1, 1]) for (const z of [-1.44, 1.44]) windowBay(parts, side * 4.02, z, 2.88, bottom, top, Math.PI / 2, .3);
+  for (const x of [-2.68, 0, 2.68]) windowBay(parts, x, -2.88, 2.68, bottom, top, 0, .6);
+  // One folded shell carries both wings to a connected valley gutter. Its soffit is exposed.
+  const roofPoint = (u: number, v: number) => {
+    const x = (u - .5) * 8.75;
+    return new Vector3(x, 4.8 + .63 * Math.pow(Math.abs(x) / 4.375, 1.3), (v - .5) * 6.30);
+  };
+  const roof = surface(roofPoint, 40, 8, .17);
+  const ribs: BufferGeometry[] = [], clerestory: BufferGeometry[] = [];
+  for (const z of [-2.86, -1.42, 0, 1.42, 2.86]) {
+    ribs.push(stroke(t => { const point = roofPoint(t, .5 + z / 6.30); point.y -= .18; return point; }, .065, 32));
+    for (const x of [-3.95, 3.95]) ribs.push(box(.13, 4.8 + .63 * Math.pow(Math.abs(x) / 4.375, 1.3) - .17 - bottom, .13, x, (4.8 + .63 * Math.pow(Math.abs(x) / 4.375, 1.3) - .17 + bottom) / 2, z));
+  }
+  for (const z of [-2.88, 2.88]) clerestory.push(surface((u, v) => {
+    const x = (u - .5) * 8.04, roofHeight = 4.8 + .63 * Math.pow(Math.abs(x) / 4.375, 1.3) - .18;
+    return new Vector3(x, 4.59 + v * (roofHeight - 4.59), z);
+  }, 32, 1, .035));
+  for (const x of [-4.02, 4.02]) clerestory.push(box(.04, .59, 5.76, x, 4.875, 0));
+  const shades: BufferGeometry[] = [];
+  for (const x of [-3.67, -2.83, -1.99, 1.99, 2.83, 3.67]) shades.push(box(.055, 2.78, .36, x, 2.63, 3.01));
+  const canopy = combine([roundedBox(3.05, .14, 1.32, .08).translate(0, 3.65, 3.35), box(.075, 2.59, .075, -1.42, 2.37, 3.85), box(.075, 2.59, .075, 1.42, 2.37, 3.85), box(.22, .32, .22, -1.42, .92, 3.85), box(.22, .32, .22, 1.42, .92, 3.85)]);
+  return {
+    base: floorSlab('experience-foundation', [floorRectangle(0, 0, 8.45, 6.12)], 1.01, .21, 'foundation'),
+    walls: combine(parts.walls), windows: combine(parts.glass), frames: combine(parts.frames), roof,
+    ribs: combine(ribs), clerestory: combine(clerestory), shades: combine(shades), canopy,
+    gutter: stroke(t => new Vector3(0, 4.78, -3.22 + t * 6.44), .085, 2),
+    threshold: floorSlab('experience-threshold', [floorRectangle(0, 3.1, 2.3, .58)], 1.08, .23, 'threshold'),
+  };
+}
+
 export function ExperienceStudio(props: ModelProps) {
   const material = usePalette(props, 'experience');
-  const geometry = useResources(() => {
-    const box = (w: number, h: number, d: number, x: number, y: number, z: number, yaw = 0) => new BoxGeometry(w, h, d).rotateY(yaw).translate(x, y, z);
-    const walls: BufferGeometry[] = [
-      box(8.2, 3.65, .18, 0, 2.84, -2.88),
-      box(.18, 3.65, 5.6, -4.02, 2.84, 0), box(.18, 3.65, 5.6, 4.02, 2.84, 0),
-      box(1.22, 3.65, .18, -3.35, 2.84, 2.88), box(1.22, 3.65, .18, 3.35, 2.84, 2.88),
-      box(.24, 3.65, .24, -1.22, 2.84, 2.83), box(.24, 3.65, .24, 1.22, 2.84, 2.83),
-      box(2.2, .42, .18, 0, 4.46, 2.88),
-    ];
-    const windows: BufferGeometry[] = [];
-    const frames: BufferGeometry[] = [];
-    for (const x of [-2.28, 2.28]) {
-      windows.push(box(1.78, 2.82, .045, x, 2.83, 2.93));
-      for (const edge of [-.92, .92]) frames.push(box(.075, 3.02, .1, x + edge, 2.83, 2.95));
-      frames.push(box(1.92, .075, .1, x, 1.33, 2.95), box(1.92, .075, .1, x, 4.33, 2.95));
-    }
-    for (const side of [-1, 1]) {
-      windows.push(box(.045, 2.45, 1.65, side * 4.11, 2.72, .55));
-      frames.push(box(.1, 2.65, .075, side * 4.12, 2.72, -.31), box(.1, 2.65, .075, side * 4.12, 2.72, 1.41));
-    }
-    const roof = combine([
-      box(4.35, .2, 6.35, -2.05, 4.86, -.05, -.035),
-      box(4.35, .2, 6.35, 2.05, 4.86, -.05, .035),
-      box(1.3, .16, 2.05, 0, 5.18, -.7),
-    ]);
-    const planters: BufferGeometry[] = [];
-    for (const x of [-2.85, -1.85, 1.85, 2.85]) {
-      planters.push(box(.72, .34, 1.5, x, 5.08, -.5));
-      for (const z of [-.95, -.5, -.05]) planters.push(new SphereGeometry(.27, 10, 7).scale(1.15, 1.45, .8).translate(x, 5.47, z));
-    }
-    const vine = combine([-1, 1].map(side => stroke(t => new Vector3(side * (3.85 - .35 * Math.sin(t * Math.PI * 2)), 1.25 + t * 3.25, -2.98 + .2 * Math.sin(t * Math.PI * 3)), .045, 32)));
-    return {
-      base: floorSlab('experience-foundation', [floorRectangle(0, 0, 8.45, 6.12)], 1.01, .21, 'foundation'),
-      walls: combine(walls), windows: combine(windows), frames: combine(frames), roof,
-      doors: combine([box(.58, 2.15, .05, -.31, 2.12, 2.98), box(.58, 2.15, .05, .31, 2.12, 2.98)]),
-      threshold: floorSlab('experience-threshold', [floorRectangle(0, 3.1, 1.5, .58)], 1.08, .23, 'threshold'),
-      planters: combine(planters), vine,
-      canopy: roundedBox(3.25, .18, 1.25, .12).rotateX(-.06).translate(0, 4.02, 3.42),
-    };
-  });
+  const geometry = useResources(makeExperienceStudio);
   return <group dispose={null}>
     <mesh name="experience-foundation" geometry={geometry.base} material={material.paving} receiveShadow />
     <mesh name="experience-opaque-structural-shell" geometry={geometry.walls} material={material.porcelain} castShadow receiveShadow />
     <mesh name="experience-window-openings" geometry={geometry.windows} material={material.facade} />
-    <mesh name="experience-window-frames" geometry={geometry.frames} material={material.edge} castShadow />
-    <mesh name="experience-glass-entry" geometry={geometry.doors} material={material.glass} />
-    <mesh name="experience-butterfly-roof" geometry={geometry.roof} material={material.cyan} castShadow receiveShadow />
-    <mesh name="experience-entry-canopy" geometry={geometry.canopy} material={material.glass} />
+    <mesh name="experience-window-frames" geometry={geometry.frames} material={material.navy} castShadow />
+    <mesh name="experience-continuous-folded-roof" geometry={geometry.roof} material={material.cyan} castShadow receiveShadow />
+    <mesh name="experience-roof-bearing-portals" geometry={geometry.ribs} material={material.edge} castShadow />
+    <mesh name="experience-roof-clerestory" geometry={geometry.clerestory} material={material.glass} />
+    <mesh name="experience-vertical-sunshades" geometry={geometry.shades} material={material.edge} castShadow />
+    <mesh name="experience-supported-entry-canopy" geometry={geometry.canopy} material={material.porcelain} castShadow />
+    <mesh name="experience-valley-gutter" geometry={geometry.gutter} material={material.navy} />
     <mesh name="experience-door-threshold" geometry={geometry.threshold} material={material.paving} receiveShadow />
-    <mesh name="experience-roof-garden" geometry={geometry.planters} material={material.green} castShadow />
-    <mesh name="experience-wall-vines" geometry={geometry.vine} material={material.green} castShadow />
     <FurnishedInterior name="experience-visible-workshop" build={createExperienceInterior} />
   </group>;
 }
@@ -92,80 +90,60 @@ function createHistoryInterior() {
   return b.finish();
 }
 
+export function makeHistoryMuseum() {
+  const parts: ShellParts = { walls: [], glass: [], frames: [] };
+  const floor = 1.075, ceiling = 5.8, upper = 4.3;
+  for (const x of [-3.62, 3.62]) windowBay(parts, x, 3.54, 3.33, floor, ceiling, 0, .32);
+  doorway(parts, 0, 3.54, 3.56, floor, ceiling);
+  for (const side of [-1, 1]) for (const z of [-2.34, 0, 2.34]) windowBay(parts, side * 5.3, z, 2.34, floor, ceiling, Math.PI / 2, .62);
+  parts.walls.push(box(10.72, 4.725, .22, 0, 3.4375, -3.55));
+  // The shell closes continuously at both arch-shaped gables, with a structural rib at every bay.
+  const archHeight = (x: number) => 5.84 + 1.42 * Math.cos(x / 11.25 * Math.PI);
+  const roof = surface((u, v) => { const x = (u - .5) * 11.25; return new Vector3(x, archHeight(x), (v - .5) * 7.75); }, 48, 10, .16);
+  const gable = new Shape(); gable.moveTo(-5.29, 5.76);
+  for (let i = 0; i <= 48; i++) { const x = -5.29 + i / 48 * 10.58; gable.lineTo(x, archHeight(x) - .17); }
+  gable.lineTo(5.29, 5.76); gable.closePath();
+  const gables = combine([-3.55, 3.54].map(z => new ExtrudeGeometry(gable, { depth: .045, bevelEnabled: false }).translate(0, 0, z)));
+  const ribs: BufferGeometry[] = [];
+  for (const z of [-3.54, -1.77, 0, 1.77, 3.54]) {
+    ribs.push(stroke(t => { const x = (t - .5) * 10.61; return new Vector3(x, archHeight(x) - .19, z); }, .075, 40));
+    for (const x of [-5.21, 5.21]) ribs.push(box(.15, 4.85, .15, x, 3.5, z));
+  }
+  const stair = stairFlight(0, 1.73, 1.38, floor, upper, 17, .24);
+  const gallery = floorSlab('history-upper-gallery-floor', [floorRectangle(-4.42, 0, 1.49, 6.72), floorRectangle(4.42, 0, 1.49, 6.72), floorRectangle(0, -2.69, 8.84, 1.34)], upper, .17);
+  const rails = combine([stair.rails, guardRail(-3.68, 3.22, -3.68, -2.02, upper), guardRail(3.68, 3.22, 3.68, -2.02, upper), guardRail(-3.68, -2.02, -.73, -2.02, upper), guardRail(.73, -2.02, 3.68, -2.02, upper)]);
+  const cases: BufferGeometry[] = [], caseGlass: BufferGeometry[] = [];
+  for (const x of [-4.38, 4.38]) for (const z of [-.8, 1.42]) {
+    cases.push(box(.8, .55, .75, x, upper + .275, z), box(.82, .055, .77, x, upper + .56, z));
+    caseGlass.push(box(.72, .6, .66, x, upper + .89, z));
+  }
+  return {
+    base: floorSlab('history-foundation', [floorRectangle(0, 0, 11.2, 7.7)], 1.01, .21, 'foundation'),
+    walls: combine(parts.walls), windows: combine(parts.glass), frames: combine(parts.frames), roof, gables, ribs: combine(ribs), gallery, steps: stair.steps, rails,
+    cases: combine(cases), caseGlass: combine(caseGlass),
+    threshold: floorSlab('history-threshold', [floorRectangle(0, 3.82, 3.58, .7)], 1.08, .23, 'threshold'),
+    canopy: combine([box(4.1, .15, 1.17, 0, 3.71, 3.95), box(.1, 2.61, .1, -1.96, 2.38, 4.42), box(.1, 2.61, .1, 1.96, 2.38, 4.42), box(.26, .32, .26, -1.96, .92, 4.42), box(.26, .32, .26, 1.96, .92, 4.42)]),
+  };
+}
+
 export function HistoryMuseum(props: ModelProps) {
   const material = usePalette(props, 'history');
-  const geometry = useResources(() => {
-    const box = (w: number, h: number, d: number, x: number, y: number, z: number, yaw = 0) => new BoxGeometry(w, h, d).rotateY(yaw).translate(x, y, z);
-    const walls: BufferGeometry[] = [box(10.7, 4.75, .22, 0, 3.42, -3.55)];
-    for (const side of [-1, 1]) {
-      walls.push(box(.22, 4.75, 7.05, side * 5.3, 3.42, 0));
-      walls.push(box(2.02, 4.75, .2, side * 4.22, 3.42, 3.54));
-      walls.push(box(.24, 4.75, .24, side * 1.75, 3.42, 3.5));
-    }
-    const windows: BufferGeometry[] = [], frames: BufferGeometry[] = [];
-    for (const side of [-1, 1]) {
-      windows.push(box(2.2, 3.8, .045, side * 2.92, 3.35, 3.65));
-      frames.push(box(.08, 4, .11, side * 1.8, 3.35, 3.68), box(.08, 4, .11, side * 4.04, 3.35, 3.68));
-      frames.push(box(2.32, .08, .11, side * 2.92, 1.37, 3.68), box(2.32, .08, .11, side * 2.92, 5.34, 3.68));
-      for (const z of [-2.25, 0, 2.25]) windows.push(box(.045, 2.1, 1.55, side * 5.42, 3.25, z));
-    }
-    const atriumGlass = box(3.32, 4.18, .05, 0, 3.23, 3.65);
-    const atriumFrame = combine([
-      box(.09, 4.35, .12, -1.7, 3.23, 3.67), box(.09, 4.35, .12, 1.7, 3.23, 3.67),
-      box(3.48, .09, .12, 0, 5.38, 3.67), box(.07, 4.18, .12, 0, 3.23, 3.67),
-    ]);
-    const roof = surface((u, v) => {
-      const x = (u - .5) * 11.25; const z = (v - .5) * 7.75;
-      return new Vector3(x, 5.64 + 1.16 * Math.cos(x / 11.25 * Math.PI), z);
-    }, 56, 18, .12);
-    const roofRibs: BufferGeometry[] = [];
-    for (const z of [-3.55, -1.8, 0, 1.8, 3.55]) roofRibs.push(stroke(t => {
-      const x = (t - .5) * 11.18;
-      return new Vector3(x, 5.72 + 1.16 * Math.cos(x / 11.25 * Math.PI), z);
-    }, .045, 48));
-    for (const x of [-4.5, 0, 4.5]) roofRibs.push(stroke(t => new Vector3(x, 5.72 + 1.16 * Math.cos(x / 11.25 * Math.PI), (t - .5) * 7.55), .04, 28));
-    const steps: BufferGeometry[] = [], rails: BufferGeometry[] = [];
-    for (let index = 0; index < 13; index++) {
-      const y = 1.12 + index * .255, z = 1.7 - index * .29;
-      steps.push(box(1.28, .12, .48, 0, y, z));
-    }
-    for (const side of [-1, 1]) {
-      rails.push(stroke(t => new Vector3(side * .72, 1.58 + t * 3.08, 1.9 - t * 3.48), .035, 32));
-      for (let index = 0; index < 7; index++) rails.push(new CylinderGeometry(.025, .025, .8, 8).translate(side * .72, 1.34 + index * .5, 1.7 - index * .54));
-    }
-    const upperGallery = combine([
-      box(3.9, .16, 1.2, -3.25, 4.22, 1.72), box(3.9, .16, 1.2, 3.25, 4.22, 1.72),
-      box(10.3, .16, 1.1, 0, 4.22, -2.7),
-    ]);
-    const garden: BufferGeometry[] = [];
-    for (const x of [-4.15, -2.8, 2.8, 4.15]) {
-      garden.push(box(1.05, .38, 1.8, x, 6.15, -.35));
-      for (const z of [-.85, -.35, .15]) garden.push(new SphereGeometry(.34, 10, 7).scale(1.3, 1.5, .9).translate(x, 6.62, z));
-    }
-    for (const x of [-4.6, 4.6]) garden.push(stroke(t => new Vector3(x + .22 * Math.sin(t * 12), 1.3 + t * 4.4, -3.68), .05, 40));
-    return {
-      base: floorSlab('history-foundation', [floorRectangle(0, 0, 11.2, 7.7)], 1.01, .21, 'foundation'),
-      walls: combine(walls), windows: combine(windows), frames: combine(frames), atriumGlass, atriumFrame, roof, roofRibs: combine(roofRibs),
-      doors: combine([box(.72, 2.3, .055, -.38, 2.19, 3.71), box(.72, 2.3, .055, .38, 2.19, 3.71)]),
-      threshold: floorSlab('history-threshold', [floorRectangle(0, 3.82, 2, .7)], 1.08, .23, 'threshold'),
-      steps: combine(steps), rails: combine(rails), upperGallery, garden: combine(garden),
-    };
-  });
+  const geometry = useResources(makeHistoryMuseum);
   return <group dispose={null}>
     <mesh name="history-museum-foundation" geometry={geometry.base} material={material.paving} receiveShadow />
     <mesh name="history-museum-opaque-shell" geometry={geometry.walls} material={material.porcelain} castShadow receiveShadow />
     <mesh name="history-gallery-window-openings" geometry={geometry.windows} material={material.facade} />
-    <mesh name="history-window-frames" geometry={geometry.frames} material={material.edge} castShadow />
-    <mesh name="history-planted-atrium" geometry={geometry.atriumGlass} material={material.glass} />
-    <mesh geometry={geometry.atriumFrame} material={material.edge} castShadow />
-    <mesh name="history-curved-roof" geometry={geometry.roof} material={material.glass} receiveShadow />
-    <mesh name="history-curved-roof-ribs" geometry={geometry.roofRibs} material={material.edge} castShadow />
-    <mesh name="history-entry-doors" geometry={geometry.doors} material={material.glass} />
+    <mesh name="history-window-frames" geometry={geometry.frames} material={material.navy} castShadow />
+    <mesh name="history-vaulted-roof" geometry={geometry.roof} material={material.porcelain} castShadow receiveShadow />
+    <mesh name="history-glazed-arch-gables" geometry={geometry.gables} material={material.glass} />
+    <mesh name="history-vault-bearing-ribs" geometry={geometry.ribs} material={material.edge} castShadow />
     <mesh name="history-entry-threshold" geometry={geometry.threshold} material={material.paving} receiveShadow />
-    <mesh name="history-visible-staircase" geometry={geometry.steps} material={material.porcelain} castShadow receiveShadow />
-    <mesh name="history-stair-rails" geometry={geometry.rails} material={material.edge} castShadow />
-    <mesh name="history-upper-galleries" geometry={geometry.upperGallery} material={material.paving} receiveShadow />
-    <mesh name="history-roof-garden-and-vines" geometry={geometry.garden} material={material.green} castShadow />
+    <mesh name="history-supported-entry-canopy" geometry={geometry.canopy} material={material.cyan} castShadow />
+    <mesh name="history-visible-staircase" geometry={geometry.steps} material={material.paving} castShadow receiveShadow />
+    <mesh name="history-gallery-and-stair-rails" geometry={geometry.rails} material={material.edge} castShadow />
+    <mesh name="history-continuous-upper-gallery" geometry={geometry.gallery} material={material.paving} receiveShadow />
+    <mesh name="history-upper-exhibit-plinths" geometry={geometry.cases} material={material.porcelain} castShadow />
+    <mesh name="history-exhibit-vitrines" geometry={geometry.caseGlass} material={material.glass} />
     <FurnishedInterior name="history-visible-galleries" build={createHistoryInterior} />
   </group>;
 }

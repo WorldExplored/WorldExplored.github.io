@@ -1,3 +1,4 @@
+import { applySurface } from './surfaceMaterials';
 import { BufferGeometry, Color, Float32BufferAttribute, Group, InstancedMesh, MeshStandardMaterial, Object3D } from 'three';
 import type { LandscapeRock } from './terrain';
 
@@ -12,24 +13,31 @@ export function coastalRockGeometry(kind: number) {
     [[1, 0], [.78, .16], [.88, .29], [.53, .45]],
     [[.83, 0], [1, .26], [.82, .57], [.44, .68]],
   ][kind % 6];
-  const sides = [8, 7, 6, 8, 7, 9][kind % 6], positions: number[] = [], colors: number[] = [];
-  const rings = profiles.map(([r, y], row) => Array.from({ length: sides }, (_, i) => {
-    const a = i / sides * Math.PI * 2, uneven = 1 + .14 * Math.sin(i * 3.7 + kind * 2.1) + .07 * Math.cos(i * 1.4 + row);
-    return [Math.cos(a) * r * uneven + y * .16, y, Math.sin(a) * r * uneven * (kind === 2 ? .36 : kind === 0 ? .7 : .82)];
-  }));
+  const sides = 24, rows=12, positions: number[] = [], colors: number[] = [], uvs:number[]=[], indices:number[]=[];
   const tint = new Color(['#7c837c', '#737d7d', '#aa9876', '#8b8e83', '#67777b', '#96988a'][kind % 6]);
-  const triangle = (a: number[], b: number[], c: number[], shade: number) => { for (const v of [a,b,c]) { positions.push(...v); colors.push(tint.r * shade, tint.g * shade, tint.b * shade); } };
-  for (let row = 0; row < rings.length - 1; row++) for (let i = 0; i < sides; i++) {
-    const j = (i + 1) % sides, shade = .82 + row * .05 + .09 * Math.sin(i * 2.1 + kind);
-    triangle(rings[row][i], rings[row+1][i], rings[row][j], shade);
-    triangle(rings[row][j], rings[row+1][i], rings[row+1][j], shade);
+  for(let row=0;row<=rows;row++){
+    const t=row/rows*3,segment=Math.min(2,Math.floor(t)),mix=t-segment;
+    const r=profiles[segment][0]*(1-mix)+profiles[segment+1][0]*mix;
+    const height=profiles[segment][1]*(1-mix)+profiles[segment+1][1]*mix;
+    for(let side=0;side<=sides;side++){
+      const a=side/sides*Math.PI*2;
+      const weather=1+.065*Math.sin(a*7+kind)+.10*Math.cos(a*3-kind*.8)+.035*Math.sin(a*13+row*.5);
+      const ledge=.025*Math.sin(row*2.5+a*4)*Math.sin(row/rows*Math.PI);
+      const x=Math.cos(a)*(r+ledge)*weather+height*.16;
+      const z=Math.sin(a)*(r+ledge)*weather*(kind===2?.36:kind===0?.7:.82);
+      const y=height*(1+.055*Math.sin(a*4+kind))-.02*Math.sin(row/rows*Math.PI)*Math.cos(a*3);
+      positions.push(x,y,z);uvs.push(side/sides*2,row/rows);
+      const stratum=.91+.045*Math.sin(y*42+a*.7)+.035*Math.sin(a*11+row*4.1);colors.push(tint.r*stratum,tint.g*stratum,tint.b*stratum);
+      if(row&&side){const i=row*(sides+1)+side;indices.push(i,i-sides-1,i-1,i-1,i-sides-1,i-sides-2);}
+    }
   }
-  const top = rings.at(-1)!, center = [top.reduce((s,p)=>s+p[0],0)/sides, profiles.at(-1)![1], top.reduce((s,p)=>s+p[2],0)/sides];
-  for (let i=0;i<sides;i++) {triangle(top[i],center,top[(i+1)%sides],1.03);triangle(rings[0][i],rings[0][(i+1)%sides],[0,0,0],.75);}
-  const geometry=new BufferGeometry();geometry.setAttribute('position',new Float32BufferAttribute(positions,3));geometry.setAttribute('color',new Float32BufferAttribute(colors,3));geometry.computeVertexNormals();return geometry;
+  // The top is slightly domed and weathered, retaining broad geological strata.
+  const top=positions.length/3,topHeight=profiles.at(-1)![1];positions.push(topHeight*.16,topHeight+.012,0);colors.push(tint.r,tint.g,tint.b);uvs.push(.5,.5);
+  for(let side=0;side<sides;side++){const a=rows*(sides+1)+side;indices.push(a,top,a+1);}
+  const geometry=new BufferGeometry();geometry.setAttribute('position',new Float32BufferAttribute(positions,3));geometry.setAttribute('color',new Float32BufferAttribute(colors,3));geometry.setAttribute('uv',new Float32BufferAttribute(uvs,2));geometry.setIndex(indices);geometry.computeVertexNormals();return geometry;
 }
 export function createCoastalRocks(sites: LandscapeRock[]) {
-  const root=new Group();root.name='shoreline-rocks';const material=new MeshStandardMaterial({vertexColors:true,roughness:.97,metalness:0});
+  const root=new Group();root.name='shoreline-rocks';const material=applySurface(new MeshStandardMaterial({vertexColors:true,roughness:.97,metalness:0}),'mineral');
   const geometries=ROCK_ARCHETYPES.map((_,i)=>coastalRockGeometry(i)), transform=new Object3D();
   const batches=geometries.map((geometry,kind)=>{
     const entries=sites.filter((_,i)=>i%6===kind);const mesh=new InstancedMesh(geometry,material,entries.length);mesh.name=`coastal-rock-${ROCK_ARCHETYPES[kind]}`;mesh.castShadow=true;mesh.receiveShadow=true;mesh.userData.entries=entries;

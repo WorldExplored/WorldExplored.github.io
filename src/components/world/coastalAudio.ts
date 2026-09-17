@@ -35,10 +35,12 @@ export class CoastalAudio {
   private buffers = new Map<Sound, Promise<AudioBuffer>>();
   private sources = new Set<AudioBufferSourceNode>();
   private layers = new Map<string, GainNode>();
+  private technologyVoices = new Map<OscillatorNode, () => void>();
   private timer: ReturnType<typeof setInterval> | undefined;
   private nextGull = 0;
   private gullUntil = 0;
   private lastBell = -Infinity;
+  private lastTechnology = -Infinity;
   private running = false;
   private initialized = false;
   private disposed = false;
@@ -138,9 +140,42 @@ export class CoastalAudio {
     source.addEventListener('ended', () => gain.disconnect()); this.bellCount++;
     return true;
   }
+  technology(event: TechnologySoundEvent) {
+    // No implicit permission: contextual sounds only run after this audio context is started.
+    const now = this.context.currentTime;
+    if (this.disposed || this.context.state !== 'running' || now - this.lastTechnology < .18) return;
+    const distanceGain = proximity(coastalSoundScene.listener, event.position, 8);
+    if (distanceGain < .02) return;
+    this.lastTechnology = now;
+    const gain = this.context.createGain(), pan = this.context.createStereoPanner();
+    const oscillator = this.context.createOscillator();
+    const duration = event.kind === 'servo' ? .48 : event.kind === 'hover' ? .1 : .26;
+    const frequency = event.kind === 'arrival' ? 740 : event.kind === 'servo' ? 120 : 480;
+    oscillator.type = event.kind === 'servo' ? 'triangle' : 'sine';
+    oscillator.frequency.setValueAtTime(frequency, now);
+    oscillator.frequency.exponentialRampToValueAtTime(frequency * (event.kind === 'arrival' ? 1.33 : .72), now + duration);
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(distanceGain * (event.kind === 'hover' ? .035 : .075), now + .015);
+    gain.gain.exponentialRampToValueAtTime(.0001, now + duration);
+    pan.pan.value = Math.max(-.75, Math.min(.75, (event.position[0] - coastalSoundScene.listener[0]) / 20));
+    oscillator.connect(gain).connect(pan).connect(this.master);
+    const cleanup = () => { this.technologyVoices.delete(oscillator); oscillator.onended = null; oscillator.disconnect(); gain.disconnect(); pan.disconnect(); };
+    this.technologyVoices.set(oscillator, cleanup);
+    oscillator.onended = cleanup;
+    oscillator.start(now); oscillator.stop(now + duration + .02);
+  }
   dispose() {
     this.disposed = true; this.running = false; clearInterval(this.timer);
     for (const source of this.sources) { try { source.stop(); } catch {} source.disconnect(); }
-    this.sources.clear(); void this.context.close();
+    this.sources.clear();
+    for (const [oscillator, cleanup] of this.technologyVoices) { try { oscillator.stop(); } catch {} cleanup(); }
+    void this.context.close();
   }
+}
+
+export const TECHNOLOGY_SOUND_EVENT = 'portfolio:technology-sound';
+export type TechnologySound = 'activate' | 'hover' | 'arrival' | 'servo';
+export interface TechnologySoundEvent { kind: TechnologySound; position: readonly number[] }
+export function emitTechnologySound(kind: TechnologySound, position: readonly number[]) {
+  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent<TechnologySoundEvent>(TECHNOLOGY_SOUND_EVENT, { detail: { kind, position } }));
 }

@@ -57,6 +57,25 @@ const fragmentShader = /* glsl */ `
   varying vec3 vWorld;
   varying vec3 vNormal;
   ${shorelineWaveGLSL}
+  float seaHash(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
+  float seaNoise(vec2 p){ vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(seaHash(i),seaHash(i+vec2(1.,0.)),f.x),mix(seaHash(i+vec2(0.,1.)),seaHash(i+1.),f.x),f.y); }
+  float surfaceField(vec2 p){
+    mat2 rotate=mat2(.8,-.6,.6,.8);
+    float h=seaNoise(p*.38+vec2(uTime*.16,-uTime*.11))*.6;
+    h+=seaNoise(rotate*p*1.07+vec2(-uTime*.23,uTime*.17))*.26;
+    h+=seaNoise(p*2.73+vec2(uTime*.31,uTime*.09))*.11;
+    return h;
+  }
+  float causticCell(vec2 p){
+    vec2 cell=floor(p),f=fract(p);float first=10.,second=10.;
+    for(int y=-1;y<=1;y++)for(int x=-1;x<=1;x++){
+      vec2 q=vec2(float(x),float(y));
+      vec2 offset=.5+.3*sin(uTime*.24+6.283*vec2(seaHash(cell+q),seaHash(cell+q+17.)));
+      float d=length(q+offset-f);
+      if(d<first){second=first;first=d;}else second=min(second,d);
+    }
+    return 1.-smoothstep(.025,.085,second-first);
+  }
   void main() {
     vec2 p = vWorld.xz;
     vec3 view = normalize(cameraPosition - vWorld);
@@ -64,7 +83,10 @@ const fragmentShader = /* glsl */ `
     float b = p.x * -.24 + p.y * .53 - uTime * .75;
     vec2 slope = cos(a) * vec2(.39,.25) * .055 + cos(b) * vec2(-.24,.53) * .035 + cos(p.x * .095 + p.y * .13 + uTime * .64) * vec2(.095,.13) * .13;
     vec3 n = normalize(vec3(-slope.x, 1., -slope.y));
-    if (uDetail > .5) n.xz += vec2(sin(p.x * 5.7 + p.y * 3.1 + uTime * 1.2), cos(p.x * 3.4 - p.y * 5.2 - uTime)) * .006 * uDetail * (1. - smoothstep(25., 80., length(cameraPosition - vWorld)));
+    float closeDetail=1.-smoothstep(35.,150.,length(cameraPosition-vWorld));
+    float h=surfaceField(p);
+    vec2 fineSlope=vec2(surfaceField(p+vec2(.08,0.))-h,surfaceField(p+vec2(0.,.08))-h)/.08;
+    n.xz -= fineSlope*.23*(.2+closeDetail*uDetail);
     float age = uRipple.z;
     if (age >= 0. && age < 2.8) {
       vec2 offset = p - uRipple.xy;
@@ -77,19 +99,14 @@ const fragmentShader = /* glsl */ `
       n.xz -= offset / max(radius, .25) * slope;
     }
     n = normalize(n);
-    float caustic = 0.;
-    {
-      caustic = sin(p.x * 2.4 + sin(p.y * 2.1 + uTime * .3)) * sin(p.y * 2.3 - sin(p.x * 1.7 - uTime * .4));
-      caustic = pow(max(caustic, 0.), 12.) * .055 * uDetail;
-    }
     float broad = sin(p.x * .19 + p.y * .22) * .035;
     vec2 coastUV = (p - uCoastBounds.xy) / uCoastBounds.zw;
     vec4 coastSample = texture2D(uCoast, clamp(coastUV, 0., 1.));
     float coast = coastSample.r * 64. - 32.;
     if (any(lessThan(coastUV, vec2(0.))) || any(greaterThan(coastUV, vec2(1.)))) coast = -32.;
     float shallows = 1. - smoothstep(0., 7., -coast);
-    vec3 color = mix(uDeep, uWater, .64 + broad);
-    color = mix(color, vec3(.08,.72,.66), shallows * .78);
+    vec3 color = mix(uDeep, uWater, .40 + broad);
+    color = mix(color, vec3(.016,.47,.39), shallows * .86);
     vec3 surf = shoreWave(coast, p, uTime, coastSample.g);
     vec2 texel = vec2(1./640.,1./640.);
     vec2 coastGradient = vec2(texture2D(uCoast,coastUV+vec2(texel.x,0.)).r-texture2D(uCoast,coastUV-vec2(texel.x,0.)).r,texture2D(uCoast,coastUV+vec2(0.,texel.y)).r-texture2D(uCoast,coastUV-vec2(0.,texel.y)).r);
@@ -101,14 +118,17 @@ const fragmentShader = /* glsl */ `
     if (age >= 0. && age < 2.8) localWake = exp(-pow((length(p-uRipple.xy)-age*2.1)/.7,2.)) * (1.-age/2.8);
     color = mix(color,vec3(.88,.99,.96),foam*.78);
     color += vec3(.32,.52,.48)*surf.x*.19 + vec3(.3,.4,.37)*localWake*.13;
-    color = mix(color, uHorizon, fresnel * .25) + caustic;
+    float caustic = 0.;
+    float causticNear = 1.-smoothstep(12.,38.,length(cameraPosition-vWorld));
+    if (shallows*causticNear > .02) caustic = causticCell(p*3.9+vec2(seaNoise(p*1.4),seaNoise(p*1.7+3.))*1.8)*.008*shallows*causticNear*uDetail;
+    color = mix(color, uHorizon*.68, fresnel * .48) + caustic;
     float sheen = pow(max(dot(reflect(-normalize(vec3(-.4,.8,.25)),n), view),0.),24.);
     color += vec3(.35,.55,.6) * sheen * .23;
     float sun = pow(max(dot(reflect(-uSunDirection, n), view), 0.), 110.);
     color += uSunColor * sun * uSunIntensity * .14;
     float haze = smoothstep(uFogRange.x, uFogRange.y, length(cameraPosition - vWorld));
     color = mix(color, uFog, haze);
-    gl_FragColor = vec4(color, mix(.985, .48, shallows));
+    gl_FragColor = vec4(color, mix(.98, .37, shallows));
     #include <colorspace_fragment>
   }
 `;
@@ -141,7 +161,7 @@ export function Water({ runtime, paused, quality }: EnvironmentProps) {
   const detail = world.quality[quality].waterDetail;
   const invalidate = useThree(state => state.invalidate);
   const geometry = useMemo(() => {
-    const segments = 96;
+    const segments = 192;
     return new PlaneGeometry(1600, 1600, segments, segments).rotateX(-Math.PI / 2);
   }, []);
   const material = useMemo(() => new ShaderMaterial({

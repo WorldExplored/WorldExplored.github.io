@@ -12,9 +12,9 @@ import { createSceneRuntime } from '../src/content/world';
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 const fixtures = [
   { id: 'work', Component: ComputeBuilding, build: makeComputeInterior, bounds: [-4.18, 1.1, -2.12, 4.18, 4.94, 2.05], origin: [2.28, 2.07, 5], target: [2.28, 2.07, 1.56], aisle: [0, 1.65, 2.1, 0, 1.65, -.6] },
-  { id: 'research', Component: ResearchInstitute, build: makeResearchInterior, bounds: [-2.7, 1.03, -1.6, 2.5, 3.35, 1.76], origin: [.02, 2.02, 4], target: [-.18, 1.955, .99], aisle: [-1.33, 1.4, 1.58, -1.33, 1.4, -.3] },
-  { id: 'about', Component: GardenGallery, build: makeGalleryInterior, bounds: [-2.44, 1.05, -2.05, 2.44, 3.31, 1.38], origin: [-.45, 2.57, -5], target: [-.45, 2.57, -1.91], aisle: [-1.88, 1.3, 1.35, -1.88, 1.3, -1.21] },
-  { id: 'contact', Component: ReceptionTerminal, build: makeReceptionInterior, bounds: [-1.53, 1.03, -1.53, 2.25, 3.16, 1.53], origin: [-4, 2, .25], target: [-1.13, 1.59, .25], aisle: [0, 1.4, 1.5, 0, 1.4, .1] },
+  { id: 'research', Component: ResearchInstitute, build: makeResearchInterior, bounds: [-3.55, 1.03, -3.32, 3.55, 6.4, 1.76], origin: [-5, 1.8, -2.48], target: [-2.72, 1.8, -2.48], aisle: [-1.33, 1.4, 1.58, -1.33, 1.4, -.3] },
+  { id: 'about', Component: GardenGallery, build: makeGalleryInterior, bounds: [-3.41, 1.05, -2.79, 2.45, 4.0, 1.38], origin: [.25, 2.578, -5], target: [.25, 2.578, -2.61], aisle: [-1.88, 1.3, 1.35, -1.88, 1.3, -1.21] },
+  { id: 'contact', Component: ReceptionTerminal, build: makeReceptionInterior, bounds: [-1.53, 1.03, -2.455, 3.77, 3.4, 1.53], origin: [-4, 2, .25], target: [-1.13, 1.59, .25], aisle: [0, 1.4, 1.5, 0, 1.4, .1] },
 ];
 
 test('furniture geometry remains inside occupied envelopes and leaves entrance circulation clear', () => {

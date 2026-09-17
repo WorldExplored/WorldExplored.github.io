@@ -65,34 +65,42 @@ export function createSeaweedLayout(plan = createLandscapePlan()): SeaweedSite[]
 export function createSeaweedGeometry(variant: number) {
   const positions: number[] = [], colors: number[] = [], indices: number[] = [];
   const random = seededRandom(694 + variant);
-  const tint = new Color(['#698359', '#4e8272', '#7e8752'][variant]);
-  for (let blade = 0; blade < 6 + variant; blade++) {
-    const start = positions.length / 3;
-    const angle = blade * 2.399 + random() * 0.5;
-    const length = blade === 0 ? 1 : 0.58 + random() * 0.4;
-    const breadth = (variant === 1 ? 0.055 : 0.035) + random() * 0.028;
-    const lean = 0.12 + random() * 0.14;
-    for (let row = 0; row <= 10; row++) {
-      const t = row / 10;
-      const wave = Math.sin(t * Math.PI * (variant === 2 ? 3 : 2) + blade) * 0.025 * t;
-      const width = Math.pow(Math.sin(t * Math.PI), 0.7) * breadth;
-      for (const side of [-1, 1]) {
-        const along = lean * t * t;
-        const across = side * width + wave;
-        positions.push(Math.sin(angle) * along + Math.cos(angle) * across, t * length, Math.cos(angle) * along - Math.sin(angle) * across);
-        const light = 0.68 + t * 0.32;
-        colors.push(tint.r * light, tint.g * light, tint.b * light);
+  const tint = new Color(['#3d795b', '#69813e', '#547e57'][variant]);
+  function blade(angle:number,length:number,breadth:number,lean:number,base=0,side=0) {
+    const start=positions.length/3;
+    for(let row=0;row<=8;row++)for(let rib=0;rib<=2;rib++){
+      const t=row/8,v=rib-1;
+      const edge=variant===1?1+Math.sin(t*39+angle)*.17:1;
+      const width=Math.pow(Math.sin(t*Math.PI),variant===0?.45:.75)*breadth*edge;
+      const along=lean*t*t+side*t;
+      const fold=(1-Math.abs(v))*.008*Math.sin(t*Math.PI);
+      const across=v*width;
+      positions.push(Math.sin(angle)*along+Math.cos(angle)*across,base+t*length+fold,Math.cos(angle)*along-Math.sin(angle)*across);
+      const vein=rib===1?1.12:1;const light=(.62+(base+t*length)*.35)*vein;
+      colors.push(tint.r*light,tint.g*light,tint.b*light);
+      if(row&&rib){const n=start+row*3+rib;indices.push(n,n-3,n-1,n-1,n-3,n-4);}
+    }
+  }
+  if(variant===0){
+    // Eelgrass has parallel strap leaves, narrow midribs and gently drooping tips.
+    for(let leaf=0;leaf<7;leaf++)blade(leaf*2.399,.64+random()*.34,.016+random()*.012,.14+random()*.07);
+  }else if(variant===1){
+    // Broad kelp rises from one holdfast; ruffled edges and raised stipes are part of the mesh.
+    for(let leaf=0;leaf<4;leaf++)blade(leaf*2.399,.69+random()*.27,.065+random()*.025,.12+random()*.05);
+  }else{
+    // A branched algal frond has paired lateral blades attached along each central stipe.
+    for(let stem=0;stem<3;stem++){
+      const angle=stem*2.399;blade(angle,.86,.008,.012);
+      for(let level=1;level<=6;level++)for(const side of [-1,1]){
+        const base=level*.115;blade(angle+side*.25,.12,.023,.02,base,side*(.19-level*.013));
       }
-      if (row < 10) { const at = start + row * 2; indices.push(at, at + 1, at + 2, at + 1, at + 3, at + 2); }
     }
   }
   const geometry = new BufferGeometry();
   geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
   geometry.setAttribute('color', new Float32BufferAttribute(colors, 3));
-  geometry.setIndex(indices);
-  geometry.computeVertexNormals();
-  geometry.computeBoundingBox();
-  geometry.computeBoundingSphere();
+  geometry.setIndex(indices);geometry.computeVertexNormals();geometry.computeBoundingBox();geometry.computeBoundingSphere();
+  geometry.userData.form=['strap-leaved eelgrass','ruffled broad kelp','paired branching algae'][variant];
   return geometry;
 }
 

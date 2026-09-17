@@ -6,18 +6,20 @@
 import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
 import { useEffect, useRef, type MutableRefObject, type ReactNode } from 'react';
 import { Mesh, MeshBasicMaterial, type Object3D } from 'three';
+import { FOOTPRINT_RADII } from './terrain';
+import { emitTechnologySound } from './coastalAudio';
 import { world, type LandmarkConfig, type LandmarkId, type SceneRuntime } from '@/content/world';
 
 export const LANDMARK_HOVER_GRACE_MS = 120;
 export const LANDMARK_HIT_BOUNDS: Record<LandmarkId, { radius: number; floor: number; top: number }> = {
-  work: { radius: 5.5, floor: .8, top: 11.6 },
-  experience: { radius: 5.4, floor: .8, top: 7.8 },
-  research: { radius: 3.8, floor: .8, top: 7 },
-  purdue: { radius: 3.05, floor: .8, top: 4.3 },
-  history: { radius: 7, floor: .8, top: 8.8 },
-  about: { radius: 3.5, floor: .8, top: 5 },
-  contact: { radius: 3.2, floor: .8, top: 6.5 },
-  building: { radius: 2.4, floor: .8, top: 7.8 },
+  work: { radius: FOOTPRINT_RADII.work, floor: .8, top: 11.6 },
+  experience: { radius: FOOTPRINT_RADII.experience, floor: .8, top: 7.8 },
+  research: { radius: FOOTPRINT_RADII.research, floor: .8, top: 8.5 },
+  purdue: { radius: FOOTPRINT_RADII.purdue, floor: .8, top: 4.8 },
+  history: { radius: FOOTPRINT_RADII.history, floor: .8, top: 8.8 },
+  about: { radius: FOOTPRINT_RADII.about, floor: .8, top: 5 },
+  contact: { radius: FOOTPRINT_RADII.contact, floor: .8, top: 6.5 },
+  building: { radius: FOOTPRINT_RADII.building, floor: .8, top: 7.8 },
 };
 
 function intersectsSculpture(event: { intersections?: { object: Object3D }[] }) {
@@ -42,7 +44,7 @@ export function Landmark({ config, runtime, paused, onNavigate, children }: { co
     if (!delegates(event)) event.stopPropagation();
     cancelExit();
     if (event.pointerType === 'touch') { clearHover(); return; }
-    if (!runtime.current.dragging && runtime.current.hovered !== config.id) { runtime.current.hovered = config.id; invalidate(); }
+    if (!runtime.current.dragging && runtime.current.hovered !== config.id) { runtime.current.hovered = config.id; emitTechnologySound('hover', config.position); invalidate(); }
   };
   useEffect(() => () => {
     clearTimeout(exitTimer.current);
@@ -68,7 +70,7 @@ export function Landmark({ config, runtime, paused, onNavigate, children }: { co
         // The About boundary retains hover while the sculpture owns its nested drag/tap.
         if (delegates(event)) return;
         event.stopPropagation();
-        if (event.delta < 6 && !runtime.current.dragging && dragCount.current === runtime.current.dragCount) onNavigate(config.id);
+        if (event.delta < 6 && !runtime.current.dragging && dragCount.current === runtime.current.dragCount) { emitTechnologySound('activate', config.position); onNavigate(config.id); }
       }}>
     <group name={`landmark-model-${config.id}`} rotation={[0, config.rotationY ?? 0, 0]}>{children}</group>
     <mesh ref={ring} raycast={() => {}} position={[0, bounds.floor + .04, 0]} rotation={[-Math.PI / 2, 0, 0]}>

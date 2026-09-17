@@ -3,9 +3,9 @@ import { createServer } from 'node:http';
 import { extname, join, normalize, resolve } from 'node:path';
 
 const root = resolve('out');
-const evidence = resolve('docs/qa/close-range');
+const evidence = resolve('.tmp/qa');
 const port = Number(process.argv[2] ?? 4177);
-const mime = { '.css': 'text/css', '.html': 'text/html; charset=utf-8', '.ico': 'image/x-icon', '.js': 'text/javascript', '.json': 'application/json', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.png': 'image/png', '.svg': 'image/svg+xml', '.woff2': 'font/woff2' };
+const mime = { '.css': 'text/css', '.html': 'text/html; charset=utf-8', '.ico': 'image/x-icon', '.js': 'text/javascript', '.json': 'application/json', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.webp': 'image/webp', '.png': 'image/png', '.svg': 'image/svg+xml', '.woff2': 'font/woff2' };
 
 createServer((request, response) => {
   const url = new URL(request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`);

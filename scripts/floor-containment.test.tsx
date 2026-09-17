@@ -3,11 +3,11 @@ import assert from 'node:assert/strict';
 import { create } from '@react-three/test-renderer';
 import { Box3, BufferGeometry, DoubleSide, Float32BufferAttribute, Mesh, MeshBasicMaterial, Object3D, Raycaster, Vector3 } from 'three';
 import { ComputeBuilding } from '../src/components/world/ComputeBuilding';
-import { ResearchInstitute } from '../src/components/world/ResearchInstitute';
+import { ResearchInstitute, makeResearchBuilding } from '../src/components/world/ResearchInstitute';
 import { CampusHall } from '../src/components/world/CampusHall';
 import { GardenGallery } from '../src/components/world/GardenGallery';
 import { ReceptionTerminal } from '../src/components/world/ReceptionTerminal';
-import { ExperienceStudio, HistoryMuseum } from '../src/components/world/CivicLandmarks';
+import { ExperienceStudio, HistoryMuseum, makeExperienceStudio, makeHistoryMuseum } from '../src/components/world/CivicLandmarks';
 import { createSceneRuntime, world } from '../src/content/world';
 import { cityBuildings } from '../src/components/world/city';
 import { buildCityArchitecture } from '../src/components/world/CityArchitecture';
@@ -22,20 +22,20 @@ const disk=(x:number,z:number,cx:number,cz:number,rx:number,rz=rx)=>((x-cx)/rx)*
 const rooms:Record<string,(x:number,z:number)=>boolean>={
   work:(x,z)=>(Math.abs(x)>=1.63-eps&&Math.abs(x)<=4.08+eps&&z>=-2.13-eps&&z<=2.24+eps)||rect(x,z,-1.64,1.64,-1.9,2.18)||rect(x,z,-1.37,1.37,2.18,2.31),
   experience:(x,z)=>rect(x,z,-3.825,3.825,-2.64,2.64),
-  research:(x,z)=>rect(x,z,-2.75,.32,-1.61,1.58)||disk(x,z,1.58,-.73,.91)||rect(x,z,.665,2.695,.41,1.79)||rect(x,z,.24,.81,-1.12,-.34)||rect(x,z,.24,.81,.68,1.42),
-  purdue:(x,z)=>rect(x,z,-2.055,2.055,-1.435,1.435)||rect(x,z,-.725,.725,1.435,1.515),
+  research:(x,z)=>rect(x,z,-3.58,3.58,-3.32,1.58),
+  purdue:(x,z)=>rect(x,z,-3.24,3.24,-3.2,1.435)||rect(x,z,-.725,.725,1.435,1.515),
   history:(x,z)=>rect(x,z,-5.275,5.275,-3.55,3.55),
-  about:(x,z)=>rect(x,z,-2.44,2.44,-2,-1.36)||rect(x,z,-2.45,-1.45,-1.36,1.38),
-  contact:(x,z)=>disk(x,z,0,0,1.55)||rect(x,z,1.14,2.24,-1.265,.765),
+  about:(x,z)=>rect(x,z,-3.41,2.45,-2.79,-1.36)||rect(x,z,-3.41,-1.43,-1.36,1.38),
+  contact:(x,z)=>disk(x,z,0,0,1.55)||rect(x,z,1.18,3.77,-2.455,.635),
 };
 const foundations:Record<string,(x:number,z:number)=>boolean>={
   work:(x,z)=>rect(x,z,-4.325,4.325,-2.375,2.375)||rect(x,z,-1.555,1.555,-2.375,2.455),
   experience:(x,z)=>rect(x,z,-4.225,4.225,-3.06,3.06),
-  research:(x,z)=>rect(x,z,-2.925,.495,-1.785,1.755)||disk(x,z,1.58,-.73,1.085)||rect(x,z,.53,2.83,.275,1.925)||rect(x,z,.36,.67,-1.18,-.28)||rect(x,z,.36,.67,.61,1.49),
-  purdue:(x,z)=>rect(x,z,-2.225,2.225,-1.6,1.6),
+  research:(x,z)=>rect(x,z,-3.79,3.79,-3.55,1.81),
+  purdue:(x,z)=>rect(x,z,-3.44,3.44,-3.39,1.6),
   history:(x,z)=>rect(x,z,-5.6,5.6,-3.85,3.85),
-  about:(x,z)=>rect(x,z,-2.615,2.615,-2.185,-1.195)||rect(x,z,-2.605,-1.295,-1.315,1.555),
-  contact:(x,z)=>disk(x,z,0,0,1.72)||rect(x,z,1.12,2.38,-1.405,.905),
+  about:(x,z)=>rect(x,z,-3.56,2.60,-2.98,-1.20)||rect(x,z,-3.61,-1.27,-1.31,1.55),
+  contact:(x,z)=>disk(x,z,0,0,1.72)||rect(x,z,1.135,3.965,-2.69,.89),
 };
 function points(geometry:BufferGeometry,start=0,count=geometry.index?.count??geometry.attributes.position.count) {
   const p=geometry.attributes.position,index=geometry.index;const result:number[][]=[];
@@ -155,4 +155,40 @@ test('campus plank joints and doorway connection cover the actual graded terrain
     for(let joint=0;joint<13;joint++)for(let row=0;row<=14;row++)check(-1.74+joint*.29,-1.4+row*.2);
     for(const x of [-.65,0,.65])for(const z of [1.43,1.47,1.51])check(x,z);
   }finally{floors.forEach(mesh=>mesh.geometry.dispose());ground.geometry.dispose();material.dispose();await renderer.unmount();}
+});
+
+
+test('laboratory and museum upper floors have complete flights ending on connected occupied landings',()=>{
+  const material=new MeshBasicMaterial({side:DoubleSide});
+  for(const [build,upperKey] of [[makeResearchBuilding,'upper'],[makeHistoryMuseum,'gallery']] as const){
+    const geometry=build();
+    try{
+      const stair=geometry.steps.userData.stair;
+      assert.ok(stair.width>=1.1 && (stair.upper-stair.lower)/stair.count<.2 && stair.tread>=.24);
+      const meshes=[new Mesh(geometry.steps,material),new Mesh(geometry[upperKey as keyof typeof geometry],material)];
+      const ray=new Raycaster(new Vector3(),new Vector3(0,-1,0));
+      for(let step=0;step<stair.count;step++){
+        ray.ray.origin.set(stair.x,stair.upper+.1,stair.startZ-step*stair.tread);
+        const hit=ray.intersectObjects(meshes,false)[0];
+        const expected=stair.lower+(step+1)*(stair.upper-stair.lower)/stair.count;
+        assert.ok(hit&&Math.abs(hit.point.y-expected)<.0001,`Step ${step} lacks a closed walkable tread`);
+      }
+      ray.ray.origin.set(stair.x,stair.upper+.1,stair.endZ-stair.tread);
+      const landing=ray.intersectObjects(meshes,false)[0];
+      assert.ok(landing&&Math.abs(landing.point.y-stair.upper)<.0001,'The final tread must meet an upper floor at the same elevation');
+    }finally{Object.values(geometry).forEach(g=>g.dispose());}
+  }
+  material.dispose();
+});
+
+test('experience folded roof has real portal supports meeting the underside',()=>{
+  const geometry=makeExperienceStudio(),material=new MeshBasicMaterial({side:DoubleSide});
+  try{
+    const roof=new Mesh(geometry.roof,material),supports=new Mesh(geometry.ribs,material);
+    for(const x of [-3.95,3.95])for(const z of [-2.86,-1.42,0,1.42,2.86]){
+      const roofHit=new Raycaster(new Vector3(x,4.61,z),new Vector3(0,1,0)).intersectObject(roof)[0];
+      const supportHit=new Raycaster(new Vector3(x,6,z),new Vector3(0,-1,0)).intersectObject(supports)[0];
+      assert.ok(roofHit&&supportHit&&Math.abs(roofHit.point.y-supportHit.point.y)<.07,'Roof bearing must remain connected to its column or rib');
+    }
+  }finally{Object.values(geometry).forEach(g=>g.dispose());material.dispose();}
 });

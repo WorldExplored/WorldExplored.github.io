@@ -107,19 +107,32 @@ test('default browser timers never receive the playlist instance as their host r
   } finally { player.dispose(); }
 });
 
-import { EnvironmentalAudioControl } from '../src/components/EnvironmentalAudioControl';
-import { CoastalAudio, coastalSoundScene, loopSamples, proximity } from '../src/components/world/coastalAudio';
+import { EnvironmentalAudioControl, subscribeToTechnologySounds } from '../src/components/EnvironmentalAudioControl';
+import { CoastalAudio, coastalSoundScene, loopSamples, proximity, TECHNOLOGY_SOUND_EVENT } from '../src/components/world/coastalAudio';
 
-class SoundParam { value=0; setTargetAtTime(value:number){this.value=value;} }
-class SoundNode extends EventTarget { gain=new SoundParam();frequency=new SoundParam();Q=new SoundParam();pan=new SoundParam();playbackRate=new SoundParam();loop=false;buffer:unknown;type='';started=false;stopped=false;onended: (()=>void)|null=null;connect(node:unknown){return node;}disconnect(){}start(){this.started=true;}stop(){this.stopped=true;} }
+class SoundParam {
+  value=0;automation:Array<{method:string;value:number;time:number}>=[];
+  setTargetAtTime(value:number){this.value=value;}
+  setValueAtTime(value:number,time:number){this.value=value;this.automation.push({method:'set',value,time});}
+  linearRampToValueAtTime(value:number,time:number){this.value=value;this.automation.push({method:'linear',value,time});}
+  exponentialRampToValueAtTime(value:number,time:number){this.value=value;this.automation.push({method:'exponential',value,time});}
+}
+class SoundNode extends EventTarget {
+  gain=new SoundParam();frequency=new SoundParam();Q=new SoundParam();pan=new SoundParam();playbackRate=new SoundParam();loop=false;buffer:unknown;type='';started=false;stopped=false;onended: (()=>void)|null=null;
+  connections:unknown[]=[];disconnects=0;startTimes:Array<number|undefined>=[];stopTimes:Array<number|undefined>=[];
+  connect(node:unknown){this.connections.push(node);return node;}
+  disconnect(){this.disconnects++;}start(time?:number){this.started=true;this.startTimes.push(time);}stop(time?:number){this.stopped=true;this.stopTimes.push(time);}
+  end(){this.onended?.();this.dispatchEvent(new Event('ended'));}
+}
 class SoundContext {
-  currentTime=0;destination=new SoundNode();sources:SoundNode[]=[];gains:SoundNode[]=[];resumes=0;closed=false;
+  currentTime=0;state:AudioContextState='suspended';destination=new SoundNode();sources:SoundNode[]=[];gains:SoundNode[]=[];oscillators:SoundNode[]=[];panners:SoundNode[]=[];resumes=0;closed=false;
   createGain(){const node=new SoundNode();this.gains.push(node);return node;}
   createBufferSource(){const node=new SoundNode();this.sources.push(node);return node;}
-  createBiquadFilter(){return new SoundNode();}createStereoPanner(){return new SoundNode();}
+  createBiquadFilter(){return new SoundNode();}createStereoPanner(){const node=new SoundNode();this.panners.push(node);return node;}
+  createOscillator(){const node=new SoundNode();this.oscillators.push(node);return node;}
   createBuffer(){return {copyToChannel(){}};}
   decodeAudioData(){return Promise.resolve({getChannelData:()=>new Float32Array(800),sampleRate:100,duration:8});}
-  resume(){this.resumes++;return Promise.resolve();}close(){this.closed=true;return Promise.resolve();}
+  resume(){this.resumes++;this.state='running';return Promise.resolve();}close(){this.closed=true;this.state='closed';return Promise.resolve();}
 }
 
 test('recorded coast starts only on a gesture, positions its layers, and rings the muted-aware bell independently',async t=>{
@@ -156,4 +169,56 @@ test('loop overlap preserves a continuous splice and proximity falls smoothly wi
   const data=Float32Array.from({length:1000},(_,i)=>Math.sin(i*.07));const loop=loopSamples(data,100);
   assert.equal(loop.length,900);assert.ok(Math.abs(loop.at(-1)!-loop[0])<.08);assert.ok(loop.every(Number.isFinite));
   assert.equal(proximity([0,0,0],[0,0,0],8),1);assert.equal(proximity([8,0,0],[0,0,0],8),.5);assert.ok(proximity([80,0,0],[0,0,0],8)<.01);
+});
+
+
+test('technology sound never opens or resumes audio and the listener unregisters cleanly',()=>{
+  const target=new EventTarget(),context=new SoundContext();
+  let engine:CoastalAudio|null=null;
+  const unsubscribe=subscribeToTechnologySounds(target,()=>engine);
+  const event=()=>new CustomEvent(TECHNOLOGY_SOUND_EVENT,{detail:{kind:'hover',position:[0,0,0]}});
+  const previous=coastalSoundScene.listener;coastalSoundScene.listener=[0,0,0];
+  try{
+    target.dispatchEvent(event());assert.equal(context.resumes,0);assert.equal(context.oscillators.length,0);
+    engine=new CoastalAudio({volume:.4,muted:false},context as unknown as AudioContext);
+    target.dispatchEvent(event());assert.equal(context.oscillators.length,0,'a suspended context is not resumed by a hover');assert.equal(context.resumes,0);
+    context.state='running';target.dispatchEvent(event());assert.equal(context.oscillators.length,1);
+    unsubscribe();context.currentTime=1;target.dispatchEvent(event());assert.equal(context.oscillators.length,1,'unmounted listeners cannot create another sound');
+  }finally{unsubscribe();engine?.dispose();coastalSoundScene.listener=previous;}
+});
+
+test('technology voices attenuate by distance, pan spatially, share mute and obey a bounded envelope',()=>{
+  const context=new SoundContext(),engine=new CoastalAudio({volume:.42,muted:true},context as unknown as AudioContext);
+  const previous=coastalSoundScene.listener;coastalSoundScene.listener=[0,0,0];context.state='running';
+  try{
+    engine.technology({kind:'activate',position:[80,0,0]});assert.equal(context.oscillators.length,0,'far-away infrastructure is inaudible and allocates no nodes');
+    engine.technology({kind:'arrival',position:[8,0,0]});assert.equal(context.oscillators.length,1);
+    const oscillator=context.oscillators[0],gain=oscillator.connections[0] as SoundNode,pan=gain.connections[0] as SoundNode;
+    assert.equal(pan.connections[0],engine.master);assert.equal(context.gains[0].gain.value,0,'every technology voice passes through muted master');
+    assert.equal(gain.gain.automation.find(point=>point.method==='linear')!.value,.075*.5);assert.equal(pan.pan.value,.4);
+    assert.deepEqual(oscillator.frequency.automation.map(point=>point.value),[740,740*1.33]);assert.ok(oscillator.stopTimes[0]!<=.50);
+    assert.equal(gain.gain.automation[0].value,0);assert.equal(gain.gain.automation.at(-1)!.value,.0001);
+    engine.technology({kind:'hover',position:[0,0,0]});assert.equal(context.oscillators.length,1,'repeated events inside180ms are bounded');
+    engine.setPreferences({volume:.42,muted:false});assert.equal(context.gains[0].gain.value,.42);
+    context.currentTime=.2;engine.technology({kind:'hover',position:[0,0,0]});assert.equal(context.oscillators.length,2);
+    const hoverGain=context.oscillators[1].connections[0] as SoundNode;
+    assert.equal(hoverGain.gain.automation.find(point=>point.method==='linear')!.value,.035);assert.ok(context.oscillators[1].stopTimes[0]!-.2<=.121);
+    context.currentTime=.4;engine.technology({kind:'servo',position:[-20,0,0]});assert.equal(context.panners.at(-1)!.pan.value,-.75);assert.equal(context.oscillators.at(-1)!.type,'triangle');
+    context.state='suspended';context.currentTime=2;engine.technology({kind:'hover',position:[0,0,0]});assert.equal(context.oscillators.length,3);assert.equal(context.resumes,0);
+  }finally{engine.dispose();coastalSoundScene.listener=previous;}
+});
+
+test('technology cleanup disconnects completed voices and immediately stops active voices on disposal',()=>{
+  const context=new SoundContext(),engine=new CoastalAudio({volume:.3,muted:false},context as unknown as AudioContext);
+  const previous=coastalSoundScene.listener;coastalSoundScene.listener=[0,0,0];context.state='running';
+  try{
+    engine.technology({kind:'servo',position:[0,0,0]});
+    const ended=context.oscillators[0],endedGain=ended.connections[0] as SoundNode,endedPan=endedGain.connections[0] as SoundNode;
+    ended.end();assert.equal(ended.disconnects,1);assert.equal(endedGain.disconnects,1);assert.equal(endedPan.disconnects,1);assert.equal(ended.onended,null);
+    context.currentTime=1;engine.technology({kind:'arrival',position:[0,0,0]});
+    const active=context.oscillators[1],activeGain=active.connections[0] as SoundNode,activePan=activeGain.connections[0] as SoundNode;
+    engine.dispose();assert.deepEqual(active.stopTimes,[1.28,undefined],'disposal supersedes the scheduled end with an immediate stop');
+    assert.equal(active.disconnects,1);assert.equal(activeGain.disconnects,1);assert.equal(activePan.disconnects,1);assert.equal(active.onended,null);assert.equal(ended.disconnects,1,'already ended voice is no longer retained');
+    context.currentTime=2;engine.technology({kind:'hover',position:[0,0,0]});assert.equal(context.oscillators.length,2);assert.equal(context.closed,true);
+  }finally{coastalSoundScene.listener=previous;}
 });

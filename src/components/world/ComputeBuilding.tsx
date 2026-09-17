@@ -1,8 +1,9 @@
 'use client';
 
-import { BoxGeometry, CylinderGeometry, type BufferGeometry } from 'three';
+import { BoxGeometry, CylinderGeometry, Vector3, type BufferGeometry } from 'three';
+import { architecturalSurface as surface } from './LandmarkShellKit';
 import { FurnishedInterior, InteriorBuilder, floorSlab, floorRectangle } from './InteriorKit';
-import { combine, roundedBox, usePalette, useResources, type ModelProps } from './BuildingKit';
+import { combine, roundedBox, stroke, usePalette, useResources, type ModelProps } from './BuildingKit';
 
 export function makeComputeBuilding() {
   const walls: BufferGeometry[] = [];
@@ -43,10 +44,10 @@ export function makeComputeBuilding() {
     // Low roof gardens sit clear of the central machinery mounting surface.
     walls.push(box(0.58, 0.19, 3.35, side * 3.86, 5.08, -0.07));
     planting.push(box(0.43, 0.13, 3.17, side * 3.86, 5.23, -0.07));
-    for (let panel = 0; panel < 3; panel++) {
-      solar.push(new BoxGeometry(1.27, 0.07, 0.76).rotateX(-0.1).translate(side * 2.69, 5.15, -1.11 + panel * 0.89));
-      frames.push(box(1.33, 0.045, 0.035, side * 2.69, 5.235, -1.49 + panel * 0.89));
-      frames.push(box(0.025, 0.055, 0.75, side * 2.69, 5.18, -1.11 + panel * 0.89));
+    for (let panel = 0; panel < 2; panel++) {
+      solar.push(new BoxGeometry(1.27, 0.07, 0.76).rotateX(-0.1).translate(side * 2.69, 5.15, .67 + panel * .89));
+      frames.push(box(1.33, 0.045, 0.035, side * 2.69, 5.235, .29 + panel * .89));
+      frames.push(box(0.025, 0.055, 0.75, side * 2.69, 5.18, .67 + panel * .89));
     }
   }
 
@@ -84,10 +85,29 @@ export function makeComputeBuilding() {
   const roof = combine([
     roundedBox(2.98, 0.22, 4.86, 0.065).translate(-2.875, 4.99, 0),
     roundedBox(2.98, 0.22, 4.86, 0.065).translate(2.875, 4.99, 0),
-    roundedBox(3.02, 0.23, 4.94, 0.07).translate(0, 5.075, 0),
-    box(0.28, 0.14, 0.72, -0.98, 5.26, -0.54),
-    box(0.28, 0.14, 0.72, 0.98, 5.26, -0.54),
+
   ]);
+  // A raised glazed hall binds the two compute wings into one building. The roof closes
+  // on its bearing rails and exposes the mezzanine rather than supporting novelty wheels.
+  const atriumRoof = surface((u,v) => new Vector3((u-.5)*3.06,5.56+.53*Math.sin(u*Math.PI),(v-.5)*4.99),32,8,.075);
+  const atriumRibs: BufferGeometry[] = [];
+  for(const z of [-2.34,-1.17,0,1.17,2.34]) atriumRibs.push(stroke(t=>new Vector3((t-.5)*3.06,5.48+.53*Math.sin(t*Math.PI),z),.055,24));
+  for(const x of [-1.48,1.48]) {
+    atriumRibs.push(box(.09,.14,4.91,x,5.48,0));
+    windows.push(box(.05,.54,4.68,x,5.21,0));
+    for(const z of [-2.3,-1.15,0,1.15,2.3]) frames.push(box(.065,.57,.065,x,5.23,z));
+  }
+  for(const z of [-2.34,2.34]) windows.push(surface((u,v)=>{
+    const x=(u-.5)*2.92,top=5.5+.53*Math.sin(u*Math.PI);
+    return new Vector3(x,4.94+v*(top-4.94),z);
+  },24,1,.045));
+  const shades: BufferGeometry[] = [];
+  for(const side of [-1,1]) {
+    // Full-height piers and individually attached fins give the two occupied wings depth.
+    for(const x of [1.62,2.45,3.28,4.12]) shades.push(box(.065,3.42,.42,side*x,3.05,2.47));
+    for(const level of [3.15,4.94]) shades.push(box(2.8,.095,.55,side*2.875,level,2.48));
+    for(const z of [-1.33,0,1.33]) shades.push(box(.35,3.28,.055,side*4.39,3.0,z));
+  }
   const entry = combine([
     floorSlab('work-door-threshold',[floorRectangle(0,2.51,2.5,.5)],1.105,.305,'threshold'),
     box(2.23, 0.11, 0.68, 0, 3.275, 2.57),
@@ -95,7 +115,7 @@ export function makeComputeBuilding() {
   return {
     walls: combine(walls), frames: combine(frames), windows: combine(windows),
     service: combine(service), planting: combine(planting), solar: combine(solar), hardware: combine(hardware),
-    foundation, ground, upper, floors: combine(floors), roof, atrium, doors, entry,
+    foundation, ground, upper, floors: combine(floors), roof, atrium, doors, entry, atriumRoof, atriumRibs: combine(atriumRibs), shades: combine(shades),
   };
 }
 
@@ -148,6 +168,9 @@ export function ComputeBuilding(props: ModelProps) {
   return <group name="work-compute-building" dispose={null}>
     <FurnishedInterior name="work-interior" build={makeComputeInterior} />
     <mesh name="work-exterior-walls" geometry={geometry.walls} material={materials.porcelain} castShadow receiveShadow />
+    <mesh name="work-raised-atrium-roof" geometry={geometry.atriumRoof} material={materials.glass} />
+    <mesh name="work-atrium-roof-bearing-ribs" geometry={geometry.atriumRibs} material={materials.edge} castShadow />
+    <mesh name="work-structural-piers-and-sunshades" geometry={geometry.shades} material={materials.edge} castShadow />
     <mesh name="work-roof" geometry={geometry.roof} material={materials.porcelain} castShadow receiveShadow />
     <mesh name="work-entry-threshold-and-lintel" geometry={geometry.entry} material={materials.porcelain} castShadow receiveShadow />
     <mesh name="work-foundation" geometry={geometry.foundation} material={materials.paving} receiveShadow />

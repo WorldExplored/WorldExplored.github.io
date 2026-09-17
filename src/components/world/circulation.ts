@@ -83,14 +83,14 @@ export function createCirculationGraph() {
   const garden=node('garden-court',-5.5,24.1,'park'),contact=node('contact',12,24.95,'entrance',1.06);
   const mainDock=node('main-dock-land',-8,-18.5,'dock',1.06),mainBoat=node('main-dock-boarding',-8,-24.45,'dock',1.06);
   edge('work-entrance',work,center,[{x:-8,z:3.6}]);edge('main-west-walk',work,west,[{x:-9.6,z:4.3}]);
-  edge('experience-entrance',experience,west,[{x:-22.5,z:2.9},{x:-18,z:3.2}],1.2);
-  edge('main-lab-walk',center,lab,[{x:-1,z:3.2},{x:1,z:-2.6}]);edge('research-entrance',lab,research);
+  edge('experience-entrance',experience,west,[{x:-22.5,z:2.9},{x:-18,z:3.2}],1.8);
+  edge('main-lab-walk',center,lab,[{x:-1,z:3.2},{x:1,z:-2.6}],1.8);edge('research-entrance',lab,research);
   edge('main-garden-approach',center,gardenNorth);edge('research-purdue-approach',lab,purdueWest,[{x:8.4,z:-3.8},{x:10.5,z:-5}]);
   edge('purdue-entrance',purdueEast,purdue,[],1.25);
   edge('garden-bridge-walk',gardenSouth,garden,[{x:-4,z:21.5}]);
   edge('gallery-entrance',gallery,garden,[{x:-8.625,z:22.3},{x:-8.625,z:23.65},{x:-9.05,z:24.15},{x:-9.2,z:25.65},{x:-6.75,z:25.65}],.65);
   edge('conservatory-entrance',glasshouse,garden,[{x:-11.95,z:26},{x:-7.8,z:26}]);
-  edge('garden-spine',garden,contact,[{x:5,z:26},{x:12,z:25.6}],1.3);
+  edge('garden-spine',garden,contact,[{x:2,z:25.8},{x:8,z:26},{x:12,z:25.6}],1.75);
   edge('main-harbor-walk',west,mainDock,[{x:-15.2,z:-6},{x:-13.5,z:-13.5},{x:-8,z:-16.6}],1.25);
   edge('main-dock',mainDock,mainBoat,[],1.1,'dock');
   for(const bridge of BRIDGES){const ends=bridge.id==='garden'?[gardenNorth,gardenSouth]:[purdueWest,purdueEast];const e=edge(`bridge-${bridge.id}`,ends[0],ends[1],[],bridge.width,'bridge');e.bridge=true;e.bridgeId=bridge.id;e.points=bridge.samples.map(p=>({x:p.point.x,z:p.point.z}));}
@@ -134,7 +134,7 @@ function roundedRoute(points: PathPoint[], city: boolean, tight: boolean) {
   for(let i=1;i<points.length-1;i++){
     const a=points[i-1],b=points[i],c=points[i+1];
     const ab=Math.hypot(b.x-a.x,b.z-a.z),bc=Math.hypot(c.x-b.x,c.z-b.z);
-    let cut=Math.min(city?.42:.85,ab*.24,bc*.24);
+    let cut=Math.min(city?.7:1.5,ab*.24,bc*.24);
     let arc:PathPoint[]=[];
     for(let attempt=0;attempt<4;attempt++){
       const p={x:b.x+(a.x-b.x)*cut/Math.max(.001,ab),z:b.z+(a.z-b.z)*cut/Math.max(.001,ab)};

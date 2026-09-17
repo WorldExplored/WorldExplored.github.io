@@ -5,16 +5,42 @@ import { coastalSoundScene } from './coastalAudio';
 import { useEffect, useState } from 'react';
 import { world } from '../../content/world';
 import { useFrame } from '@react-three/fiber';
-import { BoxGeometry, BufferGeometry, CapsuleGeometry, CatmullRomCurve3, CylinderGeometry, ExtrudeGeometry, Group, InstancedMesh, Mesh, MeshPhysicalMaterial, Object3D, Shape, SphereGeometry, TorusGeometry, TubeGeometry, Vector3 } from 'three';
+import { BoxGeometry, BufferGeometry, CylinderGeometry, ExtrudeGeometry, Float32BufferAttribute, Group, InstancedMesh, Mesh, MeshPhysicalMaterial, Object3D, Shape, SphereGeometry, Vector3 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { cityRoofMounts, cityStationActivity, type CityTransitRoute } from './city';
-import { cityDocks, cityFerryDistance, cityTurbines, createCityFerryRoute, writeCityFerryPose } from './cityInfrastructure';
+import { cityDocks, cityTurbines, createCityFerryRoute, FERRY_DWELL, writeCityFerryPose } from './cityInfrastructure';
 import { terrainHeight } from './terrain';
 import { GardenFountain } from './GardenFountain';
 import type { EnvironmentProps } from './Water';
 import { createTownInteractionState, type TownInteractionState } from './townInteractionState';
 import { TownInteractions } from './TownInteractions';
 import { createTownMechanisms } from './TownMechanisms';
+import { createCoastalFerry } from './CoastalFerry';
+
+// Route waterline + aft threshold center + half its slab thickness.
+export const DOCK_BOARDING_HEIGHT = .17 + .26 + .055 / 2;
+export const DOCK_STAIR_COUNT = 4;
+
+export function dockBoardingPlan() {
+  const route=createCityFerryRoute();
+  return cityDocks.map((dock,index)=>{
+    const position=new Vector3(),tangent=new Vector3();writeCityFerryPose(route,index===0?0:route.firstDuration,position,tangent);
+    const right=new Vector3(tangent.z,0,-tangent.x);
+    // The gangway stops 2cm behind the actual aft deck edge, leaving room for a fender.
+    const end=position.clone().addScaledVector(tangent,-1.04);end.y=DOCK_BOARDING_HEIGHT;
+    const start=dock.id==='city'?new Vector3(dock.x-dock.width/2,DOCK_BOARDING_HEIGHT,end.z):new Vector3(-8.40,DOCK_BOARDING_HEIGHT,dock.z-dock.length/2);
+    const across=dock.id==='city'?new Vector3(0,0,1):new Vector3(1,0,0);
+    return {dock,index,start,end,right,across,stairStart:dock.id==='city'?-62.1:-21.8,stairEnd:dock.id==='city'?-60.7:-23.2,width:.50};
+  });
+}
+
+export function dockBoardingExtension(elapsed:number,station:number,duration:number,firstDuration:number) {
+  const phase=((elapsed%duration)+duration)%duration;
+  const age=phase-(station===0?0:firstDuration);
+  if(age<0||age>FERRY_DWELL)return 0;
+  const smooth=(value:number)=>{const t=Math.max(0,Math.min(1,value));return t*t*(3-2*t);};
+  return smooth(age/.65)*smooth((FERRY_DWELL-.3-age)/.65);
+}
 
 export function createCityLife(stationRoute: CityTransitRoute) {
   const root = new Group(); root.name = 'operating-city-infrastructure';
@@ -25,7 +51,6 @@ export function createCityLife(stationRoute: CityTransitRoute) {
     aqua: new MeshPhysicalMaterial({ color: '#3fdee6', roughness: .45, metalness: .25, clearcoat: .12 }),
     glass: new MeshPhysicalMaterial({ color: '#a4f3f4', roughness: .08, metalness: 0, clearcoat: .7, transparent: true, opacity: .28, depthWrite: false, thickness: .06, ior: 1.45 }),
     solar: new MeshPhysicalMaterial({ color: '#17485e', roughness: .5, metalness: .15, clearcoat: .18, envMapIntensity: .15 }),
-    wake: new MeshPhysicalMaterial({ color: '#c1fffa', roughness: .3, metalness: 0, clearcoat: .8, transparent: true, opacity: .22, depthWrite: false }),
     station: new MeshPhysicalMaterial({ color: '#d0fff8', emissive: '#68eeed', emissiveIntensity: 0, roughness: .25, metalness: .02, clearcoat: .9 }),
   };
   materials.solar.onBeforeCompile=shader=>{
@@ -65,20 +90,53 @@ export function createCityLife(stationRoute: CityTransitRoute) {
     const rotor = new Group(); rotor.name = `city-wind-turbine-${index}`; rotor.position.set(turbine.x, floor + turbine.height, turbine.z + .23); root.add(rotor); rotors.push(rotor);
     add(`city-sculpted-turbine-blades-${index}`, merged([new SphereGeometry(.24, 20, 12).scale(1, 1, 1.5), ...Array.from({ length: 3 }, (_, bladeIndex) => blade().rotateZ(bladeIndex * Math.PI * 2 / 3))]), materials.white, rotor);
   }
-  for (const dock of cityDocks) {
-    fixed.push(new BoxGeometry(dock.width, .16, dock.length).translate(dock.x, dock.y - .08, dock.z));
-    for (const side of [-1, 1]) for (const step of [-1, 0, 1]) {
-      const z = dock.z + step * (dock.length / 2 - .3);
-      const floor = Math.min(terrainHeight(dock.x, z), .2);
-      fixed.push(new CylinderGeometry(.055, .065, dock.y + .43 - floor, 10).translate(dock.x + side * .59, (dock.y + .43 + floor) / 2, z));
+  const boardings=dockBoardingPlan();
+  const gangways:Array<{mesh:Mesh;index:number}>=[];
+  const dockBeam=(a:Vector3,b:Vector3,radius=.025)=>{
+    const direction=b.clone().sub(a),transform=new Object3D();transform.position.copy(a).add(b).multiplyScalar(.5);transform.quaternion.setFromUnitVectors(new Vector3(0,1,0),direction.clone().normalize());transform.updateMatrix();
+    return new CylinderGeometry(radius,radius,direction.length(),10).applyMatrix4(transform.matrix);
+  };
+  for(const boarding of boardings){
+    const {dock,stairStart,stairEnd}=boarding;
+    const direction=Math.sign(stairEnd-stairStart),rise=(dock.y-DOCK_BOARDING_HEIGHT)/DOCK_STAIR_COUNT;
+    const dryEnd=dock.z-direction*dock.length/2,wetEnd=dock.z+direction*dock.length/2;
+    const segment=(a:number,b:number,top:number)=>fixed.push(new BoxGeometry(dock.width,.16,Math.abs(b-a)).translate(dock.x,top-.08,(a+b)/2));
+    segment(dryEnd,stairStart,dock.y);
+    for(let step=0;step<DOCK_STAIR_COUNT;step++)segment(stairStart+(stairEnd-stairStart)*step/DOCK_STAIR_COUNT,stairStart+(stairEnd-stairStart)*(step+1)/DOCK_STAIR_COUNT,dock.y-rise*(step+1));
+    segment(stairEnd,wetEnd,DOCK_BOARDING_HEIGHT);
+    const heightAt=(z:number)=>{
+      const t=(z-stairStart)/(stairEnd-stairStart);
+      return t<=0?dock.y:t>=1?DOCK_BOARDING_HEIGHT:dock.y-(dock.y-DOCK_BOARDING_HEIGHT)*t;
+    };
+    for(const side of [-1,1]){
+      const x=dock.x+side*.59;
+      const breakpoints=[dryEnd,stairStart,stairEnd,wetEnd];
+      if(dock.id==='city'&&side===-1)breakpoints.push(boarding.start.z-.36,boarding.start.z+.36);
+      breakpoints.sort((a,b)=>(a-b)*direction);
+      for(let i=1;i<breakpoints.length;i++){
+        const a=breakpoints[i-1],b=breakpoints[i],middle=(a+b)/2;
+        if(dock.id==='city'&&side===-1&&Math.abs(middle-boarding.start.z)<.36)continue;
+        fixed.push(dockBeam(new Vector3(x,heightAt(a)+.42,a),new Vector3(x,heightAt(b)+.42,b)));
+      }
+      for(const z of breakpoints){
+        const floor=Math.min(terrainHeight(x,z),.1),top=heightAt(z)+.42;
+        fixed.push(new CylinderGeometry(.035,.055,top-floor,10).translate(x,(top+floor)/2,z));
+      }
     }
-    fixed.push(new BoxGeometry(.055, .055, dock.length - .4).translate(dock.x + .59, dock.y + .42, dock.z));
-    fixed.push(new BoxGeometry(.055, .055, dock.length - .4).translate(dock.x - .59, dock.y + .42, dock.z));
-    water.push(new BoxGeometry(.035, .025, dock.length - .6).translate(dock.x + .45, dock.y + .01, dock.z));
+    // Closed solid gangway, morphing into its pier-mounted cassette before the taxi moves.
+    const half=boarding.width/2;
+    const corners=[boarding.start.clone().addScaledVector(boarding.across,-half),boarding.start.clone().addScaledVector(boarding.across,half),boarding.end.clone().addScaledVector(boarding.right,half),boarding.end.clone().addScaledVector(boarding.right,-half)];
+    // Keep both edges consistently ordered even when the docks face opposite directions.
+    if(corners[0].distanceToSquared(corners[3])+corners[1].distanceToSquared(corners[2])>corners[0].distanceToSquared(corners[2])+corners[1].distanceToSquared(corners[3]))[corners[2],corners[3]]=[corners[3],corners[2]];
+    const positions:number[]=[],retracted:number[]=[],uvs:number[]=[];
+    for(const bottom of [0,.06])for(let i=0;i<4;i++){
+      const vertex=corners[i].clone();vertex.y-=bottom;positions.push(...vertex.toArray());uvs.push(i%2,i>1?1:0);
+      const target=i>1?boarding.start.clone().addScaledVector(boarding.across,i===2?half:-half):corners[i].clone();target.y-=bottom;retracted.push(...target.toArray());
+    }
+    const geometry=new BufferGeometry();geometry.setAttribute('position',new Float32BufferAttribute(positions,3));geometry.setAttribute('uv',new Float32BufferAttribute(uvs,2));geometry.setIndex([0,2,1,0,3,2,4,5,6,4,6,7,0,1,5,0,5,4,1,2,6,1,6,5,2,3,7,2,7,6,3,0,4,3,4,7]);geometry.computeVertexNormals();if(geometry.getAttribute('normal').getY(0)<0){const index=geometry.index!;for(let i=0;i<index.count;i+=3){const a=index.getX(i);index.setX(i,index.getX(i+2));index.setX(i+2,a);}geometry.computeVertexNormals();}geometry.morphAttributes.position=[new Float32BufferAttribute(retracted,3)];
+    const mesh=add(`city-${dock.id}-boarding-gangway`,geometry,materials.aqua);mesh.userData.boarding=boarding;gangways.push({mesh,index:boarding.index});
+    fixed.push(new BoxGeometry(dock.id==='city'?.035:.62,.10,dock.id==='city'?.62:.035).translate(boarding.start.x,DOCK_BOARDING_HEIGHT-.10,boarding.start.z));
   }
-  // Boarding fingers reach the taxi's two safe offshore stops.
-  fixed.push(new BoxGeometry(.3, .16, 1.05).translate(-12.7, .98, -60));
-  fixed.push(new BoxGeometry(2.2, .16, .5).translate(-8, .98, -24.45));
   // Public station rail and canopy lights align with the existing transit hall.
   fixed.push(new BoxGeometry(2.2, .09, .75).translate(-5, 3.08, -67.15));
   for (const index of [-1, 0, 1]) fixed.push(new BoxGeometry(.025, .12, .025).translate(-5 + index * .64, 5.26, -66.87));
@@ -104,46 +162,20 @@ export function createCityLife(stationRoute: CityTransitRoute) {
   const frames = instance('city-articulated-solar-frames', panels.length, merged([new BoxGeometry(1, .055, 1), ...[-1,1].map(side => new BoxGeometry(.08, .08, .92).translate(side*.31,-.045,0))]), materials.aqua);
   const cells = instance('city-articulated-solar-cells', panels.length, merged([new BoxGeometry(.88, .014, .39).translate(0, .036, -.235), new BoxGeometry(.88, .014, .39).translate(0, .036, .235)]), materials.solar);
   frames.castShadow = false; cells.castShadow = false;
-  add('city-dock-edge-stripes', merged(water), materials.aqua);
+  if(water.length)add('city-dock-edge-stripes', merged(water), materials.aqua);
   const station = add('city-station-arrival-lights', merged([-1, 0, 1].map(index => new BoxGeometry(.42, .04, .07).translate(-5 + index * .64, 5.18, -66.87))), materials.station);
   station.castShadow = false;
 
-  const ferryRoute = createCityFerryRoute();
-  const ferry = new Group(); ferry.name = 'city-water-taxi'; root.add(ferry);
-  const hull = merged([-1, 1].map(side => new CapsuleGeometry(.2, 1.75, 4, 16).rotateX(Math.PI / 2).translate(side * .45, .06, 0)));
-  const roof = new CapsuleGeometry(.43, .83, 4, 18).rotateX(Math.PI / 2).scale(1, .2, 1).translate(0, .82, 0);
-  const glazing = new CapsuleGeometry(.39, .75, 4, 18).rotateX(Math.PI / 2).scale(1, .62, 1).translate(0, .5, 0);
-  add('city-water-taxi-shell', merged([merged([hull, roof, new BoxGeometry(.95, .12, 1.7).translate(0, .2, 0)]), glazing], true), [materials.white, materials.glass], ferry);
-  const cabin = [
-    new BoxGeometry(.78, .08, .32).translate(0, .29, .34),
-    new BoxGeometry(.78, .08, .32).translate(0, .29, -.34),
-    new BoxGeometry(.48, .2, .18).translate(0, .42, -.43),
-    new BoxGeometry(.34, .13, .08).rotateX(-.35).translate(0, .62, -.35),
-    new BoxGeometry(.48,.025,.36).translate(0,.78,.08),
-    new SphereGeometry(.045,8,6).translate(-.47,.72,-.42),
-    new SphereGeometry(.045,8,6).translate(.47,.72,-.42),
-  ];
-  const rails: BufferGeometry[] = [];
-  for (const side of [-1, 1]) {
-    rails.push(new BoxGeometry(.035, .035, 1.42).translate(side * .54, .5, 0));
-    for (const z of [-.62, 0, .62]) rails.push(new CylinderGeometry(.018, .018, .3, 8).translate(side * .54, .35, z));
-  }
-  rails.push(new TorusGeometry(.14, .018, 6, 18).rotateY(Math.PI / 2).translate(0, .57, -.5));
-  rails.push(new CylinderGeometry(.04, .055, .35, 10).rotateX(Math.PI / 2).translate(0, .08, -.96));
-  rails.push(...[-1,1].flatMap(side=>[-.62,.62].map(z=>new TorusGeometry(.11,.032,6,14).rotateY(Math.PI/2).translate(side*.58,.22,z))));
-  rails.push(...[-1,1].flatMap(side=>[-.66,.66].map(z=>new CylinderGeometry(.035,.05,.16,8).translate(side*.38,.28,z))));
-  rails.push(new BoxGeometry(.34,.035,.16).translate(0,.79,.08));
-  add('city-water-taxi-seating-and-console', merged(cabin), materials.aqua, ferry);
-  add('city-water-taxi-rails-and-electric-drive', merged(rails), materials.white, ferry);
-  const wake = add('city-water-taxi-wake', merged([-1, 1].map(side => new TubeGeometry(new CatmullRomCurve3([new Vector3(side * .38, .03, -.6), new Vector3(side * .75, .03, -1.5), new Vector3(side * 1.15, .03, -2.55)]), 24, .028, 5, false))), materials.wake, ferry);
-  wake.castShadow = false;
-  const dummy = new Object3D(); const ferryPosition = new Vector3(); const ferryTangent = new Vector3();
+  const coastalFerry = createCoastalFerry();
+  const ferry = coastalFerry.root; root.add(ferry);
+  const dummy = new Object3D();
   let disposeTimer: ReturnType<typeof setTimeout> | undefined;
   let displayedTime = 0; let detail = 1;
   const idleControls = createTownInteractionState();
   const update = (elapsed: number, stationRoute: CityTransitRoute, controls: TownInteractionState = idleControls, paused = false, sunDirection:readonly number[]=world.lighting.sunPosition) => {
     if (!paused) displayedTime = elapsed;
     const time = displayedTime;
+    if(!paused)for(const gangway of gangways){const extension=dockBoardingExtension(time,gangway.index,coastalFerry.route.duration,coastalFerry.route.firstDuration);gangway.mesh.morphTargetInfluences![0]=1-extension;gangway.mesh.visible=extension>.005;}
     mechanisms.update(time, controls, paused, detail);
     for (let index = 0; index < rotors.length; index++) {
       rotors[index].rotation.z = time * cityTurbines[index].rate + cityTurbines[index].phase;
@@ -160,15 +192,12 @@ export function createCityLife(stationRoute: CityTransitRoute) {
     }
     frames.instanceMatrix.needsUpdate = true; cells.instanceMatrix.needsUpdate = true;
     materials.station.emissiveIntensity = .03 + cityStationActivity(stationRoute, time) * .6 + controls.states.station.amount * .8;
-    writeCityFerryPose(ferryRoute, time, ferryPosition, ferryTangent);
-    ferry.position.copy(ferryPosition); ferry.rotation.y = Math.atan2(ferryTangent.x, ferryTangent.z);
-    const speed = ((cityFerryDistance(ferryRoute, time + .02) - cityFerryDistance(ferryRoute, time) + ferryRoute.length) % ferryRoute.length) / .02;
-    coastalSoundScene.ferry = ferryPosition.toArray(); coastalSoundScene.ferrySpeed = paused ? 0 : speed; coastalSoundScene.fountainPressure = 1 + controls.states.fountain.amount * .18;
-    const wakeStrength = Math.min(1, speed / ferryRoute.speed);
-    wake.visible = wakeStrength > .015; materials.wake.opacity = .22 * wakeStrength;
+    const {position:ferryPosition,speed} = coastalFerry.update(time,paused);
+    coastalSoundScene.ferry=ferryPosition.toArray();coastalSoundScene.ferrySpeed=paused?0:speed;
+    coastalSoundScene.fountainPressure=1+controls.states.fountain.amount*.18;
   };
   update(0, stationRoute);
-  return { root, update, setQuality(quality: EnvironmentProps['quality']) { detail = quality === 'high' ? 1 : quality === 'medium' ? .65 : .35; ferry.visible = quality !== 'low'; }, retain() { clearTimeout(disposeTimer); return () => { disposeTimer = setTimeout(() => { mechanisms.dispose(); geometryResources.forEach(geometry => geometry.dispose()); root.traverse(object => { if (object instanceof InstancedMesh) object.dispose(); }); Object.values(materials).forEach(material => material.dispose()); }, 0); }; } };
+  return { root, update, setQuality(quality: EnvironmentProps['quality']) { detail = quality === 'high' ? 1 : quality === 'medium' ? .65 : .35; ferry.visible = quality !== 'low'; }, retain() { clearTimeout(disposeTimer); return () => { disposeTimer = setTimeout(() => { mechanisms.dispose(); coastalFerry.dispose(); geometryResources.forEach(geometry => geometry.dispose()); root.traverse(object => { if (object instanceof InstancedMesh) object.dispose(); }); Object.values(materials).forEach(material => material.dispose()); }, 0); }; } };
 }
 
 export function CityLife({ runtime, paused, quality, route }: EnvironmentProps & { route: CityTransitRoute }) {

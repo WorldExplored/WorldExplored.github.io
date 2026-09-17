@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { create, act } from '@react-three/test-renderer';
 import { InstancedMesh, Matrix4, Vector3 } from 'three';
 import { Wildlife, createWildlife, writeGullPose } from '../src/components/world/Wildlife';
-import { createCrabRoutes, createCrabStates, createGullPerches, createGullStates, startGullTakeoff, stepCrab, stepGull, validCrabPosition, WILDLIFE_COUNTS, writeCrabPosition, gullFlightFloor, type GullMode } from '../src/components/world/wildlifeState';
+import { createCrabRoutes, createCrabStates, createGullPerches, createGullStates, startGullTakeoff, stepCrab, stepGull, validCrabPosition, WILDLIFE_COUNTS, writeCrabPosition, gullFlightFloor, GULL_TURN_RATE, type GullMode } from '../src/components/world/wildlifeState';
 import { cameraObstacles } from '../src/components/world/cameraControls';
 import { createLandscapePlan, terrainHeight } from '../src/components/world/terrain';
 import { createSceneRuntime, type QualityTier } from '../src/content/world';
@@ -57,7 +57,7 @@ test('wildlife tiers reuse geometry, have articulated silhouettes, freeze and ne
   const geometry = wings.geometry; const matrix = new Matrix4(); const position = new Vector3();
   const advance = async (frames: number) => act(async () => { for (let frame = 0; frame < frames; frame++) await renderer.advanceFrames(1, 1 / 60); });
   try {
-    await advance(1); assert.equal(body.count, 18); assert.equal(crabs.count, 10); assert.ok(wings.geometry.attributes.position.count > 500);
+    await advance(1); assert.equal(body.count, 18); assert.equal(crabs.count, 10); wings.geometry.computeBoundingBox();const featherBounds=wings.geometry.boundingBox!;assert.ok(featherBounds.max.x-featherBounds.min.x>.4);assert.ok(featherBounds.max.z-featherBounds.min.z>.2);assert.ok(featherBounds.max.y-featherBounds.min.y>.02);
     for (const mesh of meshes) { mesh.getMatrixAt(0, matrix); assert.ok(matrix.determinant() > 0); const hits: unknown[] = []; mesh.raycast({} as never, hits as never); assert.equal(hits.length, 0); }
     body.getMatrixAt(1, matrix); position.setFromMatrixPosition(matrix); await advance(30); body.getMatrixAt(1, matrix); assert.ok(position.distanceTo(new Vector3().setFromMatrixPosition(matrix)) > .1);
     for (const tier of ['medium', 'low'] as const) { await renderer.update(render(tier)); await advance(1); assert.equal(body.count, WILDLIFE_COUNTS[tier].gulls); assert.equal(crabs.count, WILDLIFE_COUNTS[tier].crabs); assert.equal(wings.geometry, geometry); }
@@ -73,9 +73,10 @@ test('five-minute flock keeps clear flight corridors and exclusive perches throu
   const residentOrigin=birds[0].position.clone();
   for(let frame=0;frame<60*300;frame++){
     for(const bird of birds){
-      const previous=bird.position.clone();const before=bird.mode;
+      const previous=bird.position.clone();const before=bird.mode;const previousHeading=bird.heading;
       const threat=frame===60*150&&bird.index===0?bird.position.toArray():null;
       stepGull(bird,1/60,distantCamera,threat);modes.add(bird.mode);
+      assert.ok(Math.abs(bird.heading-previousHeading)<=GULL_TURN_RATE/60+1e-10,`${bird.index} exceeded bounded heading rate`);
       assert.ok(bird.position.distanceTo(previous)<.06,`${bird.index} moved abruptly`);
       assert.ok([...bird.position.toArray(),...bird.velocity.toArray()].every(Number.isFinite));
       assert.ok(bird.age<=bird.duration+.02||!['approach','takeoff'].includes(bird.mode));

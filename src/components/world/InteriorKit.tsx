@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { BoxGeometry, BufferGeometry, CylinderGeometry, ExtrudeGeometry, Shape, MeshStandardMaterial, MeshPhysicalMaterial, SphereGeometry, Vector3 } from 'three';
 import { combine, strut, useResources } from './BuildingKit';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { applySurface } from './surfaceMaterials';
 
 export type InteriorFinish = 'wood' | 'fabric' | 'metal' | 'paper' | 'screen' | 'light' | 'leaf' | 'soil' | 'coolant' | 'pipe';
 export type InteriorGeometry = Record<InteriorFinish, BufferGeometry>;
@@ -88,7 +90,11 @@ export class InteriorBuilder {
   add(finish: InteriorFinish, geometry: BufferGeometry) { this.parts[finish].push(geometry); }
   floor(name: string, polygons: readonly FloorPolygon[], top: number, thickness = .018) { this.add('wood', floorSlab(name,polygons,top,thickness)); }
   box(finish: InteriorFinish, w: number, h: number, d: number, x: number, y: number, z: number, yaw = 0) {
-    this.add(finish, new BoxGeometry(w, h, d).rotateY(yaw).translate(x, y, z));
+    // Chamfer furniture that has a visible silhouette; thin boards and book spines
+    // retain flat faces instead of spending hundreds of triangles on millimetre edges.
+    const rounded=(finish==='fabric'&&w>=.25)||(finish==='wood'&&w>=.3&&d>=.3);
+    const geometry=rounded ? new RoundedBoxGeometry(w,h,d,1,Math.min(.035,w*.12,h*.12,d*.12)) : new BoxGeometry(w,h,d);
+    this.add(finish,geometry.rotateY(yaw).translate(x,y,z));
   }
   rod(finish: InteriorFinish, a: number[], b: number[], radius = .025) { this.add(finish, strut(new Vector3(...a), new Vector3(...b), radius)); }
   table(x: number, floor: number, z: number, width = .85, depth = .43, height = .64) {
@@ -98,7 +104,8 @@ export class InteriorBuilder {
   chair(x: number, floor: number, z: number, yaw = 0, scale = 1) {
     const put = (finish: InteriorFinish, w: number, h: number, d: number, dx: number, y: number, dz: number) => this.box(finish, w * scale, h * scale, d * scale, x + (dx * Math.cos(yaw) + dz * Math.sin(yaw)) * scale, floor + y * scale, z + (-dx * Math.sin(yaw) + dz * Math.cos(yaw)) * scale, yaw);
     put('fabric', .34, .075, .35, 0, .36, 0); put('fabric', .34, .33, .065, 0, .56, -.145);
-    for (const dx of [-.12, .12]) for (const dz of [-.12, .12]) put('metal', .025, .32, .025, dx, .16, dz);
+    for(const dx of [-.12,.12])for(const dz of [-.12,.12])put('metal',.025,.32,.025,dx,.16,dz);
+    for(const side of [-1,1]) {put('wood',.04,.035,.28,side*.18,.49,-.02);put('metal',.022,.16,.022,side*.18,.41,-.1);}
   }
   monitor(x: number, desktop: number, z: number, yaw = 0) {
     this.box('metal', .18, .025, .14, x, desktop + .016, z, yaw);
@@ -138,15 +145,15 @@ export class InteriorBuilder {
 export function FurnishedInterior({ build, name }: { build: () => InteriorGeometry; name: string }) {
   const geometry = useResources(build);
   const [materials] = useState(() => ({
-    wood: new MeshStandardMaterial({ color: '#b58651', roughness: .8 }),
-    fabric: new MeshStandardMaterial({ color: '#52757b', roughness: .98 }),
-    metal: new MeshStandardMaterial({ color: '#7b8990', roughness: .46, metalness: .65 }),
-    paper: new MeshStandardMaterial({ color: '#f5eed8', roughness: .92 }),
+    wood: applySurface(new MeshStandardMaterial({color:'#986345',roughness:.8}),'cedar',1.2),
+    fabric: new MeshStandardMaterial({ color: '#1262c4', roughness: .98 }),
+    metal: new MeshStandardMaterial({ color: '#244f64', roughness: .46, metalness: .65 }),
+    paper: new MeshStandardMaterial({ color: '#edf6ef', roughness: .92 }),
     screen: new MeshStandardMaterial({ color: '#143a49', roughness: .38, emissive: '#3c8791', emissiveIntensity: .22 }),
     light: new MeshStandardMaterial({ color: '#fff0cc', roughness: .5, emissive: '#ffda91', emissiveIntensity: .65 }),
-    leaf: new MeshStandardMaterial({ color: '#498346', roughness: .85 }),
+    leaf: new MeshStandardMaterial({ color: '#287843', roughness: .85 }),
     soil: new MeshStandardMaterial({ color: '#433b2d', roughness: 1 }),
-    coolant: new MeshStandardMaterial({ color: '#29aeb5', roughness: .23, metalness: .05 }),
+    coolant: new MeshStandardMaterial({ color: '#06abc1', roughness: .23, metalness: .05 }),
     pipe: new MeshPhysicalMaterial({ color: '#d4f9f4', roughness: .08, transparent: true, opacity: .2, depthWrite: false }),
   }));
   useEffect(() => { clearTimeout(timers.get(materials)); return () => { timers.set(materials, setTimeout(() => Object.values(materials).forEach(material => material.dispose()), 0)); }; }, [materials]);

@@ -9,13 +9,13 @@ import { createSceneRuntime, type LandmarkId } from '../src/content/world';
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 const ids: LandmarkId[] = ['work', 'research', 'contact', 'building'];
 const moving: Record<LandmarkId, string[]> = {
-  work: ['work-ring-mount-0', 'work-compute-wheel-0', 'work-compute-wheel-1', 'work-coolant-capsule-0', 'work-service-carriage'],
+  work: ['work-cooling-fan-0', 'work-cooling-fan-1'],
   experience: [],
   research: ['research-tracking-solar-panel-0', 'research-observation-instrument'],
   purdue: [],
   history: [],
   about: [],
-  contact: ['contact-articulated-signal-petal-0', 'contact-outward-signal-pulse'],
+  contact: ['contact-tracking-dish'],
   building: ['lighthouse-rotating-fresnel-lens', 'lighthouse-weather-vane'],
 };
 const pose = (object: Object3D) => [...object.position.toArray(), ...object.quaternion.toArray(), ...object.scale.toArray()];
@@ -34,7 +34,7 @@ test('operating buildings retain multiple real mechanisms with independent perio
         rates.add(object.quaternion.toArray().map(value => value.toFixed(4)).join(','));
       });
       assert.deepEqual(assembly.root.scale.toArray(), [1, 1, 1]);
-      assert.deepEqual(assembly.root.position.toArray(), id === 'work' ? [0, 1.9, 0] : [0, 0, 0]);
+      assert.deepEqual(assembly.root.position.toArray(), [0, 0, 0]);
     } finally { assembly.dispose(); }
   }
   assert.ok(rates.size >= 7, 'Landmarks cannot share one synchronized rotation.');
