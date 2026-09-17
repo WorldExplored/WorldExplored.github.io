@@ -19,7 +19,7 @@ function assertSafe(position: Vector3, target: Vector3, obstacles = cameraObstac
   assert.ok(polar >= CAMERA_LIMITS.minPolarAngle - 1e-6 && polar <= CAMERA_LIMITS.maxPolarAngle + 1e-6, `Polar angle ${polar} is bounded.`);
   assert.ok(position.y >= Math.max(CAMERA_LIMITS.minY, terrainMeshHeight(position.x, position.z) + 1.15) - 1e-6, 'The near plane clears terrain and water.');
   for (const obstacle of obstacles) {
-    assert.ok(position.y >= obstacle.top - 1e-6 || Math.hypot(position.x - obstacle.x, position.z - obstacle.z) >= obstacle.radius - 1e-6, 'The camera clears every structure and tree.');
+    assert.ok(position.y >= obstacle.top - 1e-6 || Math.hypot(position.x - obstacle.x, position.z - obstacle.z) >= obstacle.radius - 1e-6, 'The camera clears every structural obstacle.');
   }
 }
 
@@ -396,8 +396,14 @@ test('static obstacle envelopes are reused and remain immutable across destinati
   assert.equal(cameraObstacles(), obstacles);
 });
 
+test('decorative trees are permeable and cannot trap close zoom', () => {
+  const obstacles = cameraObstacles();
+  assert.ok(!obstacles.some(obstacle => Math.abs(obstacle.x + 4) < .01 && Math.abs(obstacle.z + 85) < .01), 'The city tree is not a hard camera obstacle.');
+  assert.equal(CAMERA_LIMITS.minDistance, 5.5);
+});
+
 test('pointer rays intersect the rendered graded triangles rather than the analytic surface between vertices', () => {
-  const x = -12.97, z = -63.9;
+  const x = -11.08, z = -63.72;
   const renderedHeight = terrainMeshHeight(x, z);
   assert.ok(Math.abs(renderedHeight - terrainHeight(x, z)) > .1, 'The crossing exercises a real grade interpolation difference');
   const hit = new Vector3(); const ray = new Ray(new Vector3(x, 12, z), new Vector3(0, -1, 0));

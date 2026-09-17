@@ -119,7 +119,7 @@ test('all graded route endpoints meet their thresholds across the full path widt
   }
   // Architectural threshold surfaces, not the centre of the corresponding boxes.
   // Surface height includes rounded trim; graded approach must meet within 5mm.
-  const expected: Record<string,number>={work:1.105,experience:1.03,research:1.07,purdue:1.03,history:1.03,about:1.06,'about-conservatory':1.06,contact:1.06,building:2.86};
+  const expected: Record<string,number>={work:1.105,experience:1.07,research:1.07,purdue:1.03,history:1.07,about:1.06,'about-conservatory':1.06,contact:1.06,building:2.86};
   for(const [id,y] of Object.entries(expected)) {
     const node=createCirculationGraph().nodes.find(n=>n.id===id)!;
     assert.ok(Math.abs(node.y!-y)<.005, `${id}: path endpoint y=${node.y} differs from modeled threshold top ${y}`);

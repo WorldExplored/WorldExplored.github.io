@@ -1,4 +1,4 @@
-export const TOWN_BEDS = [[-4,-85,1.6,3.6],[6,-81,1.5,3.5],[-14,-84,.7,2.2],[-25,-83,.6,2.6],[8,-86,.7,2.8],[2,-76,.6,1.6]] as const;
+export const TOWN_BEDS = [[-4,-85,1.8,4.2],[6,-81,1.8,4],[-14,-84,1.1,3],[-25,-83,.9,3.1],[8,-86,1,3.3],[2,-76,.9,2.2],[-18,-88,.8,2.6],[-22,-67,.8,2.5],[13,-76,.7,2.3]] as const;
 /** One ecological field drives both terrain color and instanced planting. */
 export function biomeSmooth(a: number, b: number, value: number) {
   const t = Math.max(0, Math.min(1, (value - a) / (b - a)));

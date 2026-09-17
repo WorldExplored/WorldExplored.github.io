@@ -74,7 +74,7 @@ export function createCirculationGraph() {
     const e:CirculationEdge={id,from:from.id,to:to.id,mode,width,points:[from,...via,to],startY:from.y,endY:to.y};edges.push(e);return e;
   };
   const work=node('work',-8,2.51,'entrance',1.105), research=node('research',2.67,-5.15,'entrance',1.07);
-  const experience=node('experience',-26.62,1.18,'entrance',1.03);
+  const experience=node('experience',-26.62,1.18,'entrance',1.07);
   const west=node('main-west',-14.8,3.2),center=node('main-center',-5.5,5.4),lab=node('research-plaza',2.67,-3.75);
   const gardenNorth=node('garden-bridge-north',-6,7,'landing',.95), gardenSouth=node('garden-bridge-south',-6,18,'landing',1.4);
   const purdueWest=node('purdue-bridge-west',12,-7,'landing',.95),purdueEast=node('purdue-bridge-east',21.7,-7,'landing',.95);
@@ -95,10 +95,15 @@ export function createCirculationGraph() {
   edge('main-dock',mainDock,mainBoat,[],1.1,'dock');
   for(const bridge of BRIDGES){const ends=bridge.id==='garden'?[gardenNorth,gardenSouth]:[purdueWest,purdueEast];const e=edge(`bridge-${bridge.id}`,ends[0],ends[1],[],bridge.width,'bridge');e.bridge=true;e.bridgeId=bridge.id;e.points=bridge.samples.map(p=>({x:p.point.x,z:p.point.z}));}
   const cityWest=node('city-west-street',-19.5,-74.7),cityCenter=node('city-center-street',-5,-74.2),cityEast=node('city-east-street',13,-72);
-  const history=node('history',19.96,-68.4,'entrance',1.03),historyCourt=node('history-court',17.5,-69.2,'park');
+  const history=node('history',19.96,-68.4,'entrance',1.07),historyCourt=node('history-court',17.5,-69.2,'park');
   const waterfront=node('city-waterfront',-15.5,-65.4,'park'),cityDock=node('city-dock-land',-12,-65,'dock',1.06),cityBoat=node('city-dock-boarding',-12.7,-60,'dock',1.06);
   const hubs=[cityWest,cityCenter,cityEast,waterfront];
-  for(const [a,b] of [[cityWest,cityCenter],[cityCenter,cityEast],[cityWest,waterfront],[waterfront,cityDock]]){const e=edge(`${a.id}-${b.id}`,a,b,[],1.05);e.points=routeCityWalk(a,b,1.05);}
+  // These primary streets are authored town geometry. The router remains a
+  // validator and supplies the short secondary building approaches below.
+  edge('town-main-street-west',cityWest,cityCenter,[{x:-14.8,z:-73.85},{x:-9.5,z:-73.95}],1.12);
+  edge('town-main-street-east',cityCenter,cityEast,[{x:0,z:-72.35},{x:6,z:-71.65}],1.22);
+  edge('town-waterfront-route',cityWest,waterfront,[{x:-21.6,z:-79.6},{x:-27.6,z:-80.4},{x:-29,z:-75},{x:-25.5,z:-69.25},{x:-20.5,z:-66.2}],1.05);
+  edge('town-dock-walk',waterfront,cityDock,[{x:-14.2,z:-64.75}],1.08);
   edge('history-threshold',history,historyCourt,[],1.35);
   edge('history-promenade',historyCourt,cityEast,[{x:16.2,z:-70},{x:14.5,z:-71.2}],1.35);
   const park=node('city-park',-16.2,-68.51,'park');const parkEdge=edge('city-park-walk',park,cityWest,[],.5);parkEdge.points=routeCityWalk(park,cityWest,.5);

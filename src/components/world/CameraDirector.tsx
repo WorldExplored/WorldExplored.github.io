@@ -24,7 +24,7 @@ export function CameraDirector({ destination, flight, mobile, onArrive, paused, 
     };
   }, [camera, obstacles]);
   const transition = useRef({ elapsed: 0, active: false, id: destination, serial: flight });
-  const input = useRef({ moved: false, active: false, blocked: false, pointers: new Map<number, PointerSample>(), orbitX: 0, orbitY: 0, panX: 0, panY: 0, zoom: 0 });
+  const input = useRef({ moved: false, active: false, blocked: false, pointers: new Map<number, PointerSample>(), orbitX: 0, orbitY: 0, panX: 0, panY: 0, zoom: 0, wheelGestureAt: -Infinity });
   const latest = useRef({ mobile, paused, aspect: size.width / size.height, onArrive });
   useEffect(() => { latest.current = { mobile, paused, aspect: size.width / size.height, onArrive }; }, [mobile, paused, size.width, size.height, onArrive]);
 
@@ -54,7 +54,11 @@ export function CameraDirector({ destination, flight, mobile, onArrive, paused, 
       if (state.zoom) zoomTowardPoint(camera.position, controls.target, vectors.zoomAnchor, Math.exp(state.zoom * fraction));
       const remainder = 1 - fraction;
       state.orbitX *= remainder; state.orbitY *= remainder; state.panX *= remainder; state.panY *= remainder; state.zoom *= remainder;
-      clipCameraTravel(vectors.motionFrom, camera.position, obstacles); controls.update(); invalidate(); return true;
+      const travel = clipCameraTravel(vectors.motionFrom, camera.position, obstacles);
+      // An obstructed wheel impulse ends at the safe boundary. Discard its inertia so
+      // a following orbit, pan, or zoom-away gesture starts immediately.
+      if (travel < .025 && Math.abs(state.zoom) > 1e-6) state.zoom = 0;
+      controls.update(); invalidate(); return true;
     };
     return { stripParallax, settle, arrive, beginInput, applyMotion };
   }, [camera, controls, invalidate, obstacles, runtime, vectors]);
@@ -139,12 +143,15 @@ export function CameraDirector({ destination, flight, mobile, onArrive, paused, 
       if (runtime.current.dragging || input.current.blocked) return;
       const amount = normalizedWheelZoom(event.deltaY, event.deltaMode, element.clientHeight);
       if (!amount) return;
-      actions.beginInput(); pickAnchor(event.clientX, event.clientY);
+      actions.beginInput();
+      const now = Number.isFinite(event.timeStamp) ? event.timeStamp : performance.now();
+      if (now - input.current.wheelGestureAt > 140) pickAnchor(event.clientX, event.clientY);
+      input.current.wheelGestureAt = now;
       input.current.zoom = MathUtils.clamp(input.current.zoom + amount, -1, 1);
       if (latest.current.paused) actions.applyMotion(1);
       invalidate();
     };
-    const cancelPointers = () => { input.current.pointers.clear(); input.current.active = input.current.blocked = false; controls.enabled = true; actions.stripParallax(); actions.settle(); };
+    const cancelPointers = () => { input.current.pointers.clear(); input.current.active = input.current.blocked = false; input.current.wheelGestureAt = -Infinity; controls.enabled = true; actions.stripParallax(); actions.settle(); };
     const contextMenu = (event: Event) => event.preventDefault();
     // This controller alone owns canvas input. Panel events never reach these listeners.
     element.addEventListener('pointerdown', onPointerDown, true);
@@ -166,7 +173,7 @@ export function CameraDirector({ destination, flight, mobile, onArrive, paused, 
   useEffect(() => {
     actions.stripParallax(); actions.settle();
     // An explicit destination/recovery also ends any gesture that was still held.
-    input.current.pointers.clear(); input.current.active = input.current.blocked = false; controls.enabled = true;
+    input.current.pointers.clear(); input.current.active = input.current.blocked = false; input.current.wheelGestureAt = -Infinity; controls.enabled = true;
     const pose = focusPose(destination, latest.current.mobile, latest.current.aspect);
     vectors.start.copy(camera.position); vectors.startLook.copy(controls.target); vectors.end.fromArray(pose.position); vectors.endLook.fromArray(pose.target);
     transition.current = { elapsed: 0, active: true, id: destination, serial: flight };

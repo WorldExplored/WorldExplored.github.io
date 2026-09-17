@@ -114,7 +114,7 @@ function disturb(fish: SchoolFish, x: number, z: number, strength: number) {
   fish.velocityOut = Math.min(1.5, fish.velocityOut + response * kind.escapeOut);
 }
 export function stepSchoolFish(fish: SchoolFish, delta: number, disturbance: FishDisturbance, quality: QualityTier, paused = false) {
-  if (paused) return;
+  if (paused) return false;
   const kind = FISH_SPECIES[fish.variant];
   const dt = Math.min(.05, Math.max(0, delta)); const previousX = fish.position.x; const previousZ = fish.position.z;
   fish.time += dt;
@@ -128,7 +128,8 @@ export function stepSchoolFish(fish: SchoolFish, delta: number, disturbance: Fis
   fish.velocityAlong *= Math.exp(-kind.recovery * dt); fish.velocityOut *= Math.exp(-kind.recovery * dt);
   fish.scatterAlong = Math.max(-1.9, Math.min(1.9, fish.scatterAlong + fish.velocityAlong * dt));
   fish.scatterOut = Math.max(0, Math.min(1.2, fish.scatterOut + fish.velocityOut * dt));
-  if (fish.jumpAge >= 0) { fish.jumpAge += dt; if (fish.jumpAge > 1.5) fish.jumpAge = -1; }
+  let reentered=false;
+  if (fish.jumpAge >= 0) { fish.jumpAge += dt; if (fish.jumpAge > 1.5) {fish.jumpAge = -1;reentered=true;} }
   else if (quality === 'high' && fish.variant === 1 && fish.member === 0 && fish.time > fish.nextJump && fish.scatterOut < .03) {
     fish.jumpAge = 0; fish.nextJump = fish.time + 65 + fish.schoolIndex * 3;
   }
@@ -140,4 +141,5 @@ export function stepSchoolFish(fish: SchoolFish, delta: number, disturbance: Fis
     fish.heading += turn;
     fish.bank += (Math.max(-.22, Math.min(.22, turn / Math.max(dt, .001) * -.12)) - fish.bank) * (1 - Math.exp(-3 * dt));
   }
+  return reentered;
 }

@@ -172,7 +172,7 @@ export function createLandscapePlan(): LandscapePlan {
       rocks.push({ id: `coast-rock-${rocks.length}`, x, z, y: terrainHeight(x, z) + .12, radius: size * 1.4, scale, rotation: random() * Math.PI });
     }
   }
-  for(const [x,z] of [[-4,-85],[6,-81],[-14,-84]]) {
+  for(const [x,z] of [[-4,-85],[6,-81],[-14,-84],[-25,-83],[8,-86],[2,-76],[-18,-88],[-22,-67],[13,-76]]) {
     const height=2.5,radius=1.25;
     if(circleClearance(x,z,[...structures,...rocks,...trees])<radius+.15||pathClearance(x,z,paths)<radius+.8)continue;
     trees.push({id:`courtyard-tree-${trees.length}`,x,z,y:terrainHeight(x,z),radius,height,rotation:random()*Math.PI*2});

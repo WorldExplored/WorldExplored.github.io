@@ -35,7 +35,7 @@ export function buildCityArchitecture(building: Readonly<CityBuilding>, add: Cit
     // A clear central view reaches the table, rear shelving and planted corner.
     box(x - width * .18, y + .47, z, Math.min(.73, width * .42), .065, .48, 'wood');
     for (const dx of [-.22, .22]) box(x - width * .18 + dx, y + .22, z, .035, .45, .35, 'metal');
-    chair(x - width * .18, y, z + .49);
+    chair(x - width * .18, y, z + .49, Math.PI);
     if (width > 1.7) chair(x + width * .28, y, z + .1, Math.PI / 2);
     const back = z - depth * .34;
     for (let shelf = 0; shelf < 3; shelf++) box(x + width * .22, y + .35 + shelf * .35, back, width * .35, .055, .22, 'wood');
@@ -53,7 +53,16 @@ export function buildCityArchitecture(building: Readonly<CityBuilding>, add: Cit
       const geometry=new BoxGeometry(ww,hh,dd);geometry.userData.roomWall={room:roomId,role,ground:y<.21};add(geometry,finish,cx,cy,cz);
     };
     // Each facade is a thin wall or glazing plane. There is no filled opaque body behind the window.
-    wall('back',x, y + height / 2, z - depth / 2 + .06, width, height, .12, variant % 2 ? 'aqua' : 'stone');
+    wall('back',x, y + height / 2, z - depth / 2 + .06, width, height, .12, 'porcelain');
+    // Rear elevations use real service openings and one continuous material
+    // language instead of alternating aqua and white floor bands.
+    box(x, y + height * .55, z - depth / 2 - .012, Math.max(.55,width*.32), Math.max(.42,height*.42), .025, 'window');
+    for(const side of [-1,1]) box(x+side*Math.max(.31,width*.18),y+height*.55,z-depth/2-.034,.035,Math.max(.48,height*.47),.035,'metal');
+    box(x,y+height*.78,z-depth/2-.034,Math.max(.65,width*.38),.035,.035,'metal');
+    if(variant%3===0){
+      box(x-width*.34,y+height*.48,z-depth/2-.075,.035,height*.82,.035,'metal');
+      for(let leaf=0;leaf<4;leaf++)add(new SphereGeometry(.11,6,4),'garden',x-width*.34+Math.sin(leaf*2.1)*.11,y+.28+leaf*height*.19,z-depth/2-.11,1,1.4,.55);
+    }
     for (const side of [-1, 1]) {
       wall(side<0?'left':'right',x + side * (width / 2 - .06), y + height / 2, z, .12, height, depth, 'porcelain');
       box(x + side * (width / 2 - .11), y + height / 2, z + depth / 2, .075, height, .075, 'metal');
@@ -75,6 +84,8 @@ export function buildCityArchitecture(building: Readonly<CityBuilding>, add: Cit
   };
   const roof = (x: number, y: number, z: number, width: number, depth: number, planted = false) => {
     slab(x, y, z, width + .08, depth + .08, 'porcelain');
+    for(const side of [-1,1]) { box(x+side*width*.49,y+.13,z,.055,.18,depth,'metal'); box(x,y+.13,z+side*depth*.49,width,.18,.055,'metal'); }
+    box(x+width*.36,y+.13,z-depth*.35,.16,.22,.16,'metal');
     if (planted) for (const side of [-1, 1]) { box(x + side * width * .33, y + .2, z - depth * .2, width * .22, .2, depth * .5, 'stone'); plant(x + side * width * .33, y + .3, z - depth * .2, .85); }
   };
   const gable = (x: number, y: number, z: number, width: number, depth: number, rise: number, glass = false) => {
@@ -178,6 +189,20 @@ export function buildCityArchitecture(building: Readonly<CityBuilding>, add: Cit
     slab(0, 1.85, doorZ - .08, 1.15, .5, 'porcelain');
     // The approach metadata includes the open-air porch in front of the inset facade.
     if (entrance[1] !== .24) throw new Error('Unexpected city threshold height');
+  }
+  if (family !== 'public-station' && h > 4) {
+    // A compact attached lift core gives every glazed upper floor a credible
+    // circulation route. The landing doors align to the rear service facade.
+    const coreX=w*.32,coreZ=-d/2-.24;
+    box(coreX,h/2,coreZ,.72,h-.35,.46,'glass');
+    for(const side of [-1,1])box(coreX+side*.31,h/2,coreZ,.055,h-.28,.055,'metal');
+    const levels=Math.max(2,Math.round((h-.6)/1.55));
+    for(let level=0;level<=levels;level++){
+      const y=.28+level*(h-1.1)/levels;
+      box(coreX,y,coreZ+.24,.62,.07,.42,'metal');
+      box(coreX,y+.34,coreZ+.245,.46,.55,.025,'aqua');
+    }
+    slab(coreX,h-.15,coreZ,.82,.58,'porcelain');
   }
   add(floorSlab(`${building.id}-foundation`,foundationPolygons,.2,.2,'foundation'),'stone');
   return roomViews;

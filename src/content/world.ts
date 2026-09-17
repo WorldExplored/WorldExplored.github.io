@@ -1,4 +1,5 @@
 import type { SectionId } from './profile';
+import { Vector3 } from 'three';
 
 export type Vec3 = [number, number, number];
 export type QualityTier = 'high' | 'medium' | 'low';
@@ -17,6 +18,8 @@ export interface SceneRuntime {
   moving: boolean;
   hovered: LandmarkId | null;
   ripple: { x: number; z: number; time: number; serial: number };
+  sunDirection: Vec3;
+  nature: { x: number; y: number; z: number; kind: 'tree' | 'rock' | 'fish'; time: number; serial: number };
   dragCount: number;
   dragging: boolean;
   frames: number;
@@ -59,7 +62,8 @@ export const world = {
 };
 
 export function createSceneRuntime(): SceneRuntime {
-  return { elapsed: 0, pointer: [0, 0], pointerActive: false, pointerWorld: [0, 0, 0], cloudInteraction: 0, plantInteraction: 0, moving: false, hovered: null, ripple: { x: 0, z: 0, time: -100, serial: 0 }, dragCount: 0, dragging: false, frames: 0 };
+  const sun=new Vector3(...world.lighting.sunPosition).normalize();
+  return { elapsed: 0, pointer: [0, 0], pointerActive: false, pointerWorld: [0, 0, 0], cloudInteraction: 0, plantInteraction: 0, moving: false, hovered: null, ripple: { x: 0, z: 0, time: -100, serial: 0 }, sunDirection: sun.toArray(), nature: { x: 0, y: 0, z: 0, kind: 'tree', time: -100, serial: 0 }, dragCount: 0, dragging: false, frames: 0 };
 }
 
 export function motionPolicy(reduced: boolean, saveData: boolean, forcedColors: boolean) {

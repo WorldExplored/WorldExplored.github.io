@@ -3,9 +3,9 @@ import { createCityInfrastructureObstacles } from './cityInfrastructure';
 import { MathUtils, Ray, Vector3 } from 'three';
 import { landmarkFor, world, type CameraPose, type LandmarkId } from '../../content/world';
 import { cityBuildings, createCityTransitRoute } from './city';
-import { architectureFootprints, createLandscapePlan, terrainHeight, terrainMeshHeight } from './terrain';
+import { architectureFootprints, terrainHeight, terrainMeshHeight } from './terrain';
 
-export const CAMERA_LIMITS = { minDistance: 8, maxDistance: 220, minPolarAngle: .28, maxPolarAngle: 1.43, minY: 3.5 };
+export const CAMERA_LIMITS = { minDistance: 5.5, maxDistance: 220, minPolarAngle: .28, maxPolarAngle: 1.43, minY: 3.5 };
 export const CAMERA_WORLD_BOUNDS = Object.freeze({ minX: -220, maxX: 190, minZ: -230, maxZ: 170, maxY: 230 });
 export const CAMERA_TARGET_BOUNDS = Object.freeze({ minX: -110, maxX: 80, minZ: -120, maxZ: 60, minY: -20, maxY: 24 });
 
@@ -29,7 +29,6 @@ export function cameraObstacles(): CameraObstacle[] {
     ...architectureFootprints().map(item => ({ x: item.x, z: item.z, radius: item.radius + CLEARANCE, top: terrainHeight(item.x, item.z) + HEIGHTS[item.id as LandmarkId] + CLEARANCE })),
     ...cityBuildings.map(item => ({ x: item.x, z: item.z, radius: item.radius + CLEARANCE, top: terrainHeight(item.x, item.z) + item.height + CLEARANCE })),
     ...createCityTransitRoute().curve.getPoints(100).map(point => ({ x: point.x, z: point.z, radius: 1.5, top: point.y + 2.2 })),
-    ...createLandscapePlan().trees.map(item => ({ x: item.x, z: item.z, radius: item.radius + CLEARANCE, top: item.y + item.height + CLEARANCE })),
   ].map(obstacle => Object.freeze(obstacle))) as CameraObstacle[];
 }
 
@@ -67,7 +66,7 @@ export function clipCameraTravel(from: Vector3, to: Vector3, obstacles: readonly
   const dy = to.y - from.y;
   const dz = to.z - from.z;
   const a = dx * dx + dz * dz;
-  if (a < 1e-10) return;
+  if (a < 1e-10) return 1;
   let fraction = 1;
   for (const obstacle of obstacles) {
     const x = from.x - obstacle.x;
@@ -83,6 +82,7 @@ export function clipCameraTravel(from: Vector3, to: Vector3, obstacles: readonly
     if (firstBelow <= leave && from.y + dy * firstBelow < obstacle.top + 1e-6) fraction = Math.min(fraction, Math.max(0, firstBelow - .002));
   }
   to.set(from.x + dx * fraction, from.y + dy * fraction, from.z + dz * fraction);
+  return fraction;
 }
 
 export function intersectTerrainRay(ray: Ray, result: Vector3) {

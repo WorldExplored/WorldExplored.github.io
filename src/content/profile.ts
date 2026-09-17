@@ -10,7 +10,10 @@ export interface Contribution {
 export interface FeaturedContribution extends Contribution {
   heading: string;
   problem: string;
+  why: string;
   contribution: string;
+  validation: string;
+  currentStatus: string;
   tags: string[];
   attribution?: string;
 }
@@ -51,9 +54,11 @@ export const profile = {
       dates: 'January – July 2024',
       location: 'Remote',
       details: [
-        'Built and evaluated LLM forecasting workflows using Zero-True notebooks.',
-        'Integrated components into the platform’s API component library and existing product workflows.',
-        'Tested AI models and documented implementation behavior for product development and demonstrations.',
+        'Built and evaluated LLM forecasting workflows in Zero-True notebooks, comparing model behavior inside the product’s notebook environment.',
+        'Prepared data and API components for the platform’s component library and connected them to existing product workflows.',
+        'Tested model responses and product experiments, then recorded implementation behavior and failure cases for development and demonstrations.',
+        'Wrote technical documentation for the workflows and their API-facing components.',
+        'The publicly verified role describes evaluation, integration, experimentation, and documentation; it does not state production-scale metrics or deployment ownership.',
       ],
     },
     {
@@ -62,10 +67,12 @@ export const profile = {
       dates: 'November 2023 – January 2024',
       location: 'Remote',
       details: [
-        'Evaluated third-party AI APIs and integrated selected providers into prototypes.',
-        'Built web-scraping and data-processing workflows.',
-        'Used Pinecone for vector-indexing and semantic-retrieval experiments.',
-        'Compared models, frameworks, and APIs for implementation trade-offs.',
+        'Evaluated third-party AI APIs and integrated selected providers into product prototypes.',
+        'Built web-scraping, cleaning, and data-processing workflows for model-facing inputs.',
+        'Created Pinecone vector indexes and tested semantic retrieval behavior for prototype search flows.',
+        'Compared models, frameworks, and APIs for capability, integration, and implementation trade-offs.',
+        'Documented technical setup and observed limits so experiments could be reproduced and reviewed.',
+        'The verified scope covers prototypes and evaluation; no production outcome or business metric is claimed.',
       ],
     },
   ],
@@ -80,6 +87,11 @@ export const profile = {
       attribution: 'Co-authored by Msvpj Sathvik, Abhilash Dowpati, and Srreyansh Sethi.',
       description: 'A Ukrainian-language social-media dataset for identifying help-seeking signals during wartime. The work studies binary classification of posts that request help and those that do not.',
       role: 'I contributed to dataset construction, preprocessing, model evaluation, analysis, and manuscript writing.',
+      question: 'Can Ukrainian-language social posts be classified for subtle signals that a person is seeking help during the Russia–Ukraine war?',
+      setup: 'The paper introduces a binary dataset of Ukrainian social-media posts labeled as requiring help or not requiring help, then evaluates baseline language-processing and machine-learning approaches.',
+      methods: 'Dataset construction and preprocessing were paired with baseline classification experiments, including GPT-3.5.',
+      findings: 'The paper reports 81.15% accuracy for GPT-3.5 on the dataset’s binary classification task.',
+      limitations: 'The dataset and baselines establish an initial task; broader validation across platforms, time periods, dialects, and real humanitarian response settings remains necessary.',
       tags: ['Natural language processing', 'Dataset construction', 'Model evaluation'],
       url: 'https://aclanthology.org/2024.findings-emnlp.16/',
     },
@@ -92,7 +104,12 @@ export const profile = {
       venue: 'International Journal of High School Research, 2024',
       attribution: 'Research by Srreyansh Sethi.',
       description: 'I investigated how MaxPressure, DQN, PPO, and PPO_PFRL behaved across CityFlow and LibSignal road networks. Ninety-nine simulation runs compared throughput, travel time, and computation time while testing reward, resize, control, and hyperparameter changes.',
-      role: 'Modified DQN achieved the highest tested throughput, while MaxPressure led the unchanged baseline agents. PPO was generally more stable, and the results exposed sensitivity and compute tradeoffs that require broader networks and real-world validation.',
+      role: 'I configured and ran the comparative simulations, tested baseline and modified agent variants, and analyzed throughput, total travel time, and computation-time results across the road networks.',
+      question: 'How do classical and reinforcement-learning traffic-signal agents respond to reward, sizing, control, and hyperparameter changes across simulated road networks?',
+      setup: 'Ninety-nine LibSignal and CityFlow simulations covered road networks representing New York, Hangzhou, and other labeled cities, tracking throughput, total travel time, and computation time.',
+      methods: 'The study compared MaxPressure, DQN, PPO, and PPO_PFRL baselines and modified variants, including reward, resize, control, and combined changes.',
+      findings: 'Modified DQN produced the highest tested throughput; among unchanged agents, MaxPressure remained strongest. PPO-family experiments showed stability and compute tradeoffs that changed with the modification and road layout.',
+      limitations: 'The paper calls for stronger comparison of interacting modifications, robustness under changing traffic and simulator parameters, larger metropolitan networks, and validation against real traffic data and signal systems.',
       tags: ['Reinforcement learning', 'Traffic simulation', 'Comparative evaluation'],
       url: 'https://terra-docs.s3.us-east-2.amazonaws.com/IJHSR/Articles/volume6-issue4/IJHSR_2024_64_99.pdf',
     },
@@ -101,7 +118,7 @@ export const profile = {
     {
       date: 'Current',
       title: 'Open-source ML systems work',
-      description: 'Contributing to vLLM across GPU performance, attention selection, compilation caching, and multimodal serving.',
+      description: 'Tracing GPU kernel paths, attention capability selection, compilation cache correctness, multimodal serving requests, and failure diagnostics in vLLM pull requests.',
       href: '#work',
     },
     {
@@ -113,25 +130,25 @@ export const profile = {
     {
       date: '2024',
       title: 'Ukrainian Resilience',
-      description: 'Published in Findings of EMNLP 2024.',
+      description: 'Constructed and evaluated a Ukrainian-language help-seeking classification dataset with preprocessing, baseline experiments, analysis, and manuscript work; published in Findings of EMNLP 2024.',
       href: 'https://aclanthology.org/2024.findings-emnlp.16/',
     },
     {
       date: '2024',
       title: 'AI Reinforcement Learning Traffic System Implementations and Limitations',
-      description: 'Published in the International Journal of High School Research.',
+      description: 'Ran a comparative traffic-signal study across MaxPressure, DQN, PPO, and PPO_PFRL variants in LibSignal and CityFlow; published in the International Journal of High School Research.',
       href: 'https://terra-docs.s3.us-east-2.amazonaws.com/IJHSR/Articles/volume6-issue4/IJHSR_2024_64_99.pdf',
     },
     {
       date: 'January – July 2024',
       title: 'Zero-True internship',
-      description: 'AI and Database Analyst Intern · Remote.',
+      description: 'Built notebook-based LLM forecasting experiments, connected data and API components, tested model behavior, and documented the implementation as a remote AI and Database Analyst Intern.',
       href: '#experience',
     },
     {
       date: 'November 2023 – January 2024',
       title: 'Equiwiz internship',
-      description: 'Machine Learning Engineer Intern · Remote.',
+      description: 'Evaluated AI APIs, built scraping and processing workflows, and tested Pinecone vector retrieval in prototypes as a remote Machine Learning Engineer Intern.',
       href: '#experience',
     },
   ],
@@ -268,7 +285,10 @@ export const featured: FeaturedContribution[] = [
     "status": "Open",
     "heading": "Expanding ldmatrix for Marlin W4A8",
     "problem": "Low-bit weights need an efficient path into integer matrix operations.",
+    "why": "Marlin’s W4A8 kernels repeatedly load signed 4-bit weight fragments before 8-bit matrix operations; a native expanding load can remove conversion work on GPUs that support PTX 9.4.",
     "contribution": "Added a CUDA 13.4+ expanding-load path for eligible Marlin W4A8 kernels, while preserving existing fallbacks.",
+    "validation": "Added x1, x2, and x4 instruction probes, exercised two x4 loads in eligible kernels, ran focused H100 and A100 coverage, and passed the project’s pre-commit checks reported in the pull request.",
+    "currentStatus": "Open as of September 16, 2026. The path is gated to supported SM90, SM100, SM107, SM110, and SM120 targets; unsupported and activation-order cases keep the established fallback.",
     "tags": [
       "CUDA",
       "PTX",
@@ -284,7 +304,10 @@ export const featured: FeaturedContribution[] = [
     "status": "Merged",
     "heading": "Batch-invariant attention selection",
     "problem": "Automatic backend selection could choose an implementation incompatible with batch invariance.",
+    "why": "A backend that changes numerical behavior with batch composition can violate a model’s explicit batch-invariance requirement.",
     "contribution": "Made selection capability-aware across attention paths, with explicit compatibility checks and regression coverage.",
+    "validation": "Added nine determinism cases, eight selector cases, explicit unsupported-backend validation, Mamba-path coverage, and an H100 smoke test.",
+    "currentStatus": "Merged on April 23, 2026. Automatic selection now chooses the highest-priority compatible backend, while an explicitly requested incompatible backend fails with a direct explanation.",
     "tags": [
       "Attention",
       "Model serving",
@@ -299,7 +322,10 @@ export const featured: FeaturedContribution[] = [
     "status": "Merged",
     "heading": "Safer torch.compile configuration hashing",
     "problem": "New configuration fields could be omitted from compilation cache invalidation.",
+    "why": "A stale compilation cache key can reuse generated work after a configuration change that should have produced a different compiled graph.",
     "contribution": "Co-developed opt-out hashing so new fields participate in cache keys unless explicitly excluded.",
+    "validation": "Updated the configuration, cache, and compilation paths together and added configuration tests covering the opt-out behavior.",
+    "currentStatus": "Merged on November 19, 2025. This is presented as co-developed work because the merged pull request has shared authorship.",
     "tags": [
       "torch.compile",
       "Caching",
@@ -315,7 +341,10 @@ export const featured: FeaturedContribution[] = [
     "status": "Merged",
     "heading": "Chat-style multimodal /classify",
     "problem": "Classification requests could reject chat-style multimodal inputs.",
+    "why": "Clients using chat-shaped content needed classification to accept the same multimodal request style used by adjacent serving APIs.",
     "contribution": "Extended /classify to accept chat-style multimodal requests, including video_url, and aligned its input handling with related serving APIs.",
+    "validation": "Updated serving protocol and endpoint tests and added smoke coverage for message-shaped multimodal classification requests.",
+    "currentStatus": "Merged on November 14, 2025. The endpoint accepts either direct input or chat-style messages while retaining the established classification response path.",
     "tags": [
       "Multimodal",
       "API design",
@@ -330,7 +359,10 @@ export const featured: FeaturedContribution[] = [
     "status": "Merged",
     "heading": "Clearer decode-context-parallel validation",
     "problem": "Incompatible attention backends could fail without a useful explanation of DCP requirements.",
+    "why": "Decode context parallelism requires decode-time softmax LSE support, so a late or opaque failure makes backend configuration unnecessarily difficult to diagnose.",
     "contribution": "Added a direct validation message explaining the need for decode-time softmax LSE and pointing to backend configuration.",
+    "validation": "Moved the check into the worker’s context-parallel validation path and added regression coverage for the incompatible-backend error.",
+    "currentStatus": "Merged on April 10, 2026. This is a diagnostics and validation change; it does not claim a kernel-speed improvement.",
     "tags": [
       "Validation",
       "Attention",

@@ -116,6 +116,7 @@ const fragmentShader = /* glsl */ `
 function updateWater(material: ShaderMaterial, state: SceneRuntime) {
   material.uniforms.uTime.value = state.elapsed * world.environment.waterSpeed;
   material.uniforms.uRipple.value.set(state.ripple.x, state.ripple.z, state.elapsed - state.ripple.time, state.ripple.serial);
+  material.uniforms.uSunDirection.value.fromArray(state.sunDirection);
 }
 
 function startRipple(state: SceneRuntime, x: number, z: number) {

@@ -5,7 +5,7 @@ import { combine, roundedBox, stroke, surface, usePalette, useResources, type Mo
 import { FurnishedInterior, InteriorBuilder, floorRectangle, floorSlab } from './InteriorKit';
 
 function createExperienceInterior() {
-  const b = new InteriorBuilder(); const floor = 1.04;
+  const b = new InteriorBuilder(); const floor = 1.075;
   b.floor('experience-studio-floor', [floorRectangle(0, 0, 7.65, 5.28)], floor, .025);
   for (const x of [-2.15, 0, 2.15]) {
     b.table(x, floor, -.65, 1.35, .58, .7);
@@ -54,10 +54,10 @@ export function ExperienceStudio(props: ModelProps) {
     }
     const vine = combine([-1, 1].map(side => stroke(t => new Vector3(side * (3.85 - .35 * Math.sin(t * Math.PI * 2)), 1.25 + t * 3.25, -2.98 + .2 * Math.sin(t * Math.PI * 3)), .045, 32)));
     return {
-      base: floorSlab('experience-foundation', [floorRectangle(0, 0, 8.45, 6.12)], 1.04, .24, 'foundation'),
+      base: floorSlab('experience-foundation', [floorRectangle(0, 0, 8.45, 6.12)], 1.01, .21, 'foundation'),
       walls: combine(walls), windows: combine(windows), frames: combine(frames), roof,
       doors: combine([box(.58, 2.15, .05, -.31, 2.12, 2.98), box(.58, 2.15, .05, .31, 2.12, 2.98)]),
-      threshold: floorSlab('experience-threshold', [floorRectangle(0, 3.1, 1.5, .58)], 1.04, .2, 'threshold'),
+      threshold: floorSlab('experience-threshold', [floorRectangle(0, 3.1, 1.5, .58)], 1.08, .23, 'threshold'),
       planters: combine(planters), vine,
       canopy: roundedBox(3.25, .18, 1.25, .12).rotateX(-.06).translate(0, 4.02, 3.42),
     };
@@ -78,7 +78,7 @@ export function ExperienceStudio(props: ModelProps) {
 }
 
 function createHistoryInterior() {
-  const b = new InteriorBuilder(); const floor = 1.04;
+  const b = new InteriorBuilder(); const floor = 1.075;
   b.floor('history-gallery-floor', [floorRectangle(0, 0, 10.55, 7.1)], floor, .025);
   for (const x of [-3.55, 3.55]) {
     b.shelf(x, floor, -2.95, 1.8, 1.5, .28);
@@ -144,10 +144,10 @@ export function HistoryMuseum(props: ModelProps) {
     }
     for (const x of [-4.6, 4.6]) garden.push(stroke(t => new Vector3(x + .22 * Math.sin(t * 12), 1.3 + t * 4.4, -3.68), .05, 40));
     return {
-      base: floorSlab('history-foundation', [floorRectangle(0, 0, 11.2, 7.7)], 1.04, .24, 'foundation'),
+      base: floorSlab('history-foundation', [floorRectangle(0, 0, 11.2, 7.7)], 1.01, .21, 'foundation'),
       walls: combine(walls), windows: combine(windows), frames: combine(frames), atriumGlass, atriumFrame, roof, roofRibs: combine(roofRibs),
       doors: combine([box(.72, 2.3, .055, -.38, 2.19, 3.71), box(.72, 2.3, .055, .38, 2.19, 3.71)]),
-      threshold: floorSlab('history-threshold', [floorRectangle(0, 3.82, 2, .7)], 1.04, .2, 'threshold'),
+      threshold: floorSlab('history-threshold', [floorRectangle(0, 3.82, 2, .7)], 1.08, .23, 'threshold'),
       steps: combine(steps), rails: combine(rails), upperGallery, garden: combine(garden),
     };
   });

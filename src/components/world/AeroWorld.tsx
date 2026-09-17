@@ -6,7 +6,7 @@
 import { useEffect, useMemo, useRef, type MutableRefObject } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { Environment, Lightformer } from '@react-three/drei';
-import { BackSide, Color, Vector3, Vector2, Raycaster } from 'three';
+import { BackSide, Color, Vector3, Vector2, Raycaster, type DirectionalLight } from 'three';
 import { world, type SceneRuntime, type QualityTier, type WorldProps } from '@/content/world';
 import { CameraDirector } from './CameraDirector';
 import { intersectTerrainRay } from './cameraControls';
@@ -24,6 +24,7 @@ import { Seaweed } from './Seaweed';
 import { Water } from './Water';
 import { QualityController } from './QualityController';
 import { ReflectiveObject } from './ReflectiveObject';
+import { NatureResponses } from './NatureResponses';
 
 function SceneClock({ runtime, paused }: { runtime: MutableRefObject<SceneRuntime>; paused: boolean }) {
   useFrame((_, delta) => {
@@ -33,12 +34,29 @@ function SceneClock({ runtime, paused }: { runtime: MutableRefObject<SceneRuntim
   return null;
 }
 
-function Sky() {
+export function daylightDirectionAt(elapsed: number, result = new Vector3()) {
+  const phase=elapsed*Math.PI/720;
+  return result.set(-.54+Math.sin(phase)*.18,.42+Math.cos(phase*.72)*.08,-.78+Math.sin(phase*.43)*.08).normalize();
+}
+
+function Sky({runtime}:{runtime:MutableRefObject<SceneRuntime>}) {
   const uniforms = useMemo(() => ({ top: { value: new Color(world.lighting.skyTop) }, bottom: { value: new Color(world.lighting.horizon) }, sun: { value: new Vector3(...world.lighting.sunPosition).normalize() } }), []);
+  const colors=useMemo(()=>({morning:new Color('#167adf'),noon:new Color('#005cdd'),horizon:new Color(world.lighting.horizon),bright:new Color('#a5e9ef')}),[]);
+  useFrame(()=>{uniforms.sun.value.fromArray(runtime.current.sunDirection);const lift=Math.max(0,Math.min(1,(uniforms.sun.value.y-.28)/.32));uniforms.top.value.copy(colors.morning).lerp(colors.noon,lift);uniforms.bottom.value.copy(colors.horizon).lerp(colors.bright,lift*.32);});
   return <mesh><sphereGeometry args={[900, 32, 24]} /><shaderMaterial side={BackSide} depthWrite={false} uniforms={uniforms}
     vertexShader={'varying vec3 direction; void main(){direction=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}' }
     fragmentShader={'uniform vec3 top;uniform vec3 bottom;uniform vec3 sun;varying vec3 direction;void main(){vec3 ray=normalize(direction);float h=ray.y;float light=max(dot(ray,sun),0.);vec3 sky=mix(bottom,top,smoothstep(-.02,.13,h));sky+=vec3(1.,.98,.9)*(pow(light,14000.)*2.5+pow(light,450.)*.06);gl_FragColor=vec4(sky,1.);\n #include <colorspace_fragment>\n}'} />
   </mesh>;
+}
+
+function Daylight({runtime,shadows}:{runtime:MutableRefObject<SceneRuntime>;shadows:boolean}){
+  const light=useRef<DirectionalLight>(null);const direction=useMemo(()=>new Vector3(),[]);const bucket=useRef(-1);
+  useFrame(()=>{
+    const next=Math.floor(runtime.current.elapsed*2);if(next===bucket.current&&bucket.current>=0)return;bucket.current=next;
+    daylightDirectionAt(runtime.current.elapsed,direction);runtime.current.sunDirection=direction.toArray();
+    if(light.current){light.current.position.copy(direction).multiplyScalar(260);light.current.target.position.set(-6,0,-24);light.current.target.updateMatrixWorld();}
+  },-1);
+  return <directionalLight ref={light} position={new Vector3(...runtime.current.sunDirection).multiplyScalar(260)} intensity={world.lighting.sunIntensity} color={world.lighting.sunColor} castShadow={shadows} shadow-mapSize={[2048,2048]} shadow-camera-left={-52} shadow-camera-right={76} shadow-camera-top={42} shadow-camera-bottom={-20} shadow-camera-near={105} shadow-camera-far={330} shadow-normalBias={.025} shadow-bias={-.00015}/>;
 }
 
 function Labels({ runtime, mobile }: { runtime: MutableRefObject<SceneRuntime>; mobile: boolean }) {
@@ -80,11 +98,11 @@ function Labels({ runtime, mobile }: { runtime: MutableRefObject<SceneRuntime>; 
   return null;
 }
 
-function PointerGround({ runtime, paused }: { runtime: MutableRefObject<SceneRuntime>; paused: boolean }) {
+function PointerGround({ runtime }: { runtime: MutableRefObject<SceneRuntime> }) {
   const math = useMemo(() => ({ ray: new Raycaster(), pointer: new Vector2(), hit: new Vector3() }), []);
   useFrame(({ camera }) => {
     const state = runtime.current;
-    if (paused || !state.pointerActive) { state.pointerWorld[0] = 10000; state.pointerWorld[2] = 10000; return; }
+    if (!state.pointerActive) { state.pointerWorld[0] = 10000; state.pointerWorld[2] = 10000; return; }
     math.pointer.fromArray(state.pointer);
     math.ray.setFromCamera(math.pointer, camera);
     const hit = intersectTerrainRay(math.ray.ray, math.hit) ? math.hit : null;
@@ -99,8 +117,6 @@ export function AeroWorld(props: WorldProps & { runtime: MutableRefObject<SceneR
   const { runtime, tier, onTier, paused, mobile, destination, onNavigate } = props;
   const stopped = paused;
   const stage = props.stage ?? 5;
-  // Preserve sunlight direction while placing every island in front of the shadow camera.
-  const sunlightPosition = useMemo(() => new Vector3(...world.lighting.sunPosition).multiplyScalar(3), []);
   const reflections = useMemo(() => (<Environment frames={1} resolution={128}>
       <Lightformer position={[0, 10, 0]} rotation={[Math.PI / 2, 0, 0]} scale={[20, 20, 1]} intensity={2} color="#edffff" />
       <Lightformer position={[-12, 8, 10]} scale={[7, 18, 1]} intensity={2.4} color="#ffffff" />
@@ -108,10 +124,10 @@ export function AeroWorld(props: WorldProps & { runtime: MutableRefObject<SceneR
     </Environment>), []);
   return <>
     <SceneClock runtime={runtime} paused={stopped} />
-    <Sky />
+    <Sky runtime={runtime} />
     <fog attach="fog" args={[world.lighting.fogColor, world.lighting.fogNear, world.lighting.fogFar]} />
     <hemisphereLight args={[world.lighting.ambientSky, world.lighting.ambientGround, world.lighting.ambientIntensity]} />
-    <directionalLight position={sunlightPosition} intensity={world.lighting.sunIntensity} color={world.lighting.sunColor} castShadow={world.quality[tier].shadows} shadow-mapSize={[2048, 2048]} shadow-camera-left={-52} shadow-camera-right={76} shadow-camera-top={42} shadow-camera-bottom={-20} shadow-camera-near={105} shadow-camera-far={330} shadow-normalBias={0.025} shadow-bias={-0.00015} />
+    <Daylight runtime={runtime} shadows={world.quality[tier].shadows}/>
     {reflections}
 
     {stage >= 1 && <EcoCity runtime={runtime} paused={stopped} quality={tier} />}
@@ -121,12 +137,13 @@ export function AeroWorld(props: WorldProps & { runtime: MutableRefObject<SceneR
     {stage >= 4 && <Wildlife runtime={runtime} paused={stopped} quality={tier} />}
     {stage >= 5 && <GardenRover runtime={runtime} paused={stopped} quality={tier} active={false} />}
     {stage >= 5 && <ShoreImpacts runtime={runtime} paused={stopped} quality={tier} />}
+    {stage >= 5 && <NatureResponses runtime={runtime} paused={stopped}/>}
     <Bridges />
     <Water runtime={runtime} paused={stopped} quality={tier} />
     <AmbientSystem onPlantsReady={props.onPlantsReady} stage={stage} runtime={runtime} paused={stopped} quality={tier} />
     {world.landmarks.map(config => <Landmark key={config.id} config={config} runtime={runtime} paused={stopped} onNavigate={onNavigate}><LandmarkModel id={config.id} active={destination === config.id} runtime={runtime} paused={stopped} quality={tier} /></Landmark>)}
     <ReflectiveObject position={[-10, 2.5, 23]} runtime={runtime} paused={stopped} quality={tier} command={props.rotationCommand} />
-    <PointerGround runtime={runtime} paused={stopped} />
+    <PointerGround runtime={runtime} />
     <CameraDirector {...props} />
     <Labels runtime={runtime} mobile={mobile} />
     <QualityController mobile={mobile} runtime={runtime} tier={tier} onTier={onTier} paused={stopped} />

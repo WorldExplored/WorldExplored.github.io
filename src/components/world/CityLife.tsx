@@ -72,9 +72,7 @@ export function createCityLife(stationRoute: CityTransitRoute) {
   fixed.push(new BoxGeometry(2.2, .09, .75).translate(-5, 3.08, -67.15));
   for (const index of [-1, 0, 1]) fixed.push(new BoxGeometry(.025, .12, .025).translate(-5 + index * .64, 5.26, -66.87));
   add('city-public-infrastructure', merged(fixed), materials.white);
-  add('city-dock-guide-stripes', merged(water), materials.aqua);
 
-  const solarHeading = Math.atan2(-world.lighting.sunPosition[0], -world.lighting.sunPosition[2]);
   const panels: Array<{ x: number; y: number; z: number; yaw: number; width: number; depth: number; phase: number }> = [];
   const solarSupports:BufferGeometry[]=[];
   for (const mount of cityRoofMounts) {
@@ -92,12 +90,18 @@ export function createCityLife(stationRoute: CityTransitRoute) {
     return {x,z,base,yaw:building.rotation,height:building.height-.4};
   });
   const guides:BufferGeometry[]=[];
+  const attachments:BufferGeometry[]=[];
   for(const lift of lifts){
     const frame=new Object3D();frame.position.set(lift.x,lift.base,lift.z);frame.rotation.y=lift.yaw;frame.updateMatrix();
     for(const side of [-1,1])guides.push(new BoxGeometry(.045,lift.height,.06).translate(side*.4,lift.height/2,.22).applyMatrix4(frame.matrix));
     guides.push(new BoxGeometry(1.1,.16,1).translate(0,.08,0).applyMatrix4(frame.matrix));
+    for(const y of [.55,lift.height*.5,lift.height-.45])attachments.push(new BoxGeometry(.9,.07,.62).translate(0,y,.5).applyMatrix4(frame.matrix));
+    attachments.push(new BoxGeometry(1.12,.14,1.35).translate(0,lift.height-.16,.48).applyMatrix4(frame.matrix));
+    attachments.push(new BoxGeometry(.08,lift.height-.35,.08).translate(.53,lift.height/2,.76).applyMatrix4(frame.matrix));
+    attachments.push(new BoxGeometry(.24,.28,.05).translate(.53,.52,.82).applyMatrix4(frame.matrix));
   }
-  add('city-service-lift-guides-and-docks',merged(guides),materials.aqua);
+  guides.push(...attachments,...water);
+  add('city-aqua-infrastructure-lift-guides-docks-brackets-platforms-conduits-and-dock-stripes',merged(guides),materials.aqua);
   const station = add('city-station-arrival-lights', merged([-1, 0, 1].map(index => new BoxGeometry(.42, .04, .07).translate(-5 + index * .64, 5.18, -66.87))), materials.station);
   station.castShadow = false;
 
@@ -112,6 +116,9 @@ export function createCityLife(stationRoute: CityTransitRoute) {
     new BoxGeometry(.78, .08, .32).translate(0, .29, -.34),
     new BoxGeometry(.48, .2, .18).translate(0, .42, -.43),
     new BoxGeometry(.34, .13, .08).rotateX(-.35).translate(0, .62, -.35),
+    new BoxGeometry(.48,.025,.36).translate(0,.78,.08),
+    new SphereGeometry(.045,8,6).translate(-.47,.72,-.42),
+    new SphereGeometry(.045,8,6).translate(.47,.72,-.42),
   ];
   const rails: BufferGeometry[] = [];
   for (const side of [-1, 1]) {
@@ -120,6 +127,9 @@ export function createCityLife(stationRoute: CityTransitRoute) {
   }
   rails.push(new TorusGeometry(.14, .018, 6, 18).rotateY(Math.PI / 2).translate(0, .57, -.5));
   rails.push(new CylinderGeometry(.04, .055, .35, 10).rotateX(Math.PI / 2).translate(0, .08, -.96));
+  rails.push(...[-1,1].flatMap(side=>[-.62,.62].map(z=>new TorusGeometry(.11,.032,6,14).rotateY(Math.PI/2).translate(side*.58,.22,z))));
+  rails.push(...[-1,1].flatMap(side=>[-.66,.66].map(z=>new CylinderGeometry(.035,.05,.16,8).translate(side*.38,.28,z))));
+  rails.push(new BoxGeometry(.34,.035,.16).translate(0,.79,.08));
   add('city-water-taxi-seating-and-console', merged(cabin), materials.aqua, ferry);
   add('city-water-taxi-rails-and-electric-drive', merged(rails), materials.white, ferry);
   const wake = add('city-water-taxi-wake', merged([-1, 1].map(side => new TubeGeometry(new CatmullRomCurve3([new Vector3(side * .38, .03, -.6), new Vector3(side * .75, .03, -1.5), new Vector3(side * 1.15, .03, -2.55)]), 24, .028, 5, false))), materials.wake, ferry);
@@ -128,7 +138,7 @@ export function createCityLife(stationRoute: CityTransitRoute) {
   let disposeTimer: ReturnType<typeof setTimeout> | undefined;
   let displayedTime = 0; let detail = 1;
   const idleControls = createTownInteractionState();
-  const update = (elapsed: number, stationRoute: CityTransitRoute, controls: TownInteractionState = idleControls, paused = false) => {
+  const update = (elapsed: number, stationRoute: CityTransitRoute, controls: TownInteractionState = idleControls, paused = false, sunDirection:readonly number[]=world.lighting.sunPosition) => {
     if (!paused) displayedTime = elapsed;
     const time = displayedTime;
     mechanisms.update(time, controls, paused, detail);
@@ -139,8 +149,10 @@ export function createCityLife(stationRoute: CityTransitRoute) {
     for (let index = 0; index < panels.length; index++) {
       const panel = panels[index];
       const response = controls.states.solar.amount;
-      const heading = Math.max(-.6, Math.min(.6, solarHeading - panel.yaw));
-      dummy.position.set(panel.x, panel.y, panel.z); dummy.rotation.set((-.13 + Math.sin(time * .13 + panel.phase) * .055) * (1 - response) - .16 * response, panel.yaw + heading * response, 0, 'YXZ'); dummy.scale.set(panel.width, 1, panel.depth); dummy.updateMatrix();
+      const solarHeading=Math.atan2(-sunDirection[0],-sunDirection[2]);
+      const heading = Math.max(-.72, Math.min(.72, solarHeading - panel.yaw));
+      const tilt=-.13-Math.max(0,Math.min(.04,(sunDirection[1]-.35)*.12));
+      dummy.position.set(panel.x, panel.y, panel.z); dummy.rotation.set(tilt-response*.025, panel.yaw + heading, 0, 'YXZ'); dummy.scale.set(panel.width, 1, panel.depth); dummy.updateMatrix();
       frames.setMatrixAt(index, dummy.matrix); cells.setMatrixAt(index, dummy.matrix);
     }
     frames.instanceMatrix.needsUpdate = true; cells.instanceMatrix.needsUpdate = true;
@@ -167,6 +179,6 @@ export function CityLife({ runtime, paused, quality, route }: EnvironmentProps &
   const [controls] = useState(createTownInteractionState);
   useEffect(() => city.retain(), [city]);
   useEffect(() => city.setQuality(quality), [city, quality]);
-  useFrame((_, delta) => { controls.advance(delta, paused); city.update(runtime.current.elapsed, route, controls, paused); });
+  useFrame((_, delta) => { controls.advance(delta, paused); city.update(runtime.current.elapsed, route, controls, paused, runtime.current.sunDirection); });
   return <><primitive object={city.root} dispose={null} /><GardenFountain runtime={runtime} paused={paused} quality={quality} controls={controls} /><TownInteractions controls={controls} /></>;
 }

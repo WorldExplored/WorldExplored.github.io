@@ -41,7 +41,7 @@ test('full 22-second service geometry cycle: building clearance, mounts and guid
   const pods = root.getObjectByName('city-maintenance-pods')! as InstancedMesh;
   const frames = root.getObjectByName('city-articulated-solar-frames')! as InstancedMesh;
   const cells = root.getObjectByName('city-articulated-solar-cells')! as InstancedMesh;
-  const guides = root.getObjectByName('city-service-lift-guides-and-docks')! as Mesh;
+  const guides = root.getObjectByName('city-aqua-infrastructure-lift-guides-docks-brackets-platforms-conduits-and-dock-stripes')! as Mesh;
   const lifts = architecture.filter(a => ['residence-west', 'residence-east'].includes(a.building.id));
   const gp = guides.geometry.attributes.position;
   const liftBoxes = lifts.map((a, index) => Array.from({ length: 3 }, (_, part) => { const box = new Box3(); for (let n = (index * 3 + part) * 36; n < (index * 3 + part + 1) * 36; n++)

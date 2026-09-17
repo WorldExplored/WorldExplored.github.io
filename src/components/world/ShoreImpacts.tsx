@@ -4,40 +4,33 @@ import { useEffect, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { InstancedMesh, MeshPhysicalMaterial, Object3D, SphereGeometry, Vector3 } from 'three';
 import { world, type QualityTier } from '../../content/world';
-import { ISLANDS, islandContour, landDistance, seededRandom } from './terrain';
+import { createLandscapePlan, landDistance, seededRandom } from './terrain';
 import { coastExposure, coastNormal, shoreAlong, shoreBreakup } from './waves';
 import type { EnvironmentProps } from './Water';
 
-export interface ShoreImpactSite { island: string; x: number; z: number; nx: number; nz: number; exposure: number; start: number; period: number }
+export interface ShoreImpactSite { island: string; rock: string; x: number; z: number; nx: number; nz: number; exposure: number; energy: number; start: number; period: number }
 export interface ShoreDrop { site: number; delay: number; lift: number; outward: number; sideways: number; size: number }
 const DROPS_PER_SITE = 7;
 const GRAVITY = 9;
 
 export function createShoreImpactSites() {
   const sites: ShoreImpactSite[] = [];
-  // The first four sites survive medium quality, including the offshore beacon.
-  const islands = ['beacon', 'main', 'garden', 'city', 'beacon', 'purdue', 'experience-meadow', 'city'];
-  for (const id of islands) {
-    const island = ISLANDS.find(item => item.id === id)!;
-    let best: { x: number; z: number; nx: number; nz: number; exposure: number; score: number } | null = null;
-    for (let step = 0; step < 96; step++) {
-      const angle = step / 96 * Math.PI * 2; const contour = islandContour(island, angle);
-      if (contour < 1.025 && id !== 'beacon') continue;
-      let x = island.x + Math.cos(angle) * island.rx * contour; let z = island.z + Math.sin(angle) * island.rz * contour;
-      const normal = coastNormal(x, z);
-      x += normal.x * .5; z += normal.z * .5;
-      const exposure = coastExposure(x, z);
-      if (exposure < .35 || landDistance(x, z) > -.25 || sites.some(site => Math.hypot(site.x - x, site.z - z) < 4)) continue;
-      const score = exposure * (.8 + contour * .2);
-      if (!best || score > best.score) best = { x, z, nx: normal.x, nz: normal.z, exposure, score };
-    }
-    if (!best) continue;
+  // Every emitter belongs to a modeled exposed rock. The phase below then
+  // gates spray to the arrival of an actual visible shoreline wave crest.
+  const rocks=createLandscapePlan().rocks.toSorted((a,b)=>a.id.includes('beacon')?-1:b.id.includes('beacon')?1:b.radius-a.radius);
+  for (const rock of rocks) {
+    const normal=coastNormal(rock.x,rock.z),x=rock.x+normal.x*.42,z=rock.z+normal.z*.42;
+    const exposure=coastExposure(x,z);
+    if(exposure<.28||landDistance(x,z)>.05||sites.some(site=>Math.hypot(site.x-x,site.z-z)<.72))continue;
     const wavePeriod = Math.PI * 2 / (1.45 * world.environment.waterSpeed);
-    const period = wavePeriod * (sites.length % 2 ? 3 : 2);
-    const arrival = (-shoreAlong(best.x, best.z) + landDistance(best.x, best.z) * 1.32 + .22) / (1.45 * world.environment.waterSpeed);
-    const start = (arrival % wavePeriod + wavePeriod) % wavePeriod + (sites.length % 3 === 1 ? wavePeriod : 0);
-    sites.push({ island: id, x: best.x, z: best.z, nx: best.nx, nz: best.nz, exposure: best.exposure, start, period });
+    const waveMultiple=sites.length+3;
+    const period = wavePeriod * waveMultiple;
+    const arrival = (-shoreAlong(x,z) + landDistance(x,z) * 1.32 + .22) / (1.45 * world.environment.waterSpeed);
+    const start = (arrival % wavePeriod + wavePeriod) % wavePeriod + wavePeriod*sites.length;
+    sites.push({ island:'coast',rock:rock.id,x,z,nx:normal.x,nz:normal.z,exposure,energy:Math.min(1.35,.65+rock.radius*.35),start,period });
+    if(sites.length===8)break;
   }
+  if(sites.length<4)throw new Error(`Insufficient exposed shoreline rocks (${sites.length})`);
   return sites;
 }
 
@@ -55,7 +48,7 @@ export function shoreDropPose(site: ShoreImpactSite, drop: ShoreDrop, age: numbe
   if (age < 0 || age > life) { position.set(site.x, -.3, site.z); return 0; }
   position.set(site.x + site.nx * drop.outward * age - site.nz * drop.sideways * age, .055 + drop.lift * age - .5 * GRAVITY * age * age, site.z + site.nz * drop.outward * age + site.nx * drop.sideways * age);
   const fade = Math.min(1, age / .065) * (1 - Math.max(0, (age - life + .14) / .14));
-  return drop.size * fade;
+  return drop.size * site.energy * fade;
 }
 
 export function createShoreImpactSystem() {

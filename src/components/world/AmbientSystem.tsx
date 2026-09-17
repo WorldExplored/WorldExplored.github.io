@@ -6,7 +6,7 @@
 import { measureConstruction } from './renderDiagnostics';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useFrame } from '@react-three/fiber';
+import { useFrame, type ThreeEvent } from '@react-three/fiber';
 import { BufferGeometry, CatmullRomCurve3, Color, DataTexture, DoubleSide, Float32BufferAttribute, InstancedBufferAttribute, InstancedMesh, LinearFilter, LinearMipmapLinearFilter, MeshPhysicalMaterial, Object3D, Points, PointsMaterial, Raycaster, RepeatWrapping, ShaderMaterial, SRGBColorSpace, SphereGeometry, TubeGeometry, Vector2, Vector3 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { world, type SceneRuntime } from '../../content/world';
@@ -249,7 +249,8 @@ function makeLandscape(plan: LandscapePlan) {
       float grain = groundNoise(groundXZ*39.);
       float broad = groundNoise(groundXZ*.62);
       float grass = ecology.x * (1.-smoothstep(.48,.86,slope));
-      float pathMask=1.-smoothstep(-.06,.10,paving);
+      float pathAA=max(fwidth(paving)*1.6,.018);
+      float pathMask=1.-smoothstep(-pathAA,pathAA*2.2,paving);
       float wet = 1.-smoothstep(.09,.40,elevation);
       float depth = max(0.,-elevation);
       float stone = smoothstep(.65,1.3,slope) * smoothstep(.5,1.2,elevation);
@@ -276,7 +277,7 @@ function makeLandscape(plan: LandscapePlan) {
       diffuseColor.rgb *= surface;
       `).replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n roughnessFactor = mix(.94,.32,wet*(1.-grass)*(1.-smoothstep(.2,1.,depth)));');
   };
-  material.customProgramCacheKey = () => 'coastal-biome-graded-ground-v2';
+  material.customProgramCacheKey = () => 'coastal-biome-graded-ground-v3';
   const rockResources=createCoastalRocks(plan.rocks),rocks=rockResources.root;
   const shoreDetails=createShoreDetails(plan),townLandscape=createTownLandscape(plan);
   const transform=new Object3D();
@@ -303,16 +304,21 @@ function makeLandscape(plan: LandscapePlan) {
   const crownGeometry = foliageGeometry();
   const trunkMaterial = new MeshPhysicalMaterial({ color: '#765238', roughness: .96, envMapIntensity: .1 });
   const crownMaterial = new MeshPhysicalMaterial({ color: '#327d27', vertexColors: true, side: DoubleSide, roughness: .73, clearcoat: .08, clearcoatRoughness: .4, envMapIntensity: .15 });
-  const canopyWind = { time: { value: 0 }, strength: { value: 1 } };
+  const canopyWind = { time: { value: 0 }, strength: { value: 1 }, pointer: { value: new Vector3(10000,0,10000) }, pointerStrength: { value: 0 } };
   crownMaterial.userData.canopyWind = canopyWind;
   crownMaterial.onBeforeCompile = shader => {
     shader.uniforms.uCanopyTime = canopyWind.time;
     shader.uniforms.uCanopyStrength = canopyWind.strength;
-    shader.vertexShader = `uniform float uCanopyTime; uniform float uCanopyStrength;\n${shader.vertexShader}`.replace('#include <begin_vertex>', `#include <begin_vertex>
+    shader.uniforms.uCanopyPointer = canopyWind.pointer;
+    shader.uniforms.uCanopyPointerStrength = canopyWind.pointerStrength;
+    shader.vertexShader = `uniform float uCanopyTime; uniform float uCanopyStrength; uniform vec3 uCanopyPointer; uniform float uCanopyPointerStrength;\n${shader.vertexShader}`.replace('#include <begin_vertex>', `#include <begin_vertex>
       float canopyPhase = instanceMatrix[3].x * .21 + instanceMatrix[3].z * .13;
       float canopyWeight = smoothstep(-.7, .9, position.y) * uCanopyStrength;
       transformed.x += sin(uCanopyTime * .3 + canopyPhase) * canopyWeight * .035;
-      transformed.z += sin(uCanopyTime * .47 + canopyPhase * 1.7) * canopyWeight * .025;`);
+      transformed.z += sin(uCanopyTime * .47 + canopyPhase * 1.7) * canopyWeight * .025;
+      vec2 canopyAway=instanceMatrix[3].xz-uCanopyPointer.xz;
+      float canopyNear=(1.-smoothstep(.3,3.4,length(canopyAway)))*uCanopyPointerStrength*smoothstep(-.7,.9,position.y);
+      transformed.xz += canopyAway/max(length(canopyAway),.2)*canopyNear*.32;`);
   };
   crownMaterial.customProgramCacheKey = () => 'grove-canopy-wind';
   const trunks = new InstancedMesh(trunkGeometry, trunkMaterial, plan.trees.length);
@@ -340,7 +346,7 @@ function makeLandscape(plan: LandscapePlan) {
     }
   });
   trunks.computeBoundingSphere(); crowns.computeBoundingSphere();
-  return { ground, material, rocks, trunks, crowns, shells, shoreDetails, townLandscape, canopyWind, shoreTime, dispose() {
+  return { ground, material, rocks, trunks, crowns, shells, shoreDetails, townLandscape, canopyWind, shoreTime, plan, dispose() {
     [ground, trunkGeometry, crownGeometry, shellGeometry].forEach(geometry => geometry.dispose());
     [material, trunkMaterial, crownMaterial, shellMaterial].forEach(value => value.dispose());
     texture.dispose(); shoreDetails.dispose(); townLandscape.dispose(); shells.dispose(); rockResources.dispose(); trunks.dispose(); crowns.dispose();
@@ -390,11 +396,14 @@ function retain(resource: object, dispose: () => void) {
 function TerrainSystem({ runtime, paused, quality }: EnvironmentProps) {
   const landscape = useMemo(() => measureConstruction('terrain-trees', () => makeLandscape(createLandscapePlan())), []);
   useEffect(() => retain(landscape, () => landscape.dispose()), [landscape]);
-  useFrame(() => { if (!paused) { landscape.canopyWind.time.value = runtime.current.elapsed; landscape.shoreTime.value = runtime.current.elapsed * world.environment.waterSpeed; } });
+  useFrame(() => { const state=runtime.current;landscape.canopyWind.pointer.value.fromArray(state.pointerWorld);landscape.canopyWind.pointerStrength.value=state.pointerActive ? (paused ? .22 : 1) : 0;if (!paused) { landscape.canopyWind.time.value = state.elapsed; landscape.shoreTime.value = state.elapsed * world.environment.waterSpeed; } });
   useEffect(() => { landscape.canopyWind.strength.value = quality === 'low' ? 0 : 1; }, [landscape, quality]);
+  const nature=(kind:'tree'|'rock',x:number,y:number,z:number)=>{const state=runtime.current;state.nature={x,y,z,kind,time:state.elapsed,serial:state.nature.serial+1};if(kind==='rock')state.ripple={x,z,time:state.elapsed,serial:state.ripple.serial+1};};
+  const treeClick=(event:ThreeEvent<MouseEvent>)=>{event.stopPropagation();if(event.delta>6||runtime.current.dragging||event.instanceId===undefined)return;const tree=landscape.plan.trees[event.instanceId];if(tree)nature('tree',tree.x,tree.y+tree.height*.72,tree.z);};
+  const rockClick=(event:ThreeEvent<MouseEvent>)=>{event.stopPropagation();if(event.delta>6||runtime.current.dragging||event.instanceId===undefined)return;const entries=event.object.userData.entries as LandscapePlan['rocks']|undefined;const rock=entries?.[event.instanceId];if(rock)nature('rock',rock.x,.05,rock.z);};
   return <group dispose={null}>
     <mesh geometry={landscape.ground} material={landscape.material} receiveShadow name="archipelago-land" />
-    <primitive object={landscape.shells} /><primitive object={landscape.shoreDetails.root} /><primitive object={landscape.townLandscape.root} /><primitive object={landscape.rocks} /><primitive object={landscape.trunks} /><primitive object={landscape.crowns} />
+    <primitive object={landscape.shells} /><primitive object={landscape.shoreDetails.root} /><primitive object={landscape.townLandscape.root} /><primitive object={landscape.rocks} onClick={rockClick}/><primitive object={landscape.trunks} onClick={treeClick}/><primitive object={landscape.crowns} raycast={()=>{}} />
   </group>;
 }
 function PlantSystem({ runtime, paused, quality, positions, onReady }: EnvironmentProps & { positions?: PlantPosition[]; onReady?: () => void }) {

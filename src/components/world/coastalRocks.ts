@@ -32,7 +32,7 @@ export function createCoastalRocks(sites: LandscapeRock[]) {
   const root=new Group();root.name='shoreline-rocks';const material=new MeshStandardMaterial({vertexColors:true,roughness:.97,metalness:0});
   const geometries=ROCK_ARCHETYPES.map((_,i)=>coastalRockGeometry(i)), transform=new Object3D();
   const batches=geometries.map((geometry,kind)=>{
-    const entries=sites.filter((_,i)=>i%6===kind);const mesh=new InstancedMesh(geometry,material,entries.length);mesh.name=`coastal-rock-${ROCK_ARCHETYPES[kind]}`;mesh.castShadow=true;mesh.receiveShadow=true;mesh.raycast=()=>{};
+    const entries=sites.filter((_,i)=>i%6===kind);const mesh=new InstancedMesh(geometry,material,entries.length);mesh.name=`coastal-rock-${ROCK_ARCHETYPES[kind]}`;mesh.castShadow=true;mesh.receiveShadow=true;mesh.userData.entries=entries;
     entries.forEach((rock,i)=>{transform.position.set(rock.x,rock.y-.16,rock.z);transform.rotation.set(0,rock.rotation,0);transform.scale.fromArray(rock.scale);transform.updateMatrix();mesh.setMatrixAt(i,transform.matrix);});mesh.computeBoundingSphere();root.add(mesh);return mesh;
   });
   return {root,dispose(){geometries.forEach(g=>g.dispose());material.dispose();batches.forEach(m=>m.dispose());}};

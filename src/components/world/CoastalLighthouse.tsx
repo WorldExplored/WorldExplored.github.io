@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Html } from '@react-three/drei';
 import { useFrame, useThree } from '@react-three/fiber';
-import { BoxGeometry, BufferGeometry, CatmullRomCurve3, CylinderGeometry, DoubleSide, Float32BufferAttribute, LatheGeometry, Mesh, MeshPhysicalMaterial, MeshStandardMaterial, SphereGeometry, TorusGeometry, TubeGeometry, Vector2, Vector3 } from 'three';
+import { AdditiveBlending, BoxGeometry, BufferGeometry, CatmullRomCurve3, CylinderGeometry, DoubleSide, Float32BufferAttribute, FrontSide, LatheGeometry, Mesh, MeshPhysicalMaterial, MeshStandardMaterial, SphereGeometry, TorusGeometry, TubeGeometry, Vector2, Vector3 } from 'three';
 import { world } from '../../content/world';
 import { combine, roundedBox, stroke, strut, TAU, usePalette, useResources, type ModelProps } from './BuildingKit';
 import { createLighthouseActivation, lighthouseSignal, LIGHTHOUSE_INTERACTION, stepLighthouseSignal } from './lighthouseSignal';
@@ -89,8 +89,7 @@ function createLighthouseResources(){
 }
 
 export function LighthouseFocusButton({activate}:{activate:()=>void}){
-  const [focused,setFocused]=useState(false);
-  return <button type="button" aria-label={LIGHTHOUSE_INTERACTION.label} onFocus={()=>setFocused(true)} onBlur={()=>setFocused(false)} onPointerDown={event=>event.stopPropagation()} onClick={event=>{event.stopPropagation();activate();}} style={{width:44,height:44,padding:0,border:focused?'2px solid #fff':'2px solid transparent',borderRadius:'50%',outline:focused?'2px solid #123e57':'none',background:focused?'#12445d55':'transparent',cursor:'pointer',pointerEvents:'auto'}}/>;
+  return <button type="button" className="lighthouse-focus-control" aria-label={LIGHTHOUSE_INTERACTION.label} onPointerDown={event=>event.stopPropagation()} onClick={event=>{event.stopPropagation();activate();}} style={{width:44,height:44,padding:0,border:'2px solid transparent',borderRadius:'50%',outline:'none',background:'transparent',cursor:'pointer',pointerEvents:'auto'}}/>;
 }
 export function CoastalLighthouse(props:ModelProps){
   const invalidate=useThree(state=>state.invalidate);
@@ -99,7 +98,18 @@ export function CoastalLighthouse(props:ModelProps){
   const [activation]=useState(()=>createLighthouseActivation(props.runtime.current,invalidate));
   useEffect(()=>()=>activation.dispose(),[activation]);
   const palette=usePalette(props,'building'),geometry=useResources(createLighthouseResources),beam=useRef<Mesh<BufferGeometry,MeshPhysicalMaterial>>(null);
-  const [materials]=useState(()=>({hitbox:new MeshStandardMaterial({name:'lighthouse-interaction-proxy',colorWrite:false,depthWrite:false}),masonry:new MeshStandardMaterial({name:'weathered-painted-masonry',color:'#e9e8da',roughness:.83,metalness:0,side:DoubleSide}),mortar:new MeshStandardMaterial({color:'#b0b8ac',roughness:1}),beam:new MeshPhysicalMaterial({color:'#ddffff',emissive:'#c9ffff',emissiveIntensity:world.lighting.lampIntensity,transparent:true,opacity:.008,roughness:.1,depthWrite:false,side:DoubleSide})}));
+  const [materials]=useState(()=>{
+    const beam=new MeshPhysicalMaterial({name:'soft-additive-lighthouse-beam',color:'#ddffff',emissive:'#c9ffff',emissiveIntensity:world.lighting.lampIntensity,transparent:true,opacity:.008,roughness:1,metalness:0,depthWrite:false,side:FrontSide,blending:AdditiveBlending,toneMapped:false});
+    // The open frustum has no cap. Fade both ends in the material so its distant
+    // rim cannot become a screen-space disc when the signal intensifies.
+    beam.userData.softVolume=true;
+    beam.onBeforeCompile=shader=>{
+      shader.vertexShader=`varying float vBeamLength;\n${shader.vertexShader}`.replace('#include <begin_vertex>','#include <begin_vertex>\n vBeamLength = clamp(-position.x / 10., 0., 1.);');
+      shader.fragmentShader=`varying float vBeamLength;\n${shader.fragmentShader}`.replace('#include <alphamap_fragment>','#include <alphamap_fragment>\n diffuseColor.a *= smoothstep(0., .16, vBeamLength) * (1. - smoothstep(.68, 1., vBeamLength));');
+    };
+    beam.customProgramCacheKey=()=> 'soft-open-beam-v1';
+    return{hitbox:new MeshStandardMaterial({name:'lighthouse-interaction-proxy',visible:false,colorWrite:false,depthWrite:false}),masonry:new MeshStandardMaterial({name:'weathered-painted-masonry',color:'#e9e8da',roughness:.83,metalness:0,side:DoubleSide}),mortar:new MeshStandardMaterial({color:'#b0b8ac',roughness:1}),beam};
+  });
   const timer=useRef<ReturnType<typeof setTimeout>|undefined>(undefined),rotation=useRef(0),dragCount=useRef(0);
   useEffect(()=>{clearTimeout(timer.current);return()=>{timer.current=setTimeout(()=>Object.values(materials).forEach(m=>m.dispose()),0);};},[materials]);
   useFrame((_,delta)=>{

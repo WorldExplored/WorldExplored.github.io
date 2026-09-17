@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { create, act } from '@react-three/test-renderer';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { DoubleSide, Mesh, MeshBasicMaterial, MeshPhysicalMaterial, Raycaster, Vector3 } from 'three';
+import { AdditiveBlending, DoubleSide, FrontSide, Mesh, MeshBasicMaterial, MeshPhysicalMaterial, Raycaster, Vector3 } from 'three';
 import { createLighthouseGeometry, CoastalLighthouse, LIGHTHOUSE_OPENINGS, lighthouseRadius, LighthouseFocusButton } from '../src/components/world/CoastalLighthouse';
 import { createLighthouseActivation, illuminateLighthouse, lighthouseSignal, stepLighthouseSignal } from '../src/components/world/lighthouseSignal';
 import { createLandmarkMechanism, LandmarkMechanisms } from '../src/components/world/LandmarkMechanisms';
@@ -68,6 +68,7 @@ test('one demand frame updates both lamp and beam; a wall-clock timeout resets p
   try {
     const root=renderer.scene.instance;const hit=root.getObjectByName('lighthouse-lantern-hit') as Mesh;assert.equal(hit.userData.cameraInteraction,true);const geometry=hit.geometry;
     const beam=root.getObjectByName('signal-light-sweep') as Mesh;const material=beam.material as MeshPhysicalMaterial;
+    assert.equal(material.depthWrite,false);assert.equal(material.blending,AdditiveBlending);assert.equal(material.side,FrontSide);assert.equal(material.userData.softVolume,true);
     const lamp=(root.getObjectByName('lighthouse-lens-prism') as Mesh).material as MeshPhysicalMaterial;
     const lens=root.getObjectByName('lighthouse-rotating-fresnel-lens')!;const angle=beam.rotation.y;const lensAngle=lens.rotation.y;
     context.mock.timers.tick(30000);
@@ -78,6 +79,6 @@ test('one demand frame updates both lamp and beam; a wall-clock timeout resets p
     context.mock.timers.tick(1);assert.equal(signal.intensity,0,'timeout resets even with no intervening frames');
     runtime.current.elapsed=50;await act(async()=>{await renderer.advanceFrames(1,4);});assert.equal(beam.rotation.y,angle);assert.equal(lens.rotation.y,lensAngle);assert.ok(material.opacity<.01);assert.ok(lamp.emissiveIntensity<.2);
     await renderer.update(render('low'));assert.equal((root.getObjectByName('lighthouse-lantern-hit') as Mesh).geometry,geometry);
-    const button=renderToStaticMarkup(<LighthouseFocusButton activate={()=>{}}/>);assert.match(button,/aria-label="Illuminate lighthouse"/);assert.match(button,/width:44px/);assert.doesNotMatch(button,/>[^<]+</);
+    const button=renderToStaticMarkup(<LighthouseFocusButton activate={()=>{}}/>);assert.match(button,/aria-label="Illuminate lighthouse"/);assert.match(button,/lighthouse-focus-control/);assert.match(button,/width:44px/);assert.doesNotMatch(button,/outline:[^;]*#123e57/);assert.doesNotMatch(button,/>[^<]+</);
   }finally{await renderer.unmount();context.mock.timers.tick(0);}
 });

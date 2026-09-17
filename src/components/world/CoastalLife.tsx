@@ -114,7 +114,11 @@ export function CoastalLife({ runtime, paused, quality }: EnvironmentProps) {
     for (const batch of life.batches) {
       let visible = 0; const { kind, variant } = batch;
       for (const fish of batch.members) {
-        stepSchoolFish(fish, delta, life.disturbance, quality, paused);
+        const reentered=stepSchoolFish(fish, delta, life.disturbance, quality, paused);
+        if(reentered){
+          state.ripple={x:fish.position.x,z:fish.position.z,time:state.elapsed,serial:state.ripple.serial+1};
+          state.nature={x:fish.position.x,y:.05,z:fish.position.z,kind:'fish',time:state.elapsed,serial:state.nature.serial+1};
+        }
         if (fish.member >= kind.population[quality]) continue;
         const index = visible++; const scale = .86 + fish.member % 4 * .055;
         const beat = fish.time * (kind.tailRate + fish.scatterOut * 5) + fish.member * 2.39;

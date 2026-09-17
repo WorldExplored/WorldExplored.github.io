@@ -139,7 +139,7 @@ test('experience and history preserve stated chronology without invented organiz
   assert.match(plainText(sectionBody('history')), /Python maze navigation/);
   assert.match(plainText(sectionBody('history')), /hackathons/);
   assert.match(profile.research[1].description, /Ninety-nine simulation runs/);
-  assert.match(profile.research[1].role, /real-world validation/);
+  assert.match(profile.research[1].limitations, /real traffic data/);
   assert.doesNotMatch(plainText(sectionBody('experience')), /increased|improved|reduced|percent|%/i);
   assert.doesNotMatch(plainText(sectionBody('history')), /oversaw|spearheaded|led a team|increased|improved|percent|%/i);
 });
