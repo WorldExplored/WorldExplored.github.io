@@ -161,7 +161,7 @@ test('all eight landmarks have finite geometry and localized lighting at every q
       const frozen = contactMaterials.map(material => material.emissiveIntensity);
       runtime.current.hovered = null;
       await advance(renderer, 60);
-      assert.deepEqual(contactMaterials.map(material => material.emissiveIntensity), frozen);
+      assert.ok(contactMaterials.some((material, index) => material.emissiveIntensity < frozen[index]), 'Reduced motion still acknowledges hover exit without animated transforms.');
       console.log(JSON.stringify({ quality, meshes: meshes.length, colorCalls: calls, triangles, windowIllumination: world.lighting.windowIllumination }));
     } finally { await renderer.unmount(); }
   }

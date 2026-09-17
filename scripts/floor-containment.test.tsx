@@ -76,8 +76,8 @@ test('every city room floor is bounded by the inner faces of its actual generate
       for(const floor of floors){
         const name=floor.userData.floor.name,walls=geometries.filter(g=>g.userData.roomWall?.room===name);
         const curved=walls.find(g=>g.userData.roomWall.role==='ellipse');
-        if(curved){const b=curved.boundingBox!;assertContained(floor,(x,z)=>disk(x,z,(b.min.x+b.max.x)/2,(b.min.z+b.max.z)/2,(b.max.x-b.min.x)/2,(b.max.z-b.min.z)/2),name);continue;}
-        const bound=(role:string)=>walls.find(g=>g.userData.roomWall.role===role)!.boundingBox!;
+        if(curved){const b=curved.boundingBox!;assertContained(floor,(x,z)=>disk(x,z,0,0,Math.max(Math.abs(b.min.x),Math.abs(b.max.x)),Math.max(Math.abs(b.min.z),Math.abs(b.max.z))),name);continue;}
+        const bound=(role:string)=>walls.find(g=>g.userData.roomWall.role===role||(role==='back'&&g.userData.roomWall.role==='back-left'))!.boundingBox!;
         const left=bound('left').max.x,right=bound('right').min.x,back=bound('back').max.z,front=bound('front').min.z;
         assertContained(floor,(x,z)=>rect(x,z,left,right,back,front),name);
       }

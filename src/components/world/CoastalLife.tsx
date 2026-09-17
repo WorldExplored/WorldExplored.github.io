@@ -4,7 +4,7 @@ import { measureConstruction } from './renderDiagnostics';
 // Frame callbacks update persistent Three.js objects outside React rendering.
 import { useEffect, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { BufferGeometry, Color, Float32BufferAttribute, DoubleSide, InstancedMesh, MeshPhysicalMaterial, Object3D, SphereGeometry, Vector3 } from 'three';
+import { BufferGeometry, CatmullRomCurve3, Color, Float32BufferAttribute, DoubleSide, InstancedMesh, MeshPhysicalMaterial, Object3D, SphereGeometry, Vector3 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { EnvironmentProps } from './Water';
 import { createSchoolFish, FISH_SPECIES, stepSchoolFish } from './fishSchools';
@@ -35,7 +35,10 @@ function bodyTint(variant: number, x: number, angle: number) {
   return color.set(dorsal < -.25 ? '#858574' : mottled > .25 ? '#666d54' : '#354b48');
 }
 export function createFishBodyGeometry(variant: number) {
-  const profile = PROFILES[variant]; const radial = variant === 3 ? 12 : 16; const vertices: number[] = []; const colors: number[] = []; const indices: number[] = [];
+  const original = PROFILES[variant];
+  const curve = new CatmullRomCurve3(original.map(([x, height, width]) => new Vector3(x, height, width)), false, 'catmullrom', .35);
+  const profile = Array.from({length:25}, (_, i) => { const point = curve.getPoint(i / 24); const segment=Math.min(4,Math.floor(i/24*5)), t=i/24*5-segment; const offset=original[segment][3]*(1-t)+original[segment+1][3]*t; return [point.x, Math.max(.008,point.y), Math.max(.008,point.z), offset]; });
+  const radial = 24; const vertices: number[] = []; const colors: number[] = []; const indices: number[] = [];
   profile.forEach(([x, height, width, offset], ring) => {
     for (let side = 0; side <= radial; side++) {
       const angle = side / radial * Math.PI * 2; const y = Math.cos(angle);
@@ -116,8 +119,8 @@ export function CoastalLife({ runtime, paused, quality }: EnvironmentProps) {
       for (const fish of batch.members) {
         const reentered=stepSchoolFish(fish, delta, life.disturbance, quality, paused);
         if(reentered){
-          state.ripple={x:fish.position.x,z:fish.position.z,time:state.elapsed,serial:state.ripple.serial+1};
-          state.nature={x:fish.position.x,y:.05,z:fish.position.z,kind:'fish',time:state.elapsed,serial:state.nature.serial+1};
+          state.ripple={x:fish.reentry.x,z:fish.reentry.z,time:state.elapsed,serial:state.ripple.serial+1};
+          state.nature={x:fish.reentry.x,y:fish.reentry.y+.025,z:fish.reentry.z,kind:'fish',time:state.elapsed,serial:state.nature.serial+1};
         }
         if (fish.member >= kind.population[quality]) continue;
         const index = visible++; const scale = .86 + fish.member % 4 * .055;

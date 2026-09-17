@@ -106,3 +106,54 @@ test('default browser timers never receive the playlist instance as their host r
     assert.ok(cancelled >= 2, 'watchdog and transition timers are cancelled through the host wrapper');
   } finally { player.dispose(); }
 });
+
+import { EnvironmentalAudioControl } from '../src/components/EnvironmentalAudioControl';
+import { CoastalAudio, coastalSoundScene, loopSamples, proximity } from '../src/components/world/coastalAudio';
+
+class SoundParam { value=0; setTargetAtTime(value:number){this.value=value;} }
+class SoundNode extends EventTarget { gain=new SoundParam();frequency=new SoundParam();Q=new SoundParam();pan=new SoundParam();playbackRate=new SoundParam();loop=false;buffer:unknown;type='';started=false;stopped=false;onended: (()=>void)|null=null;connect(node:unknown){return node;}disconnect(){}start(){this.started=true;}stop(){this.stopped=true;} }
+class SoundContext {
+  currentTime=0;destination=new SoundNode();sources:SoundNode[]=[];gains:SoundNode[]=[];resumes=0;closed=false;
+  createGain(){const node=new SoundNode();this.gains.push(node);return node;}
+  createBufferSource(){const node=new SoundNode();this.sources.push(node);return node;}
+  createBiquadFilter(){return new SoundNode();}createStereoPanner(){return new SoundNode();}
+  createBuffer(){return {copyToChannel(){}};}
+  decodeAudioData(){return Promise.resolve({getChannelData:()=>new Float32Array(800),sampleRate:100,duration:8});}
+  resume(){this.resumes++;return Promise.resolve();}close(){this.closed=true;return Promise.resolve();}
+}
+
+test('recorded coast starts only on a gesture, positions its layers, and rings the muted-aware bell independently',async t=>{
+  const html=renderToStaticMarkup(<EnvironmentalAudioControl/>);assert.match(html,/Start ambience/);assert.doesNotMatch(html,/src=|autoplay|<audio|<iframe/);
+  const callbacks:Array<()=>void>=[];t.mock.method(globalThis,'setInterval',(callback:()=>void)=>{callbacks.push(callback);return 1 as unknown as ReturnType<typeof setInterval>;});t.mock.method(globalThis,'clearInterval',()=>{});
+  const descriptor=Object.getOwnPropertyDescriptor(globalThis,'document');Object.defineProperty(globalThis,'document',{value:{hidden:false},configurable:true});
+  t.after(()=>{if(descriptor)Object.defineProperty(globalThis,'document',descriptor);else Reflect.deleteProperty(globalThis,'document');});
+  const urls:string[]=[];t.mock.method(globalThis,'fetch',async (url:unknown)=>{urls.push(String(url));return {ok:true,arrayBuffer:async()=>new ArrayBuffer(1)} as Response;});
+  const context=new SoundContext(),engine=new CoastalAudio({volume:.4,muted:false},context as unknown as AudioContext);
+  try {
+    assert.equal(context.sources.length,0);assert.equal(urls.length,0);
+    await engine.start();assert.equal(context.sources.filter(s=>s.loop&&s.started).length,5);assert.equal(context.resumes,1);
+    assert.ok(urls.every(url=>url.startsWith('/audio/coast/')));assert.equal(new Set(urls).size,5);
+    const far=context.gains.map(n=>n.gain.value);coastalSoundScene.listener=[-16.2,1.4,-70];coastalSoundScene.ferry=[-16.2,1.4,-70];coastalSoundScene.ferrySpeed=1.8;callbacks[0]();
+    assert.ok(context.gains.some((n,i)=>n.gain.value>far[i]+.05),'Fountain and moving ferry grow nearby');
+    engine.pause();assert.equal(context.gains[1].gain.value,0);
+    assert.equal(await engine.bell(),true);assert.equal(engine.bellCount,1);assert.equal(context.sources.at(-1)!.loop,false);
+    assert.equal(await engine.bell(),false,'Rapid strikes are bounded');
+    engine.setPreferences({volume:.4,muted:true});assert.equal(context.gains[0].gain.value,0);
+    context.currentTime=1;assert.equal(await engine.bell(),true,'Bell uses the same muted master');
+    await engine.start();assert.equal(context.sources.filter(s=>s.loop).length,5,'Resume reuses every loop');
+  }finally{engine.dispose();assert.ok(context.sources.every(s=>s.stopped));assert.ok(context.closed);}
+});
+
+test('failed initial sample download creates no partial duplicate loops on retry',async t=>{
+  let fail=true;t.mock.method(globalThis,'fetch',async (url:unknown)=>({ok:!(fail&&String(url).includes('gull')),arrayBuffer:async()=>new ArrayBuffer(1)}) as Response);
+  t.mock.method(globalThis,'setInterval',()=>1 as unknown as ReturnType<typeof setInterval>);t.mock.method(globalThis,'clearInterval',()=>{});
+  const descriptor=Object.getOwnPropertyDescriptor(globalThis,'document');Object.defineProperty(globalThis,'document',{value:{hidden:false},configurable:true});
+  const context=new SoundContext(),engine=new CoastalAudio({volume:.3,muted:false},context as unknown as AudioContext);
+  try{await assert.rejects(engine.start());assert.equal(context.sources.length,0);fail=false;await engine.start();assert.equal(context.sources.filter(s=>s.loop).length,5);}finally{engine.dispose();if(descriptor)Object.defineProperty(globalThis,'document',descriptor);else Reflect.deleteProperty(globalThis,'document');}
+});
+
+test('loop overlap preserves a continuous splice and proximity falls smoothly with distance',()=>{
+  const data=Float32Array.from({length:1000},(_,i)=>Math.sin(i*.07));const loop=loopSamples(data,100);
+  assert.equal(loop.length,900);assert.ok(Math.abs(loop.at(-1)!-loop[0])<.08);assert.ok(loop.every(Number.isFinite));
+  assert.equal(proximity([0,0,0],[0,0,0],8),1);assert.equal(proximity([8,0,0],[0,0,0],8),.5);assert.ok(proximity([80,0,0],[0,0,0],8)<.01);
+});

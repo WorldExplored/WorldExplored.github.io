@@ -1,15 +1,11 @@
-import { BoxGeometry, BufferGeometry, CatmullRomCurve3, CylinderGeometry, Group, InstancedMesh, Mesh, MeshStandardMaterial, SphereGeometry, TorusGeometry, TubeGeometry, Vector3 } from 'three';
+import { BoxGeometry, BufferGeometry, CatmullRomCurve3, CylinderGeometry, Group, InstancedMesh, LatheGeometry, Mesh, MeshStandardMaterial, SphereGeometry, TorusGeometry, TubeGeometry, Vector2, Vector3 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { world } from '../../content/world';
 import { cityBuildings, cityLocalToWorld, type CityTransitRoute } from './city';
 import { GREENHOUSE_VENT_LOCAL, TOWN_BUOY_SITE } from './TownInteractions';
 import type { TownInteractionState } from './townInteractionState';
 
-// Match the displacement used by the open-water vertex shader, without allocating vectors.
-export function harborWaterHeight(x: number, z: number, elapsed: number, detail = 1) {
-  const time = elapsed * world.environment.waterSpeed;
-  return Math.sin(x * .39 + z * .25 + time) * .055 + Math.sin(x * -.24 + z * .53 - time * .75) * .035 + Math.sin(x * .095 + z * .13 + time * .64) * .13 + (detail > .5 ? Math.sin(x * 1.2 + z * .71 + time * 1.3) * .013 * detail : 0);
-}
+import { harborWaterHeight } from './waterSurface';
+export { harborWaterHeight } from './waterSurface';
 
 export function createTownMechanisms(route: CityTransitRoute) {
   const root = new Group(); root.name = 'town-working-mechanisms';
@@ -52,7 +48,7 @@ export function createTownMechanisms(route: CityTransitRoute) {
     new CylinderGeometry(.04, .055, .2, 8).translate(0, -.23, 0),
   ]), materials.metal, buoy);
   const bell = new Group(); bell.name = 'harbor-buoy-bell'; bell.position.y = .63; buoy.add(bell);
-  mesh('harbor-brass-bell', combine([new CylinderGeometry(.075, .155, .19, 16, 1, true).translate(0, -.11, 0), new SphereGeometry(.045, 8, 6).translate(0, -.23, 0)]), materials.brass, bell);
+  mesh('harbor-brass-bell', combine([new LatheGeometry([[.018,0],[.044,-.018],[.059,-.05],[.069,-.12],[.103,-.18],[.154,-.20],[.155,-.222],[.129,-.224],[.08,-.18],[.044,-.08],[.018,-.045]].map(([r,y])=>new Vector2(r,y)),32), new SphereGeometry(.029, 12, 8).translate(0, -.22, 0), new CylinderGeometry(.008,.008,.16,8).translate(0,-.12,0), new TorusGeometry(.025,.008,6,16).translate(0,.014,0)]), materials.brass, bell);
   const lens = mesh('harbor-buoy-lens', new SphereGeometry(.075, 10, 8).translate(0, .75, 0), materials.buoySignal, buoy); lens.castShadow = false;
   const center = new Vector3(); const ahead = new Vector3(); const points: Vector3[] = [];
   for (let index = 0; index <= 256; index++) {

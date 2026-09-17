@@ -5,6 +5,7 @@ import { addAfterEffect, createRoot, events, extend, type RootState } from '@rea
 import * as THREE from 'three';
 import { createSceneRuntime, world, type QualityTier, type WorldProps } from '@/content/world';
 import { AeroWorld } from './AeroWorld';
+import { QA_VIEWS } from './qaViews';
 import { auditing, renderAudit, sampleFrame } from './renderDiagnostics';
 
 extend({ Mesh: THREE.Mesh, Group: THREE.Group, Object3D: THREE.Object3D,
@@ -31,6 +32,8 @@ export function WorldCanvas(props: WorldProps) {
   const [coreVisible, setCoreVisible] = useState(false);
   const [stage, setStage] = useState(0);
   const [plantsReady, setPlantsReady] = useState(false);
+  const captureState = useRef({ stage, plantsReady });
+  useEffect(() => { captureState.current = { stage, plantsReady }; stateRef.current?.invalidate(); }, [stage, plantsReady]);
   const onPlantsReady = useCallback(() => { performance.mark('world:plants-ready'); setPlantsReady(true); }, []);
   useEffect(() => { latest.current = props; });
 
@@ -48,8 +51,10 @@ export function WorldCanvas(props: WorldProps) {
       let ready = false;
       let previousFrames = 0;
       let context: WebGL2RenderingContext | null = null;
-      const unavailable = new URLSearchParams(window.location.search).get('scene') === 'unavailable';
-      try { context = unavailable ? null : canvas.getContext('webgl2', { antialias: true, alpha: true, powerPreference: 'high-performance' }); }
+      const search = new URLSearchParams(window.location.search);
+      const unavailable = search.get('scene') === 'unavailable';
+      const captureName = ['localhost', '127.0.0.1'].includes(window.location.hostname) ? search.get('qaCapture') : null;
+      try { context = unavailable ? null : canvas.getContext('webgl2', { antialias: true, alpha: true, powerPreference: 'high-performance', preserveDrawingBuffer: Boolean(captureName) }); }
       catch { context = null; }
       if (!context) { latest.current.onFailure(); return; }
       const measure = () => canvas.parentElement!.getBoundingClientRect();
@@ -82,11 +87,32 @@ export function WorldCanvas(props: WorldProps) {
         state.invalidate();
       });
       observer.observe(canvas.parentElement!);
+      let captureSent = false, manualCapture = 0;
+      const saveCapture = (name: string, batch = false) => {
+        const state=stateRef.current?.get();
+        const metadata={url:window.location.href,viewport:[window.innerWidth,window.innerHeight],camera:state?.camera.position.toArray(),target:(state?.controls as unknown as {target?:THREE.Vector3})?.target?.toArray(),runtime:structuredClone(runtime.current),audit:{...renderAudit},quality:canvas.parentElement?.dataset.quality,audio:document.querySelector('[data-audio-state]')?.outerHTML,controls:Array.from(document.querySelectorAll('button[aria-pressed]')).map(button=>({label:button.getAttribute('aria-label')??button.textContent,pressed:button.getAttribute('aria-pressed')})),render:state?.gl.info.render};
+        canvas.toBlob(blob=>{if(blob)void Promise.all([
+          fetch(`/__qa-capture?name=${encodeURIComponent(name)}`,{method:'POST',body:blob,headers:{'Content-Type':'image/png'}}),
+          fetch(`/__qa-capture?name=${encodeURIComponent(name)}`,{method:'POST',body:JSON.stringify(metadata,null,2),headers:{'Content-Type':'application/json'}}),
+        ]).then(responses=>{if(responses.every(response=>response.ok)){
+          canvas.dataset.qaCaptured=name;
+          const prefix=search.get('qaBatch'),names=Object.keys(QA_VIEWS),next=names[names.indexOf(search.get('qaView')??'')+1];
+          // A QA reload reconstructs the renderer at the same deterministic pose.
+          // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+          if(batch&&prefix&&next)window.location.assign(`/?qaView=${next}&qaCapture=${prefix}/${next}&qaStill=1&qaBatch=${prefix}&diagnostics=1`);
+        }});},'image/png');
+      };
+      const captureKey=(event:KeyboardEvent)=>{if(captureName&&event.altKey&&event.shiftKey&&event.code==='KeyP'){event.preventDefault();saveCapture(`${captureName}-${String(++manualCapture).padStart(2,'0')}`);}};
+      if(captureName)window.addEventListener('keydown',captureKey);
       const stopSampling = addAfterEffect(() => {
         if (cancelled || runtime.current.frames === previousFrames) return;
         previousFrames = runtime.current.frames;
         if (!ready) { ready = true; performance.mark('world:core-frame'); setCoreVisible(true); latest.current.onReady(); }
         if (auditing()) sampleFrame(context!);
+        if (!captureSent && captureName && (search.has('qaStill') || runtime.current.frames > 150) && captureState.current.stage === 5 && captureState.current.plantsReady) {
+          captureSent = true;
+          saveCapture(captureName, true);
+        }
       });
       function lost(event: Event) { event.preventDefault(); renderAudit.contextLosses++; latest.current.onFailure(); }
       function restored() { renderAudit.contextRestorations++; stateRef.current?.invalidate(); }
@@ -96,7 +122,7 @@ export function WorldCanvas(props: WorldProps) {
       window.addEventListener('error', error);
       window.addEventListener('unhandledrejection', error);
       return () => {
-        cancelled = true; observer.disconnect(); stopSampling();
+        cancelled = true; observer.disconnect(); stopSampling(); window.removeEventListener('keydown',captureKey);
         canvas.removeEventListener('webglcontextlost', lost);
         canvas.removeEventListener('webglcontextrestored', restored);
         window.removeEventListener('error', error);
@@ -116,7 +142,8 @@ export function WorldCanvas(props: WorldProps) {
 
   useEffect(() => {
     if (!configured) return;
-    rootRef.current?.render(<SceneBoundary onFailure={props.onFailure}><AeroWorld {...props} onPlantsReady={onPlantsReady} stage={stage} runtime={runtime} tier={tier} onTier={setTier} /></SceneBoundary>);
+    const qaStill = ['localhost', '127.0.0.1'].includes(window.location.hostname) && new URLSearchParams(window.location.search).has('qaStill');
+    rootRef.current?.render(<SceneBoundary onFailure={props.onFailure}><AeroWorld {...props} paused={props.paused || qaStill} onPlantsReady={onPlantsReady} stage={stage} runtime={runtime} tier={tier} onTier={setTier} /></SceneBoundary>);
   }, [configured, props, tier, stage, onPlantsReady]);
 
   useEffect(() => {

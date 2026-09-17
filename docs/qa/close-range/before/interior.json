@@ -1,0 +1,111 @@
+{
+  "url": "http://127.0.0.1:4178/?qaView=interior&qaCapture=before/interior&qaStill=1&qaBatch=before&diagnostics=1",
+  "viewport": [
+    1440,
+    900
+  ],
+  "camera": [
+    -9.222367002041501,
+    3.5010000000000012,
+    -80.7743754520246
+  ],
+  "target": [
+    -9,
+    1.8,
+    -86
+  ],
+  "runtime": {
+    "elapsed": 0,
+    "pointer": [
+      0,
+      0
+    ],
+    "pointerActive": false,
+    "pointerWorld": [
+      10000,
+      0,
+      10000
+    ],
+    "cloudInteraction": 0,
+    "plantInteraction": 0,
+    "moving": false,
+    "hovered": null,
+    "ripple": {
+      "x": 0,
+      "z": 0,
+      "time": -100,
+      "serial": 0
+    },
+    "sunDirection": [
+      -0.5035525964497695,
+      0.4662524041201569,
+      -0.7273537504274448
+    ],
+    "nature": {
+      "x": 0,
+      "y": 0,
+      "z": 0,
+      "kind": "tree",
+      "time": -100,
+      "serial": 0
+    },
+    "dragCount": 0,
+    "dragging": false,
+    "frames": 12
+  },
+  "audit": {
+    "rendererCreations": 1,
+    "configurations": 1,
+    "resizes": 0,
+    "dprChanges": 0,
+    "qualityChanges": 1,
+    "frameLoopChanges": 1,
+    "contextLosses": 0,
+    "contextRestorations": 0,
+    "sceneErrors": 0,
+    "unhandledErrors": 0,
+    "samples": 4,
+    "blackFrames": 0,
+    "worstBlackFraction": 0,
+    "firstSample": 887,
+    "lastSample": 4590.700000017881
+  },
+  "quality": "high",
+  "controls": [
+    {
+      "label": "Cycle fountain jets",
+      "pressed": "false"
+    },
+    {
+      "label": "Illuminate transit route",
+      "pressed": "false"
+    },
+    {
+      "label": "Align solar panels",
+      "pressed": "false"
+    },
+    {
+      "label": "Open greenhouse vents",
+      "pressed": "false"
+    },
+    {
+      "label": "Ring harbor buoy",
+      "pressed": "false"
+    },
+    {
+      "label": "Turn wind turbine into breeze",
+      "pressed": "false"
+    },
+    {
+      "label": "≈Start ambience",
+      "pressed": "false"
+    }
+  ],
+  "render": {
+    "frame": 37,
+    "calls": 82,
+    "triangles": 1708250,
+    "points": 18,
+    "lines": 0
+  }
+}

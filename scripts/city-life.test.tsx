@@ -84,7 +84,7 @@ test('tier changes retain every resource while pausing freezes all operating inf
     await renderer.advanceFrames(2, 1 / 60);
     assert.deepEqual(snapshot(), pausedState);
     assert.equal(root.getObjectByName('city-water-taxi')!.visible, quality !== 'low');
-    assert.equal(root.getObjectByName('city-maintenance-pods')!.visible, quality === 'high');
+    assert.equal(root.getObjectByName('city-maintenance-pods'), undefined, 'Detached service pods are replaced by building-owned cabins.');
     assert.ok(turbine0.visible && turbine1.visible);
     assert.ok([...disposed.values()].every(count => count === 0));
     for (const mesh of meshes) assert.ok(root.getObjectByName(mesh.name) === mesh, mesh.name);

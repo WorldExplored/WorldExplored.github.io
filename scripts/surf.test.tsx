@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import { create, act } from '@react-three/test-renderer';
 import { Matrix4, Vector3, type InstancedMesh, type Mesh, type ShaderMaterial } from 'three';
 import { coastExposure, coastNormal, shoreAlong, shoreBreakup, shorelineWave } from '../src/components/world/waves';
-import { createShoreDrops, createShoreImpactSites, createShoreImpactSystem, shoreDropPose, ShoreImpacts, updateShoreImpacts } from '../src/components/world/ShoreImpacts';
+import { rockImpactPosition, createShoreDrops, createShoreImpactSites, createShoreImpactSystem, shoreDropPose, ShoreImpacts, updateShoreImpacts } from '../src/components/world/ShoreImpacts';
 import { Water } from '../src/components/world/Water';
 import { createSceneRuntime, type QualityTier } from '../src/content/world';
-import { landDistance } from '../src/components/world/terrain';
+import { createLandscapePlan, landDistance } from '../src/components/world/terrain';
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
@@ -135,4 +135,14 @@ test('water retains coast texture, geometry and material while quality changes, 
       await renderer.update(render(quality)); assert.equal(water.geometry, geometry); assert.equal(water.material, material); assert.equal(material.uniforms.uCoast.value, texture);
     }
   } finally { await renderer.unmount(); }
+});
+
+
+test('direct rock responses start in visible water beyond the modeled rock footprint', () => {
+  for (const rock of createLandscapePlan().rocks) {
+    const point = rockImpactPosition(rock, 7);
+    assert.ok(Math.hypot(point.x-rock.x, point.z-rock.z) > rock.radius);
+    assert.ok(landDistance(point.x, point.z) < 0, rock.id);
+    assert.ok(Math.hypot(point.x-rock.x, point.z-rock.z) < rock.radius+2.2);
+  }
 });

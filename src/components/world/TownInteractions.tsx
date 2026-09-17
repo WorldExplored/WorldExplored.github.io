@@ -7,6 +7,7 @@ import { useThree, type ThreeEvent } from '@react-three/fiber';
 import { cityBuildings, cityLocalToWorld, cityRoofMounts, type CityPoint } from './city';
 import { cityTurbines } from './cityInfrastructure';
 import { terrainHeight } from './terrain';
+import { COASTAL_BELL_EVENT } from './coastalAudio';
 import { FOUNTAIN_SITE } from './GardenFountain';
 import type { TownAction, TownInteractionState } from './townInteractionState';
 
@@ -50,7 +51,7 @@ function TownHitTarget({ site, controls, resources }: { site: TownInteractionSit
   const portal = useMemo(() => ({ current: element.parentElement as HTMLElement }), [element]);
   const hovering = useRef(false);
   useEffect(() => () => { if (hovering.current && element.style) element.style.removeProperty('cursor'); }, [element]);
-  const activate = () => controls.activate(site.id);
+  const activate = () => { controls.activate(site.id); if (site.id === 'buoy' && typeof window !== 'undefined') window.dispatchEvent(new Event(COASTAL_BELL_EVENT)); };
   const click = (event: ThreeEvent<MouseEvent>) => { event.stopPropagation(); if (event.button === 0 && event.delta <= 8) activate(); };
   return <group name={`town-control-${site.id}`} position={site.position as [number, number, number]} rotation-y={site.yaw ?? 0}>
     <mesh name={`town-hitbox-${site.id}`} geometry={resources.geometry} material={resources.hit} scale={site.size as [number, number, number]} userData={{ cameraInteraction: true, townAction: site.id }} onClick={click} onPointerOver={event => { event.stopPropagation(); hovering.current = true; if (element.style) element.style.setProperty('cursor', 'pointer'); }} onPointerOut={event => { event.stopPropagation(); hovering.current = false; if (element.style) element.style.removeProperty('cursor'); }} onPointerMove={event => event.stopPropagation()} />

@@ -1,0 +1,34 @@
+
+> srreyansh-sethi-portfolio@0.5.0 check
+> npm run lint && npm run typecheck && npm run build
+
+
+> srreyansh-sethi-portfolio@0.5.0 lint
+> eslint
+
+
+> srreyansh-sethi-portfolio@0.5.0 typecheck
+> tsc --noEmit
+
+
+> srreyansh-sethi-portfolio@0.5.0 build
+> node --import tsx scripts/build-coast.ts && next build
+
+▲ Next.js 16.3.5 (Turbopack)
+✓ Running next.config.ts took 50ms
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 938ms
+  Running TypeScript ...
+  Finished TypeScript in 1105ms ...
+  Collecting page data using 4 workers ...
+  Generating static pages using 4 workers (0/3) ...
+✓ Generating static pages using 4 workers (3/3) in 197ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ○ /
+└ ○ /_not-found
+
+
+○  (Static)  prerendered as static content

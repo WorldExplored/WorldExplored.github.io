@@ -63,7 +63,7 @@ test('deterministic plants clear actual structures, paths, rocks, trees and shor
     assert.ok(canPlacePlant(plant.x, plant.z, plant.reach, plan));
     assert.ok(plant.reach >= .95);
     assert.ok(Math.abs(plant.y - terrainHeight(plant.x, plant.z) + .015) < 1e-9);
-    for (const circle of [...plan.structures, ...plan.rocks, ...plan.trees]) assert.ok(Math.hypot(plant.x - circle.x, plant.z - circle.z) > circle.radius + plant.reach, circle.id);
+    for (const circle of [...plan.structures, ...plan.rocks, ...plan.trees.map(tree => ({...tree, radius: tree.height * .15}))]) assert.ok(Math.hypot(plant.x - circle.x, plant.z - circle.z) > circle.radius + plant.reach, circle.id);
     for (const path of plan.paths) for (let index = 1; index < path.points.length; index++) assert.ok(distanceToSegment(plant.x, plant.z, path.points[index - 1], path.points[index]) > path.width / 2 + plant.reach);
     assert.ok(landDistance(plant.x, plant.z) > plant.reach + 1.1);
   }

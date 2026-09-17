@@ -174,7 +174,8 @@ export function usePalette({ active, paused, runtime }: ModelProps, id: Landmark
     };
   }, [materials]);
   useFrame((_, delta) => {
-    if (paused || !animated.current) return;
+    if (!animated.current) return;
+    if (paused) delta = 1;
     const highlighted = (active || runtime.current.hovered === id) && (id !== 'building' || world.lighting.lampEnabled);
     const palette = animated.current;
     if (id === 'building' && !world.lighting.lampEnabled) {

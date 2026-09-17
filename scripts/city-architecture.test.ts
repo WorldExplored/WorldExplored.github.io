@@ -46,7 +46,7 @@ test('selected city windows reveal real occupied depth with no opaque facade bac
       for (const room of item.rooms) {
         assert.ok(room.depth >= 1 && room.width >= 1, `${building.id} furniture-scale room`);
         const origin = new Vector3(...room.window).add(new Vector3(0, 0, .5));
-        ray.set(origin, new Vector3(0, 0, -1));
+        ray.set(origin, new Vector3(origin.x, room.floor + .015, room.target[2]).sub(origin).normalize());
         const glass = ray.intersectObjects(glazing, false)[0];
         const interior = ray.intersectObjects(opaque, false)[0];
         assert.ok(glass && glass.distance < .8, `${building.id} visible transparent opening`);

@@ -1,11 +1,13 @@
 'use client';
 
+import { coastalSoundScene } from './coastalAudio';
+
 import { useEffect, useState } from 'react';
 import { world } from '../../content/world';
 import { useFrame } from '@react-three/fiber';
 import { BoxGeometry, BufferGeometry, CapsuleGeometry, CatmullRomCurve3, CylinderGeometry, ExtrudeGeometry, Group, InstancedMesh, Mesh, MeshPhysicalMaterial, Object3D, Shape, SphereGeometry, TorusGeometry, TubeGeometry, Vector3 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { cityBuildings, cityLocalToWorld, cityRoofMounts, cityStationActivity, type CityTransitRoute } from './city';
+import { cityRoofMounts, cityStationActivity, type CityTransitRoute } from './city';
 import { cityDocks, cityFerryDistance, cityTurbines, createCityFerryRoute, writeCityFerryPose } from './cityInfrastructure';
 import { terrainHeight } from './terrain';
 import { GardenFountain } from './GardenFountain';
@@ -22,10 +24,19 @@ export function createCityLife(stationRoute: CityTransitRoute) {
     white: new MeshPhysicalMaterial({ color: '#f3fff6', roughness: .4, metalness: .03, clearcoat: .3, clearcoatRoughness: .2 }),
     aqua: new MeshPhysicalMaterial({ color: '#3fdee6', roughness: .45, metalness: .25, clearcoat: .12 }),
     glass: new MeshPhysicalMaterial({ color: '#a4f3f4', roughness: .08, metalness: 0, clearcoat: .7, transparent: true, opacity: .28, depthWrite: false, thickness: .06, ior: 1.45 }),
-    solar: new MeshPhysicalMaterial({ color: '#236986', roughness: .24, metalness: .07, clearcoat: .9 }),
+    solar: new MeshPhysicalMaterial({ color: '#17485e', roughness: .5, metalness: .15, clearcoat: .18, envMapIntensity: .15 }),
     wake: new MeshPhysicalMaterial({ color: '#c1fffa', roughness: .3, metalness: 0, clearcoat: .8, transparent: true, opacity: .22, depthWrite: false }),
     station: new MeshPhysicalMaterial({ color: '#d0fff8', emissive: '#68eeed', emissiveIntensity: 0, roughness: .25, metalness: .02, clearcoat: .9 }),
   };
+  materials.solar.onBeforeCompile=shader=>{
+    shader.vertexShader=`varying vec2 solarCell;\n${shader.vertexShader}`.replace('#include <begin_vertex>','#include <begin_vertex>\nsolarCell=position.xz*vec2(9.,10.);');
+    shader.fragmentShader=`varying vec2 solarCell;\n${shader.fragmentShader}`.replace('#include <color_fragment>',`#include <color_fragment>
+      vec2 cell=fract(solarCell),edge=min(cell,1.-cell),width=max(fwidth(solarCell),vec2(.006));
+      float seam=1.-min(smoothstep(0.,width.x+.012,edge.x),smoothstep(0.,width.y+.012,edge.y));
+      diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.18,.30,.34),seam*.42);
+    `);
+  };
+  materials.solar.customProgramCacheKey=()=> 'photovoltaic-cell-grid';
   const merged = (geometries: BufferGeometry[], groups = false) => {
     const sources = geometries.map(geometry => geometry.index ? geometry.toNonIndexed() : geometry);
     const result = mergeGeometries(sources, groups)!;
@@ -76,32 +87,24 @@ export function createCityLife(stationRoute: CityTransitRoute) {
   const panels: Array<{ x: number; y: number; z: number; yaw: number; width: number; depth: number; phase: number }> = [];
   const solarSupports:BufferGeometry[]=[];
   for (const mount of cityRoofMounts) {
-    panels.push({x:mount.world[0],y:mount.world[1]+.20,z:mount.world[2],yaw:mount.yaw,width:mount.width,depth:mount.depth,phase:mount.world[0]*.06});
-    solarSupports.push(new BoxGeometry(.1,.22,.1).translate(mount.world[0],mount.world[1]+.09,mount.world[2]));
+    panels.push({x:mount.world[0],y:mount.world[1]+.32,z:mount.world[2],yaw:mount.yaw,width:mount.width,depth:mount.depth,phase:mount.world[0]*.06});
+    const rack = new Object3D(); rack.position.set(...mount.world); rack.rotation.y = mount.yaw; rack.updateMatrix();
+    for (const side of [-1, 1]) {
+      solarSupports.push(new BoxGeometry(mount.width * .74, .055, .08).translate(0, .15, side * mount.depth * .25).applyMatrix4(rack.matrix));
+      for (const x of [-mount.width * .3, mount.width * .3]) {
+        solarSupports.push(new BoxGeometry(.09, .15, .10).translate(x, .065, side * mount.depth * .25).applyMatrix4(rack.matrix));
+        solarSupports.push(new BoxGeometry(.17, .025, .18).translate(x, .012, side * mount.depth * .25).applyMatrix4(rack.matrix));
+      }
+    }
+    solarSupports.push(new BoxGeometry(.16,.06,mount.depth*.5+.1).translate(0,.15,0).applyMatrix4(rack.matrix));
+    solarSupports.push(new CylinderGeometry(.15, .20, .13, 16).translate(0, .185, 0).applyMatrix4(rack.matrix));
+    solarSupports.push(new SphereGeometry(.045,12,8).translate(0,.27,0).applyMatrix4(rack.matrix));
   }
   const supports=add('solar-roof-supports',merged(solarSupports),materials.white);supports.geometry.userData.mounts=cityRoofMounts.map(mount=>mount.building);
-  const frames = instance('city-articulated-solar-frames', panels.length, new BoxGeometry(1, .055, 1), materials.aqua);
+  const frames = instance('city-articulated-solar-frames', panels.length, merged([new BoxGeometry(1, .055, 1), ...[-1,1].map(side => new BoxGeometry(.08, .08, .92).translate(side*.31,-.045,0))]), materials.aqua);
   const cells = instance('city-articulated-solar-cells', panels.length, merged([new BoxGeometry(.88, .014, .39).translate(0, .036, -.235), new BoxGeometry(.88, .014, .39).translate(0, .036, .235)]), materials.solar);
   frames.castShadow = false; cells.castShadow = false;
-  const pods = instance('city-maintenance-pods', 2, merged([new CapsuleGeometry(.18, .45, 4, 12).rotateZ(Math.PI / 2), new TorusGeometry(.29, .035, 6, 16).rotateY(Math.PI / 2).translate(-.22, 0, 0), new TorusGeometry(.29, .035, 6, 16).rotateY(Math.PI / 2).translate(.22, 0, 0), ...[-1,1].flatMap(side=>[new BoxGeometry(.16,.10,.12).translate(side*.34,0,.19),new TorusGeometry(.065,.023,6,12).rotateY(Math.PI/2).translate(side*.4,0,.22)])]), materials.white);
-  // Captive service lifts have a visible ground dock and fixed rails behind two buildings.
-  const lifts=cityBuildings.filter(building=>['residence-west','residence-east'].includes(building.id)).map(building=>{
-    const [x,base,z]=cityLocalToWorld(building,[0,0,-building.depth/2-.75]);
-    return {x,z,base,yaw:building.rotation,height:building.height-.4};
-  });
-  const guides:BufferGeometry[]=[];
-  const attachments:BufferGeometry[]=[];
-  for(const lift of lifts){
-    const frame=new Object3D();frame.position.set(lift.x,lift.base,lift.z);frame.rotation.y=lift.yaw;frame.updateMatrix();
-    for(const side of [-1,1])guides.push(new BoxGeometry(.045,lift.height,.06).translate(side*.4,lift.height/2,.22).applyMatrix4(frame.matrix));
-    guides.push(new BoxGeometry(1.1,.16,1).translate(0,.08,0).applyMatrix4(frame.matrix));
-    for(const y of [.55,lift.height*.5,lift.height-.45])attachments.push(new BoxGeometry(.9,.07,.62).translate(0,y,.5).applyMatrix4(frame.matrix));
-    attachments.push(new BoxGeometry(1.12,.14,1.35).translate(0,lift.height-.16,.48).applyMatrix4(frame.matrix));
-    attachments.push(new BoxGeometry(.08,lift.height-.35,.08).translate(.53,lift.height/2,.76).applyMatrix4(frame.matrix));
-    attachments.push(new BoxGeometry(.24,.28,.05).translate(.53,.52,.82).applyMatrix4(frame.matrix));
-  }
-  guides.push(...attachments,...water);
-  add('city-aqua-infrastructure-lift-guides-docks-brackets-platforms-conduits-and-dock-stripes',merged(guides),materials.aqua);
+  add('city-dock-edge-stripes', merged(water), materials.aqua);
   const station = add('city-station-arrival-lights', merged([-1, 0, 1].map(index => new BoxGeometry(.42, .04, .07).translate(-5 + index * .64, 5.18, -66.87))), materials.station);
   station.castShadow = false;
 
@@ -156,22 +159,16 @@ export function createCityLife(stationRoute: CityTransitRoute) {
       frames.setMatrixAt(index, dummy.matrix); cells.setMatrixAt(index, dummy.matrix);
     }
     frames.instanceMatrix.needsUpdate = true; cells.instanceMatrix.needsUpdate = true;
-    for (let index = 0; index < 2; index++) {
-      const phase = (time + index * 9) % 22; const travel = Math.min(1, Math.max(0, (phase - 3) / 16));
-      const eased = (1 - Math.cos(travel * Math.PI * 2)) / 2;
-      const lift=lifts[index];
-      dummy.position.set(lift.x,lift.base+.485+eased*(lift.height-.8),lift.z); dummy.rotation.set(0,lift.yaw,0); dummy.scale.set(1, 1, 1); dummy.updateMatrix(); pods.setMatrixAt(index, dummy.matrix);
-    }
-    pods.instanceMatrix.needsUpdate = true;
     materials.station.emissiveIntensity = .03 + cityStationActivity(stationRoute, time) * .6 + controls.states.station.amount * .8;
     writeCityFerryPose(ferryRoute, time, ferryPosition, ferryTangent);
     ferry.position.copy(ferryPosition); ferry.rotation.y = Math.atan2(ferryTangent.x, ferryTangent.z);
     const speed = ((cityFerryDistance(ferryRoute, time + .02) - cityFerryDistance(ferryRoute, time) + ferryRoute.length) % ferryRoute.length) / .02;
+    coastalSoundScene.ferry = ferryPosition.toArray(); coastalSoundScene.ferrySpeed = paused ? 0 : speed; coastalSoundScene.fountainPressure = 1 + controls.states.fountain.amount * .18;
     const wakeStrength = Math.min(1, speed / ferryRoute.speed);
     wake.visible = wakeStrength > .015; materials.wake.opacity = .22 * wakeStrength;
   };
   update(0, stationRoute);
-  return { root, update, setQuality(quality: EnvironmentProps['quality']) { detail = quality === 'high' ? 1 : quality === 'medium' ? .65 : .35; ferry.visible = quality !== 'low'; pods.visible = quality === 'high'; }, retain() { clearTimeout(disposeTimer); return () => { disposeTimer = setTimeout(() => { mechanisms.dispose(); geometryResources.forEach(geometry => geometry.dispose()); root.traverse(object => { if (object instanceof InstancedMesh) object.dispose(); }); Object.values(materials).forEach(material => material.dispose()); }, 0); }; } };
+  return { root, update, setQuality(quality: EnvironmentProps['quality']) { detail = quality === 'high' ? 1 : quality === 'medium' ? .65 : .35; ferry.visible = quality !== 'low'; }, retain() { clearTimeout(disposeTimer); return () => { disposeTimer = setTimeout(() => { mechanisms.dispose(); geometryResources.forEach(geometry => geometry.dispose()); root.traverse(object => { if (object instanceof InstancedMesh) object.dispose(); }); Object.values(materials).forEach(material => material.dispose()); }, 0); }; } };
 }
 
 export function CityLife({ runtime, paused, quality, route }: EnvironmentProps & { route: CityTransitRoute }) {

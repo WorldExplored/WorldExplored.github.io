@@ -23,6 +23,7 @@ export function NatureResponses({runtime,paused}:{runtime:MutableRefObject<Scene
   useEffect(()=>()=>{response.geometry.dispose();response.material.dispose();},[response]);
   useFrame(()=>{
     const event=runtime.current.nature;
+    if(event.serial===0){response.geometry.setDrawRange(0,0);return;}
     if(event.serial!==response.serial){
       response.serial=event.serial;response.start=runtime.current.elapsed;response.base=[event.x,event.y,event.z];response.kind=event.kind;
       response.material.color.set(event.kind==='tree'?'#d6ff83':'#c9ffff');response.geometry.setDrawRange(0,COUNT);
@@ -33,10 +34,9 @@ export function NatureResponses({runtime,paused}:{runtime:MutableRefObject<Scene
       }
       response.attribute.needsUpdate=true;
     }
-    const age=runtime.current.elapsed-response.start;
+    const age=paused ? .24 : runtime.current.elapsed-response.start;
     if(age<0||age>1.65){response.geometry.setDrawRange(0,0);return;}
     response.material.opacity=.82*Math.max(0,1-age/1.65);
-    if(paused)return;
     for(let i=0;i<COUNT;i++){
       const j=i*3;response.positions[j]=response.base[0]+response.velocity[j]*age;response.positions[j+1]=response.base[1]+response.velocity[j+1]*age-(response.kind==='tree' ? .03 : 1.6)*age*age;response.positions[j+2]=response.base[2]+response.velocity[j+2]*age;
     }

@@ -1,3 +1,5 @@
+import { BRIDGES, bridgeHeightAt } from '../src/components/world/bridgePlan';
+import { createBridges } from '../src/components/world/Bridges';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createElement } from 'react';
@@ -72,7 +74,7 @@ test('station graph meets measured ground landing and actual upper platform', ()
 
 test('paved routes are samples of one rendered ground mesh, without floating ribbons or side caps', () => {
   const material=new MeshBasicMaterial({side:DoubleSide}),ground=new Mesh(archipelagoGeometry(),material);
-  ground.updateMatrixWorld();const ray=new Raycaster(new Vector3(),new Vector3(0,-1,0));
+  ground.updateMatrixWorld();const bridges=createBridges();bridges.root.updateMatrixWorld(true);const decks=bridges.root.children.filter(mesh=>mesh.name.endsWith('-deck'));decks.forEach(deck=>{deck.raycast=Mesh.prototype.raycast;});const ray=new Raycaster(new Vector3(),new Vector3(0,-1,0));
   try {
     for(const path of circulationPaths().filter(p=>!p.bridge)) {
       const sample=pathGeometry([path]);
@@ -88,12 +90,14 @@ test('paved routes are samples of one rendered ground mesh, without floating rib
         const samples=new Set<number>([...Array.from({length:stride},(_,i)=>i),...Array.from({length:stride},(_,i)=>p.count-stride+i)]);
         for(let i=0;i<p.count;i+=Math.max(stride,Math.floor(p.count/5/stride)*stride))samples.add(i+Math.floor(stride/2));
         for(const i of samples){
-          ray.ray.origin.set(p.getX(i),30,p.getZ(i));const hit=ray.intersectObject(ground,false)[0];
-          assert.ok(hit&&Math.abs(hit.point.y-p.getY(i))<.00003,`${path.id}: rendered ground differs from route at vertex ${i}`);
+          ray.ray.origin.set(p.getX(i),30,p.getZ(i));const hit=ray.intersectObjects([ground,...decks],false)[0];
+          const bridge=hit&&BRIDGES.find(bridge=>hit.object.name===`bridge-${bridge.id}-deck`);
+          const expected=bridge?bridgeHeightAt(bridge,p.getX(i),p.getZ(i)):p.getY(i);
+          assert.ok(hit&&Math.abs(hit.point.y-expected)<(bridge?.001:.00003),`${path.id}: rendered ground differs from route at vertex ${i}`);
         }
       }finally{sample.dispose();}
     }
-  }finally{ground.geometry.dispose();material.dispose();}
+  }finally{bridges.dispose();ground.geometry.dispose();material.dispose();}
 });
 
 test('route unions grade continuously across segment and junction boundaries',()=>{

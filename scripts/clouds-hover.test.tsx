@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { setTimeout as wait } from 'node:timers/promises';
 import { create, act, type ReactThreeTest } from '@react-three/test-renderer';
 import { Group, Object3D, Ray, Vector3, type Mesh } from 'three';
-import { Landmark, LANDMARK_HIT_BOUNDS, LANDMARK_HOVER_GRACE_MS } from '../src/components/world/Landmark';
+import { Landmark, LANDMARK_HOVER_GRACE_MS } from '../src/components/world/Landmark';
 import { cloudInstanceCount, cloudInstanceRanges, cloudOrigin, cloudDeformation, cloudDensity, cloudBounds, createCloudClusters, updateCloudResponses } from '../src/components/world/clouds';
 import { cloudSurfaceGeometry, makeClouds, writeCloudMatrices } from '../src/components/world/CloudSurface';
 import { createSceneRuntime, world, type LandmarkId, type SceneRuntime } from '../src/content/world';
@@ -147,7 +147,7 @@ async function fixture(id: LandmarkId) {
     <mesh name="visual-child-a" position={[-.5, 1.5, 0]}><sphereGeometry args={[.7, 8, 6]} /><meshBasicMaterial /></mesh>
     <mesh name="visual-child-b" position={[.5, 2.5, 0]}><sphereGeometry args={[.7, 8, 6]} /><meshBasicMaterial /></mesh>
   </Landmark>);
-  const proxy = renderer.scene.findByProps({ name: `landmark-hit-${id}` });
+  const proxy = renderer.scene.findByProps({ name: `landmark-${id}` });
   return { renderer, runtime, navigations, proxy, config };
 }
 
@@ -159,12 +159,7 @@ for (const config of world.landmarks) test(`${config.id}: a pointer held for thr
   const mesh = f.proxy.instance as Mesh;
   mesh.updateMatrixWorld(true);
   const initialMatrix = mesh.matrixWorld.clone();
-  const bounds = LANDMARK_HIT_BOUNDS[config.id];
-  const geometry = mesh.geometry;
-  geometry.computeBoundingBox();
-  assert.ok(Math.abs(geometry.boundingBox!.max.x - bounds.radius) < 1e-6);
-  assert.ok(Math.abs(mesh.position.y + geometry.boundingBox!.max.y - bounds.top) < 1e-6);
-  assert.ok(Math.abs(mesh.position.y + geometry.boundingBox!.min.y - bounds.floor) < 1e-6);
+  assert.equal(mesh.type, 'Group', 'Visible child surfaces share one stable event owner.');
   const children = ['visual-child-a', 'visual-child-b'].map(name => f.renderer.scene.findByProps({ name }));
   for (const child of children) assert.equal(child.props.onPointerOut, undefined, 'Visual children do not own hover exits.');
   await f.renderer.fireEvent(f.proxy, 'pointerOver', { pointerType: 'mouse' });
@@ -173,7 +168,7 @@ for (const config of world.landmarks) test(`${config.id}: a pointer held for thr
   while (performance.now() - start < 3050 || movements <= 50) {
     await wait(40);
     const child = children[movements % 2];
-    // Cross moving child surfaces while the fixed proxy remains the event owner.
+    // Cross moving child surfaces while the parent boundary remains the event owner.
     (child.instance as Mesh).position.x = Math.sin(movements) * .6;
     await f.renderer.fireEvent(f.proxy, 'pointerMove', { pointerType: 'mouse', object: child.instance, eventObject: mesh });
     f.runtime.current.elapsed += .04;
@@ -249,7 +244,7 @@ test('About retains its hover boundary while delegating sculpture drag and tap o
   await f.renderer.fireEvent(f.proxy, 'pointerMove', event);
   f.runtime.current.dragging = false;
   await f.renderer.fireEvent(f.proxy, 'click', { ...event, delta: 0 });
-  assert.equal(stops, 0, 'The sculpture receives events through the transparent About proxy.');
+  assert.equal(stops, 0, 'The sculpture receives events through the About parent.');
   assert.deepEqual(f.navigations, [], 'Sculpture taps cannot accidentally open About.');
   assert.deepEqual(f.runtime.changes, ['about'], 'Delegation does not cut holes into hover ownership.');
   await f.renderer.fireEvent(f.proxy, 'pointerMove', { pointerType: 'mouse' });

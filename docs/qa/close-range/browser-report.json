@@ -1,0 +1,58 @@
+{
+  "build": "Next.js production static export",
+  "browser": "Codex in-app browser on host machine",
+  "consoleWarnings": [],
+  "consoleErrors": [],
+  "viewports": [
+    {
+      "width": 1920,
+      "height": 1080,
+      "tier": "high",
+      "observedFps": "60",
+      "capture": "viewports/1920x1080.json"
+    },
+    {
+      "width": 1440,
+      "height": 900,
+      "tier": "high",
+      "observedFps": "59\u201360",
+      "capture": "viewports/1440x900.json"
+    },
+    {
+      "width": 1024,
+      "height": 768,
+      "tier": "high",
+      "observedFps": "45\u201348",
+      "capture": "viewports/1024x768.json"
+    },
+    {
+      "width": 768,
+      "height": 1024,
+      "tier": "high",
+      "observedFps": "60",
+      "capture": "viewports/768x1024.json"
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "tier": "medium",
+      "observedFps": "60",
+      "capture": "viewports/390x844.json"
+    }
+  ],
+  "interactions": {
+    "landmarkHover": "roof, glazing, rotor; stable work owner for >20 seconds; identical camera",
+    "landmarkClick": "visible rotor opens #work",
+    "mobilePanel": "Open source opens actual content; Close returns to scene",
+    "zoom": "six full in/out cycles, additional longer approach/retreat, orbit and Escape recovery",
+    "audio": "recorded bell count increments; ambience playing, mute/unmute, pause native controls verified",
+    "fountain": "two consecutive visible basin clicks change native state and water geometry",
+    "tree": "visible canopy click produces localized tree event",
+    "rock": "visible rock click produces water-facing impact and ripple"
+  },
+  "limits": [
+    "Host browser viewport emulation is not physical mobile testing",
+    "Recorded audio was not independently auditioned through speakers/headphones",
+    "Native OS reduced-motion preference was not changed; paused rendering and regression coverage were used"
+  ]
+}

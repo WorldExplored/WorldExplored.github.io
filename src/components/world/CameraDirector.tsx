@@ -7,9 +7,11 @@ import { useFrame, useThree, type RootState } from '@react-three/fiber';
 import { MathUtils, Plane, Raycaster, TOUCH, Vector2, Vector3, type Intersection, type Object3D, type PerspectiveCamera } from 'three';
 import { flightEase, world, type SceneRuntime, type WorldProps } from '@/content/world';
 import { CAMERA_LIMITS, cameraObstacles, clipCameraTravel, constrainCameraPose, focusPose, intersectTerrainRay, normalizedWheelZoom, zoomTowardPoint } from './cameraControls';
+import { readQaView } from './qaViews';
+import { coastalSoundScene } from './coastalAudio';
 
 type Props = Pick<WorldProps, 'destination' | 'flight' | 'mobile' | 'onArrive' | 'panelOpen' | 'paused'> & { runtime: MutableRefObject<SceneRuntime> };
-interface PointerSample { x: number; y: number; type: string; pan: boolean }
+interface PointerSample { x: number; y: number; startX: number; startY: number; type: string; pan: boolean }
 
 export function CameraDirector({ destination, flight, mobile, onArrive, paused, runtime }: Props) {
   const { camera, gl, scene, invalidate, size, get, set } = useThree();
@@ -26,6 +28,8 @@ export function CameraDirector({ destination, flight, mobile, onArrive, paused, 
   const transition = useRef({ elapsed: 0, active: false, id: destination, serial: flight });
   const input = useRef({ moved: false, active: false, blocked: false, pointers: new Map<number, PointerSample>(), orbitX: 0, orbitY: 0, panX: 0, panY: 0, zoom: 0, wheelGestureAt: -Infinity });
   const latest = useRef({ mobile, paused, aspect: size.width / size.height, onArrive });
+  const qaView = useMemo(() => readQaView(), []);
+  const poseFor = useMemo(() => (id: typeof destination, compact: boolean, aspect: number) => !id && qaView ? qaView : focusPose(id, compact, aspect), [qaView]);
   useEffect(() => { latest.current = { mobile, paused, aspect: size.width / size.height, onArrive }; }, [mobile, paused, size.width, size.height, onArrive]);
 
   const actions = useMemo(() => {
@@ -98,14 +102,19 @@ export function CameraDirector({ destination, flight, mobile, onArrive, paused, 
         const groundHit = intersectTerrainRay(vectors.raycaster.ray, vectors.hit);
         state.blocked = runtime.current.dragging || (event.button !== 2 && !event.shiftKey && Boolean(hits[0] && (!groundHit || hits[0].distance < vectors.raycaster.ray.origin.distanceTo(vectors.hit) + .2)));
       }
-      state.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY, type: event.pointerType, pan: event.button === 2 || event.shiftKey });
+      state.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY, startX: event.clientX, startY: event.clientY, type: event.pointerType, pan: event.button === 2 || event.shiftKey });
       controls.enabled = !state.blocked;
       if (controls.enabled) { state.active = true; actions.beginInput(); }
     };
     const onPointerMove = (event: PointerEvent) => {
       const state = input.current, pointer = state.pointers.get(event.pointerId);
       if (!pointer) return;
-      if (!controls.enabled || state.blocked || runtime.current.dragging) { pointer.x = event.clientX; pointer.y = event.clientY; return; }
+      if (runtime.current.dragging) { pointer.x = event.clientX; pointer.y = event.clientY; return; }
+      if (state.blocked) {
+        if (state.pointers.size < 2 && Math.hypot(event.clientX - pointer.startX, event.clientY - pointer.startY) < 6) return;
+        state.blocked = false; controls.enabled = true; state.active = true;
+        runtime.current.dragCount++; runtime.current.hovered = null;
+      }
       actions.beginInput();
       const first = state.pointers.values().next().value!;
       let dx = event.clientX - pointer.x, dy = event.clientY - pointer.y;
@@ -174,21 +183,22 @@ export function CameraDirector({ destination, flight, mobile, onArrive, paused, 
     actions.stripParallax(); actions.settle();
     // An explicit destination/recovery also ends any gesture that was still held.
     input.current.pointers.clear(); input.current.active = input.current.blocked = false; input.current.wheelGestureAt = -Infinity; controls.enabled = true;
-    const pose = focusPose(destination, latest.current.mobile, latest.current.aspect);
+    const pose = poseFor(destination, latest.current.mobile, latest.current.aspect);
     vectors.start.copy(camera.position); vectors.startLook.copy(controls.target); vectors.end.fromArray(pose.position); vectors.endLook.fromArray(pose.target);
     transition.current = { elapsed: 0, active: true, id: destination, serial: flight };
     input.current.moved = false; runtime.current.moving = true; invalidate();
-  }, [actions, camera, controls, destination, flight, invalidate, runtime, vectors]);
+  }, [actions, camera, controls, destination, flight, invalidate, poseFor, runtime, vectors]);
   useEffect(() => {
     if (input.current.moved) return;
-    const pose = focusPose(transition.current.id, mobile, size.width / size.height);
+    const pose = poseFor(transition.current.id, mobile, size.width / size.height);
     vectors.end.fromArray(pose.position); vectors.endLook.fromArray(pose.target);
     if (!transition.current.active) { actions.stripParallax(); camera.position.copy(vectors.end); controls.target.copy(vectors.endLook); controls.update(); }
     invalidate();
-  }, [actions, camera, controls, invalidate, mobile, size.width, size.height, vectors]);
+  }, [actions, camera, controls, invalidate, mobile, poseFor, size.width, size.height, vectors]);
   useEffect(() => { actions.stripParallax(); actions.settle(); invalidate(); }, [actions, paused, invalidate]);
 
   useFrame((_, delta) => {
+    coastalSoundScene.listener = camera.position.toArray();
     const dt = Math.min(delta, .05);
     actions.stripParallax(); vectors.previous.copy(camera.position);
     const state = transition.current;

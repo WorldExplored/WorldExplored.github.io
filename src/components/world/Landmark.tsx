@@ -54,13 +54,7 @@ export function Landmark({ config, runtime, paused, onNavigate, children }: { co
     const material = ring.current.material as MeshBasicMaterial;
     material.opacity += ((active ? .65 : .16) - material.opacity) * (paused ? 1 : Math.min(1, delta * 8));
   });
-  return <group name={`landmark-${config.id}`} position={config.position}>
-    <group name={`landmark-model-${config.id}`} rotation={[0, config.rotationY ?? 0, 0]}>{children}</group>
-    <mesh ref={ring} position={[0, .08, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-      <ringGeometry args={[bounds.radius - .05, bounds.radius, world.quality.high.segments]} />
-      <meshBasicMaterial color={config.color} transparent opacity={.16} depthWrite={false} />
-    </mesh>
-    <mesh name={`landmark-hit-${config.id}`} position={[0, (bounds.floor + bounds.top) / 2, 0]}
+  return <group name={`landmark-${config.id}`} position={config.position}
       onPointerOver={enter}
       onPointerMove={enter}
       onPointerOut={event => {
@@ -76,8 +70,12 @@ export function Landmark({ config, runtime, paused, onNavigate, children }: { co
         event.stopPropagation();
         if (event.delta < 6 && !runtime.current.dragging && dragCount.current === runtime.current.dragCount) onNavigate(config.id);
       }}>
-      <cylinderGeometry args={[bounds.radius, bounds.radius, bounds.top - bounds.floor, 32, 1]} />
-      <meshBasicMaterial transparent opacity={0} colorWrite={false} depthWrite={false} />
+    <group name={`landmark-model-${config.id}`} rotation={[0, config.rotationY ?? 0, 0]}>{children}</group>
+    <mesh ref={ring} raycast={() => {}} position={[0, bounds.floor + .04, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+      <ringGeometry args={[bounds.radius - .05, bounds.radius, world.quality.high.segments]} />
+      <meshBasicMaterial color={config.color} transparent opacity={.16} depthWrite={false} />
     </mesh>
+
+
   </group>;
 }

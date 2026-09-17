@@ -114,7 +114,7 @@ test('each landmark routes clicks to its semantic destination and ignores drags'
   const renderer = await create(<group>{world.landmarks.map(config => <Landmark key={config.id} config={config} runtime={runtime} paused={false} onNavigate={id => destinations.push(id)}><mesh><sphereGeometry args={[1, 8, 6]} /><meshBasicMaterial /></mesh></Landmark>)}</group>);
   t.after(() => renderer.unmount());
   for (const config of world.landmarks) {
-    const landmark = renderer.scene.findByProps({ name: `landmark-hit-${config.id}` });
+    const landmark = renderer.scene.findByProps({ name: `landmark-${config.id}` });
     await renderer.fireEvent(landmark, 'pointerOver');
     assert.equal(runtime.current.hovered, config.id);
     await renderer.fireEvent(landmark, 'click', { delta: 0 });

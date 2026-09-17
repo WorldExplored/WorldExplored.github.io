@@ -36,11 +36,12 @@ export function createWildlife() {
     group.add(mesh); meshes.push(mesh); return mesh;
   };
   const gullBody = instances('gull-bodies', merge([
-    ellipsoid(0, 0, 0, .19, .18, .39), ellipsoid(0, .15, -.34, .135, .14, .16), ellipsoid(0, .09, -.21, .125, .14, .20),
+    ellipsoid(0, 0, 0, .19, .18, .39),
     ...[-1, 0, 1].map(index => ellipsoid(index * .072, .015, .39, .065, .027, .23, index * .12)),
   ]), 0, 18);
-  const gullEyes = instances('gull-eyes', merge([-1, 1].map(side => ellipsoid(side * .119, .185, -.395, .019, .023, .024))), 2, 18);
-  const bill = new ConeGeometry(.059, .23, 12).rotateX(-Math.PI / 2).translate(0, .128, -.565);
+  const gullHead = instances('gull-heads-and-necks', merge([ellipsoid(0, .15, -.34, .135, .14, .16), ellipsoid(0, .09, -.21, .125, .14, .20)]).translate(0,-.09,.25), 0, 18);
+  const gullEyes = instances('gull-eyes', merge([-1, 1].map(side => ellipsoid(side * .119, .185, -.395, .019, .023, .024))).translate(0,-.09,.25), 2, 18);
+  const bill = new ConeGeometry(.059, .23, 12).rotateX(-Math.PI / 2).translate(0, .038, -.315);
   const gullBill = instances('gull-bills', bill, 3, 18);
   const wing = instances('gull-inner-wings', merge([
     ellipsoid(.39, .02, .035, .47, .062, .225, -.10),
@@ -53,7 +54,7 @@ export function createWildlife() {
     bone(new Vector3(side * .075, -.07, .07), new Vector3(side * .075, -.24, .10), .018),
     ...[-1, 0, 1].map(toe => bone(new Vector3(side * .075, -.24, .10), new Vector3(side * .075 + toe * .038, -.25, -.015), .012)),
   ])), 3, 18);
-  const crabBody = instances('crab-shells', merge([ellipsoid(0, .015, 0, .17, .09, .125), ellipsoid(0, .045, -.012, .14, .065, .10)]), 4, 10);
+  const crabBody = instances('crab-shells', merge([ellipsoid(0, .015, 0, .17, .09, .125), ellipsoid(0, .045, -.012, .14, .065, .10), ...[-1,1].flatMap(side => Array.from({length:4},(_,i) => ellipsoid(side*(.14+Math.sin(i/3*Math.PI)*.028),.026,(i-1.5)*.055,.035,.024,.018)))]), 4, 10);
   const crabEyes = instances('crab-eyes', merge([-1, 1].flatMap(side => [bone(new Vector3(side * .07, .045, -.07), new Vector3(side * .085, .14, -.11), .012), ellipsoid(side * .085, .14, -.11, .026, .027, .023)])), 2, 10);
   const crabLegs = instances('crab-jointed-legs', merge([bone(new Vector3(), new Vector3(.13, .055, .02), .017), bone(new Vector3(.13, .055, .02), new Vector3(.24, -.08, .06), .012)]), 5, 40);
   const crabClaws = instances('crab-claws', merge([
@@ -62,7 +63,7 @@ export function createWildlife() {
   ]), 4, 10);
   const leftCrabLegs = instances('crab-left-legs', mirrored(crabLegs.geometry), 5, 40);
   const leftCrabClaws = instances('crab-left-claws', mirrored(crabClaws.geometry), 4, 10);
-  return { leftWing, leftPrimaries, leftCrabLegs, leftCrabClaws, group, meshes, materials, gullBody, gullEyes, gullBill, wing, primaries, gullLegs, crabBody, crabEyes, crabLegs, crabClaws, gulls: createGullStates(), crabs: createCrabStates(), root: new Object3D(), hinge: new Object3D(), tip: new Object3D(), local: new Object3D(), timer: undefined as ReturnType<typeof setTimeout> | undefined };
+  return { leftWing, leftPrimaries, leftCrabLegs, leftCrabClaws, group, meshes, materials, gullBody, gullHead, gullEyes, gullBill, wing, primaries, gullLegs, crabBody, crabEyes, crabLegs, crabClaws, gulls: createGullStates(), crabs: createCrabStates(), root: new Object3D(), hinge: new Object3D(), tip: new Object3D(), local: new Object3D(), timer: undefined as ReturnType<typeof setTimeout> | undefined };
 }
 
 export function writeGullPose(life: ReturnType<typeof createWildlife>, bird: GullState, index: number) {
@@ -74,7 +75,9 @@ export function writeGullPose(life: ReturnType<typeof createWildlife>, bird: Gul
   const bank = perched ? 0 : Math.sin(bird.time * bird.speed + bird.phase) * .14;
   root.position.copy(bird.position); root.rotation.set(perched ? -.04+Math.sin(bird.time*.7+bird.phase)*.015 : -Math.atan2(bird.velocity.y, Math.max(.5, Math.hypot(bird.velocity.x, bird.velocity.z))) * .45, bird.heading, bank);
   root.scale.setScalar(.91 + index % 4 * .075); root.updateMatrix();
-  for (const mesh of [life.gullBody, life.gullEyes, life.gullBill]) mesh.setMatrixAt(index, root.matrix);
+  life.gullBody.setMatrixAt(index, root.matrix);
+  local.position.set(0,.09,-.25); local.rotation.set(perched ? Math.sin(bird.time*.58+bird.phase)*.06 : 0, perched ? Math.sin(bird.time*.37+bird.phase)*.22 : 0, 0); local.scale.set(1,1,1); local.updateMatrix(); local.matrix.premultiply(root.matrix);
+  for (const mesh of [life.gullHead, life.gullEyes, life.gullBill]) mesh.setMatrixAt(index, local.matrix);
   local.position.set(0, 0, 0); local.rotation.set(0, 0, 0); local.scale.set(1, perched || bird.mode === 'approach' ? 1 : .26, 1); local.updateMatrix(); local.matrix.premultiply(root.matrix); life.gullLegs.setMatrixAt(index, local.matrix);
   for (let sideIndex = 0; sideIndex < 2; sideIndex++) {
     const side = sideIndex === 0 ? -1 : 1;
@@ -91,7 +94,7 @@ export function Wildlife({ runtime, paused, quality }: EnvironmentProps) {
   useFrame(({ camera }, delta) => {
     const counts = WILDLIFE_COUNTS[quality]; const pointer = runtime.current.pointerActive ? runtime.current.pointerWorld : null;
     const { root, local } = life;
-    for (const mesh of [life.gullBody, life.gullEyes, life.gullBill, life.gullLegs]) mesh.count = counts.gulls;
+    for (const mesh of [life.gullBody, life.gullHead, life.gullEyes, life.gullBill, life.gullLegs]) mesh.count = counts.gulls;
     life.wing.count = life.primaries.count = life.leftWing.count = life.leftPrimaries.count = counts.gulls;
     life.crabBody.count = life.crabEyes.count = counts.crabs; life.crabLegs.count = life.leftCrabLegs.count = counts.crabs * 4; life.crabClaws.count = life.leftCrabClaws.count = counts.crabs;
     life.gulls.forEach((bird, index) => {

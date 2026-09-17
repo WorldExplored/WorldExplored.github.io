@@ -126,7 +126,7 @@ function plantingIndex(plan: LandscapePlan) {
       insert(cell);
     }
   }
-  for (const circle of [...plan.structures, ...plan.rocks, ...plan.trees]) {
+  for (const circle of [...plan.structures, ...plan.rocks, ...plan.trees.map(tree => ({ ...tree, radius: tree.height * .15 }))]) {
     const r = circle.radius + 3;
     add(circle.x - r, circle.z - r, circle.x + r, circle.z + r, cell => cell.circles.push(circle));
   }
@@ -148,7 +148,7 @@ export function vegetationSuitability(x: number, z: number, reach: number, plan:
     const cell=plantingIndex(plan).get(`${Math.floor(x/8)},${Math.floor(z/8)}`);
     if(cell){clearance=circleClearance(x,z,cell.circles);if(clearance<=reach)return 0;
       for(const {a,b,halfWidth} of cell.segments){clearance=Math.min(clearance,distanceToSegment(x,z,a,b)-halfWidth);if(clearance<=reach)return 0;}}
-  }else clearance=Math.min(circleClearance(x,z,plan.structures),circleClearance(x,z,plan.rocks),circleClearance(x,z,plan.trees),pathClearance(x,z,plan.paths));
+  }else clearance=Math.min(circleClearance(x,z,plan.structures),circleClearance(x,z,plan.rocks),circleClearance(x,z,plan.trees.map(tree=>({...tree,radius:tree.height*.15}))),pathClearance(x,z,plan.paths));
   const free=smooth(0,.75,clearance-reach);
   if(!free)return 0;
   const slope=Math.hypot(terrainBaseHeight(x+.25,z)-terrainBaseHeight(x-.25,z),terrainBaseHeight(x,z+.25)-terrainBaseHeight(x,z-.25))*2;
@@ -240,10 +240,41 @@ export function archipelagoGeometry() {
     zones.push(distance, y, 0); exposures.push(distance > -.8 && distance < .8 ? coastExposure(x, z, distance) : 0);
     return index;
   };
+  const cuts=BRIDGES.flatMap(bridge=>bridge.samples.slice(0,-1).flatMap((sample,i)=>{
+    if(i>8&&i<bridge.samples.length-10)return [];
+    const next=bridge.samples[i+1],half=bridge.width/2;
+    const polygon=[[-1,sample],[1,sample],[1,next],[-1,next]].map(([side,value])=>{const p=value as typeof sample;return [p.point.x+p.normal.x*Number(side)*half,p.point.z+p.normal.z*Number(side)*half];});
+    return [{polygon,minX:Math.min(...polygon.map(p=>p[0])),maxX:Math.max(...polygon.map(p=>p[0])),minZ:Math.min(...polygon.map(p=>p[1])),maxZ:Math.max(...polygon.map(p=>p[1]))}];
+  }));
+  const attributes: [number[],number][]=[[positions,3],[colors,3],[uvs,2],[zones,3],[exposures,1],[ecology,3],[paving,1]];
+  const interpolate=(a:number,b:number,t:number)=>{const index=positions.length/3;for(const [values,size] of attributes)for(let k=0;k<size;k++)values.push(values[a*size+k]*(1-t)+values[b*size+k]*t);return index;};
+  function split(polygon:number[],a:number[],b:number[]) {
+    const inside:number[]=[],outside:number[]=[];
+    const signed=(v:number)=>(b[0]-a[0])*(positions[v*3+2]-a[1])-(b[1]-a[1])*(positions[v*3]-a[0]);
+    for(let i=0;i<polygon.length;i++) {
+      const p=polygon[i],q=polygon[(i+1)%polygon.length],pd=signed(p),qd=signed(q);
+      (pd>=0?inside:outside).push(p);
+      if((pd>=0)!==(qd>=0)){const v=interpolate(p,q,pd/(pd-qd));inside.push(v);outside.push(v);}
+    }
+    return {inside,outside};
+  }
+  const emit=(polygon:number[])=>{for(let i=1;i<polygon.length-1;i++)indices.push(polygon[0],polygon[i],polygon[i+1]);};
+  function face(triangle:number[]) {
+    const xs=triangle.map(i=>positions[i*3]),zs=triangle.map(i=>positions[i*3+2]);
+    const near=cuts.filter(c=>Math.max(...xs)>c.minX&&Math.min(...xs)<c.maxX&&Math.max(...zs)>c.minZ&&Math.min(...zs)<c.maxZ);
+    let remaining=[triangle];
+    for(const cut of near) {
+      const points=cut.polygon;const area=points.reduce((sum,p,i)=>{const q=points[(i+1)%points.length];return sum+p[0]*q[1]-q[0]*p[1];},0);if(area<0)points.reverse();
+      const outside:number[][]=[];
+      for(const polygon of remaining) {let within=polygon;for(let side=0;side<points.length&&within.length>=3;side++){const result=split(within,points[side],points[(side+1)%points.length]);if(result.outside.length>=3)outside.push(result.outside);within=result.inside;}}
+      remaining=outside;
+    }
+    remaining.forEach(emit);
+  }
   for (let iz = -280; iz < 110; iz++) for (let ix = -230; ix < 105; ix++) {
     if (landDistance((ix + .5) * step, (iz + .5) * step) < -6.5) continue;
     const a = vertex(ix, iz), b = vertex(ix + 1, iz), c = vertex(ix, iz + 1), d = vertex(ix + 1, iz + 1);
-    indices.push(a, c, b, b, c, d);
+    face([a,c,b]);face([b,c,d]);
   }
   geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
   geometry.setAttribute('color', new Float32BufferAttribute(colors, 3));

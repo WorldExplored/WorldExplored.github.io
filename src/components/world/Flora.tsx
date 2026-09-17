@@ -25,6 +25,8 @@ export function createFloraSites() {
     const angle = random()*Math.PI*2; const r=Math.sqrt(random())*radius; const x=ax+Math.cos(angle)*r; const z=az+Math.sin(angle)*r;
     const reach=kind==='broadleaf'?1.55:kind==='shrub'?1.3:1.0;
     if(vegetationSuitability(x,z,reach,plan)<.13)continue;
+    const spacing=kind==='broadleaf'?.85:kind==='shrub'?.65:kind==='flower'?.5:.35;
+    if(sites.some(site=>Math.hypot(x-site.x,z-site.z)<spacing))continue;
     sites.push({x,y:terrainHeight(x,z),z,kind,scale:.7+random()*.65,rotation:random()*Math.PI*2});
   }
   for(let index=0;index<3200;index++) {
@@ -58,8 +60,8 @@ function floraGeometry(kind:FloraKind) {
   function petal(cx:number,cy:number,cz:number,angle:number,color:string) {
     const start=positions.length/3;tint.set(color);
     for(let ring=0;ring<=7;ring++){
-      const t=ring/7;const w=Math.sin(t*Math.PI)*.065;const r=.035+t*.20;
-      for(const side of [-1,1]) {positions.push(cx+Math.cos(angle)*r-Math.sin(angle)*w*side,cy+Math.sin(t*Math.PI)*.045,cz+Math.sin(angle)*r+Math.cos(angle)*w*side);colors.push(tint.r,tint.g,tint.b);}
+      const t=ring/7;const w=Math.sin(t*Math.PI)*.023;const r=.016+t*.066;
+      for(const side of [-1,1]) {positions.push(cx+Math.cos(angle)*r-Math.sin(angle)*w*side,cy+Math.sin(t*Math.PI)*.018,cz+Math.sin(angle)*r+Math.cos(angle)*w*side);colors.push(tint.r,tint.g,tint.b);}
       if(ring<7){const n=start+ring*2;indices.push(n,n+1,n+2,n+1,n+3,n+2);}
     }
   }
@@ -84,7 +86,7 @@ function floraGeometry(kind:FloraKind) {
     leaf(bloom,.01,.012,y,0,'#438832',x,z);
     for(let p=0;p<9;p++)petal(x,y,z,p/9*Math.PI*2,bloom===0?'#fffdf0':bloom===1?'#f6ac83':'#ffc85d');
     const center=positions.length/3;tint.set('#dba526');positions.push(x,y+.025,z);colors.push(tint.r,tint.g,tint.b);
-    for(let p=0;p<=12;p++){const a=p/12*Math.PI*2;positions.push(x+Math.cos(a)*.065,y+.028,z+Math.sin(a)*.065);colors.push(tint.r,tint.g,tint.b);if(p<12)indices.push(center,center+p+1,center+p+2);}
+    for(let p=0;p<=12;p++){const a=p/12*Math.PI*2;positions.push(x+Math.cos(a)*.025,y+.028,z+Math.sin(a)*.025);colors.push(tint.r,tint.g,tint.b);if(p<12)indices.push(center,center+p+1,center+p+2);}
     for(let l=0;l<3;l++)leaf(l*2.399,.25,.06,y*.6,.08,'#408f30',x,z);
   }
   const geometry=new BufferGeometry();geometry.setAttribute('position',new Float32BufferAttribute(positions,3));geometry.setAttribute('color',new Float32BufferAttribute(colors,3));geometry.setIndex(indices);geometry.computeVertexNormals();return geometry;

@@ -4,14 +4,24 @@ import { useEffect, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { InstancedMesh, MeshPhysicalMaterial, Object3D, SphereGeometry, Vector3 } from 'three';
 import { world, type QualityTier } from '../../content/world';
-import { createLandscapePlan, landDistance, seededRandom } from './terrain';
+import { createLandscapePlan, landDistance, seededRandom, type LandscapeRock } from './terrain';
 import { coastExposure, coastNormal, shoreAlong, shoreBreakup } from './waves';
+import { harborWaterHeight } from './waterSurface';
 import type { EnvironmentProps } from './Water';
 
 export interface ShoreImpactSite { island: string; rock: string; x: number; z: number; nx: number; nz: number; exposure: number; energy: number; start: number; period: number }
 export interface ShoreDrop { site: number; delay: number; lift: number; outward: number; sideways: number; size: number }
 const DROPS_PER_SITE = 7;
 const GRAVITY = 9;
+
+/** A clicked shore rock disturbs water beside its exposed face. */
+export function rockImpactPosition(rock: LandscapeRock, elapsed: number) {
+  const normal = coastNormal(rock.x, rock.z);
+  let reach = rock.radius + .12;
+  while (landDistance(rock.x + normal.x * reach, rock.z + normal.z * reach) > -.12 && reach < rock.radius + 2) reach += .1;
+  const x = rock.x + normal.x * reach, z = rock.z + normal.z * reach;
+  return { x, y: harborWaterHeight(x, z, elapsed) + .06, z };
+}
 
 export function createShoreImpactSites() {
   const sites: ShoreImpactSite[] = [];

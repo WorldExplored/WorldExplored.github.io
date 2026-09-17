@@ -57,3 +57,21 @@ test('Purdue faces its separated arrival plaza',()=>{
   assert.ok(approach.dot(new Vector3(Math.sin(config.rotationY??0),0,Math.cos(config.rotationY??0)))>.99);
   assert.ok(Math.hypot(landing.x-config.position[0],landing.z-config.position[2])>landing.radius+2.8);
 });
+
+test('bridge mouths contain one walkable surface with no competing ground or round cap',()=>{
+  const material=new MeshBasicMaterial({side:DoubleSide}),ground=new Mesh(archipelagoGeometry(),material),bridges=createBridges();ground.updateMatrixWorld();bridges.root.updateMatrixWorld(true);
+  const ray=new Raycaster(new Vector3(),new Vector3(0,-1,0));
+  try{
+    assert.ok(bridges.root.children.every(mesh=>!mesh.name.includes('landing-cap')));
+    for(const bridge of BRIDGES)for(const end of [false,true])for(const index of [1,3,5,7]){
+      const sample=bridge.samples[end?bridge.samples.length-1-index:index];
+      for(const across of [-.35,0,.35]){
+        ray.ray.origin.copy(sample.point).addScaledVector(sample.normal,across).setY(30);
+        const terrain=ray.intersectObject(ground)[0];
+        assert.ok(!terrain||terrain.point.y<sample.point.y-.03,'Terrain is cut beneath the bridge mouth');
+        const deck=bridges.root.getObjectByName(`bridge-${bridge.id}-deck`)!;deck.raycast=Mesh.prototype.raycast;
+        const hit=ray.intersectObject(deck)[0];assert.ok(hit&&Math.abs(hit.point.y-sample.point.y)<.001,'The connected deck owns the walking surface');
+      }
+    }
+  }finally{ground.geometry.dispose();material.dispose();bridges.dispose();}
+});

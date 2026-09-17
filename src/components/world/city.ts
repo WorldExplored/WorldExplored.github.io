@@ -46,7 +46,7 @@ export function cityLocalToWorld(building: Readonly<CityBuilding>, point: CityPo
 
 // These are the actual open doorway thresholds, shared by architecture and circulation.
 export const cityEntrances = Object.freeze(cityBuildings.map(building => {
-  const local: CityPoint = building.family === 'public-station' ? [1.6, 2.32, 0] : [0, .24, building.depth / 2 + .08];
+  const local: CityPoint = building.family === 'public-station' ? [1.6, 2.32, 0] : [0, .33, building.depth / 2 + .08];
   return Object.freeze({ building: building.id, local, world: cityLocalToWorld(building, local), width: building.family === 'public-station' ? 1.1 : .86, yaw: building.rotation + (building.family === 'public-station' ? Math.PI / 2 : 0) });
 }));
 

@@ -1,0 +1,112 @@
+{
+  "url": "http://127.0.0.1:4177/?qaView=tree&qaCapture=interactions/shore-motion&diagnostics=1",
+  "viewport": [
+    1440,
+    900
+  ],
+  "camera": [
+    6.976958372774179,
+    8.950999999999999,
+    -4.773877254436638
+  ],
+  "target": [
+    0.20000000000000018,
+    3.1,
+    -12.9
+  ],
+  "runtime": {
+    "elapsed": 12.59789999997613,
+    "pointer": [
+      0.7333333333333334,
+      -0.04444444444444451
+    ],
+    "pointerActive": true,
+    "pointerWorld": [
+      3.3948490028957305,
+      0,
+      -22.012627742140175
+    ],
+    "cloudInteraction": 0,
+    "plantInteraction": 0,
+    "moving": false,
+    "hovered": null,
+    "ripple": {
+      "x": 4.510553559295708,
+      "z": -22.407719863943843,
+      "time": 12.41559999999401,
+      "serial": 1
+    },
+    "sunDirection": [
+      -0.49727799161082237,
+      0.4689735238560091,
+      -0.7299167301696706
+    ],
+    "nature": {
+      "x": 4.510553559295708,
+      "y": 0.2035072018171928,
+      "z": -22.407719863943843,
+      "kind": "rock",
+      "time": 12.41559999999401,
+      "serial": 1
+    },
+    "dragCount": 0,
+    "dragging": false,
+    "frames": 750
+  },
+  "audit": {
+    "rendererCreations": 1,
+    "configurations": 1,
+    "resizes": 0,
+    "dprChanges": 0,
+    "qualityChanges": 1,
+    "frameLoopChanges": 1,
+    "contextLosses": 0,
+    "contextRestorations": 0,
+    "sceneErrors": 0,
+    "unhandledErrors": 0,
+    "samples": 70,
+    "blackFrames": 0,
+    "worstBlackFraction": 0,
+    "firstSample": 1129,
+    "lastSample": 13943.5
+  },
+  "quality": "high",
+  "audio": "<div class=\"ambience-control\" role=\"group\" aria-label=\"Environmental ambience\" data-audio-state=\"unstarted\" data-bell-strikes=\"0\"><button type=\"button\" class=\"audio-control__button\" aria-pressed=\"false\"><span aria-hidden=\"true\">≈</span><span>Start ambience</span></button></div>",
+  "controls": [
+    {
+      "label": "Cycle fountain jets",
+      "pressed": "false"
+    },
+    {
+      "label": "Illuminate transit route",
+      "pressed": "false"
+    },
+    {
+      "label": "Align solar panels",
+      "pressed": "false"
+    },
+    {
+      "label": "Open greenhouse vents",
+      "pressed": "false"
+    },
+    {
+      "label": "Ring harbor buoy",
+      "pressed": "false"
+    },
+    {
+      "label": "Turn wind turbine into breeze",
+      "pressed": "false"
+    },
+    {
+      "label": "≈Start ambience",
+      "pressed": "false"
+    }
+  ],
+  "render": {
+    "frame": 777,
+    "calls": 162,
+    "triangles": 1797272,
+    "points": 34,
+    "lines": 0
+  }
+}

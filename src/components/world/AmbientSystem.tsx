@@ -4,11 +4,13 @@
 /* eslint-disable react-hooks/immutability */
 
 import { measureConstruction } from './renderDiagnostics';
+import { rockImpactPosition } from './ShoreImpacts';
+import { coastalSoundScene } from './coastalAudio';
+import { barkTexture, treeBranches, treeWoodGeometry } from './TreeGeometry';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useFrame, type ThreeEvent } from '@react-three/fiber';
-import { BufferGeometry, CatmullRomCurve3, Color, DataTexture, DoubleSide, Float32BufferAttribute, InstancedBufferAttribute, InstancedMesh, LinearFilter, LinearMipmapLinearFilter, MeshPhysicalMaterial, Object3D, Points, PointsMaterial, Raycaster, RepeatWrapping, ShaderMaterial, SRGBColorSpace, SphereGeometry, TubeGeometry, Vector2, Vector3 } from 'three';
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
+import { BufferGeometry, Group, Color, DataTexture, DoubleSide, Float32BufferAttribute, InstancedBufferAttribute, InstancedMesh, LinearFilter, LinearMipmapLinearFilter, MeshPhysicalMaterial, Object3D, Points, PointsMaterial, Raycaster, RepeatWrapping, ShaderMaterial, SRGBColorSpace, SphereGeometry, Vector2, Vector3 } from 'three';
 import { world, type SceneRuntime } from '../../content/world';
 import { createLandscapePlan, generatePlantPositions, generatePlantPositionsAsync, archipelagoGeometry, seededRandom, vegetationSuitability, landDistance, terrainMeshHeight, terrainSlope, type LandscapePlan, type PlantPosition } from './terrain';
 import { createTownLandscape } from './TownLandscape';
@@ -182,7 +184,7 @@ function foliageGeometry() {
   const leaf = new Object3D();
   const point = new Vector3();
   // Individual curved leaves make an open crown with a fine, irregular edge.
-  for (let index = 0; index < 96; index++) {
+  for (let index = 0; index < 144; index++) {
     const azimuth = random() * Math.PI * 2;
     const y = random() * 2 - 1;
     const radius = .78 * Math.cbrt(random());
@@ -190,8 +192,8 @@ function foliageGeometry() {
     leaf.position.set(Math.cos(azimuth) * radial, y * radius, Math.sin(azimuth) * radial);
     leaf.rotation.set((random() - .5) * Math.PI, random() * Math.PI * 2, (random() - .5) * .7);
     leaf.updateMatrix();
-    const length = .34 + random() * .20;
-    const width = .12 + random() * .07;
+    const length = .17 + random() * .11;
+    const width = .052 + random() * .026;
     const shade = .66 + random() * .34;
     const start = positions.length / 3;
     const outline = [[0, 0, -.5], [-1, .03, -.16], [-.7, .065, .28], [0, .025, .5], [.7, .065, .28], [1, .03, -.16], [0, .10, 0]];
@@ -206,18 +208,6 @@ function foliageGeometry() {
   geometry.setAttribute('color', new Float32BufferAttribute(colors, 3));
   geometry.setIndex(indices);
   geometry.computeVertexNormals();
-  return geometry;
-}
-
-function treeGeometry() {
-  const paths = [
-    [[0, 0, 0], [.03, .3, 0], [-.025, .57, .015], [.02, .9, 0]],
-    [[0, .36, 0], [-.08, .51, .025], [-.21, .64, .04]],
-    [[0, .48, 0], [.09, .59, -.03], [.22, .73, -.10]],
-  ];
-  const tubes = paths.map((points, index) => new TubeGeometry(new CatmullRomCurve3(points.map(point => new Vector3(...point))), 8, index ? .012 : .026, 7, false));
-  const geometry = mergeGeometries(tubes)!;
-  tubes.forEach(tube => tube.dispose());
   return geometry;
 }
 
@@ -266,11 +256,11 @@ function makeLandscape(plan: LandscapePlan) {
       vec3 soil = mix(vec3(.22,.16,.095),vec3(.33,.25,.14),broad);
       vec3 groundcover=mix(vec3(.07,.22,.024),vec3(.18,.38,.045),broad);
       vec3 inland=mix(soil,groundcover,grass);
-      vec3 townGravel=vec3(.29,.28,.22)*(.91+grain*.12);
+      vec3 townGravel=mix(vec3(.19,.22,.095),vec3(.27,.29,.14),broad)*(.91+grain*.12);
       inland=mix(inland,mix(townGravel,groundcover,grass),ecology.z);
       vec3 surface=mix(sand,inland,ecology.y);
       surface=mix(surface,vec3(.23,.26,.22)*(.9+broad*.2),stone);
-      vec3 pavingColor=mix(vec3(.32,.30,.23),vec3(.25,.29,.28),ecology.z);
+      vec3 pavingColor=mix(vec3(.32,.30,.23),vec3(.16,.215,.215),ecology.z);
       float joints=max(1.-smoothstep(.012,.025,abs(fract(groundXZ.x*.9)-.5)),1.-smoothstep(.012,.025,abs(fract(groundXZ.y*.9)-.5)));
       pavingColor*=.96+grain*.08-joints*.055*ecology.z;
       surface=mix(surface,pavingColor,pathMask);
@@ -300,10 +290,11 @@ function makeLandscape(plan: LandscapePlan) {
     transform.position.set(x,terrainMeshHeight(x,z)+.012,z); transform.rotation.set(0,shellRandom()*Math.PI*2,0); transform.scale.set(size,size,size*.8); transform.updateMatrix(); shells.setMatrixAt(shellCount++,transform.matrix);
   }
   shells.count = shellCount; shells.computeBoundingSphere();
-  const trunkGeometry = treeGeometry();
+  const trunkGeometries = [0, 1, 2].map(treeWoodGeometry);
+  const bark = barkTexture();
   const crownGeometry = foliageGeometry();
-  const trunkMaterial = new MeshPhysicalMaterial({ color: '#765238', roughness: .96, envMapIntensity: .1 });
-  const crownMaterial = new MeshPhysicalMaterial({ color: '#327d27', vertexColors: true, side: DoubleSide, roughness: .73, clearcoat: .08, clearcoatRoughness: .4, envMapIntensity: .15 });
+  const trunkMaterial = new MeshPhysicalMaterial({ color: '#8c7055', vertexColors: true, bumpMap: bark, bumpScale: .028, roughness: .93, envMapIntensity: .13 });
+  const crownMaterial = new MeshPhysicalMaterial({ color: '#49822a', vertexColors: true, side: DoubleSide, roughness: .73, clearcoat: .08, clearcoatRoughness: .4, envMapIntensity: .15 });
   const canopyWind = { time: { value: 0 }, strength: { value: 1 }, pointer: { value: new Vector3(10000,0,10000) }, pointerStrength: { value: 0 } };
   crownMaterial.userData.canopyWind = canopyWind;
   crownMaterial.onBeforeCompile = shader => {
@@ -321,11 +312,15 @@ function makeLandscape(plan: LandscapePlan) {
       transformed.xz += canopyAway/max(length(canopyAway),.2)*canopyNear*.32;`);
   };
   crownMaterial.customProgramCacheKey = () => 'grove-canopy-wind';
-  const trunks = new InstancedMesh(trunkGeometry, trunkMaterial, plan.trees.length);
+  const trunks = new Group();
+  const woodMeshes = trunkGeometries.map((geometry, form) => {
+    const mesh = new InstancedMesh(geometry, trunkMaterial, plan.trees.length);
+    mesh.count = 0; mesh.castShadow = true; mesh.receiveShadow = true; mesh.name = `tree-wood-${form}`; mesh.userData.treeIndices = []; trunks.add(mesh); return mesh;
+  });
   const crowns = new InstancedMesh(crownGeometry, crownMaterial, plan.trees.length * 9);
   trunks.name = 'grove-trunks';
   crowns.name = 'grove-foliage';
-  trunks.castShadow = true;
+
   crowns.castShadow = true;
   crowns.receiveShadow = true;
   const leaf = new Object3D();
@@ -333,23 +328,23 @@ function makeLandscape(plan: LandscapePlan) {
   const random = seededRandom(643);
   const tint = new Color();
   plan.trees.forEach((item, index) => {
-    tree.position.set(item.x, item.y, item.z); tree.scale.setScalar(item.height); tree.rotation.set(0, item.rotation, 0); tree.updateMatrix(); trunks.setMatrixAt(index, tree.matrix);
+    tree.position.set(item.x, item.y, item.z); tree.scale.setScalar(item.height); tree.rotation.set(0, item.rotation, 0); tree.updateMatrix(); const wood = woodMeshes[index % 3]; wood.userData.treeIndices.push(index); wood.setMatrixAt(wood.count++, tree.matrix);
     for (let cluster = 0; cluster < 9; cluster++) {
-      const angle = cluster * 2.399;
-      const spread = cluster < 6 ? .19 : .10;
-      const size = .13 + random() * .035;
-      leaf.position.set(Math.cos(angle) * spread, .58 + cluster / 9 * .31 + (random() - .5) * .08, Math.sin(angle) * spread);
+      const limb = treeBranches(index % 3)[cluster];
+      const angle = limb.angle;
+      const size = limb.size + random() * .025;
+      leaf.position.copy(limb.tip);
       leaf.scale.set(size * (1.05 + random() * .3), size * (1 + random() * .5), size);
       leaf.rotation.set(random() * .3, angle, (random() - .5) * .4);
       leaf.updateMatrix(); transform.matrix.multiplyMatrices(tree.matrix, leaf.matrix); crowns.setMatrixAt(index * 9 + cluster, transform.matrix);
       tint.setRGB(.78 + random() * .22, .88 + random() * .12, .68 + random() * .22); crowns.setColorAt(index * 9 + cluster, tint);
     }
   });
-  trunks.computeBoundingSphere(); crowns.computeBoundingSphere();
+  woodMeshes.forEach(mesh => mesh.computeBoundingSphere()); crowns.computeBoundingSphere();
   return { ground, material, rocks, trunks, crowns, shells, shoreDetails, townLandscape, canopyWind, shoreTime, plan, dispose() {
-    [ground, trunkGeometry, crownGeometry, shellGeometry].forEach(geometry => geometry.dispose());
+    [ground, ...trunkGeometries, crownGeometry, shellGeometry].forEach(geometry => geometry.dispose());
     [material, trunkMaterial, crownMaterial, shellMaterial].forEach(value => value.dispose());
-    texture.dispose(); shoreDetails.dispose(); townLandscape.dispose(); shells.dispose(); rockResources.dispose(); trunks.dispose(); crowns.dispose();
+    bark.dispose(); texture.dispose(); shoreDetails.dispose(); townLandscape.dispose(); shells.dispose(); rockResources.dispose(); woodMeshes.forEach(mesh => mesh.dispose()); crowns.dispose();
   } };
 }
 
@@ -394,16 +389,17 @@ function retain(resource: object, dispose: () => void) {
   return () => { disposalTimers.set(resource, setTimeout(dispose, 0)); };
 }
 function TerrainSystem({ runtime, paused, quality }: EnvironmentProps) {
+  const invalidate = useThree(state => state.invalidate);
   const landscape = useMemo(() => measureConstruction('terrain-trees', () => makeLandscape(createLandscapePlan())), []);
   useEffect(() => retain(landscape, () => landscape.dispose()), [landscape]);
-  useFrame(() => { const state=runtime.current;landscape.canopyWind.pointer.value.fromArray(state.pointerWorld);landscape.canopyWind.pointerStrength.value=state.pointerActive ? (paused ? .22 : 1) : 0;if (!paused) { landscape.canopyWind.time.value = state.elapsed; landscape.shoreTime.value = state.elapsed * world.environment.waterSpeed; } });
+  useFrame(() => { const state=runtime.current;coastalSoundScene.foliageDistance = Math.min(...landscape.plan.trees.map(tree => Math.hypot(tree.x-coastalSoundScene.listener[0], tree.z-coastalSoundScene.listener[2])));landscape.canopyWind.pointer.value.fromArray(state.pointerWorld);landscape.canopyWind.pointerStrength.value=state.pointerActive ? (paused ? .22 : 1) : 0;const treeAge=state.elapsed-state.nature.time;if(state.nature.kind==='tree'&&treeAge>=0&&treeAge<2){landscape.canopyWind.pointer.value.set(state.nature.x+.25,state.nature.y,state.nature.z);landscape.canopyWind.pointerStrength.value=paused?.22:Math.sin(Math.min(1,treeAge/.18)*Math.PI/2)*Math.exp(-treeAge*1.5);}if (!paused) { landscape.canopyWind.time.value = state.elapsed; landscape.shoreTime.value = state.elapsed * world.environment.waterSpeed; } });
   useEffect(() => { landscape.canopyWind.strength.value = quality === 'low' ? 0 : 1; }, [landscape, quality]);
-  const nature=(kind:'tree'|'rock',x:number,y:number,z:number)=>{const state=runtime.current;state.nature={x,y,z,kind,time:state.elapsed,serial:state.nature.serial+1};if(kind==='rock')state.ripple={x,z,time:state.elapsed,serial:state.ripple.serial+1};};
-  const treeClick=(event:ThreeEvent<MouseEvent>)=>{event.stopPropagation();if(event.delta>6||runtime.current.dragging||event.instanceId===undefined)return;const tree=landscape.plan.trees[event.instanceId];if(tree)nature('tree',tree.x,tree.y+tree.height*.72,tree.z);};
-  const rockClick=(event:ThreeEvent<MouseEvent>)=>{event.stopPropagation();if(event.delta>6||runtime.current.dragging||event.instanceId===undefined)return;const entries=event.object.userData.entries as LandscapePlan['rocks']|undefined;const rock=entries?.[event.instanceId];if(rock)nature('rock',rock.x,.05,rock.z);};
+  const nature=(kind:'tree'|'rock',x:number,y:number,z:number)=>{const state=runtime.current;state.nature={x,y,z,kind,time:state.elapsed,serial:state.nature.serial+1};if(kind==='rock')state.ripple={x,z,time:state.elapsed,serial:state.ripple.serial+1};invalidate();};
+  const treeClick=(event:ThreeEvent<MouseEvent>)=>{event.stopPropagation();if(event.delta>6||runtime.current.dragging||event.instanceId===undefined)return;const index = event.object.name === 'grove-foliage' ? Math.floor(event.instanceId / 9) : event.object.userData.treeIndices?.[event.instanceId]; const tree=landscape.plan.trees[index];if(tree)nature('tree',tree.x,tree.y+tree.height*.72,tree.z);};
+  const rockClick=(event:ThreeEvent<MouseEvent>)=>{event.stopPropagation();if(event.delta>6||runtime.current.dragging||event.instanceId===undefined)return;const entries=event.object.userData.entries as LandscapePlan['rocks']|undefined;const rock=entries?.[event.instanceId];if(rock){const impact=rockImpactPosition(rock,runtime.current.elapsed);nature('rock',impact.x,impact.y,impact.z);}};
   return <group dispose={null}>
     <mesh geometry={landscape.ground} material={landscape.material} receiveShadow name="archipelago-land" />
-    <primitive object={landscape.shells} /><primitive object={landscape.shoreDetails.root} /><primitive object={landscape.townLandscape.root} /><primitive object={landscape.rocks} onClick={rockClick}/><primitive object={landscape.trunks} onClick={treeClick}/><primitive object={landscape.crowns} raycast={()=>{}} />
+    <primitive object={landscape.shells} /><primitive object={landscape.shoreDetails.root} /><primitive object={landscape.townLandscape.root} /><primitive object={landscape.rocks} onClick={rockClick}/><primitive object={landscape.trunks} onClick={treeClick}/><primitive object={landscape.crowns} onClick={treeClick} />
   </group>;
 }
 function PlantSystem({ runtime, paused, quality, positions, onReady }: EnvironmentProps & { positions?: PlantPosition[]; onReady?: () => void }) {

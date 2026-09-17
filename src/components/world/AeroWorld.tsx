@@ -50,12 +50,21 @@ function Sky({runtime}:{runtime:MutableRefObject<SceneRuntime>}) {
 }
 
 function Daylight({runtime,shadows}:{runtime:MutableRefObject<SceneRuntime>;shadows:boolean}){
-  const light=useRef<DirectionalLight>(null);const direction=useMemo(()=>new Vector3(),[]);const bucket=useRef(-1);
-  useFrame(()=>{
-    const next=Math.floor(runtime.current.elapsed*2);if(next===bucket.current&&bucket.current>=0)return;bucket.current=next;
-    daylightDirectionAt(runtime.current.elapsed,direction);runtime.current.sunDirection=direction.toArray();
-    if(light.current){light.current.position.copy(direction).multiplyScalar(260);light.current.target.position.set(-6,0,-24);light.current.target.updateMatrixWorld();}
-  },-1);
+  const light = useRef<DirectionalLight>(null);
+  const direction = useMemo(() => new Vector3(), []);
+  useFrame(({ camera, controls }) => {
+    daylightDirectionAt(runtime.current.elapsed, direction); runtime.current.sunDirection = direction.toArray();
+    if (!light.current) return;
+    const target = (controls as unknown as { target?: Vector3 } | null)?.target;
+    const extent = target ? Math.max(14, Math.min(95, camera.position.distanceTo(target) * .8)) : 80;
+    const texel = extent / 1024;
+    light.current.target.position.set(Math.round((target?.x ?? -6) / texel) * texel, 1, Math.round((target?.z ?? -24) / texel) * texel);
+    light.current.position.copy(direction).multiplyScalar(260).add(light.current.target.position);
+    light.current.target.updateMatrixWorld();
+    const shadow = light.current.shadow.camera;
+    shadow.left = shadow.bottom = -extent; shadow.right = shadow.top = extent;
+    shadow.near = 130; shadow.far = 390; shadow.updateProjectionMatrix();
+  });
   return <directionalLight ref={light} position={new Vector3(...runtime.current.sunDirection).multiplyScalar(260)} intensity={world.lighting.sunIntensity} color={world.lighting.sunColor} castShadow={shadows} shadow-mapSize={[2048,2048]} shadow-camera-left={-52} shadow-camera-right={76} shadow-camera-top={42} shadow-camera-bottom={-20} shadow-camera-near={105} shadow-camera-far={330} shadow-normalBias={.025} shadow-bias={-.00015}/>;
 }
 

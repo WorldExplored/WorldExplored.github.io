@@ -69,16 +69,20 @@ test('all visible building vertices obey the exported collision footprints and h
     }
     assert.equal(seen.size, cityBuildings.length);
     assert.ok([...counts.values()].every(count => count > 1000), 'Each archetype includes inspectable architectural detail.');
-    assert.ok(meshesIn(item.scene).filter(mesh=>mesh.name.startsWith('eco-city-')).length<=9,'Static architecture is merged by its nine distinct material families.');
+    for (const building of cityBuildings) {
+      const owner=item.scene.getObjectByName(`city-building-${building.id}`)!;
+      assert.ok(owner, 'Each building owns its visible geometry.');
+      assert.ok(owner.children.filter(mesh=>mesh.name.startsWith('eco-city-')).length<=9, 'At most one batch per finish per building.');
+    }
     let drawCalls = 0;
     item.scene.traverseVisible(object => {
       const mesh = object as Mesh; if (!mesh.isMesh) return;
       if (Array.isArray(mesh.material)) drawCalls += mesh.geometry.groups.filter(group => mesh.material instanceof Array && mesh.material[group.materialIndex ?? 0]?.visible).length;
       else if (mesh.material.visible) drawCalls++;
     });
-    // 41 at rest, plus the activated route inlay and one keyboard focus outline.
+    // Local hover boundaries and attached lift cabins add bounded per-building draws.
     // Invisible picking proxies and hidden focus outlines submit no GPU draws.
-    assert.ok(drawCalls <= 43, `Town architecture, water and six working controls use ${drawCalls} rendered draws (budget 43).`);
+    assert.ok(drawCalls <= 220, `Town architecture, water and six working controls use ${drawCalls} rendered draws (budget 220).`);
   } finally { await item.renderer.unmount(); }
 });
 
@@ -137,4 +141,23 @@ test('quality, selection and pause preserve architecture and dispose mounted res
   await item.renderer.unmount();
   await new Promise(resolve => setTimeout(resolve, 10));
   assert.ok([...resources.values()].every(record => record.disposals === 1));
+});
+
+test('background-building hover stays local across child surfaces and never owns navigation',async()=>{
+  const item=await fixture();
+  try{
+    const building=cityBuildings[0],owner=item.renderer.scene.find(node=>node.instance.name===`city-building-${building.id}`);
+    const materials=()=>meshesIn(owner.instance).map(mesh=>mesh.material as import('three').MeshPhysicalMaterial).filter(material=>material.userData.hoverResponse);
+    const other=item.scene.getObjectByName(`city-building-${cityBuildings[1].id}`)!;
+    await item.renderer.fireEvent(owner,'pointerOver',{pointerType:'mouse',stopPropagation(){}});await item.renderer.advanceFrames(30,1/60);
+    assert.ok(materials().some(material=>material.emissiveIntensity>.1));
+    assert.ok(meshesIn(other).every(mesh=>!(mesh.material as import('three').MeshPhysicalMaterial).userData.hoverResponse||(mesh.material as import('three').MeshPhysicalMaterial).emissiveIntensity===0));
+    await item.renderer.fireEvent(owner,'pointerOut',{});
+    await new Promise(resolve=>setTimeout(resolve,50));
+    await item.renderer.fireEvent(owner,'pointerMove',{pointerType:'mouse',stopPropagation(){}});await item.renderer.advanceFrames(1,1/60);
+    assert.ok(materials().some(material=>material.emissiveIntensity>.1));
+    assert.equal(owner.props.onClick,undefined);assert.equal(item.runtime.current.hovered,null);
+    await item.renderer.fireEvent(owner,'pointerOut',{});await new Promise(resolve=>setTimeout(resolve,150));await item.renderer.advanceFrames(60,1/60);
+    assert.ok(materials().every(material=>material.emissiveIntensity<.001));
+  }finally{await item.renderer.unmount();}
 });

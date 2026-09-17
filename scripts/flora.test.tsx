@@ -16,7 +16,7 @@ test('clustered flora stays grounded and clears structures and circulation',()=>
   for(const site of sites){
     assert.ok(Math.abs(site.y-terrainHeight(site.x,site.z))<1e-9);
     const reach=site.kind==='broadleaf'?1.55:site.kind==='shrub'?1.3:site.kind==='flower'?1:.9;
-    for(const circle of [...plan.structures,...plan.rocks,...plan.trees])assert.ok(Math.hypot(site.x-circle.x,site.z-circle.z)>circle.radius+reach-.001);
+    for(const circle of [...plan.structures,...plan.rocks,...plan.trees.map(tree=>({...tree,radius:tree.height*.15}))])assert.ok(Math.hypot(site.x-circle.x,site.z-circle.z)>circle.radius+reach-.001);
     for(const path of plan.paths)for(let i=1;i<path.points.length;i++)assert.ok(distanceToSegment(site.x,site.z,path.points[i-1],path.points[i])>path.width/2+reach-.001);
     if(site.kind==='reeds'||site.kind==='beach')assert.ok(landDistance(site.x,site.z)<3.81);
   }

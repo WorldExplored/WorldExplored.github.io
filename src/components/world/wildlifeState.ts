@@ -140,7 +140,7 @@ export function stepGull(state: GullState, delta: number, camera: Vector3, point
   }
   // A bounded neighbor check guards unusual simultaneous takeoffs without moving a bird into terrain.
   const flock=flocks.get(state)!;
-  if(flock.birds.some(other=>other!==state && other.position.distanceToSquared(state.position)<2.25 && other.position.distanceToSquared(state.position)<other.position.distanceToSquared(previous))){
+  if(flock.birds.some(other=>other!==state && other.position.distanceToSquared(state.position)<4.84 && other.position.distanceToSquared(state.position)<other.position.distanceToSquared(previous))){
     state.position.copy(previous);state.age-=dt;if(!['approach','takeoff'].includes(state.mode))state.routeTime-=dt;
   }
   state.velocity.copy(state.position).sub(previous).divideScalar(dt);

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo } from 'react';
-import { BufferGeometry, Curve, CylinderGeometry, Float32BufferAttribute, Group, Mesh, MeshPhysicalMaterial, TubeGeometry, Vector3 } from 'three';
+import { BoxGeometry, BufferGeometry, Curve, CylinderGeometry, Float32BufferAttribute, Group, Mesh, MeshPhysicalMaterial, TubeGeometry, Vector3 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { BRIDGES, type BridgePlan } from './bridgePlan';
 import { terrainHeight } from './terrain';
@@ -51,7 +51,15 @@ export function createBridges() {
         add(new CylinderGeometry(.105,.17,top-bottom,10).translate(p.x,(top+bottom)/2,p.z),base,`bridge-${bridge.id}-support-${i}-${side}`);
       }
     }
-    bridge.landings.forEach((landing,i)=>add(new CylinderGeometry(landing.radius,landing.radius,.22,48).translate(landing.x,landing.top-.11,landing.z),shell,`bridge-${bridge.id}-landing-${i}`));
+    // The terrain owns the approach surface. Abutments sit entirely below the
+    // deck, so there is no second horizontal cap competing with its pixels.
+    bridge.landings.forEach((landing, i) => {
+      const sample = bridge.samples[i ? bridge.samples.length - 1 : 0];
+      const geometry = new BoxGeometry(bridge.width + .22, .38, .26);
+      geometry.rotateY(Math.atan2(sample.normal.z, -sample.normal.x));
+      geometry.translate(landing.x, landing.top - bridge.thickness - .2, landing.z);
+      add(geometry, base, `bridge-${bridge.id}-abutment-${i}`);
+    });
   }
   return {root,dispose(){root.traverse(object=>{if(object instanceof Mesh)object.geometry.dispose();});shell.dispose();rail.dispose();base.dispose();}};
 }

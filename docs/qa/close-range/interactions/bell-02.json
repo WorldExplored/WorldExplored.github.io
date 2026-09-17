@@ -1,0 +1,111 @@
+{
+  "url": "http://127.0.0.1:4177/?qaView=bell&qaCapture=interactions/bell&diagnostics=1",
+  "viewport": [
+    1440,
+    900
+  ],
+  "camera": [
+    -3.1583476278300884,
+    4.040575098677317,
+    -49.72005071821172
+  ],
+  "runtime": {
+    "elapsed": 30.387100000023857,
+    "pointer": [
+      -0.5697642008463542,
+      -0.7107343207465278
+    ],
+    "pointerActive": true,
+    "pointerWorld": [
+      -9.029786339188078,
+      0,
+      -52.54829337473664
+    ],
+    "cloudInteraction": 0,
+    "plantInteraction": 0,
+    "moving": false,
+    "hovered": null,
+    "ripple": {
+      "x": -27.0695724245505,
+      "z": 30.740009370790496,
+      "time": 26.28700000002979,
+      "serial": 1
+    },
+    "sunDirection": [
+      -0.4883314135740843,
+      0.4726578625797751,
+      -0.7335713840235691
+    ],
+    "nature": {
+      "x": -27.0695724245505,
+      "y": -0.14782372990042195,
+      "z": 30.740009370790496,
+      "kind": "fish",
+      "time": 26.28700000002979,
+      "serial": 1
+    },
+    "dragCount": 0,
+    "dragging": false,
+    "frames": 1814
+  },
+  "audit": {
+    "rendererCreations": 1,
+    "configurations": 1,
+    "resizes": 0,
+    "dprChanges": 0,
+    "qualityChanges": 1,
+    "frameLoopChanges": 1,
+    "contextLosses": 0,
+    "contextRestorations": 0,
+    "sceneErrors": 0,
+    "unhandledErrors": 0,
+    "samples": 166,
+    "blackFrames": 0,
+    "worstBlackFraction": 0,
+    "firstSample": 1145.800000011921,
+    "lastSample": 31984.09999999404
+  },
+  "quality": "high",
+  "audio": "<div class=\"ambience-control\" role=\"group\" aria-label=\"Environmental ambience\" data-audio-state=\"ready\" data-bell-strikes=\"1\"><button type=\"button\" class=\"audio-control__button\" aria-pressed=\"false\"><span aria-hidden=\"true\">≈</span><span>Start ambience</span></button><button type=\"button\" class=\"audio-control__button audio-control__button--square\" aria-label=\"Mute ambience\" aria-pressed=\"false\">◖</button><label class=\"ambience-control__volume\"><span>Ambience volume</span><input aria-label=\"Ambience volume\" min=\"0\" max=\"1\" step=\"0.01\" type=\"range\" value=\"0.34\"></label><a class=\"audio-control__button\" href=\"/audio/coast/credits.html\" target=\"_blank\" rel=\"noreferrer\" aria-label=\"Coastal sound credits\">ⓘ</a></div>",
+  "controls": [
+    {
+      "label": "Cycle fountain jets",
+      "pressed": "false"
+    },
+    {
+      "label": "Illuminate transit route",
+      "pressed": "false"
+    },
+    {
+      "label": "Align solar panels",
+      "pressed": "false"
+    },
+    {
+      "label": "Open greenhouse vents",
+      "pressed": "false"
+    },
+    {
+      "label": "Ring harbor buoy",
+      "pressed": "false"
+    },
+    {
+      "label": "Turn wind turbine into breeze",
+      "pressed": "false"
+    },
+    {
+      "label": "≈Start ambience",
+      "pressed": "false"
+    },
+    {
+      "label": "Mute ambience",
+      "pressed": "false"
+    }
+  ],
+  "render": {
+    "frame": 1842,
+    "calls": 179,
+    "triangles": 1801552,
+    "points": 16,
+    "lines": 0
+  }
+}

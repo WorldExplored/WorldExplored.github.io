@@ -1,5 +1,6 @@
 import { Vector3 } from 'three';
 import type { QualityTier } from '../../content/world';
+import { harborWaterHeight } from './waterSurface';
 import { BRIDGES } from './bridgePlan';
 import { ISLANDS, islandContour, landDistance, seededRandom, terrainHeight, type Island } from './terrain';
 
@@ -11,10 +12,10 @@ export interface FishSpecies {
   tailRate: number; tailLength: number; halfHeight: number; radius: number; pattern: string;
 }
 export const FISH_SPECIES: readonly FishSpecies[] = [
-  { id: 'reef', population: { high: 10, medium: 6, low: 4 }, band: 3.2, depth: .62, speed: .12, turnRate: 4.6, routeSpan: .105, spacing: .30, escape: 1.25, escapeOut: .75, recovery: 2.3, tailRate: 10, tailLength: .18, halfHeight: .22, radius: .48, pattern: 'three dark vertical bars and pale belly' },
-  { id: 'silver', population: { high: 8, medium: 5, low: 3 }, band: 5.2, depth: .75, speed: .19, turnRate: 2.4, routeSpan: .18, spacing: .57, escape: 1.7, escapeOut: .35, recovery: 1.7, tailRate: 7.8, tailLength: .39, halfHeight: .20, radius: .76, pattern: 'silver flank with slate dorsal stripe' },
-  { id: 'sunfish', population: { high: 7, medium: 4, low: 2 }, band: 3.8, depth: .9, speed: .075, turnRate: 1.9, routeSpan: .10, spacing: .45, escape: .75, escapeOut: .95, recovery: 1.8, tailRate: 5.5, tailLength: .23, halfHeight: .33, radius: .61, pattern: 'amber shoulders and yellow belly with dark fin tips' },
-  { id: 'bottom', population: { high: 6, medium: 4, low: 2 }, band: 4.2, depth: 0, speed: .046, turnRate: 3.2, routeSpan: .07, spacing: .51, escape: .52, escapeOut: .23, recovery: 3, tailRate: 4.2, tailLength: .26, halfHeight: .19, radius: .64, pattern: 'mottled charcoal back and sand-colored edges' },
+  { id: 'reef', population: { high: 10, medium: 6, low: 4 }, band: 3.2, depth: .62, speed: .12, turnRate: 4.6, routeSpan: .105, spacing: .85, escape: 1.25, escapeOut: .75, recovery: 2.3, tailRate: 10, tailLength: .18, halfHeight: .22, radius: .48, pattern: 'three dark vertical bars and pale belly' },
+  { id: 'silver', population: { high: 8, medium: 5, low: 3 }, band: 5.2, depth: .75, speed: .19, turnRate: 2.4, routeSpan: .18, spacing: 1.45, escape: 1.7, escapeOut: .35, recovery: 1.7, tailRate: 7.8, tailLength: .39, halfHeight: .20, radius: .76, pattern: 'silver flank with slate dorsal stripe' },
+  { id: 'sunfish', population: { high: 7, medium: 4, low: 2 }, band: 3.8, depth: .9, speed: .075, turnRate: 1.9, routeSpan: .10, spacing: 1.05, escape: .75, escapeOut: .95, recovery: 1.8, tailRate: 5.5, tailLength: .23, halfHeight: .33, radius: .61, pattern: 'amber shoulders and yellow belly with dark fin tips' },
+  { id: 'bottom', population: { high: 6, medium: 4, low: 2 }, band: 4.2, depth: 0, speed: .046, turnRate: 3.2, routeSpan: .07, spacing: 1.1, escape: .52, escapeOut: .23, recovery: 3, tailRate: 4.2, tailLength: .26, halfHeight: .19, radius: .64, pattern: 'mottled charcoal back and sand-colored edges' },
 ];
 // Maximum members; actual tier populations belong to each species.
 export const FISH_PER_SCHOOL = { high: 10, medium: 6, low: 4 } satisfies Record<QualityTier, number>;
@@ -22,7 +23,7 @@ export interface FishSchool { island: Island; angle: number; phase: number; spee
 export interface SchoolFish {
   school: FishSchool; schoolIndex: number; member: number; variant: number; position: Vector3; heading: number; bank: number;
   time: number; scatterAlong: number; scatterOut: number; velocityAlong: number; velocityOut: number;
-  lastRipple: number; jumpAge: number; nextJump: number; jumpPitch: number; glint: number;
+  reentry: Vector3; lastRipple: number; jumpAge: number; nextJump: number; jumpPitch: number; glint: number;
 }
 export interface FishDisturbance { camera: Vector3; pointer: readonly number[] | null; ripple: { x: number; z: number; serial: number } }
 const TAU = Math.PI * 2;
@@ -53,7 +54,7 @@ export function createFishSchools(): FishSchool[] {
       let safe = true;
       const extent = kind.routeSpan + .035 + (2.1 + 2 * kind.spacing) / Math.min(island.rx, island.rz);
       // Validate the entire route and disturbance envelope, including the full body radius.
-      for (let sample = 0; sample <= 48 && safe; sample++) for (const offset of [0, .5, 1, 1.5, 2]) {
+      for (let sample = 0; sample <= 48 && safe; sample++) for (const offset of [0, .75, 1.5, 2.5, 3.5]) {
         writeShorePoint(island, angle + (sample / 24 - 1) * extent, kind.band + offset, point);
         if (landDistance(point.x, point.z) > -(kind.radius + 1.9) || fishBridgeClearance(point.x, point.z) < kind.radius + .4) { safe = false; break; }
       }
@@ -65,10 +66,10 @@ export function createFishSchools(): FishSchool[] {
 }
 function formationAngle(fish: SchoolFish, time: number) {
   const kind = FISH_SPECIES[fish.variant]; const radius = Math.min(fish.school.island.rx, fish.school.island.rz);
-  const followTime = time - fish.member * (fish.variant === 1 ? .3 : .17);
+  const followTime = time - fish.member * (fish.variant === 1 ? .10 : .17);
   return fish.school.angle + kind.routeSpan * Math.sin(followTime * fish.school.speed + fish.school.phase)
     + .025 * Math.sin(followTime * fish.school.speed * .57 + fish.school.phase * 2)
-    + ((fish.member % 4 - 1.5) * kind.spacing + Math.sin(time * .43 + fish.member * 2.39) * .035 + fish.scatterAlong) / radius;
+    + ((fish.member % 4 - 1.5) * kind.spacing + Math.sin(time * .43 + fish.member * 2.39) * (fish.variant === 3 ? .012 : .035) + fish.scatterAlong) / radius;
 }
 export function fishFloor(x: number, z: number, radius: number) {
   return Math.max(terrainHeight(x, z), terrainHeight(x + radius, z), terrainHeight(x - radius, z), terrainHeight(x, z + radius), terrainHeight(x, z - radius));
@@ -77,7 +78,7 @@ function pose(fish: SchoolFish) {
   const kind = FISH_SPECIES[fish.variant];
   const angle = formationAngle(fish, fish.time);
   const row = Math.floor(fish.member / 4); const fan = fish.variant === 1 ? (fish.member % 4) * .09 : (fish.member % 2) * .18;
-  const band = kind.band + row * .3 + fan + fish.scatterOut;
+  const band = kind.band + row * .9 + fan + fish.scatterOut;
   writeShorePoint(fish.school.island, angle, band, fish.position);
   const floor = fishFloor(fish.position.x, fish.position.z, kind.radius);
   const bob = Math.sin(fish.time * .9 + fish.member * 2.39 + fish.school.phase) * .025;
@@ -97,7 +98,7 @@ export function createSchoolFish(): SchoolFish[] {
   // Member-first order keeps leaders at their school index and avoids losing entire schools at lower quality.
   for (let member = 0; member < FISH_PER_SCHOOL.high; member++) schools.forEach((school, schoolIndex) => {
     if (member >= FISH_SPECIES[school.species].population.high) return;
-    const fish: SchoolFish = { school, schoolIndex, member, variant: school.species, position: new Vector3(), heading: 0, bank: 0, time: 0, scatterAlong: 0, scatterOut: 0, velocityAlong: 0, velocityOut: 0, lastRipple: 0, jumpAge: -1, nextJump: 23 + schoolIndex * 1.91, jumpPitch: 0, glint: 0 };
+    const fish: SchoolFish = { school, schoolIndex, member, variant: school.species, position: new Vector3(), heading: 0, bank: 0, time: 0, scatterAlong: 0, scatterOut: 0, velocityAlong: 0, velocityOut: 0, reentry: new Vector3(), lastRipple: 0, jumpAge: -1, nextJump: 23 + schoolIndex * 1.91, jumpPitch: 0, glint: 0 };
     pose(fish); const start = fish.position.clone(); fish.time = .001; pose(fish);
     fish.heading = Math.atan2(start.z - fish.position.z, fish.position.x - start.x); fish.time = 0; pose(fish); result.push(fish);
   });
@@ -116,7 +117,7 @@ function disturb(fish: SchoolFish, x: number, z: number, strength: number) {
 export function stepSchoolFish(fish: SchoolFish, delta: number, disturbance: FishDisturbance, quality: QualityTier, paused = false) {
   if (paused) return false;
   const kind = FISH_SPECIES[fish.variant];
-  const dt = Math.min(.05, Math.max(0, delta)); const previousX = fish.position.x; const previousZ = fish.position.z;
+  const dt = Math.min(.05, Math.max(0, delta)); const previousX = fish.position.x; const previousY = fish.position.y; const previousZ = fish.position.z;
   fish.time += dt;
   if (disturbance.ripple.serial !== fish.lastRipple) {
     if (disturbance.ripple.serial > fish.lastRipple) disturb(fish, disturbance.ripple.x, disturbance.ripple.z, 3.5);
@@ -129,11 +130,18 @@ export function stepSchoolFish(fish: SchoolFish, delta: number, disturbance: Fis
   fish.scatterAlong = Math.max(-1.9, Math.min(1.9, fish.scatterAlong + fish.velocityAlong * dt));
   fish.scatterOut = Math.max(0, Math.min(1.2, fish.scatterOut + fish.velocityOut * dt));
   let reentered=false;
-  if (fish.jumpAge >= 0) { fish.jumpAge += dt; if (fish.jumpAge > 1.5) {fish.jumpAge = -1;reentered=true;} }
+  if (fish.jumpAge >= 0) { fish.jumpAge += dt; if (fish.jumpAge > 1.5) {fish.jumpAge = -1;} }
   else if (quality === 'high' && fish.variant === 1 && fish.member === 0 && fish.time > fish.nextJump && fish.scatterOut < .03) {
     fish.jumpAge = 0; fish.nextJump = fish.time + 65 + fish.schoolIndex * 3;
   }
   pose(fish);
+  const beforeSurface=previousY-harborWaterHeight(previousX,previousZ,fish.time-dt);
+  const afterSurface=fish.position.y-harborWaterHeight(fish.position.x,fish.position.z,fish.time);
+  if (fish.jumpAge > .75 && beforeSurface > 0 && afterSurface <= 0) {
+    const t = beforeSurface / (beforeSurface - afterSurface);
+    fish.reentry.set(previousX + (fish.position.x - previousX) * t, previousY+(fish.position.y-previousY)*t, previousZ + (fish.position.z - previousZ) * t);
+    reentered = true;
+  }
   const dx = fish.position.x - previousX; const dz = fish.position.z - previousZ;
   if (Math.hypot(dx, dz) > .00002) {
     const heading = Math.atan2(-dz, dx); const error = Math.atan2(Math.sin(heading - fish.heading), Math.cos(heading - fish.heading));

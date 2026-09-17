@@ -5,6 +5,7 @@ import { create, act } from '@react-three/test-renderer';
 import { InstancedMesh, Matrix4, Vector3 } from 'three';
 import { CoastalLife, createFishHomes } from '../src/components/world/CoastalLife';
 import { createSceneRuntime, type QualityTier } from '../src/content/world';
+import { harborWaterHeight } from '../src/components/world/waterSurface';
 import { landDistance, terrainHeight } from '../src/components/world/terrain';
 import { createFishSchools, createSchoolFish, FISH_SPECIES, visibleFishCount, stepSchoolFish, type FishDisturbance } from '../src/components/world/fishSchools';
 
@@ -14,10 +15,11 @@ const quiet = (): FishDisturbance => ({ camera: new Vector3(200, 40, 200), point
 test('loose schools remain in safe water with aligned neighbors and continuous rare jumps', () => {
   const fish = createSchoolFish(); const disturbance = quiet(); const previous = new Vector3(); const schools = createFishSchools();
   assert.equal(schools.length, 9); assert.equal(fish.length, 72); assert.equal(new Set(schools.map(school => school.phase)).size, 9);
-  const aligned = [0,0,0,0]; const comparisons = [0,0,0,0]; let jumpingFrames = 0;
+  const aligned = [0,0,0,0]; const comparisons = [0,0,0,0]; let jumpingFrames = 0, reentries = 0;
   for (let frame = 0; frame < 60 * 130; frame++) {
     fish.forEach(item => {
-      previous.copy(item.position); stepSchoolFish(item, 1 / 60, disturbance, 'high');
+      previous.copy(item.position); const entered=stepSchoolFish(item, 1 / 60, disturbance, 'high');
+      if(entered){reentries++;assert.ok(item.reentry.distanceTo(item.position)<.045);assert.ok(Math.abs(item.reentry.y-harborWaterHeight(item.reentry.x,item.reentry.z,item.time))<.003,'Splash begins at the displaced water crossing');}
       assert.ok(landDistance(item.position.x, item.position.z) < -1.0);
       assert.ok(item.position.y > terrainHeight(item.position.x, item.position.z) + FISH_SPECIES[item.variant].halfHeight + .12);
       assert.ok(item.position.distanceTo(previous) < .045, `pose discontinuity ${item.schoolIndex}/${item.member}`);
@@ -25,11 +27,14 @@ test('loose schools remain in safe water with aligned neighbors and continuous r
       if (item.position.y > 0) jumpingFrames++;
       if (frame % 30 === 0 && item.member > 0) {
         const leader = fish[item.schoolIndex]; comparisons[item.variant]++;
-        if (Math.cos(item.heading - leader.heading) > .8) aligned[item.variant]++;
-        assert.ok(item.position.distanceTo(leader.position) < (item.variant === 1 ? 7.5 : 5.2));
+        const neighbor=fish.filter(other=>other.schoolIndex===item.schoolIndex&&other!==item).sort((a,b)=>a.position.distanceToSquared(item.position)-b.position.distanceToSquared(item.position))[0];
+        if (Math.cos(item.heading - neighbor.heading) > .8) aligned[item.variant]++;
+        assert.ok(item.position.distanceTo(leader.position)<12,'Loose formations remain within twelve metres');
       }
     });
+    if(frame%30===0)for(const a of fish)for(const b of fish)if(a.schoolIndex===b.schoolIndex&&a.member<b.member)assert.ok(a.position.distanceTo(b.position)>.55,'Neighbors retain visible separation');
   }
+  assert.equal(reentries,4,'Each of the four breaches has one physical re-entry');
   aligned.forEach((count, variant) => assert.ok(count / comparisons[variant] > [.9,.8,.9,.85][variant], `school alignment ${variant}: ${count / comparisons[variant]}`)); assert.ok(jumpingFrames > 0); assert.ok(jumpingFrames < fish.length * 130 * 60 * .005);
 });
 

@@ -75,7 +75,13 @@ export function createGardenFountain() {
     geometry.userData = { jets: JETS, sourceRadius: .24, impactRadius: pattern === 2 ? .54 : pattern === 1 ? .66 : .71, pattern };
     return geometry;
   });
-  const streams = add(streamGeometries[0], streamMaterial, 'fountain-six-returning-water-streams');
+  const streamShape = streamGeometries[0].clone();
+  streamShape.morphAttributes.position = streamGeometries.slice(1).map(geometry => geometry.getAttribute('position'));
+  streamShape.morphAttributes.normal = streamGeometries.slice(1).map(geometry => geometry.getAttribute('normal'));
+  const streams = add(streamShape, streamMaterial, 'fountain-six-returning-water-streams');
+  streams.updateMorphTargets();
+  const weights = [1, 0, 0], sample = new Vector3();
+  const blendedPoint = (jet: number, progress: number, target: Vector3) => { target.set(0,0,0); for (const [i,weight] of weights.entries()) target.addScaledVector(fountainStreamPoint(jet,progress,sample,i as FountainPattern),weight); return target; };
   let pattern: FountainPattern = 0;
   const drops=instances(new SphereGeometry(1,6,4),dropMaterial,72,'fountain-flowing-droplets');
   const ripples=instances(new TorusGeometry(1,.018,4,24).rotateX(Math.PI/2),rippleMaterial,12,'fountain-impact-ripples');
@@ -87,23 +93,25 @@ export function createGardenFountain() {
   let disposed=false;
   function step(delta:number,quality:QualityTier,paused=false) {
     if(!paused)time.value+=Math.min(.05,Math.max(0,delta));
+    for (let i=0;i<3;i++) weights[i] += ((i===pattern?1:0)-weights[i])*(paused?1:1-Math.exp(-5*Math.min(.05,delta)));
+    streams.morphTargetInfluences![0]=weights[1]; streams.morphTargetInfluences![1]=weights[2];
     const count={high:72,medium:48,low:24}[quality];drops.count=count;splashes.count=quality==='low'?12:24;
     for(let i=0;i<72;i++) {
       const progress=(time.value*.63+Math.floor(i/JETS)/12+i*.031)%1;
-      fountainStreamPoint(i%JETS,progress,point,pattern); transform.position.copy(point); transform.rotation.set(0,0,0);transform.scale.set(.018,.025,.018);transform.updateMatrix();drops.setMatrixAt(i,transform.matrix);
+      blendedPoint(i%JETS,progress,point); transform.position.copy(point); transform.rotation.set(0,0,0);transform.scale.set(.018,.025,.018);transform.updateMatrix();drops.setMatrixAt(i,transform.matrix);
     }
     for(let i=0;i<12;i++) {
       const phase=(time.value*.85+Math.floor(i/JETS)*.5+i*.037)%1;
-      fountainStreamPoint(i%JETS,1,point,pattern);transform.position.set(point.x,FOUNTAIN_SITE.waterHeight+.006,point.z);transform.rotation.set(0,0,0);transform.scale.setScalar(.018+phase*.145);transform.updateMatrix();ripples.setMatrixAt(i,transform.matrix);opacity.setX(i,(1-phase)**2);
+      blendedPoint(i%JETS,1,point);transform.position.set(point.x,FOUNTAIN_SITE.waterHeight+.006,point.z);transform.rotation.set(0,0,0);transform.scale.setScalar(.018+phase*.145);transform.updateMatrix();ripples.setMatrixAt(i,transform.matrix);opacity.setX(i,(1-phase)**2);
     }
     for(let i=0;i<24;i++) {
       const phase=(time.value*1.8+i*.193)%1;const angle=i*2.399;
-      fountainStreamPoint(i%JETS,1,point,pattern);transform.position.set(point.x+Math.cos(angle)*phase*.075,FOUNTAIN_SITE.waterHeight+.007+Math.sin(phase*Math.PI)*.075,point.z+Math.sin(angle)*phase*.075);transform.rotation.set(0,0,0);transform.scale.setScalar(.009*(1-phase*.6));transform.updateMatrix();splashes.setMatrixAt(i,transform.matrix);
+      blendedPoint(i%JETS,1,point);transform.position.set(point.x+Math.cos(angle)*phase*.075,FOUNTAIN_SITE.waterHeight+.007+Math.sin(phase*Math.PI)*.075,point.z+Math.sin(angle)*phase*.075);transform.rotation.set(0,0,0);transform.scale.setScalar(.009*(1-phase*.6));transform.updateMatrix();splashes.setMatrixAt(i,transform.matrix);
     }
     drops.instanceMatrix.needsUpdate=true;ripples.instanceMatrix.needsUpdate=true;splashes.instanceMatrix.needsUpdate=true;opacity.needsUpdate=true;
   }
   step(0,'high',true);
-  return { group, meshes, materials, time, step, setPattern(next: FountainPattern) { pattern = next; streams.geometry = streamGeometries[next]; }, timer: undefined as ReturnType<typeof setTimeout>|undefined,
+  return { group, meshes, materials, time, step, setPattern(next: FountainPattern) { pattern = next; streams.geometry.userData.pattern = next; }, timer: undefined as ReturnType<typeof setTimeout>|undefined,
     dispose() { if(disposed)return;disposed=true;new Set([...meshes.map(mesh=>mesh.geometry), ...streamGeometries]).forEach(geometry=>geometry.dispose());meshes.forEach(mesh=>{if(mesh instanceof InstancedMesh)mesh.dispose();});materials.forEach(material=>material.dispose()); } };
 }
 

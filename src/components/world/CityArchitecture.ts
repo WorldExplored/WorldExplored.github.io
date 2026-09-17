@@ -1,4 +1,4 @@
-import { BoxGeometry, BufferGeometry, CylinderGeometry, Float32BufferAttribute, ExtrudeGeometry, Shape, SphereGeometry, TorusGeometry } from 'three';
+import { BoxGeometry, BufferGeometry, CylinderGeometry, Float32BufferAttribute, ExtrudeGeometry, Shape, SphereGeometry, TorusGeometry, TubeGeometry, CatmullRomCurve3, Vector3 } from 'three';
 import { floorSlab, floorRectangle, floorEllipse, type FloorPolygon } from './InteriorKit';
 import { cityEntrances, type CityBuilding, type CityPoint } from './city';
 
@@ -15,16 +15,44 @@ export function cityRoundedBox(width: number, height: number, depth: number, cor
   return new ExtrudeGeometry(shape, { depth: height, bevelEnabled: false, curveSegments: 5 }).rotateX(-Math.PI / 2);
 }
 
-export function buildCityArchitecture(building: Readonly<CityBuilding>, add: CityAdd) {
+export interface CityLiftPlan { building: string; x: number; z: number; floors: number[]; top: number }
+export function buildCityArchitecture(building: Readonly<CityBuilding>, add: CityAdd, onLift?: (plan: CityLiftPlan) => void) {
   const roomViews: CityRoomView[] = [];
   const foundationPolygons: FloorPolygon[] = [];
   let roomIndex=0;
+  const access: { x: number; back: number; floor: number; height: number }[] = [];
+  const fronts: { x: number; z: number; width: number; floor: number }[] = [];
   const { width: w, depth: d, height: h, family } = building;
   const box = (x: number, y: number, z: number, width: number, height: number, depth: number, finish: CityFinish = 'porcelain', yaw = 0) => add(new BoxGeometry(width, height, depth), finish, x, y, z, 1, 1, 1, yaw);
   const slab = (x: number, y: number, z: number, width: number, depth: number, finish: CityFinish = 'stone', corner = .12) => {const geometry=cityRoundedBox(width,.13,depth,corner);geometry.name=`${building.id}-exterior-slab`;geometry.userData.exteriorSlab=true;add(geometry,finish,x,y,z);};
   const plant = (x: number, y: number, z: number, scale = 1) => {
     add(new CylinderGeometry(.14, .1, .24, 8), 'stone', x, y + .12 * scale, z, scale, scale, scale);
-    add(new SphereGeometry(.23, 7, 5), 'garden', x, y + .42 * scale, z, scale * .7, scale * 1.3, scale * .7);
+    add(new CylinderGeometry(.008, .016, .35, 7), 'wood', x, y + .38 * scale, z, scale, scale, scale);
+    for (let leaf = 0; leaf < 9; leaf++) {
+      const geometry = new BufferGeometry();
+      geometry.setAttribute('position', new Float32BufferAttribute([0,0,0, -.065,.09,.09, -.05,.13,.20, 0,.10,.31, .05,.13,.20, .065,.09,.09, 0,.16,.14],3));
+      geometry.setIndex([6,0,1,6,1,2,6,2,3,6,3,4,6,4,5,6,5,0]); geometry.computeVertexNormals();
+      geometry.rotateX(-.3 + leaf % 3 * .3).rotateY(leaf * 2.399);
+      add(geometry, 'garden', x, y + (.28 + leaf * .024) * scale, z, scale, scale, scale);
+    }
+  };
+  const grapeTrellis = (x: number, y: number, z: number, width: number) => {
+    for (const side of [-1,1]) {
+      box(x+side*width/2,y+.92,z,.07,1.84,.07,'wood');
+      box(x+side*width/2,y+.12,z,.30,.24,.34,'stone');
+      const stem=new CatmullRomCurve3(Array.from({length:12},(_,i)=>new Vector3(x+side*width/2+Math.sin(i*1.5)*.025,y+.24+i*.14,z+Math.cos(i*1.5)*.025)));
+      add(new TubeGeometry(stem,28,.014,6,false),'wood');
+      for(let i=0;i<12;i++) {
+        const leaf=new Shape();leaf.moveTo(0,0);leaf.lineTo(-.08,.04);leaf.lineTo(-.07,.09);leaf.lineTo(-.13,.12);leaf.lineTo(-.07,.16);leaf.lineTo(0,.23);leaf.lineTo(.07,.16);leaf.lineTo(.13,.12);leaf.lineTo(.07,.09);leaf.lineTo(.08,.04);leaf.closePath();
+        const geometry=new ExtrudeGeometry(leaf,{depth:.006,bevelEnabled:false}).rotateX(-.3).rotateY(side*.45+i*.71);
+        add(geometry,'garden',x+side*width/2,y+.3+i*.115,z+.04);
+      }
+    }
+    for(const height of [.65,1.1,1.55,1.84])box(x,y+height,z,width+.12,.045,.045,'wood');
+    for(let bunch=0;bunch<4;bunch++) for(let grape=0;grape<13;grape++) {
+      const row=Math.floor(grape/4),a=grape*2.399,r=.075*(1-row*.22);
+      add(new SphereGeometry(.043,8,6),'garden',x-width*.35+bunch*width*.23+Math.cos(a)*r,y+1.5-row*.055,z+.10+Math.sin(a)*r);
+    }
   };
   const chair = (x: number, y: number, z: number, yaw = 0) => {
     box(x, y + .3, z, .36, .10, .34, 'fabric', yaw);
@@ -32,18 +60,44 @@ export function buildCityArchitecture(building: Readonly<CityBuilding>, add: Cit
     for (const dx of [-.12, .12]) for (const dz of [-.11, .11]) box(x + dx, y + .14, z + dz, .035, .28, .035, 'metal');
   };
   const furnishing = (x: number, y: number, z: number, width: number, depth: number, variant: number, height = 1.8) => {
-    // A clear central view reaches the table, rear shelving and planted corner.
-    box(x - width * .18, y + .47, z, Math.min(.73, width * .42), .065, .48, 'wood');
-    for (const dx of [-.22, .22]) box(x - width * .18 + dx, y + .22, z, .035, .45, .35, 'metal');
-    chair(x - width * .18, y, z + .49, Math.PI);
-    if (width > 1.7) chair(x + width * .28, y, z + .1, Math.PI / 2);
-    const back = z - depth * .34;
-    for (let shelf = 0; shelf < 3; shelf++) box(x + width * .22, y + .35 + shelf * .35, back, width * .35, .055, .22, 'wood');
-    for (let book = 0; book < 4; book++) box(x + width * (.1 + book * .065), y + .5, back, .055, .24 + book % 2 * .04, .14, book % 2 ? 'fabric' : 'aqua');
-    plant(x - width * .35, y, back, .8);
-    box(x, y + height - .25, z, .34, .06, .22, 'porcelain');
-    // Selected curtains interrupt the window rhythm without hiding every room.
-    if (variant % 3 === 1) box(x + width * .36, y + (height - .2) / 2, z + depth * .36, width * .2, height - .2, .04, 'fabric');
+    const layout = (variant + building.id.length) % 4;
+    const back = z - depth * .32;
+    if (layout === 0) {
+      // A workbench with a task chair facing its monitor.
+      box(x - width * .16, y + .53, z, Math.min(.85, width * .48), .065, .48, 'wood');
+      for (const dx of [-.2, .2]) box(x - width * .16 + dx, y + .25, z, .04, .5, .35, 'metal');
+      chair(x - width * .16, y, z + .46, Math.PI);
+      box(x - width * .16, y + .73, z - .1, .32, .24, .035, 'metal');
+      box(x - width * .16, y + .59, z - .1, .035, .12, .04, 'metal');
+      box(x - width * .16, y + .575, z + .09, .26, .018, .10, 'fabric');
+    } else if (layout === 1) {
+      // Reading lounge; low upholstery leaves the glazing clear.
+      box(x - width * .22, y + .27, z, Math.min(.62, width * .38), .22, .63, 'fabric');
+      box(x - width * .22, y + .5, z - .27, Math.min(.62, width * .38), .35, .10, 'wood');
+      box(x + width * .17, y + .3, z + .12, Math.min(.43, width * .24), .045, .38, 'wood');
+      box(x + width * .17, y + .14, z + .12, .065, .28, .065, 'metal');
+      box(x + width * .17, y + .34, z + .12, .17, .035, .22, 'aqua');
+    } else if (layout === 2) {
+      // Conservatory counter with seed trays and irrigation pipe.
+      box(x, y + .56, back, width * .64, .09, .35, 'wood');
+      for (const side of [-1, 1]) box(x + side * width * .26, y + .26, back, .045, .52, .30, 'metal');
+      for (const side of [-1, 0, 1]) plant(x + side * width * .2, y + .61, back, .55);
+      chair(x - width * .2, y, z + .2, Math.PI);
+      box(x + width * .18, y + .45, z + .15, .30, .30, .30, 'stone');
+    } else {
+      // Small residential dining nook.
+      add(new CylinderGeometry(Math.min(.38, width * .23), Math.min(.38, width * .23), .06, 20), 'wood', x, y + .53, z);
+      box(x, y + .25, z, .065, .5, .065, 'metal');
+      chair(x, y, z + .48, Math.PI);
+      if (depth > 1.4) chair(x, y, z - .48, 0);
+      add(new CylinderGeometry(.065, .045, .14, 12), 'aqua', x, y + .63, z);
+    }
+    if (depth > 1.25 && width > 1.65) {
+      for (let shelf = 0; shelf < 3; shelf++) box(x + width * .27, y + .32 + shelf * .30, back, width * .24, .04, .18, 'wood');
+      for (let book = 0; book < 4; book++) box(x + width * (.19 + book * .042), y + .47, back, .045, .22 + book % 2 * .04, .12, book % 2 ? 'fabric' : 'aqua');
+    }
+    plant(x - width * .34, y, back, .62);
+    box(x, y + height - .22, z, .3, .04, .2, 'porcelain');
   };
   const room = (x: number, y: number, z: number, width: number, depth: number, height: number, variant: number, furnish = true, balcony = false) => {
     const roomId=`${building.id}-room-${roomIndex++}`;
@@ -53,15 +107,20 @@ export function buildCityArchitecture(building: Readonly<CityBuilding>, add: Cit
       const geometry=new BoxGeometry(ww,hh,dd);geometry.userData.roomWall={room:roomId,role,ground:y<.21};add(geometry,finish,cx,cy,cz);
     };
     // Each facade is a thin wall or glazing plane. There is no filled opaque body behind the window.
-    wall('back',x, y + height / 2, z - depth / 2 + .06, width, height, .12, 'porcelain');
-    // Rear elevations use real service openings and one continuous material
-    // language instead of alternating aqua and white floor bands.
-    box(x, y + height * .55, z - depth / 2 - .012, Math.max(.55,width*.32), Math.max(.42,height*.42), .025, 'window');
-    for(const side of [-1,1]) box(x+side*Math.max(.31,width*.18),y+height*.55,z-depth/2-.034,.035,Math.max(.48,height*.47),.035,'metal');
-    box(x,y+height*.78,z-depth/2-.034,Math.max(.65,width*.38),.035,.035,'metal');
-    if(variant%3===0){
-      box(x-width*.34,y+height*.48,z-depth/2-.075,.035,height*.82,.035,'metal');
-      for(let leaf=0;leaf<4;leaf++)add(new SphereGeometry(.11,6,4),'garden',x-width*.34+Math.sin(leaf*2.1)*.11,y+.28+leaf*height*.19,z-depth/2-.11,1,1.4,.55);
+    const rear = z - depth / 2 + .06;
+    if (family !== 'public-station' && h > 3.4) {
+      const opening = Math.min(.7, width * .55), doorHeight = Math.min(1.42, height - .22);
+      const wing = (width - opening) / 2;
+      wall('back-left', x - (opening + wing) / 2, y + height / 2, rear, wing, height, .12, 'porcelain');
+      wall('back-right', x + (opening + wing) / 2, y + height / 2, rear, wing, height, .12, 'porcelain');
+      wall('back-lintel', x, y + .13 + doorHeight + (height - .13 - doorHeight) / 2, rear, opening, height - .13 - doorHeight, .12, 'porcelain');
+      for (const side of [-1, 1]) box(x + side * opening / 2, y + .13 + doorHeight / 2, rear, .035, doorHeight, .14, 'metal');
+      box(x, y + .13 + doorHeight / 2, rear, opening - .06, doorHeight, .018, 'glass');
+      access.push({ x, back: rear - .06, floor: y + .13, height: doorHeight });
+    } else wall('back',x, y + height / 2, rear, width, height, .12, 'porcelain');
+    if (y < .21) fronts.push({ x, z: z + depth / 2, width, floor: y + .13 });
+    for (const side of [-1, 1]) for (let slat = 0; slat < 3; slat++) {
+      box(x + side * width * (.33 + slat * .04), y + height * .52, z - depth / 2 - .018, .022, height * .72, .035, 'wood');
     }
     for (const side of [-1, 1]) {
       wall(side<0?'left':'right',x + side * (width / 2 - .06), y + height / 2, z, .12, height, depth, 'porcelain');
@@ -102,15 +161,14 @@ export function buildCityArchitecture(building: Readonly<CityBuilding>, add: Cit
   };
   if (family === 'terraced-apartments') {
     const pitch = (h - .55) / 5;
-    for (let n = 0; n < 5; n++) { const width = w - n * .38; const x = -n * .105; room(x, .2 + n * pitch, -.18, width, d - .55, pitch, n, n < 2, true); roof(x, .2 + (n + 1) * pitch - .05, -.18, width, d - .55); }
-    roof(-.42, h - .35, -.18, w - 1.52, d - .55);
+    for (let n = 0; n < 5; n++) { const width = w - n * .38; const x = -n * .105; room(x, .2 + n * pitch, -.18, width, d - .55, pitch, n, n < 2, true); if (n === 4) roof(x, .2 + (n + 1) * pitch + .02, -.18, width, d - .55); }
   } else if (family === 'narrow-mixed-use') {
     const width = w * .54; const pitch = (h - .55) / 6;
     room(0, .2, 0, w - .2, d - .3, pitch, 0, true);
     for (let n = 1; n < 6; n++) room(0, .2 + n * pitch, -.15, width, d - .5, pitch, n, n === 1, n % 2 === 0);
     roof(0, h - .35, -.15, width + .15, d - .45);
     for (const side of [-1, 1]) box(side * (width / 2 + .06), h / 2, -.65, .13, h - .6, .23, 'aqua');
-    roof(0, pitch + .25, 0, w - .1, d - .25, true);
+    for (const side of [-1, 1]) roof(side * (w + width) / 4, pitch + .2, 0, (w - width) / 2 - .16, d - .25, true);
   } else if (family === 'split-wings') {
     for (const side of [-1, 1]) { const count = side < 0 ? 5 : 4; const pitch = (h - .5) / 5; for (let n = 0; n < count; n++) room(side * w * .265, .2 + n * pitch, side < 0 ? -.2 : .1, w * .44, d - .6, pitch, n + (side > 0 ? 1 : 0), n < 2); roof(side * w * .265, .2 + count * pitch, side < 0 ? -.2 : .1, w * .45, d - .6); }
     for (let n = 1; n < 4; n++) box(0, .3 + n * 1.9, -.5, w * .2, .12, .7, 'metal');
@@ -120,8 +178,10 @@ export function buildCityArchitecture(building: Readonly<CityBuilding>, add: Cit
       const y = .2 + n * pitch; const rx = w / 2 - n * .08; const rz = d / 2 - .23;
       const roomId=`${building.id}-room-${roomIndex++}`;
       add(floorSlab(roomId,[floorEllipse(0,0,rx-.13,rz-.13,64)],y+.14,.14),'wood');
-      const glazing=new CylinderGeometry(1,1,pitch-.16,32,1,true);glazing.userData.roomWall={room:roomId,role:'ellipse',ground:n===0};
+      const glazing=new CylinderGeometry(1,1,pitch-.16,48,1,true,Math.PI+.34,Math.PI*2-.68);glazing.userData.roomWall={room:roomId,role:'ellipse',ground:n===0};
       add(glazing,'window',0,y+pitch/2+.1,0,rx-.1,1,rz-.1);
+      access.push({x:0,back:-rz+.1,floor:y+.14,height:Math.min(1.42,pitch-.22)});
+      if(n===0)fronts.push({x:0,z:rz-.1,width:1.2,floor:y+.14});
       if(n===0)foundationPolygons.push(floorEllipse(0,0,rx-.03,rz-.03,64));
       for (let k = 0; k < 10; k++) { const a = k * Math.PI / 5; box(Math.cos(a) * (rx - .08), y + pitch / 2, Math.sin(a) * (rz - .08), .065, pitch, .065, 'metal'); }
       box(0, y + pitch / 2, -.35, .11, pitch, d * .46, 'wood');
@@ -133,7 +193,7 @@ export function buildCityArchitecture(building: Readonly<CityBuilding>, add: Cit
   } else if (family === 'courtyard-block') {
     const pitch = (h - .55) / 3;
     for (let n = 0; n < 3; n++) { for (const side of [-1, 1]) room(side * w * .34, .2 + n * pitch, 0, w * .3, d - .25, pitch, n, n < 2); room(0, .2 + n * pitch, -d * .28, w * .38, d * .38, pitch, n, n === 0); }
-    roof(0, h - .35, -.35, w - .1, d * .7); plant(0, .15, d * .1, 1.4);
+    roof(0, h - .35, -.35, w - .1, d * .7); grapeTrellis(0, .2, d * .1, w * .22);
   } else if (family === 'arched-apartments') {
     const pitch = (h - .8) / 3;
     for (let n = 0; n < 3; n++) { room(0, .2 + n * pitch, -.2, w - .2, d - .65, pitch, n, n < 2, true); for (const x of [-w * .29, 0, w * .29]) { const arc = new TorusGeometry(w * .135, .07, 6, 16, Math.PI); add(arc, 'stone', x, .2 + n * pitch + pitch * .59, d / 2 - .05); for (const side of [-1, 1]) box(x + side * w * .135, .2 + n * pitch + pitch * .29, d / 2 - .05, .12, pitch * .6, .14, 'stone'); } }
@@ -181,28 +241,55 @@ export function buildCityArchitecture(building: Readonly<CityBuilding>, add: Cit
   }
   if (family !== 'public-station') {
     const entrance = cityEntrances.find(item => item.building === building.id)!.local;
-    const doorZ = d / 2 + .08;
-    add(floorSlab(`${building.id}-door-threshold`,[floorRectangle(0,doorZ-.35,1.03,1)],.24,.24,'threshold'),'stone');
-    for (const side of [-1, 1]) { box(side * .46, .97, doorZ, .065, 1.5, .08, 'metal'); box(side * .1, .86, doorZ + .04, .025, .2, .03, 'metal'); }
-    box(0, 1.74, doorZ, 1, .08, .09, 'porcelain');
-    box(0, .97, doorZ, .85, 1.43, .015, 'window');
-    slab(0, 1.85, doorZ - .08, 1.15, .5, 'porcelain');
-    // The approach metadata includes the open-air porch in front of the inset facade.
-    if (entrance[1] !== .24) throw new Error('Unexpected city threshold height');
-  }
-  if (family !== 'public-station' && h > 4) {
-    // A compact attached lift core gives every glazed upper floor a credible
-    // circulation route. The landing doors align to the rear service facade.
-    const coreX=w*.32,coreZ=-d/2-.24;
-    box(coreX,h/2,coreZ,.72,h-.35,.46,'glass');
-    for(const side of [-1,1])box(coreX+side*.31,h/2,coreZ,.055,h-.28,.055,'metal');
-    const levels=Math.max(2,Math.round((h-.6)/1.55));
-    for(let level=0;level<=levels;level++){
-      const y=.28+level*(h-1.1)/levels;
-      box(coreX,y,coreZ+.24,.62,.07,.42,'metal');
-      box(coreX,y+.34,coreZ+.245,.46,.55,.025,'aqua');
+    for (const front of fronts) {
+      const doorZ = front.z + .028, opening = Math.min(.86, front.width - .3);
+      const floor = front.floor;
+      const porchDepth = Math.max(.45, entrance[2] - front.z + .12);
+      add(floorSlab(`${building.id}-door-threshold-${front.x}`, [floorRectangle(front.x, doorZ + porchDepth / 2 - .08, opening + .22, porchDepth)], floor, .13, 'threshold'), 'stone');
+      for (const side of [-1, 1]) box(front.x + side * opening / 2, floor + .68, doorZ, .055, 1.36, .09, 'metal');
+      box(front.x, floor + 1.37, doorZ, opening + .08, .07, .09, 'metal');
+      box(front.x, floor + .68, doorZ, opening - .08, 1.31, .016, 'glass');
+      box(front.x + opening * .26, floor + .67, doorZ + .07, .025, .20, .035, 'metal');
+      slab(front.x, floor + 1.52, doorZ + .14, opening + .25, .52, 'porcelain');
+      for (const side of [-1, 1]) box(front.x + side * opening * .43, floor + 1.39, doorZ + .17, .028, .26, .028, 'metal');
     }
-    slab(coreX,h-.15,coreZ,.82,.58,'porcelain');
+    if (fronts.length > 1) add(floorSlab(`${building.id}-entry-porch`, [floorRectangle(0, entrance[2] - .16, w - .08, .44)], .33, .13, 'threshold'), 'stone');
+  }
+  if (access.length) {
+    const coreX = 0, coreZ = -d / 2 - .68;
+    const floors = [...new Set(access.map(room => Number(room.floor.toFixed(5))))].sort((a,b) => a-b);
+    const top = Math.max(...access.map(room => room.floor + room.height)) + .12;
+    if (floors.length > 1) {
+      for (const side of [-1, 1]) {
+        for (const end of [-1, 1]) box(coreX + side * .43, top / 2, coreZ + end * .44, .055, top, .055, 'metal');
+        box(coreX + side * .39, top / 2, coreZ, .018, top, .78, 'glass');
+        box(coreX + side * .31, top / 2, coreZ - .35, .04, top, .04, 'metal');
+      }
+      box(coreX, top / 2, coreZ - .44, .85, top, .018, 'glass');
+      for (const room of access) {
+        const front = coreZ + .46, length = room.back - front;
+
+        for (const side of [-1, 1]) {
+          box(room.x + side * .39, room.floor + .36, front + length / 2, .03, .72, .03, 'metal');
+          if (length > 0) box(room.x + side * .39, room.floor + .72, front + length / 2, .04, .04, length, 'metal');
+        }
+      }
+      for(const floor of floors) {
+        const polygons=[floorRectangle(0,coreZ+.34,.74,.34)];
+        for(const room of access.filter(room=>Math.abs(room.floor-floor)<.00001)) {
+          const front=coreZ+.46,length=room.back-front;
+          if(length>0)polygons.push(floorRectangle(room.x,front+length/2,.78,length));
+          if(Math.abs(room.x)>.02)polygons.push(floorRectangle(room.x/2,front+.12,Math.abs(room.x)+.78,.44));
+        }
+        // One unioned walking surface prevents coincident landings for shared stops.
+        const landing=floorSlab(`${building.id}-lift-landing-${floor}`,polygons,floor,.09,'threshold');
+        landing.userData.liftLanding={building:building.id,floor};add(landing,'stone');
+        box(0,floor+.65,coreZ+.46,.69,1.3,.018,'window');
+      }
+      slab(0, top, coreZ, 1.03, 1.07, 'porcelain');
+      box(0, top + .18, coreZ, .52, .24, .45, 'metal');
+      onLift?.({ building: building.id, x: coreX, z: coreZ, floors, top });
+    }
   }
   add(floorSlab(`${building.id}-foundation`,foundationPolygons,.2,.2,'foundation'),'stone');
   return roomViews;

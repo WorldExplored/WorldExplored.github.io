@@ -36,10 +36,10 @@ test('all three fountain patterns change actual tube geometry, droplets and impa
   const fountain = createGardenFountain(); const point = new Vector3(); const matrix = new Matrix4();
   const streams = fountain.meshes.find(mesh => mesh.name === 'fountain-six-returning-water-streams')!;
   const drops = fountain.meshes.find(mesh => mesh.name === 'fountain-flowing-droplets') as InstancedMesh;
-  const patterns = new Set(); const apex: number[] = []; const hits: number[] = [];
+  const patterns = new Set(); const shapes = new Set(); const apex: number[] = []; const hits: number[] = [];
   try {
     for (const pattern of [0, 1, 2] as const) {
-      fountain.setPattern(pattern); fountain.step(.02, 'high', true); patterns.add(streams.geometry);
+      fountain.setPattern(pattern); fountain.step(.02, 'high', true); patterns.add(streams.geometry); shapes.add(JSON.stringify(streams.morphTargetInfluences));
       apex.push(fountainStreamPoint(0, .5, point, pattern).y);
       hits.push(fountainStreamPoint(0, 1, point, pattern).x);
       for (let jet = 0; jet < 6; jet++) for (let index = 0; index <= 100; index++) {
@@ -52,7 +52,7 @@ test('all three fountain patterns change actual tube geometry, droplets and impa
         assert.ok(point.distanceTo(expected) < 1e-6, 'Paused droplets move immediately onto the selected real trajectory');
       }
     }
-    assert.equal(patterns.size, 3); assert.equal(new Set(apex).size, 3); assert.equal(new Set(hits).size, 3);
+    assert.equal(patterns.size, 1); assert.equal(shapes.size, 3); assert.equal(new Set(apex).size, 3); assert.equal(new Set(hits).size, 3);
     fountain.setPattern(0); assert.equal(streams.geometry, [...patterns][0], 'Pattern cycling reuses geometry');
   } finally { fountain.dispose(); }
 });

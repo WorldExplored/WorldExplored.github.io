@@ -1,0 +1,111 @@
+{
+  "url": "http://127.0.0.1:4177/?qaView=bell&qaCapture=interactions/bell&diagnostics=1",
+  "viewport": [
+    1440,
+    900
+  ],
+  "camera": [
+    -3.0995111802976734,
+    4.097836297751142,
+    -49.799461589893085
+  ],
+  "runtime": {
+    "elapsed": 19.217100000023795,
+    "pointer": [
+      0,
+      -0.022222222222222143
+    ],
+    "pointerActive": true,
+    "pointerWorld": [
+      -11.068990333633849,
+      0,
+      -58.57743862835038
+    ],
+    "cloudInteraction": 0,
+    "plantInteraction": 0,
+    "moving": false,
+    "hovered": null,
+    "ripple": {
+      "x": 0,
+      "z": 0,
+      "time": -100,
+      "serial": 0
+    },
+    "sunDirection": [
+      -0.49395843873488104,
+      0.4703670267922094,
+      -0.7312728088130007
+    ],
+    "nature": {
+      "x": 0,
+      "y": 0,
+      "z": 0,
+      "kind": "tree",
+      "time": -100,
+      "serial": 0
+    },
+    "dragCount": 0,
+    "dragging": false,
+    "frames": 1145
+  },
+  "audit": {
+    "rendererCreations": 1,
+    "configurations": 1,
+    "resizes": 0,
+    "dprChanges": 0,
+    "qualityChanges": 1,
+    "frameLoopChanges": 1,
+    "contextLosses": 0,
+    "contextRestorations": 0,
+    "sceneErrors": 0,
+    "unhandledErrors": 0,
+    "samples": 105,
+    "blackFrames": 0,
+    "worstBlackFraction": 0,
+    "firstSample": 1145.800000011921,
+    "lastSample": 20681.59999999404
+  },
+  "quality": "high",
+  "audio": "<div class=\"ambience-control\" role=\"group\" aria-label=\"Environmental ambience\" data-audio-state=\"ready\" data-bell-strikes=\"0\"><button type=\"button\" class=\"audio-control__button\" aria-pressed=\"false\"><span aria-hidden=\"true\">≈</span><span>Start ambience</span></button><button type=\"button\" class=\"audio-control__button audio-control__button--square\" aria-label=\"Mute ambience\" aria-pressed=\"false\">◖</button><label class=\"ambience-control__volume\"><span>Ambience volume</span><input aria-label=\"Ambience volume\" min=\"0\" max=\"1\" step=\"0.01\" type=\"range\" value=\"0.34\"></label><a class=\"audio-control__button\" href=\"/audio/coast/credits.html\" target=\"_blank\" rel=\"noreferrer\" aria-label=\"Coastal sound credits\">ⓘ</a></div>",
+  "controls": [
+    {
+      "label": "Cycle fountain jets",
+      "pressed": "false"
+    },
+    {
+      "label": "Illuminate transit route",
+      "pressed": "false"
+    },
+    {
+      "label": "Align solar panels",
+      "pressed": "false"
+    },
+    {
+      "label": "Open greenhouse vents",
+      "pressed": "false"
+    },
+    {
+      "label": "Ring harbor buoy",
+      "pressed": "true"
+    },
+    {
+      "label": "Turn wind turbine into breeze",
+      "pressed": "false"
+    },
+    {
+      "label": "≈Start ambience",
+      "pressed": "false"
+    },
+    {
+      "label": "Mute ambience",
+      "pressed": "false"
+    }
+  ],
+  "render": {
+    "frame": 1175,
+    "calls": 184,
+    "triangles": 1801720,
+    "points": 16,
+    "lines": 0
+  }
+}
