@@ -17,6 +17,8 @@ import { AmbientSystem } from './AmbientSystem';
 import { CityVentilation } from './CityVentilation';
 import { EcoCity } from './EcoCity';
 import { ReefLife } from './ReefLife';
+import { DolphinLife } from './DolphinLife';
+import { ReefHabitat } from './ReefHabitatScene';
 import { CoastalLife } from './CoastalLife';
 import { Flora } from './Flora';
 import { Wildlife } from './Wildlife';
@@ -147,6 +149,8 @@ export function AeroWorld(props: WorldProps & { runtime: MutableRefObject<SceneR
 
     {stage >= 1 && <EcoCity runtime={runtime} paused={stopped} quality={tier} />}
     {stage >= 3 && <CoastalLife runtime={runtime} paused={stopped} quality={tier} />}
+    {stage >= 3 && <ReefHabitat runtime={runtime} paused={stopped} quality={tier} />}
+    {stage >= 3 && <DolphinLife runtime={runtime} paused={stopped} quality={tier} />}
     {stage >= 3 && <ReefLife runtime={runtime} paused={stopped} quality={tier} />}
     {stage >= 3 && <CityVentilation runtime={runtime} paused={stopped} quality={tier} />}
     {stage >= 3 && <Seaweed runtime={runtime} paused={stopped} quality={tier} />}

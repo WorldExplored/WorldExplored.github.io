@@ -18,18 +18,24 @@ export interface FeaturedContribution extends Contribution {
   attribution?: string;
 }
 
+export interface BackgroundMusicTrack { title: string; artist: string; playbackUrl: string }
+
 export const profile = {
   entry: {
     eyebrow: 'A little closer to the future we imagined.',
     title: 'Travel back to the future.',
     description: 'An island of ideas, open-source work, and things still to discover.',
-    sound: 'Coastal ambience + music',
+    sound: 'Coastal ambience',
     enter: 'Enter the world',
     hint: 'Drag to explore · Choose a building to step inside',
   },
+  soundSettings: {
+    label: 'Sound', group: 'Environmental ambience', ambience: 'Ambience', volume: 'Ambience volume', credits: 'Sound credits',
+    unavailable: 'Coastal audio unavailable. Try again.', bellUnavailable: 'Bell audio unavailable. Try again.',
+  },
   soundtrack: {
-    label: 'World radio', loading: 'Tuning in…', ready: 'Play or pause in the player', playing: 'Coast + music',
-    blocked: 'Tap play to start music', unavailable: 'Music unavailable here. Listen on YouTube.', close: 'Close music and stop playback',
+    audioTracks: [] as readonly BackgroundMusicTrack[],
+    settings: 'Music', volume: 'Music volume', trackUnavailable: 'unavailable', external: 'Listen on YouTube',
     source: 'Your inspiration mix', reference: 'https://www.youtube.com/watch?v=Cz2YCRmDOFk',
     tracks: [
       { title: 'LEASE', artist: 'Takeshi Abo', videoId: 'tjlvmb8SGEs' },

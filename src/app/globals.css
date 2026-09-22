@@ -312,36 +312,19 @@ html[data-world-boot] .portfolio .canvas-host { background: transparent !importa
 .world-entry__go:hover { filter: brightness(1.06); }
 .world-entry__hint { font-size: 12px; color: #487381; margin: 0; }
 .world-entry :focus-visible { outline: 3px solid #175cca; outline-offset: 4px; }
-.world-music { position: fixed; left: 20px; bottom: 168px; width: 302px; z-index: 32; border: 1px solid #dcffff; border-radius: 14px; background: linear-gradient(120deg,#e0ffffed,#83d4e7ed); box-shadow: 0 4px 20px #0535553b,inset 0 0 0 1px #3f91a9; overflow: hidden; color: #12445a; }
-.world-music__bar { height: 44px; display: flex; justify-content: space-between; align-items: center; padding-left: 12px; font-size: 14px; font-weight: 600; }
-.world-music__bar button { width: 44px; height: 44px; border: 0; background: transparent; color: inherit; font: inherit; font-size: 24px; cursor: pointer; }
-.world-music__video { width: 300px; height: 200px; background: #123751; }
-.world-music iframe { display: block; width: 300px; height: 200px; border: 0; }
-.world-music__foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 11px; padding: 7px 10px; min-height: 30px; }
-.world-music__foot a { color: #135685; }
-.world-music__links { display: grid; gap: 8px; padding: 4px 10px 12px; font-size: 12px; }
-.world-music-open { position: fixed; bottom: 112px; left: 115px; z-index: 32; }
 .ambience-settings { display: block; bottom: 112px; z-index: 33; }
 .ambience-settings summary { list-style: none; cursor: pointer; }
 .ambience-settings summary::-webkit-details-marker { display: none; }
-.ambience-settings__panel { position: absolute; bottom: 52px; left: 0; width: 260px; display: flex; flex-wrap: wrap; gap: 9px; padding: 12px; border-radius: 16px; border: 1px solid #b5eafa; background: #eafffff2; box-shadow: 0 4px 20px #12547933; }
-@media (min-width: 768px) { .portfolio:has(.world-music) .ambience-settings__panel { left: 318px; bottom: 0; } }
+.ambience-settings__panel { position: absolute; bottom: 52px; left: 0; width: 278px; max-height: min(440px,calc(100dvh - 220px)); overflow: auto; display: flex; flex-wrap: wrap; gap: 12px; padding: 16px; border-radius: 16px; border: 1px solid #b5eafa; background: #eafffff5; box-shadow: 0 4px 20px #12547933; }
+.sound-setting { display: flex; align-items: center; justify-content: space-between; gap: 14px; min-height: 44px; width: 100%; font-size: 15px; font-weight: 600; cursor: pointer; }
+.sound-setting input { width: 22px; height: 22px; accent-color: #147bac; cursor: pointer; }
+.sound-music { display: grid; gap: 10px; width: 100%; padding-top: 12px; border-top: 1px solid #b7dce4; }
+.sound-music a,.sound-credit { color: #125775; font-size: 12px; line-height: 1.45; }
+.sound-track { font-size: 12px; color: #416b7b; }
 @media (max-width: 767px) {
   .world-entry__body { padding: 24px 20px; }
-  .world-music { top: max(8px,env(safe-area-inset-top)); bottom: auto; left: 12px; }
-  .portfolio:has(.world-music).has-destination .content-stage { top: max(33dvh,294px); }
-  .portfolio:has(.world-music):not(.has-destination) .identity { top: 310px; }
-  .world-music-open { left: 15px; bottom: 100px; }
   .ambience-settings { bottom: 100px; }
   .ambience-settings__panel { left: auto; right: 0; }
 }
-@media (max-height: 580px) { .world-entry__orb { display: none; } .world-entry__body { padding: 14px 24px; } .world-entry__eyebrow { margin-top: 0; } }
-@media (forced-colors: active) { .world-entry,.world-entry__body,.world-entry__go,.world-music { background: Canvas; color: CanvasText; border: 1px solid CanvasText; } }
-
-@media (max-height: 580px) and (min-width: 600px) {
-  .world-music { top: 8px; bottom: auto; left: 12px; }
-  .portfolio:has(.world-music) .identity { left: 334px !important; top: 15px !important; }
-  .portfolio:has(.world-music).has-destination .content-stage { left: 334px; right: 12px; top: 12px; bottom: 95px; width: auto; }
-  .ambience-settings { left: auto; right: 16px; bottom: 100px; }
-  .portfolio:has(.world-music) .ambience-settings__panel { left: auto; right: 0; bottom: 52px; }
-}
+@media (max-height: 580px) { .world-entry__orb { display: none; } .world-entry__body { padding: 14px 24px; } .world-entry__eyebrow { margin-top: 0; } .ambience-settings { left: auto; right: 16px; bottom: 100px; } .ambience-settings__panel { right: 0; left: auto; } }
+@media (forced-colors: active) { .world-entry,.world-entry__body,.world-entry__go { background: Canvas; color: CanvasText; border: 1px solid CanvasText; } }

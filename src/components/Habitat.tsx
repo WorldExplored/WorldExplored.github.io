@@ -21,7 +21,6 @@ export function Habitat() {
   const ambience = useRef<EnvironmentalAudioHandle>(null);
   const [entered, setEntered] = useState(false);
   const radio = useRef<WorldMusicHandle>(null);
-  const [music, setMusic] = useState(true);
   const [started, setStarted] = useState(false);
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -36,7 +35,7 @@ export function Habitat() {
   const dock = profile.sections.filter(section => section.dock);
 
   useEffect(() => {
-    const frame = requestAnimationFrame(() => { setStarted(true); if (['localhost', '127.0.0.1'].includes(location.hostname) && new URLSearchParams(location.search).has('qaView')) { setEntered(true); setMusic(false); } setDiagnostics(new URLSearchParams(window.location.search).has('diagnostics')); });
+    const frame = requestAnimationFrame(() => { setStarted(true); if (['localhost', '127.0.0.1'].includes(location.hostname) && new URLSearchParams(location.search).has('qaView')) { setEntered(true); } setDiagnostics(new URLSearchParams(window.location.search).has('diagnostics')); });
     return () => cancelAnimationFrame(frame);
   }, []);
   useEffect(() => {
@@ -90,13 +89,11 @@ export function Habitat() {
       target.style.setProperty('--light-x', `${event.clientX - rect.left}px`);
       target.style.setProperty('--light-y', `${event.clientY - rect.top}px`);
     }} aria-label={profile.ui.mainNavigation}><DockShell />{dock.map(section => <a href={`#${section.id}`} data-destination={section.id} key={section.id} onClick={event => navigate(event, section.id)} aria-current={active === section.id ? 'location' : undefined}><HabitatIcon kind={section.id} /><span>{section.label}</span></a>)}</nav>
-    <EnvironmentalAudioControl ref={ambience} visible={entered} />
-    {entered && !music && <button className="world-music-open audio-control__button" onClick={() => setMusic(true)} aria-label="Play world radio">♫ <span>World radio</span></button>}
-    {started && music && <div hidden={!entered}><WorldMusic ref={radio} autoStart={entered} onClose={() => setMusic(false)} /></div>}
+    <EnvironmentalAudioControl ref={ambience} visible={entered}><WorldMusic ref={radio} /></EnvironmentalAudioControl>
     {started && !entered && <WorldEntry onEnter={sound => {
-      flushSync(() => { setEntered(true); if (!sound) setMusic(false); });
+      flushSync(() => setEntered(true));
       if (sound) { void ambience.current?.start(); radio.current?.play(); }
-      requestAnimationFrame(() => document.querySelector<HTMLButtonElement>('.identity button')?.focus({ preventScroll: true }));
+      requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(active ? '.surface-close' : '.identity button')?.focus({ preventScroll: true }));
     }} />}
     <div className="travel-status" role="status" aria-live="polite">{active && !surfaceOpen ? `${profile.ui.travel} ${profile.sections.find(section => section.id === active)?.label}` : ''}</div>
     {diagnostics && <output className="scene-diagnostics" data-scene-diagnostics aria-label="Scene performance diagnostics" />}

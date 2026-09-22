@@ -41,7 +41,7 @@ export class AudioPlaylist {
   private readonly schedule: NonNullable<PlaylistOptions['schedule']>;
   private readonly cancel: NonNullable<PlaylistOptions['cancel']>;
   private readonly now: () => number;
-  constructor(private media: HTMLAudioElement, private tracks: readonly LicensedAudioSource[], private changed: (snapshot: PlaylistSnapshot) => void, private options: PlaylistOptions = {}) {
+  constructor(private media: HTMLAudioElement, private tracks: readonly Pick<LicensedAudioSource, 'playbackUrl'>[], private changed: (snapshot: PlaylistSnapshot) => void, private options: PlaylistOptions = {}) {
     this.snapshot = { active: false, state: 'ready', index: 0, ...readAudioPreferences(options.storage) };
     this.schedule = options.schedule ?? ((callback, delay) => setTimeout(callback, delay));
     this.cancel = options.cancel ?? (handle => clearTimeout(handle));

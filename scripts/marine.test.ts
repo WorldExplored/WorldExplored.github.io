@@ -1,75 +1,93 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { InstancedMesh, Mesh, MeshStandardMaterial, Vector3 } from 'three';
-import { createCoralSites, createMarineState, MARINE_COUNTS, stepMarine, writeReefFish } from '../src/components/world/marineState';
-import { coralGeometry, createReefLife } from '../src/components/world/ReefLife';
-import { createCityFerryRoute } from '../src/components/world/cityInfrastructure';
-import { harborWaterHeight } from '../src/components/world/waterSurface';
-import { landDistance, terrainHeight } from '../src/components/world/terrain';
+import { InstancedMesh, Mesh, MeshStandardMaterial, Raycaster, Vector3 } from 'three';
+import { createReefLife } from '../src/components/world/ReefLife';
+import { createReefFishState, interactWithReefFish, REEF_FISH_COUNTS, reefFishPositionClear, stepReefFish } from '../src/components/world/reefFishState';
+import { getReefHabitat, reefFerryClearance, reefFloorHeight, reefHabitatContains } from '../src/components/world/reefHabitat';
 
-const route = createCityFerryRoute();
-const ferryCorridor = Array.from({ length: 400 }, (_, i) => route.curve.getPointAt(i / 400));
-const clearance = (p: Vector3) => Math.min(...ferryCorridor.map(q => Math.hypot(q.x - p.x, q.z - p.z)));
-
-test('five-minute dolphin and shark trajectories stay clear of land, reef, and the complete ferry route', () => {
-  for (const shark of [false, true]) for (let index = 0; index < 2; index++) {
-    const state = createMarineState(index, shark), previous = state.position.clone();
-    let heading = state.heading, pitch = state.pitch, contacts = 0;
-    for (let frame = 0; frame < 18000; frame++) {
-      const touched = stepMarine(state, 1 / 60);
-      assert.ok(state.position.distanceTo(previous) * 60 < 2.6, 'bounded three-dimensional speed');
-      assert.ok(Math.abs(Math.atan2(Math.sin(state.heading - heading), Math.cos(state.heading - heading))) * 60 < .22, 'continuous bounded heading');
-      assert.ok(Math.abs(state.pitch - pitch) * 60 < 5.1, 'pitch follows a smooth breach tangent');
-      assert.ok(landDistance(state.position.x, state.position.z) < -4);
-      assert.ok(state.position.y > terrainHeight(state.position.x, state.position.z) + 1.2);
-      if (frame % 60 === 0) assert.ok(clearance(state.position) > 5.6, 'body radius and ferry hull have space');
-      if (touched) {
-        contacts++;
-        assert.ok(!shark); assert.equal(state.splashAge, 0);
-        assert.ok(Math.abs(state.splash.y - harborWaterHeight(state.splash.x, state.splash.z, state.time)) < .003, 'spray starts on the actual displaced water');
+test('reef fish wander for five minutes without crossing habitat boundaries, coral, rock, sand or ferry', () => {
+  const states = Array.from({ length: REEF_FISH_COUNTS.high }, (_, i) => createReefFishState(i));
+  const origins = states.map(fish => fish.position.clone()), previous = origins.map(p => p.clone()), headings = states.map(fish => fish.heading);
+  const traveled = states.map(() => 0), elevations = states.map(fish => [fish.position.y, fish.position.y]);
+  const habitat = getReefHabitat();
+  for (let frame = 0; frame < 6000; frame++) {
+    if (frame % 240 === 0) interactWithReefFish(states, Math.floor(frame / 240) % states.length);
+    stepReefFish(states, .05);
+    for (let i = 0; i < states.length; i++) {
+      const fish = states[i], p = fish.position, distance = p.distanceTo(previous[i]);
+      assert.ok(Number.isFinite(p.x + p.y + p.z + fish.heading + fish.pitch + fish.tail));
+      assert.ok(distance < .053, 'no teleport, bounded swimming speed');
+      assert.ok(Math.abs(Math.atan2(Math.sin(fish.heading - headings[i]), Math.cos(fish.heading - headings[i]))) <= .095001);
+      assert.ok(reefFishPositionClear(p.x, p.y, p.z));
+      traveled[i] += distance; previous[i].copy(p); headings[i] = fish.heading;
+      elevations[i][0] = Math.min(elevations[i][0], p.y); elevations[i][1] = Math.max(elevations[i][1], p.y);
+      if (frame % 200 === 0) {
+        assert.ok(reefHabitatContains(p.x, p.z, .5)); assert.ok(p.y > reefFloorHeight(p.x, p.z) + .35); assert.ok(reefFerryClearance(p.x, p.z) > 2.65);
+        for (const obstacle of [...habitat.colonies, ...habitat.rocks]) {
+          const verticalOverlap = p.y + .14 > obstacle.y && p.y - .14 < obstacle.y + obstacle.height;
+          assert.ok(!verticalOverlap || Math.hypot(p.x-obstacle.x,p.z-obstacle.z) >= obstacle.radius + .14, 'actual rendered obstacle bounds');
+        }
       }
-      previous.copy(state.position); heading = state.heading; pitch = state.pitch;
     }
-    assert.equal(contacts, state.contacts); assert.ok(shark ? contacts === 0 : contacts >= 8 && contacts <= 10);
-    const frozen = JSON.stringify(state); stepMarine(state, 20, true); assert.equal(JSON.stringify(state), frozen);
   }
+  assert.ok(traveled.every(distance => distance > 12), `every fish roams, minimum traveled ${Math.min(...traveled)}`);
+  assert.ok(elevations.filter(([low, high]) => high - low > .5).length > 120, 'individual depth variation');
+  assert.ok(new Set(states.map(fish => `${Math.floor(fish.position.x / 5)},${Math.floor(fish.position.z / 5)}`)).size > 28, 'fish occupy the broad reef');
 });
 
-test('reef colonies are submerged, seabed-seated and outside the ferry lane; schooling fish stay over the reef', () => {
-  const sites = createCoralSites(); assert.ok(sites.length >= 70);
-  for (const site of sites) {
-    assert.equal(site.floor, terrainHeight(site.x, site.z));
-    assert.ok(site.floor + 1.16 + site.scale * 1.05 < -1.6);
-    assert.ok(clearance(new Vector3(site.x, 0, site.z)) > 4);
-  }
-  const pose = createMarineState(0);
-  for (let t = 0; t < 300; t += .7) for (let i = 0; i < MARINE_COUNTS.high; i++) {
-    writeReefFish(i, t, pose);
-    assert.ok(pose.position.y < -1.6 && pose.position.y > -2.5);
-    assert.ok(landDistance(pose.position.x, pose.position.z) < -4);
-    assert.ok(clearance(pose.position) > 4);
-  }
+test('a tap makes a local group react then settle; paused simulation freezes targets and poses', () => {
+  const states = Array.from({ length: 140 }, (_, i) => createReefFishState(i));
+  const affected = interactWithReefFish(states, 50);
+  assert.ok(affected >= 1 && affected < 40); assert.ok(states[50].reaction > 0);
+  for (const fish of states) if (fish.position.distanceTo(states[50].position) > 3.2) assert.equal(fish.reaction, 0);
+  const before = JSON.stringify(states); stepReefFish(states, 60, true); assert.equal(JSON.stringify(states), before);
+  for (let frame = 0; frame < 100; frame++) stepReefFish(states, .05);
+  assert.ok(states.every(fish => fish.reaction === 0));
 });
 
-test('marine anatomy and coral topology remain distinct, finite and shared within a bounded draw budget', () => {
-  const forms = [0, 1, 2].map(coralGeometry);
-  assert.equal(new Set(forms.map(geometry => geometry.userData.form)).size, 3); forms.forEach(geometry => geometry.dispose());
-  const life = createReefLife(); let draws = 0, triangles = 0;
+test('fish use bounded shared geometry, visible anatomy, articulated tails and moving tap targets', () => {
+  const life = createReefLife();
   try {
+    let draws = 0, triangles = 0;
     life.root.traverse(object => {
       if (!(object instanceof Mesh)) return;
-      draws++; const geometry = object.geometry;
-      for (const value of geometry.getAttribute('position').array) assert.ok(Number.isFinite(value));
-      triangles += (geometry.index?.count ?? geometry.getAttribute('position').count) / 3 * (object instanceof InstancedMesh ? object.count : 1);
+      draws++; for (const value of object.geometry.getAttribute('position').array) assert.ok(Number.isFinite(value));
+      triangles += (object.geometry.index?.count ?? object.geometry.getAttribute('position').count) / 3 * (object instanceof InstancedMesh ? object.count : 1);
     });
-    const dolphins = life.root.children.filter(child => child.name === 'bottlenose-dolphin'); assert.equal(dolphins.length, 2);
-    for (const dolphin of dolphins) for (const part of ['long-bottlenose-rostrum', 'horizontal-tail-flukes', 'paired-eyes', 'swept-dorsal-fin']) assert.ok(dolphin.getObjectByName(part));
-    const sharks = life.root.children.filter(child => child.name === 'offshore-shark'); assert.equal(sharks.length, 2);
-    sharks.forEach(shark => assert.ok(shark.getObjectByName('vertical-caudal-fin')));
-    assert.ok(draws <= 62, `${draws} draws`); assert.ok(triangles < 190000, `${triangles} triangles`);
+    assert.equal(draws, 5); assert.ok(triangles < 200000);
     const fish = life.root.getObjectByName('channel-reef-schools') as InstancedMesh;
-    assert.ok(!(fish.material as MeshStandardMaterial).vertexColors || fish.geometry.hasAttribute('color'), 'fish shader must not multiply colors by a missing vertex attribute');
-    for (const tier of ['medium', 'low', 'high'] as const) { life.setQuality(tier); assert.equal(fish.count, MARINE_COUNTS[tier]); }
-    life.update(.05); const matrix = fish.instanceMatrix.array.slice(); life.update(10, true); assert.deepEqual(fish.instanceMatrix.array, matrix);
+    const tails = life.root.getObjectByName('articulated-reef-fish-tails') as InstancedMesh;
+    const touch = life.root.getObjectByName('reef-fish-touch-targets') as InstancedMesh;
+    assert.equal(touch.raycast, InstancedMesh.prototype.raycast);
+    assert.ok(!(fish.material as MeshStandardMaterial).vertexColors || fish.geometry.hasAttribute('color'));
+    assert.ok(life.root.getObjectByName('reef-fish-pectoral-fins')); assert.ok(life.root.getObjectByName('reef-fish-eyes-and-bars'));
+    for (const tier of ['medium', 'low', 'high'] as const) { life.setQuality(tier); assert.equal(fish.count, REEF_FISH_COUNTS[tier]); assert.equal(touch.count, fish.count); }
+    const originalTail = tails.instanceMatrix.array.slice(); life.update(.05); assert.notDeepEqual(tails.instanceMatrix.array, originalTail);
+    const frozen = fish.instanceMatrix.array.slice(); life.update(20, true); assert.deepEqual(fish.instanceMatrix.array, frozen);
+    assert.ok(life.interact(0) >= 1);
+  } finally { life.dispose(); }
+});
+
+
+test('moving fish retain real raycaster hits across quality changes and long swims', () => {
+  const life = createReefLife();
+  try {
+    const touch = life.root.getObjectByName('reef-fish-touch-targets') as InstancedMesh;
+    const ray = new Raycaster(), down = new Vector3(0, -1, 0);
+    for (const tier of ['low', 'high', 'medium'] as const) {
+      life.setQuality(tier);
+      for (let frame = 0; frame < 800; frame++) life.update(.05);
+      life.root.updateMatrixWorld(true);
+      for (const index of [0, 12, 35]) {
+        const position = life.states[index].position;
+        assert.ok(touch.boundingSphere!.center.distanceTo(position) + .4 < touch.boundingSphere!.radius);
+        ray.set(position.clone().add(new Vector3(0, 12, 0)), down);
+        const hits = ray.intersectObject(life.root, true);
+        assert.ok(hits.some(hit => hit.object === touch && hit.instanceId === index), `real moving instance ${index} hit at ${tier}`);
+        const hit = hits.find(hit => hit.object === touch && hit.instanceId === index)!;
+        assert.ok(life.interact(hit.instanceId!) > 0);
+        assert.ok(life.states[index].reaction > 0);
+      }
+    }
   } finally { life.dispose(); }
 });

@@ -105,13 +105,13 @@ const fragmentShader = /* glsl */ `
     float coast = coastSample.r * 64. - 32.;
     if (any(lessThan(coastUV, vec2(0.))) || any(greaterThan(coastUV, vec2(1.)))) coast = -32. - length(p - clamp(p, uCoastBounds.xy, uCoastBounds.xy+uCoastBounds.zw));
     float shoreShallows = 1. - smoothstep(1., 15., -coast);
-    // The protected channel has a coral shelf; deep offshore water attenuates to ink.
-    float channel = 1. - smoothstep(.72, 1.25, length((p-vec2(-3.,-42.))/vec2(20.,24.)));
+    // The reef shelf stays clear while open water blends gently into the blue horizon.
+    float channel = 1. - smoothstep(.72, 1.25, length((p-vec2(-3.,-42.))/vec2(33.,27.)));
     float shallows = max(shoreShallows, channel);
     float outsideField = length(p - clamp(p, uCoastBounds.xy, uCoastBounds.xy+uCoastBounds.zw));
     float offshoreDistance = coastSample.b * 128. + outsideField;
     float offshore = smoothstep(15., 80., offshoreDistance);
-    vec3 color = mix(mix(uDeep, uWater, .5 + broad), vec3(.001,.005,.009), offshore);
+    vec3 color = mix(mix(uDeep, uWater, .5 + broad), vec3(.025,.24,.36), offshore * .58);
     color = mix(color, vec3(.035,.69,.66), shallows * .89);
     vec3 surf = shoreWave(coast, p, uTime, coastSample.g);
     vec2 texel = vec2(1./640.,1./640.);
@@ -127,14 +127,14 @@ const fragmentShader = /* glsl */ `
     float caustic = 0.;
     float causticNear = 1.-smoothstep(12.,38.,length(cameraPosition-vWorld));
     if (shallows*causticNear > .02) caustic = causticCell(p*3.9+vec2(seaNoise(p*1.4),seaNoise(p*1.7+3.))*1.8)*.008*shallows*causticNear*uDetail;
-    color = mix(color, uHorizon*.68, fresnel * .48 * (1. - offshore * .96)) + caustic;
+    color = mix(color, uHorizon*.68, fresnel * .48) + caustic;
     float sheen = pow(max(dot(reflect(-normalize(vec3(-.4,.8,.25)),n), view),0.),24.);
-    color += vec3(.35,.55,.6) * sheen * .23 * (1. - offshore * .9);
+    color += vec3(.35,.55,.6) * sheen * .23;
     float sun = pow(max(dot(reflect(-uSunDirection, n), view), 0.), 110.);
-    color += uSunColor * sun * uSunIntensity * .14 * (1. - offshore * .9);
+    color += uSunColor * sun * uSunIntensity * .14;
     float haze = smoothstep(uFogRange.x, uFogRange.y, length(cameraPosition - vWorld));
-    color = mix(color, uFog, haze * (1. - offshore * .96));
-    gl_FragColor = vec4(color, mix(.995, .20, shallows) + fresnel * .10 * shallows);
+    color = mix(color, uFog, haze);
+    gl_FragColor = vec4(color, mix(.985, .16, shallows) + fresnel * .12 * shallows);
     #include <colorspace_fragment>
   }
 `;
@@ -215,7 +215,6 @@ export function Water({ runtime, paused, quality }: EnvironmentProps) {
     updateWater(material, runtime.current);
   });
   function ripple(event: ThreeEvent<MouseEvent>) {
-    event.stopPropagation();
     if (paused || event.delta > 5) return;
     startRipple(runtime.current, event.point.x, event.point.z);
   }

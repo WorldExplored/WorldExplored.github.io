@@ -18,11 +18,15 @@ test('entry presents an accessible intentional sound choice without loading medi
   assert.equal(renderToStaticMarkup(<EnvironmentalAudioControl visible={false} />), '');
 });
 
-test('radio uses only the requested songs and does not render a remote player before mounting', () => {
+test('Sound settings contain track links without a remote video or false background playback', () => {
   assert.deepEqual(profile.soundtrack.tracks.map(track => track.videoId), ['tjlvmb8SGEs', 'P15Ldd_lSEM']);
-  const html = renderToStaticMarkup(<WorldMusic onClose={() => {}} />);
-  assert.doesNotMatch(html, /<iframe|<script|autoplay=/);
-  assert.match(html, /Close music and stop playback/);
+  const html = renderToStaticMarkup(<WorldMusic />);
+  assert.doesNotMatch(html, /<iframe|<script|<audio|autoplay=|world-music__/);
+  assert.match(html, /Listen on YouTube/);
+  assert.doesNotMatch(html, /type="checkbox"/);
+  const direct = renderToStaticMarkup(<WorldMusic tracks={[{title:'Test',artist:'Test',playbackUrl:'/audio/test.mp3'}]} />);
+  assert.match(direct, /aria-label="Music"/);
+  assert.doesNotMatch(direct, /<iframe|<audio|checked=""/);
 });
 
 test('YouTube loading coalesces requests, retries a failed script, and restores an existing ready callback', async () => {

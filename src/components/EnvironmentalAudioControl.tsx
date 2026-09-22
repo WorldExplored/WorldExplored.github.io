@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react';
+import { useEffect, useImperativeHandle, useRef, useState, type Ref, type ReactNode } from 'react';
+import { profile } from '@/content/profile';
 import { CoastalAudio, COASTAL_BELL_EVENT, TECHNOLOGY_SOUND_EVENT, type TechnologySoundEvent, type CoastalAudioPreferences } from './world/coastalAudio';
 
 const STORAGE = 'portfolio-ambience-v1';
@@ -19,7 +20,7 @@ export function subscribeToTechnologySounds(target: EventTarget, currentEngine: 
 }
 
 export interface EnvironmentalAudioHandle { start: () => Promise<void> }
-export function EnvironmentalAudioControl({ ref, visible = true }: { ref?: Ref<EnvironmentalAudioHandle>; visible?: boolean }) {
+export function EnvironmentalAudioControl({ ref, visible = true, children }: { ref?: Ref<EnvironmentalAudioHandle>; visible?: boolean; children?: ReactNode }) {
   const engine = useRef<CoastalAudio | null>(null);
   const [active, setActive] = useState(false), [started, setStarted] = useState(false), [loading, setLoading] = useState(false);
   const [error, setError] = useState(''), [bellCount, setBellCount] = useState(0);
@@ -29,31 +30,33 @@ export function EnvironmentalAudioControl({ ref, visible = true }: { ref?: Ref<E
   useEffect(() => {
     const bell = () => {
       engine.current ??= new CoastalAudio(latest.current); setStarted(true);
-      void engine.current.bell().then(struck => { if (struck) setBellCount(value => value + 1); }).catch(() => setError('Bell audio unavailable. Try again.'));
+      void engine.current.bell().then(struck => { if (struck) setBellCount(value => value + 1); }).catch(() => setError(profile.soundSettings.bellUnavailable));
     };
     const unsubscribeTechnology = subscribeToTechnologySounds(window, () => engine.current);
     window.addEventListener(COASTAL_BELL_EVENT, bell);
     return () => { unsubscribeTechnology(); window.removeEventListener(COASTAL_BELL_EVENT, bell); engine.current?.dispose(); engine.current = null; };
   }, []);
   const persist = (next: CoastalAudioPreferences) => {
-    setPreferences(next); try { localStorage.setItem(STORAGE, JSON.stringify(next)); } catch {}
+    latest.current = next; setPreferences(next); try { localStorage.setItem(STORAGE, JSON.stringify(next)); } catch {}
     engine.current?.setPreferences(next);
   };
   const start = async () => {
     if (loading) return;
+    if (latest.current.muted) persist({ ...latest.current, muted: false });
     if (active) return;
     setLoading(true); setError('');
-    try { engine.current ??= new CoastalAudio(preferences); setStarted(true); await engine.current.start(); setActive(true); }
-    catch { setError('Coastal audio unavailable. Try again.'); }
+    try { engine.current ??= new CoastalAudio(latest.current); setStarted(true); await engine.current.start(); setActive(true); }
+    catch { setError(profile.soundSettings.unavailable); }
     finally { setLoading(false); }
   };
   useImperativeHandle(ref, () => ({ start }));
   if (!visible) return null;
-  return <details className="ambience-control ambience-settings" role="group" aria-label="Environmental ambience" data-audio-state={active ? 'playing' : started ? 'ready' : 'unstarted'} data-bell-strikes={bellCount}>
-    <summary className="audio-control__button">◖ Sound</summary>
+  return <details className="ambience-control ambience-settings" role="group" aria-label={profile.soundSettings.group} data-audio-state={active ? 'playing' : started ? 'ready' : 'unstarted'} data-bell-strikes={bellCount}>
+    <summary className="audio-control__button">◖ {profile.soundSettings.label}</summary>
     <div className="ambience-settings__panel">
-    {!active && <button type="button" className="audio-control__button" onClick={start} disabled={loading}>{loading ? 'Loading coast…' : 'Enable ambience'}</button>}
-    {started && <><button type="button" className="audio-control__button audio-control__button--square" aria-label={preferences.muted ? 'Unmute ambience' : 'Mute ambience'} aria-pressed={preferences.muted} onClick={() => persist({ ...preferences, muted: !preferences.muted })}>{preferences.muted ? '×' : '◖'}</button><label className="ambience-control__volume"><span>Ambience volume</span><input aria-label="Ambience volume" type="range" min="0" max="1" step="0.01" value={preferences.volume} onChange={event => persist({ ...preferences, volume: Number(event.target.value) })} /></label><a className="audio-control__button" href="/audio/coast/credits.html" target="_blank" rel="noreferrer" aria-label="Coastal sound credits">ⓘ</a></>}
+    <label className="sound-setting"><span>{profile.soundSettings.ambience}</span><input type="checkbox" aria-label={profile.soundSettings.ambience} checked={active && !preferences.muted} disabled={loading} onChange={event => { const enabled = event.target.checked; persist({ ...preferences, muted: !enabled }); if (enabled) void start(); }} /></label>
+    {started && <><label className="ambience-control__volume"><span>{profile.soundSettings.volume}</span><input aria-label={profile.soundSettings.volume} type="range" min="0" max="1" step="0.01" value={preferences.volume} onChange={event => persist({ ...preferences, volume: Number(event.target.value) })} /></label><a className="sound-credit" href="/audio/coast/credits.html" target="_blank" rel="noreferrer">{profile.soundSettings.credits}</a></>}
+    {children}
     {error && <span role="status">{error}</span>}
     </div>
   </details>;

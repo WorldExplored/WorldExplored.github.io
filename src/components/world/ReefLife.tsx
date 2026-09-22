@@ -1,209 +1,110 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
-import { useFrame } from '@react-three/fiber';
-import { BufferGeometry, Color, CylinderGeometry, DoubleSide, Float32BufferAttribute, Group, InstancedMesh, Mesh, MeshStandardMaterial, Object3D, SphereGeometry, TorusGeometry, Vector3 } from 'three';
+import { useEffect, useMemo, useRef } from 'react';
+import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
+import { BufferGeometry, Color, DoubleSide, Float32BufferAttribute, Group, InstancedMesh, MeshBasicMaterial, MeshStandardMaterial, Object3D, Sphere, SphereGeometry, Vector3 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { EnvironmentProps } from './Water';
-import { createCoralSites, createMarineState, MARINE_COUNTS, stepMarine, writeReefFish, type MarinePose } from './marineState';
-import { harborWaterHeight } from './waterSurface';
+import { createReefFishState, interactWithReefFish, REEF_FISH_COUNTS, stepReefFish } from './reefFishState';
 
 function merge(parts: BufferGeometry[]) {
   parts.forEach(part => part.deleteAttribute('uv'));
-  const geometry = mergeGeometries(parts)!; parts.forEach(part => part.dispose()); return geometry;
+  const result = mergeGeometries(parts)!; parts.forEach(part => part.dispose()); return result;
 }
-function sphere(x: number, y: number, z: number, sx: number, sy: number, sz: number) {
-  return new SphereGeometry(1, 10, 6).scale(sx, sy, sz).translate(x, y, z);
+function oval(x: number, y: number, z: number, sx: number, sy: number, sz: number) {
+  return new SphereGeometry(1, 8, 6).scale(sx, sy, sz).translate(x, y, z);
 }
-function branch(a: Vector3, b: Vector3, radius: number) {
-  const axis = b.clone().sub(a), transform = new Object3D();
-  transform.position.copy(a).add(b).multiplyScalar(.5);
-  transform.quaternion.setFromUnitVectors(new Vector3(0, 1, 0), axis.clone().normalize()); transform.updateMatrix();
-  return new CylinderGeometry(radius * .57, radius, axis.length(), 7).applyMatrix4(transform.matrix);
+function fin(points: number[]) {
+  const geometry = new BufferGeometry();
+  geometry.setAttribute('position', new Float32BufferAttribute(points, 3)); geometry.setIndex([0, 1, 2]); geometry.computeVertexNormals(); return geometry;
 }
-/** Swept, tapered fin membrane with a raised central ridge. Coordinates are x/y in the fin plane. */
-function fin(points: readonly [number, number][], thickness = .026) {
-  const vertices: number[] = [], indices: number[] = [];
-  const cx = points.reduce((sum, p) => sum + p[0], 0) / points.length;
-  const cy = points.reduce((sum, p) => sum + p[1], 0) / points.length;
-  for (const side of [-1, 1]) {
-    const start = vertices.length / 3; vertices.push(cx, cy, thickness * side);
-    points.forEach(([x, y]) => vertices.push(x, y, 0));
-    for (let i = 0; i < points.length; i++) {
-      const a = start, b = start + i + 1, c = start + (i + 1) % points.length + 1;
-      if (side > 0) indices.push(a, b, c); else indices.push(a, c, b);
-    }
-  }
-  const geometry = new BufferGeometry(); geometry.setAttribute('position', new Float32BufferAttribute(vertices, 3)); geometry.setIndex(indices); geometry.computeVertexNormals(); return geometry;
-}
-export function marineBodyGeometry(shark = false) {
-  const positions: number[] = [], indices: number[] = [];
-  // Nose points right; the narrowing caudal peduncle joins the separately articulated tail.
-  const profiles = shark ? [[-1.55,.10,.09],[-1.1,.22,.2],[-.5,.36,.35],[.15,.39,.38],[.8,.29,.32],[1.3,.15,.20],[1.7,.005,.01]] : [[-1.3,.08,.09],[-.85,.19,.19],[-.3,.34,.33],[.35,.39,.35],[.78,.31,.29],[1.02,.18,.21],[1.13,.06,.12]];
-  profiles.forEach(([x, ry, rz], row) => {
-    for (let side = 0; side <= 24; side++) {
-      const angle = side / 24 * Math.PI * 2;
-      positions.push(x, Math.cos(angle) * ry, Math.sin(angle) * rz);
-      if (row && side) { const i = row * 25 + side; indices.push(i, i - 1, i - 25, i - 1, i - 26, i - 25); }
-    }
-  });
-  for (const end of [0, profiles.length - 1]) {
-    const center = positions.length / 3; positions.push(profiles[end][0], 0, 0);
-    for (let side = 0; side < 24; side++) { const a = end * 25 + side, b = a + 1; if (end === 0) indices.push(center, b, a); else indices.push(center, a, b); }
-  }
-  const geometry = new BufferGeometry(); geometry.setAttribute('position', new Float32BufferAttribute(positions, 3)); geometry.setIndex(indices); geometry.computeVertexNormals(); return geometry;
-}
-export function coralGeometry(form: number) {
-  const parts: BufferGeometry[] = [];
-  if (form === 0) {
-    parts.push(branch(new Vector3(), new Vector3(0, .68, 0), .095));
-    for (let i = 0; i < 7; i++) {
-      const angle = i * 2.4, base = new Vector3(0, .18 + i * .057, 0), tip = new Vector3(Math.cos(angle) * .36, .63 + i * .047, Math.sin(angle) * .36);
-      parts.push(branch(base, tip, .05));
-      for (let twig = 0; twig < 3; twig++) {
-        const p = base.clone().lerp(tip, .35 + twig * .2);
-        parts.push(branch(p, p.clone().add(new Vector3(Math.cos(angle + .5) * .13, .22, Math.sin(angle + .5) * .13)), .022));
-      }
-    }
-  } else if (form === 1) {
-    parts.push(branch(new Vector3(), new Vector3(0, .55, 0), .09));
-    for (let level = 0; level < 3; level++) {
-      const radius = .52 - level * .08;
-      const table = new CylinderGeometry(radius, radius * .82, .075, 24, 1).translate(level * .06, .32 + level * .2, 0);
-      const attribute = table.getAttribute('position');
-      for (let i = 0; i < attribute.count; i++) { const x = attribute.getX(i), z = attribute.getZ(i); attribute.setY(i, attribute.getY(i) + .035 * Math.sin(Math.atan2(z, x) * 7)); }
-      table.computeVertexNormals(); parts.push(table);
-      for (let polyp = 0; polyp < 14; polyp++) { const angle = polyp * 2.4, r = Math.sqrt((polyp + 1) / 15) * radius; parts.push(new SphereGeometry(1, 6, 4).scale(.033, .043, .033).translate(Math.cos(angle) * r + level * .06, .38 + level * .2, Math.sin(angle) * r)); }
-    }
-  } else {
-    parts.push(branch(new Vector3(), new Vector3(0, .35, 0), .05));
-    for (let i = 0; i < 11; i++) {
-      const angle = -.95 + i * .19, tip = new Vector3(Math.sin(angle) * .6, .3 + Math.cos(angle) * .72, .035 * Math.sin(i));
-      parts.push(branch(new Vector3(0, .2, 0), tip, .018));
-      for (let j = 1; j < 5 && i < 10; j++) {
-        const nextAngle = angle + .19, t = j / 5;
-        parts.push(branch(new Vector3(tip.x * t, .2 + (tip.y - .2) * t, tip.z * t), new Vector3(Math.sin(nextAngle) * .6 * t, .2 + (.1 + Math.cos(nextAngle) * .72) * t, .035 * Math.sin(i + 1) * t), .009));
-      }
-    }
-  }
-  const geometry = merge(parts), positions = geometry.getAttribute('position'), colors: number[] = [];
-  for (let i = 0; i < positions.count; i++) {
-    const x = positions.getX(i), y = positions.getY(i), z = positions.getZ(i);
-    const shade = .72 + Math.min(1, y) * .25 + .08 * Math.sin(x * 73 + z * 59 + y * 47);
-    colors.push(shade, shade, shade);
-  }
-  geometry.setAttribute('color', new Float32BufferAttribute(colors, 3));
-  geometry.userData.form = ['staghorn', 'table', 'sea-fan'][form]; return geometry;
-}
-
+/** Shared body, individually hinged tail, eyes and markings stay within four visible draws. */
 export function createReefLife() {
-  const root = new Group(); root.name = 'living-coral-channel';
-  const resources = new Set<BufferGeometry>();
-  const material = (color: string, roughness = .65) => new MeshStandardMaterial({ color, roughness, side: DoubleSide });
-  const materials = [material('#6f98a1', .33), material('#dce9db', .47), material('#102c31'), material('#526d79', .46), material('#b4b696', .92), material('#ffffff', .38)];
-  const coralMaterial = material('#ffffff', .85); coralMaterial.vertexColors = true; materials.push(coralMaterial);
-  const mesh = (parent: Group, name: string, geometry: BufferGeometry, mat: MeshStandardMaterial) => {
-    resources.add(geometry); const object = new Mesh(geometry, mat); object.name = name; object.raycast = () => {}; parent.add(object); return object;
-  };
-  const sites = createCoralSites(), coralMeshes: InstancedMesh[] = [];
-  const dummy = new Object3D(), color = new Color();
-  const palette = ['#f17e69', '#985cbe', '#f4c157', '#42aa9c', '#d8608d', '#648ecc'];
-  for (let form = 0; form < 3; form++) {
-    const selected = sites.filter(site => site.form === form), geometry = coralGeometry(form); resources.add(geometry);
-    const instances = new InstancedMesh(geometry, coralMaterial, selected.length); instances.name = `reef-${geometry.userData.form}`;
-    selected.forEach((site, i) => { dummy.position.set(site.x, site.floor + 1.16, site.z); dummy.rotation.set(0, site.rotation, 0); dummy.scale.setScalar(site.scale); dummy.updateMatrix(); instances.setMatrixAt(i, dummy.matrix); instances.setColorAt(i, color.set(palette[site.color])); });
-    instances.instanceMatrix.needsUpdate = true; instances.raycast = () => {}; root.add(instances); coralMeshes.push(instances);
+  const root = new Group(); root.name = 'living-reef-fish';
+  const states = Array.from({ length: REEF_FISH_COUNTS.high }, (_, index) => createReefFishState(index));
+  const bodyGeometry = merge([
+    oval(.015, 0, 0, .083, .053, .024),
+    fin([-.045,.028,0, -.036,.084,0, .034,.047,0]),
+    fin([-.039,-.025,0, -.025,-.063,0, .025,-.03,0]),
+  ]);
+  const tailGeometry = fin([0,0,0, -.061,.048,0, -.057,-.048,0]);
+  const detailGeometry = merge([
+    oval(.063,.015,.019,.007,.008,.005), oval(.063,.015,-.019,.007,.008,.005),
+    oval(.017,0,.024,.009,.044,.002), oval(.017,0,-.024,.009,.044,.002),
+    oval(-.018,0,.023,.006,.041,.002), oval(-.018,0,-.023,.006,.041,.002),
+  ]);
+  const bellyGeometry = merge([
+    oval(.02,-.03,0,.053,.012,.018),
+    fin([.026,-.011,.013,-.014,-.032,.055,-.029,-.009,.02]),
+    fin([.026,-.011,-.013,-.029,-.009,-.02,-.014,-.032,-.055]),
+  ]);
+  const skin = new MeshStandardMaterial({ color: '#ffffff', roughness: .43, metalness: .07, side: DoubleSide });
+  const ink = new MeshStandardMaterial({ color: '#143b41', roughness: .55 });
+  const pearl = new MeshStandardMaterial({ color: '#fff2b9', roughness: .48, side: DoubleSide });
+  const proxyGeometry = new SphereGeometry(.38, 6, 4), proxyMaterial = new MeshBasicMaterial({ colorWrite: false, depthWrite: false });
+  const bodies = new InstancedMesh(bodyGeometry, skin, states.length), tails = new InstancedMesh(tailGeometry, skin, states.length);
+  const details = new InstancedMesh(detailGeometry, ink, states.length), bellies = new InstancedMesh(bellyGeometry, pearl, states.length);
+  const proxies = new InstancedMesh(proxyGeometry, proxyMaterial, states.length);
+  bodies.name = 'channel-reef-schools'; tails.name = 'articulated-reef-fish-tails'; details.name = 'reef-fish-eyes-and-bars'; bellies.name = 'reef-fish-pectoral-fins'; proxies.name = 'reef-fish-touch-targets';
+  // Raycasting caches this sphere independently of frustumCulled. Keep moving fish pickable
+  // throughout the full habitat rather than retaining the first frame's instance bounds.
+  proxies.boundingSphere = new Sphere(new Vector3(-2, -3, -42), 42);
+  const meshes = [bodies, tails, details, bellies, proxies];
+  meshes.forEach(mesh => { mesh.frustumCulled = false; root.add(mesh); });
+  // Only the touch targets are raycast; their IDs map directly to the moving fish.
+  [bodies, tails, details, bellies].forEach(mesh => { mesh.raycast = () => {}; });
+  const color = new Color(), transform = new Object3D(), tail = new Object3D();
+  for (let i = 0; i < states.length; i++) {
+    color.set(['#ffd04f', '#68dbe6', '#ff9872', '#b699f3', '#f2f5cd'][i % 5]);
+    bodies.setColorAt(i, color); tails.setColorAt(i, color);
   }
-  // Each colony rises from a substantial limestone mound seated into the existing seabed.
-  const moundGeometry = merge([sphere(0, .35, 0, .85, .83, .8), sphere(.46, .16, .22, .45, .6, .55), sphere(-.42, .06, -.2, .5, .5, .45)]); resources.add(moundGeometry);
-  const mounds = new InstancedMesh(moundGeometry, materials[4], sites.length); mounds.name = 'reef-limestone-foundations';
-  sites.forEach((site, i) => { dummy.position.set(site.x, site.floor, site.z); dummy.rotation.set(0, site.rotation, 0); dummy.scale.set(1, 1, 1); dummy.updateMatrix(); mounds.setMatrixAt(i, dummy.matrix); });
-  mounds.instanceMatrix.needsUpdate = true; mounds.raycast = () => {}; root.add(mounds);
-
-  const states = [createMarineState(0), createMarineState(1), createMarineState(0, true), createMarineState(1, true)];
-  const creatures = states.map(state => {
-    const animal = new Group(); animal.name = state.shark ? 'offshore-shark' : 'bottlenose-dolphin'; root.add(animal);
-    const skin = materials[state.shark ? 3 : 0];
-    mesh(animal, 'continuous-fusiform-body', marineBodyGeometry(state.shark), skin);
-    mesh(animal, 'pale-countershaded-belly', sphere(.1, -.18, 0, state.shark ? 1.2 : .85, .17, .27), materials[1]);
-    mesh(animal, 'swept-dorsal-fin', fin([[-.43,.28],[-.38,.72],[-.26,.9],[-.10,.66],[.20,.32]]), skin);
-    if (!state.shark) {
-      mesh(animal, 'long-bottlenose-rostrum', sphere(1.16, -.05, 0, .38, .10, .115), skin);
-      mesh(animal, 'lower-jaw', sphere(1.18, -.11, 0, .35, .023, .087), materials[1]);
-      mesh(animal, 'blowhole', sphere(.62, .347, 0, .07, .006, .041), materials[2]);
+  function writeMatrices() {
+    for (let i = 0; i < bodies.count; i++) {
+      const fish = states[i], size = .83 + (i % 5) * .047;
+      transform.position.copy(fish.position); transform.rotation.set(0, fish.heading, 0); transform.rotateZ(fish.pitch);
+      transform.scale.setScalar(size); transform.updateMatrix();
+      bodies.setMatrixAt(i, transform.matrix); details.setMatrixAt(i, transform.matrix); bellies.setMatrixAt(i, transform.matrix); proxies.setMatrixAt(i, transform.matrix);
+      tail.position.set(-.058, 0, 0); tail.rotation.set(0, fish.tail, 0); tail.scale.setScalar(1); tail.updateMatrix();
+      tail.matrix.premultiply(transform.matrix); tails.setMatrixAt(i, tail.matrix);
     }
-    const eyeX = state.shark ? 1.2 : .88, eyeZ = state.shark ? .22 : .247;
-    const eyes = merge([sphere(eyeX, .08, eyeZ, .034, .032, .018), sphere(eyeX, .08, -eyeZ, .034, .032, .018)]); mesh(animal, 'paired-eyes', eyes, materials[2]);
-    for (const side of [-1, 1]) {
-      const flipper = fin([[-.38,0],[-.76,.47],[-.70,.67],[-.51,.62],[.10,0]], .025).rotateX(side * Math.PI / 2).translate(.27, -.15, side * .22);
-      mesh(animal, 'paired-pectoral-flipper', flipper, skin);
-      if (state.shark) {
-        const gills: BufferGeometry[] = [];
-        for (let i = 0; i < 5; i++) gills.push(branch(new Vector3(.45 - i * .095, -.11, side * .365), new Vector3(.48 - i * .095, .13, side * .365), .009));
-        mesh(animal, 'five-gill-slits', merge(gills), materials[2]);
-      }
-    }
-    const tail = new Group(); tail.name = state.shark ? 'vertical-caudal-fin' : 'horizontal-tail-flukes'; tail.position.x = state.shark ? -1.55 : -1.3; animal.add(tail);
-    const tailGeometry = fin(state.shark ? [[.08,0],[-.38,.39],[-.8,.95],[-.68,.38],[-.42,.02],[-.69,-.45],[-.35,-.27]] : [[.10,0],[-.33,.37],[-.71,.65],[-.61,.28],[-.39,0],[-.61,-.28],[-.71,-.65],[-.33,-.37]], .033);
-    if (!state.shark) tailGeometry.rotateX(Math.PI / 2);
-    mesh(tail, 'swept-tail-surface', tailGeometry, skin);
-    return { animal, tail };
-  });
-  const fishGeometry = merge([sphere(0, 0, 0, .22, .13, .055), fin([[-.18,0],[-.36,.12],[-.32,0],[-.36,-.12]], .008)]); resources.add(fishGeometry);
-  const fishMaterial = material('#ffffff', .5); materials.push(fishMaterial);
-  const fish = new InstancedMesh(fishGeometry, fishMaterial, MARINE_COUNTS.high); fish.name = 'channel-reef-schools'; fish.frustumCulled = false; fish.raycast = () => {}; root.add(fish);
-  for (let i = 0; i < MARINE_COUNTS.high; i++) fish.setColorAt(i, color.set(['#ffc84a', '#65cdec', '#ff9b66'][i % 3]));
-  const stripeGeometry = merge([sphere(.025, .01, .055, .025, .113, .007), sphere(.025, .01, -.055, .025, .113, .007), sphere(.105, .038, .053, .018, .02, .009), sphere(.105, .038, -.053, .018, .02, .009)]); resources.add(stripeGeometry);
-  const stripes = new InstancedMesh(stripeGeometry, materials[2], MARINE_COUNTS.high); stripes.name = 'reef-fish-bars-and-eyes'; stripes.frustumCulled = false; stripes.raycast = () => {}; root.add(stripes);
-  const splashMaterial = material('#e5ffff', .27); splashMaterial.transparent = true; splashMaterial.depthWrite = false; materials.push(splashMaterial);
-  const ringGeometry = new TorusGeometry(1, .026, 5, 40).rotateX(Math.PI / 2), dropGeometry = new SphereGeometry(1, 6, 4); resources.add(ringGeometry); resources.add(dropGeometry);
-  const splashes = states.slice(0, 2).map(() => {
-    const ring = new Mesh(ringGeometry, splashMaterial.clone()); materials.push(ring.material); ring.renderOrder = 4; root.add(ring);
-    const drops = new InstancedMesh(dropGeometry, ring.material, 12); drops.renderOrder = 4; drops.frustumCulled = false; drops.raycast = () => {}; root.add(drops); return { ring, drops };
-  });
-  let time = 0, quality: EnvironmentProps['quality'] = 'high';
-  const fishPose: MarinePose = { position: new Vector3(), heading: 0, pitch: 0, tail: 0, breach: false };
-  function update(delta: number, paused = false, onContact?: (point: Vector3) => void, waterTime?: number) {
-    if (paused) return;
-    time += Math.min(.05, Math.max(0, delta));
-    states.forEach((state, i) => {
-      if (stepMarine(state, delta, false, waterTime)) onContact?.(state.splash);
-      const { animal, tail } = creatures[i];
-      animal.position.copy(state.position); animal.rotation.set(0, state.heading, 0); animal.rotateZ(state.pitch);
-      if (state.shark) tail.rotation.y = state.tail; else tail.rotation.z = state.tail;
-      animal.visible = !state.shark || quality !== 'low';
-      if (i > 1) return;
-      const splash = splashes[i], age = state.splashAge; splash.ring.visible = splash.drops.visible = age < 1.8;
-      if (age >= 1.8) return;
-      splash.ring.position.set(state.splash.x, harborWaterHeight(state.splash.x, state.splash.z, waterTime ?? state.time) + .03, state.splash.z);
-      splash.ring.scale.setScalar(.35 + age * 1.7); splash.ring.material.opacity = .72 * (1 - age / 1.8);
-      for (let drop = 0; drop < 12; drop++) {
-        const angle = drop / 12 * Math.PI * 2, spread = age * (1 + (drop % 3) * .15);
-        dummy.position.set(state.splash.x + Math.cos(angle) * spread, state.splash.y + Math.max(0, age * (2.5 + drop % 3 * .22) - age * age * 4.9), state.splash.z + Math.sin(angle) * spread);
-        dummy.rotation.set(0, 0, 0); dummy.scale.set(.035, .065, .035).multiplyScalar(age < .65 ? 1 : 0); dummy.updateMatrix(); splash.drops.setMatrixAt(drop, dummy.matrix);
-      }
-      splash.drops.instanceMatrix.needsUpdate = true;
-    });
-    for (let i = 0; i < fish.count; i++) {
-      writeReefFish(i, time, fishPose); dummy.position.copy(fishPose.position); dummy.rotation.set(0, fishPose.heading + fishPose.tail * .11, 0); dummy.scale.setScalar(.8 + (i % 4) * .09); dummy.updateMatrix(); fish.setMatrixAt(i, dummy.matrix); stripes.setMatrixAt(i, dummy.matrix);
-    }
-    fish.instanceMatrix.needsUpdate = true; stripes.instanceMatrix.needsUpdate = true;
+    meshes.forEach(mesh => { mesh.instanceMatrix.needsUpdate = true; });
   }
-  function setQuality(tier: EnvironmentProps['quality']) { quality = tier; creatures.forEach((creature, index) => { creature.animal.visible = index < 2 || tier !== 'low'; }); fish.count = stripes.count = MARINE_COUNTS[tier]; coralMeshes.forEach(mesh => { mesh.count = tier === 'low' ? Math.ceil(mesh.instanceMatrix.count * .6) : mesh.instanceMatrix.count; }); }
-  update(0);
+  function update(delta: number, paused = false) { if (!paused) { stepReefFish(states, delta, false, bodies.count); writeMatrices(); } }
+  function setQuality(tier: EnvironmentProps['quality']) { meshes.forEach(mesh => { mesh.count = REEF_FISH_COUNTS[tier]; }); writeMatrices(); }
+  function interact(index: number) { return interactWithReefFish(states.slice(0, bodies.count), index); }
+  writeMatrices();
   let timer: ReturnType<typeof setTimeout>;
-  function dispose() { resources.forEach(resource => resource.dispose()); materials.forEach(value => value.dispose()); root.traverse(object => { if (object instanceof InstancedMesh) object.dispose(); }); }
-  return { root, update, setQuality, dispose, retain() { clearTimeout(timer); return () => { timer = setTimeout(dispose, 0); }; } };
+  function dispose() { [bodyGeometry, tailGeometry, detailGeometry, bellyGeometry, proxyGeometry].forEach(value => value.dispose()); [skin, ink, pearl, proxyMaterial].forEach(value => value.dispose()); meshes.forEach(mesh => mesh.dispose()); }
+  return { root, states, update, setQuality, interact, dispose, retain() { clearTimeout(timer); return () => { timer = setTimeout(dispose, 0); }; } };
 }
 
-export function ReefLife({ runtime, paused, quality }: EnvironmentProps) {
+export function ReefLife({ paused, quality }: EnvironmentProps) {
   const life = useMemo(() => createReefLife(), []);
+  const canvas = useThree(state => state.gl.domElement);
+  const interactions = useRef(0);
+  const previousCursor = useRef<string | null>(null);
   useEffect(() => life.retain(), [life]);
   useEffect(() => { life.setQuality(quality); }, [life, quality]);
-  useFrame((_, delta) => life.update(delta, paused, point => {
-    const state = runtime.current;
-    state.ripple.x = point.x; state.ripple.z = point.z;
-    state.ripple.time = state.elapsed; state.ripple.serial++;
-  }, runtime.current.elapsed));
-  return <primitive object={life.root} />;
+  useFrame((_, delta) => life.update(delta, paused));
+  function onFishClick(event: ThreeEvent<MouseEvent>) {
+    // Orbit drags pass through unchanged; only a stationary tap startles nearby fish.
+    if (event.delta > 4 || event.instanceId === undefined) return;
+    if (life.interact(event.instanceId)) canvas.setAttribute('data-reef-interactions', String(++interactions.current));
+  }
+  function leaveFish() {
+    canvas.removeAttribute('data-reef-hovered');
+    if (previousCursor.current !== null) {
+      if (canvas.style.cursor === 'pointer') canvas.style.setProperty('cursor', previousCursor.current);
+      previousCursor.current = null;
+    }
+  }
+  function enterFish(event: ThreeEvent<PointerEvent>) {
+    if (event.instanceId === undefined || event.buttons) return;
+    canvas.setAttribute('data-reef-hovered', String(event.instanceId));
+    if (event.pointerType !== 'touch') {
+      if (previousCursor.current === null) previousCursor.current = canvas.style.cursor;
+      canvas.style.setProperty('cursor', 'pointer');
+    }
+  }
+  return <primitive object={life.root} onClick={onFishClick} onPointerOver={enterFish} onPointerMove={enterFish} onPointerOut={leaveFish} />;
 }
