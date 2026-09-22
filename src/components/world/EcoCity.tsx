@@ -7,7 +7,7 @@ import { measureConstruction } from './renderDiagnostics';
 
 import { useEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
-import { BufferGeometry, CatmullRomCurve3, DoubleSide, ExtrudeGeometry, Float32BufferAttribute, Group, Matrix4, Mesh, MeshPhysicalMaterial, Object3D, Shape, TubeGeometry, Vector3 } from 'three';
+import { BufferGeometry, CatmullRomCurve3, DoubleSide, Float32BufferAttribute, Group, Matrix4, Mesh, MeshPhysicalMaterial, Object3D, TubeGeometry, Vector3 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { cityBuildings, createCityTransitRoute, writeCityTransitPose, type CityTransitRoute, type CityBuilding } from './city';
 import { terrainHeight } from './terrain';
@@ -19,24 +19,12 @@ import { buildCityArchitecture, type CityRoomView, type CityFinish, type CityLif
 import { createCityLift } from './CityLift';
 import { applySurface } from './surfaceMaterials';
 import { emitTechnologySound } from './coastalAudio';
+import { makeCityCarriage } from './CityMonorail';
 
 type Finish = CityFinish;
 interface Part { geometry: BufferGeometry; building: string }
 interface CityPartRange { building: string; start: number; count: number }
 interface DeferredCityInterior { building: Readonly<CityBuilding>; recipes: CityInteriorRecipe[]; object?: Group }
-
-function roundedBox(width: number, height: number, depth: number, corner = .25) {
-  const radius = Math.min(corner, width / 2, depth / 2);
-  const x = width / 2; const z = depth / 2;
-  const shape = new Shape();
-  shape.moveTo(-x + radius, -z); shape.lineTo(x - radius, -z); shape.quadraticCurveTo(x, -z, x, -z + radius);
-  shape.lineTo(x, z - radius); shape.quadraticCurveTo(x, z, x - radius, z); shape.lineTo(-x + radius, z); shape.quadraticCurveTo(-x, z, -x, z - radius);
-  shape.lineTo(-x, -z + radius); shape.quadraticCurveTo(-x, -z, -x + radius, -z);
-  const bevel = Math.min(.035, height / 4);
-  const geometry = new ExtrudeGeometry(shape, { depth: height - bevel * 2, steps: 1, bevelEnabled: true, bevelSize: bevel, bevelThickness: bevel, bevelSegments: 2, curveSegments: 5 });
-  geometry.rotateX(-Math.PI / 2); geometry.translate(0, bevel, 0);
-  return geometry;
-}
 
 function arch(points: Vector3[], radius = .065, segments = 28) {
   return new TubeGeometry(new CatmullRomCurve3(points), segments, radius, 7, false);
@@ -96,22 +84,25 @@ function makeStaticCity(route: CityTransitRoute, materials: ReturnType<typeof ma
   const center = new Vector3(); const ahead = new Vector3(); const tangent = new Vector3();
   const rails: Vector3[][] = [[], []];
   const deck: number[] = []; const indices: number[] = [];
-  for (let index = 0; index <= 256; index++) {
-    const progress = index / 256;
+  for (let index = 0; index <= 768; index++) {
+    const progress = index / 768;
     route.curve.getPointAt(progress, center); route.curve.getPointAt((progress + .0001) % 1, ahead); tangent.subVectors(ahead, center).normalize();
     const nx = tangent.z; const nz = -tangent.x;
-    for (const [edge, height] of [[-.50, -.10], [.50, -.10], [-.50, .03], [.50, .03]]) deck.push(center.x + nx * edge, center.y + height, center.z + nz * edge);
-    for (let rail = 0; rail < 2; rail++) rails[rail].push(new Vector3(center.x + nx * (rail ? .32 : -.32), center.y + .09, center.z + nz * (rail ? .32 : -.32)));
-    if (index < 256) { const n = index * 4; indices.push(n + 2, n + 6, n + 3, n + 3, n + 6, n + 7, n, n + 1, n + 4, n + 1, n + 5, n + 4, n, n + 4, n + 2, n + 2, n + 4, n + 6, n + 1, n + 3, n + 5, n + 3, n + 7, n + 5); }
+    const bottom = Math.abs(center.x + 5) < 2.5 && Math.abs(center.z + 68) < 2.8 ? -.02 : -.38;
+    for (const [edge, height] of [[-.27, bottom], [.27, bottom], [-.27, .03], [.27, .03]]) deck.push(center.x + nx * edge, center.y + height, center.z + nz * edge);
+    for (let rail = 0; rail < 2; rail++) rails[rail].push(new Vector3(center.x + nx * (rail ? .27 : -.27), center.y + .09, center.z + nz * (rail ? .27 : -.27)));
+    if (index < 768) { const n = index * 4; indices.push(n + 2, n + 6, n + 3, n + 3, n + 6, n + 7, n, n + 1, n + 4, n + 1, n + 5, n + 4, n, n + 4, n + 2, n + 2, n + 4, n + 6, n + 1, n + 3, n + 5, n + 3, n + 7, n + 5); }
   }
   const deckGeometry = new BufferGeometry(); deckGeometry.setAttribute('position', new Float32BufferAttribute(deck, 3)); deckGeometry.setIndex(indices); deckGeometry.computeVertexNormals(); add(deckGeometry, 'porcelain');
-  for (const rail of rails) add(arch(rail, .043, 256), 'aqua');
-  for (let support = 0; support < 20; support++) {
-    route.curve.getPointAt(support / 20, center); route.curve.getPointAt((support / 20 + .001) % 1, ahead); tangent.subVectors(ahead, center).normalize();
-    const floor = Math.min(terrainHeight(center.x, center.z), 1.1) - .15;
+  // Guide strips follow the beam sides below running tyres.
+  for (const rail of rails) { for (const point of rail) point.y -= .07; add(arch(rail, .022, 768), 'aqua'); }
+  for (let support = 0; support < 32; support++) {
+    route.curve.getPointAt(support / 32, center); route.curve.getPointAt((support / 32 + .001) % 1, ahead); tangent.subVectors(ahead, center).normalize();
+    if (Math.abs(center.x + 5) < 2.5 && Math.abs(center.z + 68) < 2.8) continue;
+    const floor = terrainHeight(center.x, center.z) - .15;
     // Rail piers are tapered structural supports, not decorative freestanding loops.
     const pier=new BufferGeometry();
-    const base=floor,top=center.y-.13,wide=.32,narrow=.17;
+    const base=floor,top=center.y-.02,wide=.32,narrow=.17;
     const p:number[]=[],ix:number[]=[];
     for(const [y,r] of [[base,wide],[top,narrow]])for(const [a,b] of [[-1,-1],[1,-1],[1,1],[-1,1]])p.push(center.x+a*r,y,center.z+b*r);
     for(let side=0;side<4;side++){const j=(side+1)%4;ix.push(side,j,side+4,j,j+4,side+4);}
@@ -197,23 +188,12 @@ function updateCityInteriors(city: ReturnType<typeof makeCity>, camera: Vector3,
   return waiting>1;
 }
 
-function makeCarriage(materials: ReturnType<typeof makeFinishes>) {
-  const body = roundedBox(.72, .53, 1.65, .32);
-  const roof = roundedBox(.67, .09, 1.53, .30); roof.translate(0, .54, 0);
-  const bodyGeometry = mergeGeometries([body, roof])!; body.dispose(); roof.dispose();
-  const window = roundedBox(.735, .22, 1.57, .32); window.translate(0, .29, 0);
-  const group = new Group();
-  const shell = new Mesh(bodyGeometry, materials.porcelain); shell.castShadow = true;
-  group.add(shell, new Mesh(window, materials.window));
-  return group;
-}
-
 function makeCity() {
   const route = createCityTransitRoute();
   const materials = makeFinishes();
   const architecture = makeStaticCity(route, materials);
   const buildings = architecture.groups, lifts = architecture.lifts;
-  const carriage = makeCarriage(materials);
+  const carriage = makeCityCarriage(materials);
   const cars = [carriage, carriage.clone()];
   cars[0].name = 'city-monorail-front'; cars[1].name = 'city-monorail-rear';
   const resources = { route, materials, buildings, lifts, interiors: architecture.interiors, cars, position: new Vector3(), tangent: new Vector3(), disposeTimer: undefined as ReturnType<typeof setTimeout> | undefined };

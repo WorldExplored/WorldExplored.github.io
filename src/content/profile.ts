@@ -19,6 +19,23 @@ export interface FeaturedContribution extends Contribution {
 }
 
 export const profile = {
+  entry: {
+    eyebrow: 'A little closer to the future we imagined.',
+    title: 'Travel back to the future.',
+    description: 'An island of ideas, open-source work, and things still to discover.',
+    sound: 'Coastal ambience + music',
+    enter: 'Enter the world',
+    hint: 'Drag to explore · Choose a building to step inside',
+  },
+  soundtrack: {
+    label: 'World radio', loading: 'Tuning in…', ready: 'Play or pause in the player', playing: 'Coast + music',
+    blocked: 'Tap play to start music', unavailable: 'Music unavailable here. Listen on YouTube.', close: 'Close music and stop playback',
+    source: 'Your inspiration mix', reference: 'https://www.youtube.com/watch?v=Cz2YCRmDOFk',
+    tracks: [
+      { title: 'LEASE', artist: 'Takeshi Abo', videoId: 'tjlvmb8SGEs' },
+      { title: 'New Look (Wii U Mii Maker Lofi Mix)', artist: 'Secret Potion', videoId: 'P15Ldd_lSEM' },
+    ],
+  },
   name: 'Srreyansh Sethi',
   initials: 'SS',
   siteUrl: 'https://worldexplored.github.io',

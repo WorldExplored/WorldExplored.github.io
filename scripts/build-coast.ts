@@ -12,7 +12,8 @@ for (let row = 0; row < width; row++) for (let col = 0; col < width; col++) {
   const distance = landDistance(x, z);
   const value = Math.round(Math.max(0, Math.min(1, (distance + 32) / 64)) * 255);
   const offset = row * (width * 4 + 1) + 1 + col * 4;
-  pixels.set([value, Math.round(coastExposure(x, z, distance) * 255), value, 255], offset);
+  const offshore = Math.round(Math.max(0, Math.min(1, -distance / 128)) * 255);
+  pixels.set([value, Math.round(coastExposure(x, z, distance) * 255), offshore, 255], offset);
 }
 function chunk(type: string, data: Buffer) {
   const body = Buffer.concat([Buffer.from(type), data]);

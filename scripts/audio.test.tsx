@@ -136,7 +136,7 @@ class SoundContext {
 }
 
 test('recorded coast starts only on a gesture, positions its layers, and rings the muted-aware bell independently',async t=>{
-  const html=renderToStaticMarkup(<EnvironmentalAudioControl/>);assert.match(html,/Start ambience/);assert.doesNotMatch(html,/src=|autoplay|<audio|<iframe/);
+  const html=renderToStaticMarkup(<EnvironmentalAudioControl/>);assert.match(html,/Enable ambience/);assert.doesNotMatch(html,/Pause ambience/);assert.doesNotMatch(html,/src=|autoplay|<audio|<iframe/);
   const callbacks:Array<()=>void>=[];t.mock.method(globalThis,'setInterval',(callback:()=>void)=>{callbacks.push(callback);return 1 as unknown as ReturnType<typeof setInterval>;});t.mock.method(globalThis,'clearInterval',()=>{});
   const descriptor=Object.getOwnPropertyDescriptor(globalThis,'document');Object.defineProperty(globalThis,'document',{value:{hidden:false},configurable:true});
   t.after(()=>{if(descriptor)Object.defineProperty(globalThis,'document',descriptor);else Reflect.deleteProperty(globalThis,'document');});

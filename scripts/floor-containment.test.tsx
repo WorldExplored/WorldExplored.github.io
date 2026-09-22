@@ -89,7 +89,13 @@ test('every city room floor is bounded by the inner faces of its actual generate
         const bounds=new Box3();for(const wall of walls)bounds.union(wall.boundingBox!);
         envelopes.push((x,z)=>rect(x,z,bounds.min.x-.025,bounds.max.x+.025,bounds.min.z-.025,bounds.max.z+.025));
       }
-      if(building.family==='public-station')for(const x of [-building.width*.44,building.width*.44])for(const z of [-building.depth*.43,building.depth*.43])envelopes.push((px,pz)=>rect(px,pz,x-.081,x+.081,z-.081,z+.081));
+      if(building.family==='public-station') {
+        // Foundation pads follow actual load-bearing columns, including the inset rear pair.
+        // Identify their full ground-to-platform height independently of foundation polygons.
+        const columns=geometries.map(g=>g.boundingBox!).filter(b=>Math.abs(b.min.y)<eps&&Math.abs(b.max.y-2.14)<eps&&Math.abs(b.max.x-b.min.x-.12)<eps&&Math.abs(b.max.z-b.min.z-.12)<eps);
+        assert.equal(columns.length,4,'Station canopy retains four grounded supports');
+        for(const column of columns)envelopes.push((x,z)=>rect(x,z,column.min.x-.021,column.max.x+.021,column.min.z-.021,column.max.z+.021));
+      }
       const foundation=geometries.find(g=>g.userData.floor?.kind==='foundation')!;
       assertContained(foundation,(x,z)=>envelopes.some(contains=>contains(x,z)),`${building.id} foundation`);
     }finally{geometries.forEach(g=>g.dispose());}

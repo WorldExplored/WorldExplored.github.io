@@ -72,6 +72,9 @@ export const cityRoofMounts = Object.freeze(cityBuildings.filter(building => ['t
 export interface CityTransitRoute { curve: CatmullRomCurve3; length: number; speed: number; duration: number; station: number }
 
 export const CITY_STATION_DWELL = 5;
+export const CITY_TRACK_Y = 2.82;
+export const CITY_CARRIAGE_HALF_WIDTH = .48;
+export const CITY_CARRIAGE_HALF_LENGTH = .85;
 export const CITY_TRANSIT_RAMP = 6;
 
 function rampDistance(time: number, speed: number, ramp: number) {
@@ -102,16 +105,26 @@ export function cityStationActivity(route: CityTransitRoute, elapsed: number) {
 }
 
 export function createCityTransitRoute(): CityTransitRoute {
-  const points = [[-29, -69], [-20, -64.5], [-12, -64.5], [-6, -68], [-4, -68], [-2.8, -65.7], [3, -64.5], [14, -66.8], [19, -76], [12, -89], [-1, -92], [-14, -92], [-27, -87], [-33, -78]];
-  const curve = new CatmullRomCurve3(points.map(([x, z]) => new Vector3(x, 3.4, z)), true, 'centripetal');
-  curve.arcLengthDivisions = 800;
+  // The eastern coast wraps outside the complete rotated History shell and canopy.
+  // The station throat follows the narrow gap between the winter garden and civic gallery.
+  const points = [[-35, -70], [-24, -63], [-14, -63], [-9, -63.5], [-7, -65.5], [-6.7, -67], [-5.8, -68], [-5, -68], [-4.2, -68], [-3.6, -66.5], [-2.3, -63], [10, -62], [24, -62], [32, -68], [32, -79], [22, -90], [7, -95], [-12, -95], [-29, -89], [-36, -80]];
+  const curve = new CatmullRomCurve3(points.map(([x, z]) => new Vector3(x, CITY_TRACK_Y, z)), true, 'centripetal');
+  curve.arcLengthDivisions = 2400;
   curve.updateArcLengths();
   const length = curve.getLength(); const point = new Vector3(); let station = 0; let closest = Infinity;
-  for (let index = 0; index < 1000; index++) {
-    curve.getPointAt(index / 1000, point);
+  for (let index = 0; index < 12000; index++) {
+    curve.getPointAt(index / 12000, point);
     const distance = Math.hypot(point.x + 5, point.z + 68);
-    if (distance < closest) { station = index / 1000; closest = distance; }
+    if (distance < closest) { station = index / 12000; closest = distance; }
   }
+  // Refine the stop independently of arc-length sampling so its doorway stays square to the platform.
+  let low = station - 1 / 12000, high = station + 1 / 12000;
+  const stationError = (u: number) => { curve.getPointAt(u, point); return Math.hypot(point.x + 5, point.z + 68); };
+  for (let step = 0; step < 30; step++) {
+    const a = low + (high - low) / 3, b = high - (high - low) / 3;
+    if (stationError(a) < stationError(b)) high = b; else low = a;
+  }
+  station = (low + high) / 2;
   return { curve, length, speed: .9, station, duration: length / .9 + CITY_STATION_DWELL + CITY_TRANSIT_RAMP };
 }
 
@@ -119,7 +132,6 @@ export function writeCityTransitPose(route: CityTransitRoute, elapsed: number, c
   const time = Number.isFinite(elapsed) ? elapsed : 0;
   const progress = ((cityTransitDistance(route, time) - carriage * 1.85) / route.length + route.station + 1) % 1;
   route.curve.getPointAt(progress, position);
-  route.curve.getPointAt((progress + .0001) % 1, tangent);
-  tangent.sub(position).normalize();
+  route.curve.getTangentAt(progress, tangent);
   position.y += .18;
 }

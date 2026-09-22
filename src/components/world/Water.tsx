@@ -103,10 +103,16 @@ const fragmentShader = /* glsl */ `
     vec2 coastUV = (p - uCoastBounds.xy) / uCoastBounds.zw;
     vec4 coastSample = texture2D(uCoast, clamp(coastUV, 0., 1.));
     float coast = coastSample.r * 64. - 32.;
-    if (any(lessThan(coastUV, vec2(0.))) || any(greaterThan(coastUV, vec2(1.)))) coast = -32.;
-    float shallows = 1. - smoothstep(0., 7., -coast);
-    vec3 color = mix(uDeep, uWater, .40 + broad);
-    color = mix(color, vec3(.016,.47,.39), shallows * .86);
+    if (any(lessThan(coastUV, vec2(0.))) || any(greaterThan(coastUV, vec2(1.)))) coast = -32. - length(p - clamp(p, uCoastBounds.xy, uCoastBounds.xy+uCoastBounds.zw));
+    float shoreShallows = 1. - smoothstep(1., 15., -coast);
+    // The protected channel has a coral shelf; deep offshore water attenuates to ink.
+    float channel = 1. - smoothstep(.72, 1.25, length((p-vec2(-3.,-42.))/vec2(20.,24.)));
+    float shallows = max(shoreShallows, channel);
+    float outsideField = length(p - clamp(p, uCoastBounds.xy, uCoastBounds.xy+uCoastBounds.zw));
+    float offshoreDistance = coastSample.b * 128. + outsideField;
+    float offshore = smoothstep(15., 80., offshoreDistance);
+    vec3 color = mix(mix(uDeep, uWater, .5 + broad), vec3(.001,.005,.009), offshore);
+    color = mix(color, vec3(.035,.69,.66), shallows * .89);
     vec3 surf = shoreWave(coast, p, uTime, coastSample.g);
     vec2 texel = vec2(1./640.,1./640.);
     vec2 coastGradient = vec2(texture2D(uCoast,coastUV+vec2(texel.x,0.)).r-texture2D(uCoast,coastUV-vec2(texel.x,0.)).r,texture2D(uCoast,coastUV+vec2(0.,texel.y)).r-texture2D(uCoast,coastUV-vec2(0.,texel.y)).r);
@@ -121,14 +127,14 @@ const fragmentShader = /* glsl */ `
     float caustic = 0.;
     float causticNear = 1.-smoothstep(12.,38.,length(cameraPosition-vWorld));
     if (shallows*causticNear > .02) caustic = causticCell(p*3.9+vec2(seaNoise(p*1.4),seaNoise(p*1.7+3.))*1.8)*.008*shallows*causticNear*uDetail;
-    color = mix(color, uHorizon*.68, fresnel * .48) + caustic;
+    color = mix(color, uHorizon*.68, fresnel * .48 * (1. - offshore * .96)) + caustic;
     float sheen = pow(max(dot(reflect(-normalize(vec3(-.4,.8,.25)),n), view),0.),24.);
-    color += vec3(.35,.55,.6) * sheen * .23;
+    color += vec3(.35,.55,.6) * sheen * .23 * (1. - offshore * .9);
     float sun = pow(max(dot(reflect(-uSunDirection, n), view), 0.), 110.);
-    color += uSunColor * sun * uSunIntensity * .14;
+    color += uSunColor * sun * uSunIntensity * .14 * (1. - offshore * .9);
     float haze = smoothstep(uFogRange.x, uFogRange.y, length(cameraPosition - vWorld));
-    color = mix(color, uFog, haze);
-    gl_FragColor = vec4(color, mix(.98, .37, shallows));
+    color = mix(color, uFog, haze * (1. - offshore * .96));
+    gl_FragColor = vec4(color, mix(.995, .20, shallows) + fresnel * .10 * shallows);
     #include <colorspace_fragment>
   }
 `;
@@ -152,7 +158,7 @@ function coastTexture() {
     const x = -100 + col / (width - 1) * 180; const z = -120 + row / (height - 1) * 180;
     const distance = landDistance(x,z);
     const value = Math.round(Math.max(0, Math.min(1, (distance + 32) / 64)) * 255); const index = (row * width + col) * 4;
-    data[index] = value; data[index + 1] = Math.round(coastExposure(x,z,distance)*255); data[index + 2] = value; data[index + 3] = 255;
+    data[index] = value; data[index + 1] = Math.round(coastExposure(x,z,distance)*255); data[index + 2] = Math.round(Math.max(0, Math.min(1, -distance / 128)) * 255); data[index + 3] = 255;
   }
   const texture = new DataTexture(data, width, height, RGBAFormat); texture.minFilter = LinearFilter; texture.magFilter = LinearFilter; texture.needsUpdate = true; return texture;
 }
@@ -168,6 +174,7 @@ export function Water({ runtime, paused, quality }: EnvironmentProps) {
     vertexShader,
     fragmentShader,
     transparent: true,
+    depthWrite: false,
     uniforms: {
       uTime: { value: 0 },
       uCoast: { value: measureConstruction('coast-field', () => coastTexture()) },
@@ -212,5 +219,5 @@ export function Water({ runtime, paused, quality }: EnvironmentProps) {
     if (paused || event.delta > 5) return;
     startRipple(runtime.current, event.point.x, event.point.z);
   }
-  return <mesh geometry={geometry} material={material} onClick={ripple} receiveShadow />;
+  return <mesh renderOrder={3} geometry={geometry} material={material} onClick={ripple} receiveShadow />;
 }

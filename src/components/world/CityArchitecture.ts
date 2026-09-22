@@ -149,6 +149,34 @@ export function buildCityArchitecture(building: Readonly<CityBuilding>, shellAdd
       try { furnishing(...args); } finally { add = previous; }
     });
   };
+  const entranceDoor = (roomId: string, x: number, floor: number, z: number, opening: number, height: number, primary: boolean) => {
+    const part = (role: string, width: number, tall: number, depth: number, px: number, py: number, pz: number, finish: CityFinish, yaw = 0) => {
+      const geometry = new BoxGeometry(width, tall, depth);
+      geometry.userData.entranceDoor = { building: building.id, room: roomId, role, primary, opening, floor, x, z, height };
+      add(geometry, finish, px, py, pz, 1, 1, 1, yaw);
+    };
+    for (const side of [-1, 1]) part('jamb', .07, height + .05, .15, x + side * (opening / 2 + .02), floor + height / 2, z + .018, 'aqua');
+    part('head', opening + .11, .075, .17, x, floor + height + .025, z + .018, 'aqua');
+    part('threshold', opening + .12, .025, .25, x, floor + .0125, z + .055, 'metal');
+    // A full-size door swings out beyond its jamb, leaving the center aisle open.
+    // The dark frame, cedar kick panel and bright pull remain legible from the street.
+    const yaw = 110 * Math.PI / 180, leafWidth = opening - .045, hinge = x + opening / 2;
+    const leaf = (role: string, width: number, tall: number, depth: number, offset: number, py: number, finish: CityFinish, face = 0) => {
+      part(role, width, tall, depth, hinge + offset * Math.cos(yaw) + face * Math.sin(yaw), py, z - offset * Math.sin(yaw) + face * Math.cos(yaw), finish, yaw);
+    };
+    leaf('glazing', leafWidth - .075, height - .32, .025, -leafWidth / 2, floor + height / 2 + .075, 'glass');
+    for (const offset of [-.022, -leafWidth + .022]) leaf('leaf-stile', .044, height - .025, .052, offset, floor + height / 2, 'aqua');
+    for (const py of [floor + .11, floor + height - .027]) leaf('leaf-rail', leafWidth, .055, .06, -leafWidth / 2, py, 'aqua');
+    leaf('kick-panel', leafWidth - .065, .20, .04, -leafWidth / 2, floor + .11, 'wood');
+    leaf('pull', .03, .22, .035, -leafWidth + .095, floor + height * .49, 'porcelain', .068);
+    for (const py of [floor + height * .49 - .085, floor + height * .49 + .085]) leaf('pull-bracket', .03, .027, .07, -leafWidth + .095, py, 'metal', .035);
+    for (const py of [floor + .18, floor + height - .18]) part('hinge', .042, .085, .062, hinge, py, z + .022, 'metal');
+    if (primary) {
+      part('canopy', opening + .28, .075, .64, x, floor + height + .115, z + .225, 'aqua');
+      for (const side of [-1, 1]) part('canopy-bracket', .045, .16, .35, x + side * (opening / 2 + .02), floor + height + .015, z + .12, 'metal');
+      part('entry-light', .26, .025, .065, x, floor + height + .068, z + .31, 'porcelain');
+    }
+  };
   const room = (x: number, y: number, z: number, width: number, depth: number, height: number, variant: number, _furnish = true, balcony = false) => {
     const roomId = `${building.id}-room-${roomIndex++}`;
     const floor = y + .13, rear = z-depth/2+.055, front=z+depth/2;
@@ -193,11 +221,9 @@ export function buildCityArchitecture(building: Readonly<CityBuilding>, shellAdd
     if(frontDoor) {
       for(const side of [-1,1]) {
         wall('front',x+side*(opening+wing)/2,floor+(height-.26)/2,front,wing-.025,height-.26,.018,'window');
-        box(x+side*opening/2,floor+doorHeight/2,front,.04,doorHeight,.09,'metal');
       }
       wall('door-transom',x,floor+doorHeight+(height-.13-doorHeight)/2,front,opening,height-.13-doorHeight,.018,'window');
-      box(x+opening/2-.018,floor+doorHeight/2,front-.19,.022,doorHeight-.035,.34,'glass');
-      box(x+opening/2-.045,floor+.65,front-.27,.025,.14,.025,'metal');
+      entranceDoor(roomId, x, floor, front, opening, doorHeight, y < .21);
     } else {
       wall('front',x,floor+(height-.26)/2,front,width-.12,height-.26,.018,'window');
       box(x,floor+(height-.26)/2,front,.045,height-.26,.065,'metal');
@@ -208,8 +234,18 @@ export function buildCityArchitecture(building: Readonly<CityBuilding>, shellAdd
     if(balcony) {
       const balconyDepth=.72;
       add(floorSlab(`${roomId}-balcony`,[floorRectangle(x,front+balconyDepth/2-.015,width+.03,balconyDepth+.03)],floor,.13,'balcony'),'stone');
-      box(x,floor+.72,front+balconyDepth-.025,width,.045,.045,'metal');
-      box(x,floor+.36,front+balconyDepth-.025,width-.1,.65,.014,'glass');
+      if (y < .21) {
+        const clear = opening + .16, railWidth = (width - clear) / 2;
+        for (const side of [-1, 1]) {
+          const center = x + side * (clear + railWidth) / 2;
+          box(center, floor + .72, front + balconyDepth - .025, railWidth, .045, .045, 'metal');
+          box(center, floor + .36, front + balconyDepth - .025, railWidth - .035, .65, .014, 'glass');
+          box(x + side * clear / 2, floor + .36, front + balconyDepth - .025, .035, .72, .045, 'metal');
+        }
+      } else {
+        box(x,floor+.72,front+balconyDepth-.025,width,.045,.045,'metal');
+        box(x,floor+.36,front+balconyDepth-.025,width-.1,.65,.014,'glass');
+      }
       for(const side of [-1,1]) {
         box(x+side*(width/2-.045),floor+.36,front+balconyDepth/2,.035,.72,balconyDepth,'metal');
         const bedWidth=Math.min(.36,width*.18),px=x+side*(width/2-bedWidth/2-.06);
@@ -265,7 +301,10 @@ export function buildCityArchitecture(building: Readonly<CityBuilding>, shellAdd
       }
       add(floorSlab(`${roomId}-cornice`,[floorEllipse(0,0,rx,rz,64)],y+pitch+.10,.1,'threshold'),'aqua');
       access.push({room:roomId,x:0,back:-rz+.19,floor:y+.14,height:Math.min(1.42,pitch-.22)});
-      if(n===0)fronts.push({x:0,z:rz-.1,width:1.2,floor:y+.14});
+      if(n===0) {
+        fronts.push({x:0,z:rz-.1,width:1.2,floor:y+.14});
+        entranceDoor(roomId, 0, y + .14, rz - .1, .74, Math.min(1.42, pitch - .22), true);
+      }
       if(n===0)foundationPolygons.push(floorEllipse(0,0,rx-.08,rz-.08,64));
       for (let k = 0; k < 10; k++) { const a = k * Math.PI / 5; box(Math.cos(a) * (rx - .08), y + pitch / 2, Math.sin(a) * (rz - .08), .065, pitch, .065, 'metal'); }
       // Curved residences keep the center aisle clear between front and lift doors.
@@ -301,7 +340,7 @@ export function buildCityArchitecture(building: Readonly<CityBuilding>, shellAdd
     room(0, .2, 0, w - .35, d - .35, 2.15, 0, true);
     gable(0, 2.35, 0, w - .2, d - .15, .95, true);
     for(const side of [-1,1]) {box(side*w*.36,.35,0,.52,.2,d*.6,'aqua');for(const dz of [-.65,0,.65])plant(side*w*.36,.46,dz,1.2);}
-    for (const x of [-w * .33, 0, w * .33]) box(x, 1.25, d / 2 - .15, .07, 2.3, .07, 'metal');
+    for (const x of [-w * .33, w * .33]) box(x, 1.25, d / 2 - .15, .07, 2.3, .07, 'metal');
   } else if (family === 'civic-gallery') {
     room(0, .2, -.22, w - .2, d - .55, 2.55, 0, true);
     // Broad cantilever with a raised clerestory stripe makes a low public silhouette.
@@ -316,16 +355,22 @@ export function buildCityArchitecture(building: Readonly<CityBuilding>, shellAdd
     // Ground lobby is a furnished open-front room; the upper boarding path remains clear.
     room(-.82, .2, 0, 1.25, d - .35, 1.78, 0, true);
     add(floorSlab('station-lobby-threshold',[floorRectangle(-.82,d/2-.27,1.05,.6)],.33,.33,'threshold'),'stone');
-    for (const side of [-1, 1]) box(-.82 + side * .45, 1.04, d / 2 - .175, .055, 1.4, .08, 'metal');
-    box(-.7, .93, d / 2 - .12, .025, .2, .035, 'metal');
-    const platform=cityRoundedBox(w,.18,d,.25);platform.name='station-boarding-platform';platform.userData.floor={name:platform.name,kind:'platform'};add(platform,'stone',0,2.14,0);
-    for(const x of [-w*.44,w*.44])for(const z of [-d*.43,d*.43]){box(x,1.07,z,.12,2.14,.12,'metal');foundationPolygons.push(floorRectangle(x,z,.16,.16));}
-    for (const z of [-d * .43, d * .43]) for (const side of [-1, 1]) box(side * w * .44, 3.32, z, .12, 2.1, .12, 'metal');
+    // Twin platforms leave the guideway and undercarriage a real central slot.
+    const platform = floorSlab('station-boarding-platform', [floorRectangle((-w / 2 - 1.12) / 2, 0, w / 2 - 1.12, 1.2), floorRectangle((w / 2 + .58) / 2, 0, w / 2 - .58, d)], 2.32, .18, 'threshold');
+    platform.userData.floor.kind = 'platform';
+    add(platform, 'stone');
+    // Rear posts tuck between the curved arrivals; the roof cantilevers over the track ends.
+    for (const side of [-1, 1]) for (const z of side < 0 ? [-.38, .38] : [-d * .43, d * .43]) {
+      const x = side * w * .44;
+      box(x, 1.07, z, .12, 2.14, .12, 'metal');
+      box(x, 3.32, z, .12, 2.1, .12, 'metal');
+      foundationPolygons.push(floorRectangle(x, z, .16, .16));
+    }
     // Barrel canopy opens both rail ends and the pedestrian side entrance.
     const shape = new Shape(); shape.moveTo(-w / 2, 0); shape.quadraticCurveTo(0, .74, w / 2, 0); shape.lineTo(w / 2, -.08); shape.quadraticCurveTo(0, .65, -w / 2, -.08); shape.closePath();
     add(new ExtrudeGeometry(shape, { depth: d, bevelEnabled: false, curveSegments: 14 }), 'porcelain', 0, 4.34, -d / 2);
-    box(-w * .42, 2.83, 0, .28, .25, 1.05, 'wood');
-    for (const z of [-.48, .48]) box(-w * .42, 2.57, z, .08, .43, .08, 'metal');
+    box(-w * .42, 2.83, 0, .28, .25, .58, 'wood');
+    for (const z of [-.20, .20]) box(-w * .42, 2.57, z, .08, .43, .08, 'metal');
     // Top landing is kept open around local [1.6, 2.32, 0].
     for (const z of [-d / 2 + .05, d / 2 - .05]) box(w * .38, 2.72, z, w * .18, .065, .065, 'metal');
   }
@@ -333,13 +378,9 @@ export function buildCityArchitecture(building: Readonly<CityBuilding>, shellAdd
     const entrance = cityEntrances.find(item => item.building === building.id)!.local;
     const thresholds:FloorPolygon[]=[];
     for (const front of fronts) {
-      const doorZ = front.z + .028, opening = Math.min(.86, front.width - .3);
-      const floor = front.floor;
+      const opening = Math.min(.86, front.width - .3);
       const porchDepth = Math.max(.45, entrance[2] - front.z + .12);
       thresholds.push(floorRectangle(front.x,front.z+porchDepth/2-.03,opening+.22,porchDepth));
-      // The canopy returns into jamb brackets; its door is inset in the shell above.
-      slab(front.x,floor+1.52,doorZ+.14,opening+.25,.52,'aqua');
-      for(const side of [-1,1])box(front.x+side*opening*.43,floor+1.39,doorZ+.17,.035,.26,.035,'metal');
     }
     if(fronts.length>1) {
       const start=Math.max(...fronts.map(front=>front.z-.03)),end=entrance[2]+.12;

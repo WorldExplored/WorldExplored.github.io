@@ -293,3 +293,55 @@ html[data-world-boot] .portfolio .canvas-host { background: transparent !importa
 
 @media (max-width: 1050px) and (min-width: 768px) { html[data-world-boot] .portfolio .identity { left: 4vw; } }
 @media (max-height: 580px) { html[data-world-boot] .portfolio .identity { top: 15px; } }
+
+/* Arrival and radio share the world's glass, cobalt and pearl palette. */
+.world-entry { margin: auto; width: min(510px,calc(100vw - 32px)); padding: 8px; max-height: calc(100dvh - 32px); overflow: auto; color: #123d59; border: 1px solid #efffff; border-radius: 24px; background: linear-gradient(135deg,#e2ffffe8,#64bed1d9 48%,#e8ffffee); box-shadow: inset 0 0 0 1px #4a9db5,0 24px 90px #032c6266; }
+.world-entry::backdrop { background: linear-gradient(125deg,#03294d66,#1262c43d); backdrop-filter: blur(9px) saturate(1.2); }
+.world-entry__bar { display: flex; align-items: center; gap: 8px; padding: 10px 13px 16px; font-size: 14px; font-weight: 600; text-shadow: 0 1px white; }
+.world-entry__bar > span:last-child { margin-left: auto; font-size: 22px; line-height: 1; }
+.world-entry__status { width: 8px; height: 8px; border-radius: 50%; background: #59b62a; box-shadow: 0 0 0 3px #d8ffe766; }
+.world-entry__body { padding: 25px 34px 24px; border: 1px solid #82bccb; border-radius: 17px; text-align: center; background: radial-gradient(ellipse at 50% 0,#d7f9ff,#f6ffff 55%); }
+.world-entry__orb { width: 100px; height: 100px; margin: 0 auto 12px; display: grid; place-items: center; border-radius: 50%; background: radial-gradient(circle at 35% 20%,#fff,#99e8ef 47%,#116fc0 82%); box-shadow: inset 0 2px 2px white,0 6px 18px #04749842; }
+.world-entry__orb .habitat-icon,.world-entry__orb svg { width: 84px; height: 84px; }
+.world-entry__eyebrow { font-size: 13px; color: #237783; margin: 19px 0 9px; }
+.world-entry h2 { font-size: clamp(30px,6vw,39px); letter-spacing: -.035em; line-height: 1.05; font-weight: 570; margin: 0 0 15px; color: #0c427b; }
+.world-entry__body > p:not([class]) { font-size: 17px; line-height: 1.4; margin: 0 auto 23px; max-width: 320px; }
+.world-entry__sound { display: flex; gap: 8px; align-items: center; justify-content: center; min-height: 44px; font-size: 15px; cursor: pointer; }
+.world-entry__sound input { width: 18px; height: 18px; accent-color: #1178b5; }
+.world-entry__go { width: 100%; min-height: 54px; display: flex; justify-content: center; align-items: center; gap: 26px; margin: 10px 0 15px; border: 1px solid #006692; border-radius: 28px; background: linear-gradient(#e6ffff 0%,#9eeaee 45%,#42b4d5 49%,#90dbe8); box-shadow: inset 0 2px 1px white,0 3px 0 #155f8177,0 6px 13px #12739933; color: #073c68; font: inherit; font-size: 19px; font-weight: 600; cursor: pointer; }
+.world-entry__go:hover { filter: brightness(1.06); }
+.world-entry__hint { font-size: 12px; color: #487381; margin: 0; }
+.world-entry :focus-visible { outline: 3px solid #175cca; outline-offset: 4px; }
+.world-music { position: fixed; left: 20px; bottom: 168px; width: 302px; z-index: 32; border: 1px solid #dcffff; border-radius: 14px; background: linear-gradient(120deg,#e0ffffed,#83d4e7ed); box-shadow: 0 4px 20px #0535553b,inset 0 0 0 1px #3f91a9; overflow: hidden; color: #12445a; }
+.world-music__bar { height: 44px; display: flex; justify-content: space-between; align-items: center; padding-left: 12px; font-size: 14px; font-weight: 600; }
+.world-music__bar button { width: 44px; height: 44px; border: 0; background: transparent; color: inherit; font: inherit; font-size: 24px; cursor: pointer; }
+.world-music__video { width: 300px; height: 200px; background: #123751; }
+.world-music iframe { display: block; width: 300px; height: 200px; border: 0; }
+.world-music__foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 11px; padding: 7px 10px; min-height: 30px; }
+.world-music__foot a { color: #135685; }
+.world-music__links { display: grid; gap: 8px; padding: 4px 10px 12px; font-size: 12px; }
+.world-music-open { position: fixed; bottom: 112px; left: 115px; z-index: 32; }
+.ambience-settings { display: block; bottom: 112px; z-index: 33; }
+.ambience-settings summary { list-style: none; cursor: pointer; }
+.ambience-settings summary::-webkit-details-marker { display: none; }
+.ambience-settings__panel { position: absolute; bottom: 52px; left: 0; width: 260px; display: flex; flex-wrap: wrap; gap: 9px; padding: 12px; border-radius: 16px; border: 1px solid #b5eafa; background: #eafffff2; box-shadow: 0 4px 20px #12547933; }
+@media (min-width: 768px) { .portfolio:has(.world-music) .ambience-settings__panel { left: 318px; bottom: 0; } }
+@media (max-width: 767px) {
+  .world-entry__body { padding: 24px 20px; }
+  .world-music { top: max(8px,env(safe-area-inset-top)); bottom: auto; left: 12px; }
+  .portfolio:has(.world-music).has-destination .content-stage { top: max(33dvh,294px); }
+  .portfolio:has(.world-music):not(.has-destination) .identity { top: 310px; }
+  .world-music-open { left: 15px; bottom: 100px; }
+  .ambience-settings { bottom: 100px; }
+  .ambience-settings__panel { left: auto; right: 0; }
+}
+@media (max-height: 580px) { .world-entry__orb { display: none; } .world-entry__body { padding: 14px 24px; } .world-entry__eyebrow { margin-top: 0; } }
+@media (forced-colors: active) { .world-entry,.world-entry__body,.world-entry__go,.world-music { background: Canvas; color: CanvasText; border: 1px solid CanvasText; } }
+
+@media (max-height: 580px) and (min-width: 600px) {
+  .world-music { top: 8px; bottom: auto; left: 12px; }
+  .portfolio:has(.world-music) .identity { left: 334px !important; top: 15px !important; }
+  .portfolio:has(.world-music).has-destination .content-stage { left: 334px; right: 12px; top: 12px; bottom: 95px; width: auto; }
+  .ambience-settings { left: auto; right: 16px; bottom: 100px; }
+  .portfolio:has(.world-music) .ambience-settings__panel { left: auto; right: 0; bottom: 52px; }
+}
