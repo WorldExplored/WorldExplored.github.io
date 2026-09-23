@@ -7,7 +7,7 @@ import { measureConstruction } from './renderDiagnostics';
 
 import { useEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
-import { BufferGeometry, CatmullRomCurve3, DoubleSide, Float32BufferAttribute, Group, Matrix4, Mesh, MeshPhysicalMaterial, Object3D, TubeGeometry, Vector3 } from 'three';
+import { BufferGeometry, CatmullRomCurve3, Color, DoubleSide, Float32BufferAttribute, Group, Matrix4, Mesh, MeshPhysicalMaterial, Object3D, TubeGeometry, Vector3 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { cityBuildings, createCityTransitRoute, writeCityTransitPose, type CityTransitRoute, type CityBuilding } from './city';
 import { terrainHeight } from './terrain';
@@ -36,12 +36,20 @@ function finishSurface(material: MeshPhysicalMaterial, finish: Finish) {
   return material;
 }
 
+function supplyGardenColors(geometry: BufferGeometry) {
+  if (geometry.hasAttribute('color')) return;
+  // Existing garden parts retain their original green when sharing the colored batch.
+  const color = new Color('#3c922f'), colors = new Float32Array(geometry.attributes.position.count * 3);
+  for (let i = 0; i < colors.length; i += 3) { colors[i] = color.r; colors[i + 1] = color.g; colors[i + 2] = color.b; }
+  geometry.setAttribute('color', new Float32BufferAttribute(colors, 3));
+}
+
 function makeFinishes() {
   return {
     porcelain: new MeshPhysicalMaterial({ color: '#edf6ef', roughness: .62, metalness: .025, clearcoat: .12, clearcoatRoughness: .3 }),
     glass: new MeshPhysicalMaterial({ color: '#126681', roughness: .17, metalness: .03, transparent: true, opacity: .28, depthWrite: false, side: DoubleSide }),
     aqua: new MeshPhysicalMaterial({ color: '#067eae', roughness: .25, metalness: .20, clearcoat: .65, clearcoatRoughness: .18 }),
-    garden: new MeshPhysicalMaterial({ color: '#3c922f', side: DoubleSide, roughness: .93, metalness: 0, envMapIntensity: .15 }),
+    garden: new MeshPhysicalMaterial({ color: '#ffffff', vertexColors: true, side: DoubleSide, roughness: .93, metalness: 0, envMapIntensity: .15 }),
     window: new MeshPhysicalMaterial({ color: '#3187a4', roughness: .12, metalness: .05, transparent: true, opacity: .25, depthWrite: false, side: DoubleSide }),
     stone: new MeshPhysicalMaterial({ color: '#a3b9b5', roughness: .91, metalness: 0 }),
     wood: new MeshPhysicalMaterial({ color: '#986345', roughness: .76, metalness: 0 }),
@@ -61,12 +69,13 @@ function makeStaticCity(route: CityTransitRoute, materials: ReturnType<typeof ma
     matrix.multiplyMatrices(placement.matrix, local.matrix); geometry.applyMatrix4(matrix);
     const plain = geometry.index ? geometry.toNonIndexed() : geometry;
     if (plain !== geometry) geometry.dispose();
-    for (const name of Object.keys(plain.attributes)) if (name !== 'position' && name !== 'normal' && name !== 'uv') plain.deleteAttribute(name);
+    for (const name of Object.keys(plain.attributes)) if (name !== 'position' && name !== 'normal' && name !== 'uv' && !(finish === 'garden' && name === 'color')) plain.deleteAttribute(name);
     if (!plain.getAttribute('uv')) {
       const p=plain.getAttribute('position'),uv=new Float32Array(p.count*2);
       for(let i=0;i<p.count;i++){uv[i*2]=p.getX(i);uv[i*2+1]=p.getY(i)+p.getZ(i);}
       plain.setAttribute('uv',new Float32BufferAttribute(uv,2));
     }
+    if (finish === 'garden') supplyGardenColors(plain);
     parts[finish].push({ geometry: plain, building: owner });
   }
   const roomViews: CityRoomView[] = [];
@@ -149,12 +158,13 @@ function constructCityInterior(entry: DeferredCityInterior, materials: ReturnTyp
     geometry.applyMatrix4(matrix.multiplyMatrices(placement.matrix,local.matrix));
     const plain=geometry.index?geometry.toNonIndexed():geometry;
     if(plain!==geometry)geometry.dispose();
-    for(const name of Object.keys(plain.attributes))if(!['position','normal','uv'].includes(name))plain.deleteAttribute(name);
+    for(const name of Object.keys(plain.attributes))if(!['position','normal','uv'].includes(name) && !(finish === 'garden' && name === 'color'))plain.deleteAttribute(name);
     if(!plain.getAttribute('uv')) {
       const p=plain.getAttribute('position'),uv=new Float32Array(p.count*2);
       for(let i=0;i<p.count;i++){uv[i*2]=p.getX(i);uv[i*2+1]=p.getY(i)+p.getZ(i);}
       plain.setAttribute('uv',new Float32BufferAttribute(uv,2));
     }
+    if (finish === 'garden') supplyGardenColors(plain);
     const bucket=buckets.get(finish)??[];bucket.push(plain);buckets.set(finish,bucket);
   };
   entry.recipes.forEach(recipe=>recipe(add));

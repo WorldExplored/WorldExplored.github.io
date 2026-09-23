@@ -30,6 +30,7 @@ function clearLine(a: PathPoint,b: PathPoint,margin:number) {
 /** Route streets around final rotated foundations, then remove unnecessary grid bends. */
 export function routeCityWalk(start: PathPoint,end: PathPoint,width=.95): PathPoint[] {
   const step=.4, margin=width/2+.05;
+  if(clearLine(start,end,margin))return [{...start},{...end}];
   // Authored street waypoints avoid repeating A* during startup; validate against current buildings.
   const prepared=(cityStreetRoutes as Record<string,PathPoint[]>)[JSON.stringify([start.x,start.z,end.x,end.z,width])];
   if(prepared&&prepared.slice(1).every((point,i)=>clearLine(prepared[i],point,margin)))return prepared.map(p=>({...p}));
@@ -113,6 +114,15 @@ export function createCirculationGraph() {
   const park=node('city-park',-16.2,-68.51,'park');const parkEdge=edge('city-park-walk',park,cityWest,[],.5);parkEdge.points=routeCityWalk(park,cityWest,.5);
   edge('fountain-plaza',park,park,Array.from({length:47},(_,i)=>({x:-16.2+Math.sin((i+1)/48*Math.PI*2)*1.49,z:-70+Math.cos((i+1)/48*Math.PI*2)*1.49})),.5);
   const streets=edges.filter(e=>e.id.startsWith('town-')&&e.id!=='town-dock-walk');
+  for(const street of streets){
+    const straight=[street.points[0]];let index=0;
+    while(index<street.points.length-1){
+      let next=street.points.length-1;
+      while(next>index+1&&!clearLine(street.points[index],street.points[next],street.width/2+.08))next--;
+      straight.push(street.points[next]);index=next;
+    }
+    street.points=straight;
+  }
   const joinStreet=(id:string,portal:CirculationNode)=>{
     let best:{street:CirculationEdge;point:PathPoint;segment:number;distance:number}|undefined;
     for(const street of streets)for(let i=1;i<street.points.length;i++){

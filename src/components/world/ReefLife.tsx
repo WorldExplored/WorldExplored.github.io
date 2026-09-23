@@ -48,7 +48,7 @@ export function createReefLife() {
   bodies.name = 'channel-reef-schools'; tails.name = 'articulated-reef-fish-tails'; details.name = 'reef-fish-eyes-and-bars'; bellies.name = 'reef-fish-pectoral-fins'; proxies.name = 'reef-fish-touch-targets';
   // Raycasting caches this sphere independently of frustumCulled. Keep moving fish pickable
   // throughout the full habitat rather than retaining the first frame's instance bounds.
-  proxies.boundingSphere = new Sphere(new Vector3(-2, -3, -42), 42);
+  proxies.boundingSphere = new Sphere(new Vector3(-25, -4, -42), 63);
   const meshes = [bodies, tails, details, bellies, proxies];
   meshes.forEach(mesh => { mesh.frustumCulled = false; root.add(mesh); });
   // Only the touch targets are raycast; their IDs map directly to the moving fish.

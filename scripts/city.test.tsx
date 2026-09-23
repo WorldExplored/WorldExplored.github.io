@@ -73,6 +73,17 @@ test('all visible building vertices obey the exported collision footprints and h
       const owner=item.scene.getObjectByName(`city-building-${building.id}`)!;
       assert.ok(owner, 'Each building owns its visible geometry.');
       assert.ok(owner.children.filter(mesh=>mesh.name.startsWith('eco-city-')).length<=9, 'At most one batch per finish per building.');
+      const garden = owner.children.find(child => child.name === `eco-city-${building.id}-garden`) as Mesh | undefined;
+      if (garden) {
+        const colors = garden.geometry.getAttribute('color');
+        assert.equal(colors.count, garden.geometry.getAttribute('position').count);
+        assert.ok(Array.from(colors.array).every(Number.isFinite));
+        if (building.family !== 'public-station') {
+          const shades = new Set<string>();
+          for (let i = 0; i < colors.count; i++) shades.add(`${colors.getX(i).toFixed(3)},${colors.getY(i).toFixed(3)},${colors.getZ(i).toFixed(3)}`);
+          assert.ok(shades.size >= 3, 'leaf greens and purple fruit survive the single garden batch');
+        }
+      }
     }
     let drawCalls = 0;
     item.scene.traverseVisible(object => {

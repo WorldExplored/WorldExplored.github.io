@@ -2,7 +2,7 @@ import { Vector3 } from 'three';
 import { seededRandom } from './terrain';
 import { getReefHabitat, reefFloorHeight, reefHabitatContains, reefFerryClearance } from './reefHabitat';
 
-export const REEF_FISH_COUNTS = { high: 140, medium: 90, low: 50 } as const;
+export const REEF_FISH_COUNTS = { high: 210, medium: 135, low: 75 } as const;
 export const REEF_FISH_RADIUS = .14;
 const CELL = 3;
 type Obstacle = { x: number; y: number; z: number; radius: number; height: number };
@@ -61,7 +61,8 @@ function selectTarget(state: ReefFishState, spread = 5, escapeHeading?: number) 
 export function createReefFishState(index: number): ReefFishState {
   const random = seededRandom(89171 + index * 997), position = new Vector3();
   for (let attempt = 0; attempt < 10000; attempt++) {
-    const x = -30 + random() * 57, z = -61 + random() * 38;
+    // Interleave western and eastern residents so every quality tier keeps both reef arms alive.
+    const x = index % 3 === 0 ? -76 + random() * 46 : -30 + random() * 57, z = -66 + random() * 45;
     const y = Math.min(-1.05, reefFloorHeight(x, z) + .55 + random() * 1.5);
     if (reefFishPositionClear(x, y, z, .2)) { position.set(x, y, z); break; }
   }

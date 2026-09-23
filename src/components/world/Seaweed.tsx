@@ -21,6 +21,11 @@ export const SEAWEED_COVES = [
   { x: 18, z: 1, radius: 4.9 },
   { x: 18, z: -13, radius: 5.2 },
   { x: -2, z: -25, radius: 5.6 },
+  { x: -76, z: -45, radius: 4.5 },
+  { x: -67, z: -38, radius: 4.8 },
+  { x: -36, z: -14, radius: 5.1 },
+  { x: -29, z: -15, radius: 5.1 },
+  { x: -40, z: -90, radius: 5.4 },
 ] as const;
 export const SEAWEED_REACH = 0.62;
 export const SEAWEED_FORMS = ['strap-leaved eelgrass', 'ruffled broad kelp', 'paired branching algae', 'twisting ribbon kelp', 'pleated sea fan', 'low seagrass turf', 'forked bladderwrack', 'serrated red algae'] as const;
@@ -49,7 +54,7 @@ export function createSeaweedLayout(plan = createLandscapePlan()): SeaweedSite[]
     return { x: cove.x + Math.cos(angle) * radius, z: cove.z + Math.sin(angle) * radius, radius: .65 + random() * 1.65 };
   }));
   // Round-robin ordering keeps complete beds and all forms on the low tier.
-  for (let round = 0; round < 144; round++) {
+  for (let round = 0; round < 114; round++) {
     SEAWEED_COVES.forEach((cove, coveIndex) => {
       for (let attempt = 0; attempt < 80; attempt++) {
         const clump = clumps[coveIndex][Math.floor(random() * clumps[coveIndex].length)];

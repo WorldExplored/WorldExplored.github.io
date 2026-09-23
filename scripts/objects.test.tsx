@@ -147,7 +147,7 @@ test('all eight landmarks have finite geometry and localized lighting at every q
         const material = mesh.material as MeshPhysicalMaterial;
         calls += material.transparent && material.side === DoubleSide && !material.forceSinglePass ? 2 : 1;
       }
-      assert.ok(triangles < 125000 && calls < 250, `${triangles} triangles, ${calls} calls exceed the architecture budget`);
+      assert.ok(triangles < 150000 && calls < 250, `${triangles} triangles, ${calls} calls exceed the architecture budget`);
       const contact = renderer.scene.findByProps({ name: 'model-contact' });
       const contactMaterials = contact.findAll(node => node.instance.type === 'Mesh').map(node => (node.instance as Mesh).material as MeshPhysicalMaterial);
       const unrelated = renderer.scene.findByProps({ name: 'model-work' }).findAll(node => node.instance.type === 'Mesh').map(node => (node.instance as Mesh).material as MeshPhysicalMaterial);

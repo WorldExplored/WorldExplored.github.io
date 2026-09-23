@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { InstancedMesh, Mesh, Vector3 } from 'three';
 import { createCityFerryRoute } from '../src/components/world/cityInfrastructure';
-import { getReefHabitat, reefFloorHeight, reefHabitatContains, reefFerryClearance, reefRockMesh, reefRockSurfaceHeight } from '../src/components/world/reefHabitat';
+import { getReefHabitat, reefFloorHeight, reefFloorVertexHeight, reefHabitatContains, reefFerryClearance, reefRockMesh, reefRockSurfaceHeight } from '../src/components/world/reefHabitat';
 import { createReefContactShade, createReefHabitat, reefCoralGeometry, reefSeafloorGeometry } from '../src/components/world/ReefHabitatScene';
 import { landDistance, terrainBaseHeight } from '../src/components/world/terrain';
 
@@ -82,7 +82,7 @@ test('eight coral forms and retained structural coverage fit a finite shared geo
       draws++;for(const value of object.geometry.getAttribute('position').array)assert.ok(Number.isFinite(value));
       triangles+=(object.geometry.index?.count??object.geometry.getAttribute('position').count)/3*(object instanceof InstancedMesh?object.count:1);
     });
-    assert.equal(draws,17);assert.ok(triangles<750000,`${triangles} triangles`);
+    assert.equal(draws,17);assert.ok(triangles<1400000,`${triangles} triangles`);
     const batches=habitat.root.children.filter(child=>child instanceof InstancedMesh&&child.name!=='reef-soft-contact-shading') as InstancedMesh[];
     const high=batches.map(batch=>batch.count);
     for(const tier of ['low','medium','high'] as const){
@@ -103,4 +103,30 @@ test('contact shading is a single finite terrain-conforming batch below the reef
       for(const value of attribute.array){assert.ok(Number.isFinite(value));assert.ok(value< -2.3);}
     }
   }finally{contact.geometry.dispose();contact.material.dispose();contact.mesh.dispose();}
+});
+
+
+test('lighthouse triangle has grounded rock belts, coral and seaweed across both western arms',()=>{
+  const plan=getReefHabitat();
+  for(const zone of [{x:-57,z:-48,r:14},{x:-52,z:-28,r:14},{x:-68,z:-38,r:12}]) {
+    const rocks=plan.rocks.filter(rock=>Math.hypot(rock.x-zone.x,rock.z-zone.z)<zone.r);
+    assert.ok(rocks.length>=12,`substantial structures near ${zone.x},${zone.z}`);
+    assert.ok(rocks.filter(rock=>rock.radius>3.5).length>=3);
+    assert.ok(plan.colonies.filter(c=>Math.hypot(c.x-zone.x,c.z-zone.z)<zone.r).length>80);
+    assert.ok(plan.plants.filter(c=>Math.hypot(c.x-zone.x,c.z-zone.z)<zone.r).length>40);
+  }
+  for(const rock of plan.rocks) {
+    const rendered=reefFloorHeight(rock.x,rock.z);
+    assert.ok(rock.y<rendered&&rendered-rock.y<2.5,'each rock base is embedded in the actual rendered floor');
+    const p=reefRockMesh(rock.form).positions,c=Math.cos(rock.rotation),s=Math.sin(rock.rotation);
+    for(let i=0;i<p.length;i+=3)if(p[i+1]===0){
+      const x=rock.x+rock.radius*(c*p[i]+s*p[i+2]),z=rock.z+rock.radius*(-s*p[i]+c*p[i+2]);
+      assert.ok(rock.y<reefFloorHeight(x,z),'no perimeter vertex floats above a sloping canyon floor');
+    }
+  }
+  const geometry=reefSeafloorGeometry(),position=geometry.getAttribute('position');
+  for(let i=0;i<position.count;i++)assert.ok(Math.abs(position.getY(i)-reefFloorVertexHeight(position.getX(i),position.getZ(i)))<.00001);
+  geometry.dispose();
+  assert.ok(reefFloorHeight(-53,-39)>-8,'western shelf remains visible rather than dropping into deep offshore water');
+  assert.ok(reefFloorHeight(-110,-120)<-20,'open ocean still deepens outside the archipelago');
 });

@@ -9,6 +9,7 @@ import { useEffect, useMemo, type MutableRefObject } from 'react';
 import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
 import { Color, DataTexture, LinearFilter, PlaneGeometry, RGBAFormat, ShaderMaterial, Vector2, Vector3, Vector4 } from 'three';
 import { landDistance } from './terrain';
+import { REEF_BASINS } from './reefHabitat';
 import { coastExposure, shorelineWaveGLSL } from './waves';
 import { world, type QualityTier, type SceneRuntime } from '../../content/world';
 
@@ -106,7 +107,8 @@ const fragmentShader = /* glsl */ `
     if (any(lessThan(coastUV, vec2(0.))) || any(greaterThan(coastUV, vec2(1.)))) coast = -32. - length(p - clamp(p, uCoastBounds.xy, uCoastBounds.xy+uCoastBounds.zw));
     float shoreShallows = 1. - smoothstep(1., 15., -coast);
     // The reef shelf stays clear while open water blends gently into the blue horizon.
-    float channel = 1. - smoothstep(.72, 1.25, length((p-vec2(-3.,-42.))/vec2(33.,27.)));
+    float channel = 0.;
+    ${REEF_BASINS.map(({ x, z, rx, rz }) => `channel = max(channel, 1. - smoothstep(1., 1.55, length((p-vec2(${x.toFixed(1)},${z.toFixed(1)}))/vec2(${rx.toFixed(1)},${rz.toFixed(1)}))));`).join('\n    ')}
     float shallows = max(shoreShallows, channel);
     float outsideField = length(p - clamp(p, uCoastBounds.xy, uCoastBounds.xy+uCoastBounds.zw));
     float offshoreDistance = coastSample.b * 128. + outsideField;

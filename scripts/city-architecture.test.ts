@@ -197,3 +197,33 @@ test('balcony planting is integrated into reachable terraces and all room floors
   }
   assert.ok(balconies>=20 && occupied>=40);
 });
+
+
+test('climbing gardens have supported containers, varied foliage and clear front entrances', () => {
+  let triangles = 0;
+  for (const building of cityBuildings.filter(value => value.family !== 'public-station')) {
+    const item = fixture(building);
+    try {
+      const gardens = item.meshes.filter(mesh => mesh.geometry.userData.facadeGarden);
+      assert.ok(gardens.length >= 12, `${building.id} has gardens on both sides`);
+      const foliage = gardens.filter(mesh => ['foliage', 'light'].includes(mesh.geometry.userData.facadeGarden.role));
+      const min = Math.min(...foliage.map(mesh => { mesh.geometry.computeBoundingBox(); return mesh.geometry.boundingBox!.min.y; }));
+      const max = Math.max(...foliage.map(mesh => mesh.geometry.boundingBox!.max.y));
+      assert.ok(max - min > (building.height > 4 ? building.height * .48 : 1.15), `${building.id} climbers reach multiple facade levels`);
+      assert.ok(gardens.some(mesh => mesh.geometry.userData.facadeGarden.role === 'fruit' && mesh.geometry.hasAttribute('color')));
+      assert.ok(foliage.every(mesh => mesh.geometry.hasAttribute('color')), 'leaf colors share the original garden batch');
+      const containers = gardens.filter(mesh => mesh.geometry.userData.facadeGarden.role === 'planter');
+      for (const mesh of containers) {
+        mesh.geometry.computeBoundingBox();
+        assert.ok(Math.abs(mesh.geometry.boundingBox!.min.y - mesh.geometry.userData.facadeGarden.floor) < 1e-5, 'container starts on its mounting floor');
+      }
+      for (const front of item.meshes.filter(mesh => mesh.geometry.userData.roomAccess)) {
+        const room = front.geometry.userData.roomAccess;
+        const ray = new Raycaster(new Vector3(room.front[0], room.floor + .7, room.front[1] + .6), new Vector3(0, 0, -1), 0, 1.0);
+        assert.equal(ray.intersectObjects(gardens, false).length, 0, `${room.room} entrance remains clear of climbers`);
+      }
+      triangles += gardens.reduce((sum, mesh) => sum + (mesh.geometry.index?.count ?? mesh.geometry.attributes.position.count) / 3, 0);
+    } finally { item.dispose(); }
+  }
+  assert.ok(triangles < 180000, `climbing gardens use ${triangles} triangles`);
+});

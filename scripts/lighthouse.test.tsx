@@ -6,6 +6,8 @@ import { AdditiveBlending, DoubleSide, FrontSide, Mesh, MeshBasicMaterial, MeshP
 import { createLighthouseGeometry, CoastalLighthouse, LIGHTHOUSE_OPENINGS, lighthouseRadius, LighthouseFocusButton } from '../src/components/world/CoastalLighthouse';
 import { createLighthouseActivation, illuminateLighthouse, lighthouseSignal, stepLighthouseSignal } from '../src/components/world/lighthouseSignal';
 import { createLandmarkMechanism, LandmarkMechanisms } from '../src/components/world/LandmarkMechanisms';
+import { createLighthouseAccess, lighthouseAccessCurve, LIGHTHOUSE_LANDING } from '../src/components/world/LighthouseAccess';
+import { terrainMeshHeight } from '../src/components/world/terrain';
 import { createSceneRuntime } from '../src/content/world';
 
 Object.assign(globalThis,{IS_REACT_ACT_ENVIRONMENT:true});
@@ -81,4 +83,59 @@ test('one demand frame updates both lamp and beam; a wall-clock timeout resets p
     await renderer.update(render('low'));assert.equal((root.getObjectByName('lighthouse-lantern-hit') as Mesh).geometry,geometry);
     const button=renderToStaticMarkup(<LighthouseFocusButton activate={()=>{}}/>);assert.match(button,/aria-label="Illuminate lighthouse"/);assert.match(button,/lighthouse-focus-control/);assert.match(button,/width:44px/);assert.doesNotMatch(button,/outline:[^;]*#123e57/);assert.doesNotMatch(button,/>[^<]+</);
   }finally{await renderer.unmount();context.mock.timers.tick(0);}
+});
+
+test('water landing, actual stair faces and the stone court form a continuous supported boarding route',()=>{
+  const access=createLighthouseAccess(),curve=lighthouseAccessCurve();
+  const material=new MeshBasicMaterial({side:DoubleSide}),ray=new Raycaster();
+  const walking=['lighthouse-arrival-deck','lighthouse-graded-treads','lighthouse-upper-court-steps'].map(name=>{
+    const source=access.root.getObjectByName(name) as Mesh;
+    const mesh=new Mesh(source.geometry,material);mesh.updateMatrixWorld(true);return mesh;
+  });
+  const height=(x:number,z:number)=>{ray.set(new Vector3(x,10,z),new Vector3(0,-1,0));return ray.intersectObjects(walking,false)[0]?.point.y;};
+  try {
+    assert.equal(curve.getPointAt(0).y,LIGHTHOUSE_LANDING.top);
+    for(const dx of [-.8,0,.8])for(const dz of [-.75,.04,.75]){
+      const x=LIGHTHOUSE_LANDING.x+dx,z=LIGHTHOUSE_LANDING.z+dz;
+      assert.ok(terrainMeshHeight(x,z)<-.4,'the boat landing is genuinely offshore');
+      assert.ok(Math.abs(height(x,z)!-.52)<.002,'the rendered deck is at boarding height');
+    }
+    let previous=height(curve.getPointAt(0).x,curve.getPointAt(0).z)!;
+    for(let i=1;i<=180;i++){
+      const p=curve.getPointAt(i/180),t=curve.getTangentAt(i/180),side=new Vector3(t.z,0,-t.x).normalize();
+      const top=height(p.x,p.z);
+      assert.ok(top!==undefined,'no opening between successive rendered treads');
+      assert.ok(Math.abs(top-previous)<.17,'successive stair tops have a safe rise');
+      for(const offset of [-.48,.48]){
+        const x=p.x+side.x*offset,z=p.z+side.z*offset,edge=height(x,z);
+        assert.ok(edge!==undefined,'the usable tread width has no missing faces');
+        assert.ok(edge>terrainMeshHeight(x,z)+.06,'steps clear the whole bank');
+      }
+      previous=top;
+    }
+    for(let i=0;i<=24;i++){
+      const x=-74.1-i*.69/24,z=-33.97+i*.04/24,top=height(x,z);
+      assert.ok(top!==undefined,'the final treads join the existing court');
+      assert.ok(Math.abs(top-previous)<.17);previous=top;
+    }
+    assert.ok(Math.abs(previous-terrainMeshHeight(-74.79,-33.93))<.06,'last step meets the graded court');
+    const piles=(access.root.getObjectByName('lighthouse-landing-seabed-piles') as Mesh).geometry.getAttribute('position');
+    for(const dx of [-.84,.84])for(const dz of [-.87,.87]){
+      const x=LIGHTHOUSE_LANDING.x+dx,z=LIGHTHOUSE_LANDING.z+dz;let min=Infinity,max=-Infinity;
+      for(let i=0;i<piles.count;i++)if(Math.hypot(piles.getX(i)-x,piles.getZ(i)-z)<.12){min=Math.min(min,piles.getY(i));max=Math.max(max,piles.getY(i));}
+      assert.ok(min<terrainMeshHeight(x,z)-.2);assert.ok(max>=.399,'each pile bears the deck underside');
+    }
+    for(const name of ['lighthouse-boat-fenders','lighthouse-mooring-hardware-and-ladder','lighthouse-stair-stringer','lighthouse-under-stair-cross-braces'])assert.ok(access.root.getObjectByName(name));
+  }finally{access.dispose();material.dispose();}
+});
+
+test('tower service details retain openings, beacon clearance and a bounded geometry cost',()=>{
+  const geometry=createLighthouseGeometry();
+  try {
+    for(const name of ['serviceLadder','doorPanels','lanternVentRing'] as const)assert.ok(geometry[name].getAttribute('position').count>100);
+    const ladder=geometry.serviceLadder.getAttribute('position');
+    for(let i=0;i<ladder.count;i++)assert.ok(ladder.getZ(i)<-.43,'rear maintenance ladder does not obstruct front door/windows');
+    const triangles=Object.values(geometry).reduce((sum,item)=>sum+(item.index?.count??item.getAttribute('position').count)/3,0);
+    assert.ok(triangles<70000);
+  }finally{Object.values(geometry).forEach(item=>item.dispose());}
 });

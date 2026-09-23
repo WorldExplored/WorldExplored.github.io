@@ -2,24 +2,13 @@
 
 import { useEffect, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { BufferGeometry, Color, CylinderGeometry, DoubleSide, Float32BufferAttribute, Group, InstancedBufferAttribute, InstancedMesh, Mesh, MeshBasicMaterial, MeshStandardMaterial, Object3D, PlaneGeometry, Vector3 } from 'three';
+import { BufferGeometry, Color, CylinderGeometry, DoubleSide, Float32BufferAttribute, Group, InstancedBufferAttribute, InstancedMesh, Mesh, MeshBasicMaterial, MeshStandardMaterial, Object3D, PlaneGeometry, ShaderChunk, Vector3 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { applySurface, surfaceTexture } from './surfaceMaterials';
 import { createSeaweedGeometry } from './Seaweed';
-import { getReefHabitat, reefFloorHeight, reefRockMesh, type ReefObstacle } from './reefHabitat';
+import { getReefHabitat, reefFloorHeight, reefFloorVertexHeight, reefRockMesh, type ReefObstacle } from './reefHabitat';
 import { landDistance, smooth } from './terrain';
 import type { EnvironmentProps } from './Water';
-
-function floorVertexHeight(x:number,z:number) {
-  return Math.min(-2.4,reefFloorHeight(x,z))-smooth(22,75,-landDistance(x,z))*35;
-}
-
-/** Sample the rendered one-metre triangles, not just the analytic height field. */
-function floorMeshHeight(x:number,z:number) {
-  const ix=Math.floor(x),iz=Math.floor(z),u=x-ix,v=z-iz;
-  const a=floorVertexHeight(ix,iz),b=floorVertexHeight(ix+1,iz),c=floorVertexHeight(ix,iz+1),d=floorVertexHeight(ix+1,iz+1);
-  return u+v<=1?a*(1-u-v)+b*u+c*v:d*(u+v-1)+b*(1-v)+c*(1-u);
-}
 
 /** One translucent instance batch seats each colony in the actual rippled sand surface. */
 export function createReefContactShade(entries:ReefObstacle[]) {
@@ -47,7 +36,7 @@ export function createReefContactShade(entries:ReefObstacle[]) {
     transform.position.set(entry.x,0,entry.z);transform.rotation.set(0,entry.rotation,0);transform.scale.set(radius,1,radius*.87);transform.updateMatrix();mesh.setMatrixAt(index,transform.matrix);
     for(let row=0;row<4;row++)for(let col=0;col<4;col++) {
       const lx=(col/3*2-1)*radius,lz=(row/3*2-1)*radius*.87;
-      heights[row][index*4+col]=floorMeshHeight(entry.x+cos*lx+sin*lz,entry.z-sin*lx+cos*lz)+.035;
+      heights[row][index*4+col]=reefFloorHeight(entry.x+cos*lx+sin*lz,entry.z-sin*lx+cos*lz)+.035;
     }
   });
   ['contactA','contactB','contactC','contactD'].forEach((name,row)=>geometry.setAttribute(name,new InstancedBufferAttribute(heights[row],4)));
@@ -66,7 +55,7 @@ export function reefSeafloorGeometry() {
   const width = 206, depth = 216;
   for (let row = 0; row < depth; row++) for (let col = 0; col < width; col++) {
     const x = col - 115, z = row - 140, distance = landDistance(x,z);
-    const y = floorVertexHeight(x,z);
+    const y = reefFloorVertexHeight(x,z);
     positions.push(x,y,z); uvs.push(x*.3,z*.3);
     // Match the island shader's submerged shelf before introducing pale sand further out.
     // The source named sand-color is dark mossy rock, so its raw albedo is unsuitable here.
@@ -182,17 +171,23 @@ export function createReefHabitat() {
   const geometries:BufferGeometry[]=[],materials:(MeshStandardMaterial|MeshBasicMaterial)[]=[],batches:{mesh:InstancedMesh;count:number;structural:boolean}[]=[];
   const time={value:0}, transform=new Object3D(),color=new Color(),plan=getReefHabitat();
   const floorMaterial=new MeshStandardMaterial({color:'#ffffff',vertexColors:true,roughness:.94,envMapIntensity:.2});
-  floorMaterial.normalMap=surfaceTexture('sand','normal');floorMaterial.normalScale.set(.14,.14);
+  floorMaterial.normalMap=surfaceTexture('sand','normal');floorMaterial.normalScale.set(.48,.48);
   floorMaterial.roughnessMap=surfaceTexture('sand','arm');floorMaterial.aoMap=floorMaterial.roughnessMap;floorMaterial.aoMapIntensity=.3;
   floorMaterial.onBeforeCompile=shader=>{
-    shader.vertexShader=`varying vec2 sandXZ;\n${shader.vertexShader}`.replace('#include <begin_vertex>','#include <begin_vertex>\n sandXZ = position.xz;');
-    shader.fragmentShader=`varying vec2 sandXZ;\n${shader.fragmentShader}`.replace('#include <map_fragment>',`
+    shader.uniforms.reefRockNormal={value:surfaceTexture('mineral','normal')};
+    shader.uniforms.reefRockRoughness={value:surfaceTexture('mineral','arm')};
+    shader.vertexShader=`varying vec2 sandXZ; varying float reefDepth;\n${shader.vertexShader}`.replace('#include <begin_vertex>','#include <begin_vertex>\n sandXZ = position.xz; reefDepth = -position.y;');
+    shader.fragmentShader=`uniform sampler2D reefRockNormal; uniform sampler2D reefRockRoughness; varying vec2 sandXZ; varying float reefDepth;\n${shader.fragmentShader}`.replace('#include <map_fragment>',`
       float dune = sin(sandXZ.x * 3.7 + sandXZ.y * 7. + sin(sandXZ.x * .6) * 1.4);
       float fineGrain = fract(sin(dot(floor(sandXZ * 48.), vec2(127.1,311.7))) * 43758.5453);
-      diffuseColor.rgb *= .986 + dune * .015 + fineGrain * .028;
-    `);
+      float stone = smoothstep(3.1, 5.8, reefDepth);
+      float fracture = abs(sin(sandXZ.x * .8 + sin(sandXZ.y * .62) * 2.));
+      diffuseColor.rgb *= .88 + dune * .028 + fineGrain * .17;
+      diffuseColor.rgb *= mix(1., .79 + fracture * .17, stone);
+    `).replace('#include <normal_fragment_maps>',ShaderChunk.normal_fragment_maps.replaceAll('texture2D( normalMap, vNormalMapUv ).xyz','mix(texture2D(normalMap, vNormalMapUv * 2.).xyz, texture2D(reefRockNormal, vNormalMapUv * .65).xyz, smoothstep(3.1, 5.8, reefDepth))'))
+      .replace('#include <roughnessmap_fragment>',ShaderChunk.roughnessmap_fragment.replace('texture2D( roughnessMap, vRoughnessMapUv )','mix(texture2D(roughnessMap, vRoughnessMapUv * 2.), texture2D(reefRockRoughness, vRoughnessMapUv * .65), smoothstep(3.1, 5.8, reefDepth))'));
   };
-  floorMaterial.customProgramCacheKey=()=> 'continuous-submerged-sand-v2';materials.push(floorMaterial);
+  floorMaterial.customProgramCacheKey=()=> 'continuous-submerged-sand-rock-v3';materials.push(floorMaterial);
   const floorGeometry=reefSeafloorGeometry();geometries.push(floorGeometry);
   const floor=new Mesh(floorGeometry,floorMaterial);floor.name='continuous-rippled-sand-seafloor';floor.receiveShadow=true;floor.raycast=()=>{};root.add(floor);
   const contact=createReefContactShade([...plan.rocks,...plan.colonies]);geometries.push(contact.geometry);materials.push(contact.material);root.add(contact.mesh);

@@ -10,21 +10,52 @@ export interface ReefHabitatPlan {
   colonies: ReefObstacle[]; rocks: ReefObstacle[]; plants: ReefPlant[];
 }
 
-/** The deep sand basin exposes substantial ridge faces without crowding the surface traffic. */
-export function reefFloorHeight(x: number, z: number) {
+/** The reef shelf spans the channel and both sheltered arms of the lighthouse triangle. */
+export const REEF_BASINS = [
+  { x: -2, z: -42, rx: 29, rz: 19 },
+  { x: -46, z: -37, rx: 27, rz: 17 },
+  { x: -46, z: -55, rx: 23, rz: 14 },
+  { x: -61, z: -37, rx: 18, rz: 22 },
+] as const;
+
+function shelfInfluence(x: number, z: number) {
+  return Math.max(...REEF_BASINS.map(basin => 1 - smooth(1, 1.8, Math.hypot((x - basin.x) / basin.rx, (z - basin.z) / basin.rz))));
+}
+
+const floorVertices = new Map<string, number>();
+
+/** Integer vertices are shared by the floor mesh, collision queries and benthic life. */
+export function reefFloorVertexHeight(x: number, z: number) {
+  const key = `${x},${z}`, cached = floorVertices.get(key);
+  if (cached !== undefined) return cached;
   const distance = landDistance(x, z);
   const waves = .16 * Math.sin(x * .31 + z * .17) + .09 * Math.cos(z * .43 - x * .13);
   const ripples = .026 * Math.sin(z * 5 + Math.sin(x * .41) * 2);
   const basin = (1 - smooth(.65, 1.35, Math.hypot((x + 2) / 34, (z + 42) / 24))) * smooth(7, 12, -distance);
-  return terrainBaseHeight(x, z) - .18 + smooth(6.9, 9, -distance) * (waves + ripples) - basin * 1.9;
+  const shelf = shelfInfluence(x, z);
+  const fractures = shelf * smooth(10, 17, -distance) * (.25 * Math.sin(x * .22 + z * .35) + .19 * Math.sin(x * .67 - z * .38));
+  const floor = terrainBaseHeight(x, z) - .36 + smooth(6.9, 9, -distance) * (waves + ripples) - basin * 1.9 + fractures;
+  const height = Math.min(-2.4, floor) - smooth(22, 75, -distance) * 35 * (1 - shelf);
+  floorVertices.set(key, height);
+  return height;
+}
+
+/** Exact barycentric sampling of the rendered one-metre floor triangles. */
+export function reefFloorHeight(x: number, z: number) {
+  const ix = Math.floor(x), iz = Math.floor(z), u = x - ix, v = z - iz;
+  const a = reefFloorVertexHeight(ix, iz), b = reefFloorVertexHeight(ix + 1, iz);
+  const c = reefFloorVertexHeight(ix, iz + 1), d = reefFloorVertexHeight(ix + 1, iz + 1);
+  return u + v <= 1 ? a * (1 - u - v) + b * u + c * v : d * (u + v - 1) + b * (1 - v) + c * (1 - u);
 }
 
 export function reefHabitatContains(x: number, z: number, margin = 0) {
-  const dx = x + 2, dz = z + 42;
-  const angle = Math.atan2(dz / 19, dx / 29);
-  const edge = 1 + .08 * Math.sin(angle * 3 + .7) + .035 * Math.cos(angle * 5);
-  return Math.hypot(dx / (29 - margin), dz / (19 - margin)) < edge
-    && landDistance(x, z) < -4.8 - margin && reefFloorHeight(x, z) < -2.7;
+  const inside = REEF_BASINS.some(basin => {
+    const dx = x - basin.x, dz = z - basin.z;
+    const angle = Math.atan2(dz / basin.rz, dx / basin.rx);
+    const edge = 1 + .08 * Math.sin(angle * 3 + .7) + .035 * Math.cos(angle * 5);
+    return Math.hypot(dx / (basin.rx - margin), dz / (basin.rz - margin)) < edge;
+  });
+  return inside && landDistance(x, z) < -4.8 - margin && reefFloorHeight(x, z) < -2.7;
 }
 
 const ferry = createCityFerryRoute();
@@ -96,10 +127,18 @@ export function getReefHabitat(): ReefHabitatPlan {
     [[-8,-36],[-3,-35],[2,-33],[7,-31]],
     [[3,-44],[7,-42],[10,-38],[13,-35],[17,-32]],
     [[20,-51],[23,-47],[25,-43]],
+    // Branching limestone belts connect the lighthouse shelf to both island shores.
+    [[-66,-48],[-61,-51],[-56,-54],[-50,-57],[-44,-57],[-38,-55],[-31,-53]],
+    [[-66,-39],[-61,-41],[-55,-44],[-49,-46],[-43,-45],[-37,-44],[-31,-43]],
+    [[-65,-29],[-60,-27],[-55,-25],[-50,-23],[-45,-20]],
+    [[-56,-35],[-51,-34],[-46,-32],[-41,-29],[-37,-26]],
+    [[-49,-52],[-47,-48],[-45,-43],[-42,-39],[-36,-37],[-30,-35]],
+    [[-74,-49],[-69,-49],[-65,-47],[-61,-44]],
+    [[-71,-23],[-66,-23],[-62,-26],[-61,-31],[-60,-36]],
   ];
   ridges.forEach((ridge, patch) => ridge.forEach(([cx, cz], segment) => {
     const form = (segment + patch) % 4;
-    const radius = [3.2,2.7,3.4,2.7][form] + random() * [1.3,1.1,1.2,1][form];
+    const radius = ([3.2,2.7,3.4,2.7][form] + random() * [1.3,1.1,1.2,1][form]) * (patch < 6 ? 1 : 1.32);
     if (!reefHabitatContains(cx, cz, radius * .6)) return;
     const y = reefFloorHeight(cx, cz) - .24;
     const height = Math.min([1.3,2.6,1.0,3.1][form] + random() * [1.0,1.7,.9,1.5][form], -2.85 - y);
@@ -115,8 +154,21 @@ export function getReefHabitat(): ReefHabitatPlan {
       rocks.push({ x, z, y: floor, radius: small, height: Math.min(.55 + random() * 1.2, -3 - floor), rotation: random() * Math.PI * 2, form: Math.floor(random() * 4), color: 0, patch });
     }
   }));
+  // Sink every perimeter vertex into the sampled floor, extending the rock downward
+  // instead of letting a flat base hover over the sloping canyon floor.
+  for (const rock of rocks) {
+    const { positions } = reefRockMesh(rock.form), c = Math.cos(rock.rotation), s = Math.sin(rock.rotation);
+    let base = rock.y;
+    for (let i = 0; i < positions.length; i += 3) if (positions[i + 1] === 0) {
+      const x = rock.x + rock.radius * (c * positions[i] + s * positions[i + 2]);
+      const z = rock.z + rock.radius * (-s * positions[i] + c * positions[i + 2]);
+      base = Math.min(base, reefFloorHeight(x, z) - .08);
+    }
+    rock.height += rock.y - base;
+    rock.y = base;
+  }
   for (const host of rocks) {
-    const count = Math.ceil(host.radius * host.radius * 1.5);
+    const count = Math.ceil(host.radius * host.radius * (host.patch < 6 ? 1.5 : .82));
     for (let n = 0; n < count; n++) for (let attempt = 0; attempt < 35; attempt++) {
       const angle = random() * Math.PI * 2, distance = Math.sqrt(random()) * host.radius * .9;
       const x = host.x + Math.cos(angle) * distance, z = host.z + Math.sin(angle) * distance;
@@ -132,7 +184,7 @@ export function getReefHabitat(): ReefHabitatPlan {
     }
   }
   // Dense irregular meadows occupy canyon edges, with open sand through the middle.
-  for (let i = 0; i < 600; i++) for (let attempt = 0; attempt < 25; attempt++) {
+  for (let i = 0; i < 1100; i++) for (let attempt = 0; attempt < 25; attempt++) {
     const host = rocks[Math.floor(random() * rocks.length)], a = random() * Math.PI * 2, r = host.radius * (.8 + random() * .75);
     const x = host.x + Math.cos(a) * r, z = host.z + Math.sin(a) * r;
     if (!reefHabitatContains(x, z, .25) || rocks.some(rock => reefRockSurfaceHeight(rock,x,z) > reefFloorHeight(x,z) + .15) || plants.some(plant => Math.hypot(x-plant.x,z-plant.z)<.23)) continue;

@@ -1,7 +1,9 @@
 'use client';
 
-import { ExtrudeGeometry, Shape, Vector3, type BufferGeometry } from 'three';
+import { useEffect, useRef, useState } from 'react';
+import { DoubleSide, ExtrudeGeometry, MeshPhysicalMaterial, Shape, TorusGeometry, Vector3, type BufferGeometry } from 'three';
 import { combine, roundedBox, stroke, usePalette, useResources, type ModelProps } from './BuildingKit';
+import { createFacadeGarden } from './FacadeGarden';
 import { FurnishedInterior, InteriorBuilder, floorRectangle, floorSlab } from './InteriorKit';
 import { architecturalSurface as surface, architecturalBox as box, doorway, guardRail, stairFlight, windowBay, type ShellParts } from './LandmarkShellKit';
 
@@ -87,6 +89,14 @@ function createHistoryInterior() {
   b.table(-2.6, floor, .65, 1.4, .65, .7); b.table(2.6, floor, .65, 1.4, .65, .7);
   for (const x of [-2.95, -2.25, 2.25, 2.95]) b.chair(x, floor, 1.35, Math.PI);
   for (const x of [-3.2, 0, 3.2]) b.lamp(x, 5.7, -.8, 1.25);
+  // Framed gallery panels and picture lights sit against the solid rear wall.
+  for (const x of [-3.8, -2.1, 2.1, 3.8]) {
+    b.box('metal', 1.12, 1.25, .075, x, 5.06, -3.39);
+    b.box('paper', .98, 1.11, .025, x, 5.06, -3.34);
+    b.box('screen', .67, .56, .028, x, 5.13, -3.32);
+    b.box('metal', .8, .055, .18, x, 5.75, -3.22);
+    b.box('light', .67, .025, .12, x, 5.715, -3.22);
+  }
   return b.finish();
 }
 
@@ -117,7 +127,40 @@ export function makeHistoryMuseum() {
     cases.push(box(.8, .55, .75, x, upper + .275, z), box(.82, .055, .77, x, upper + .56, z));
     caseGlass.push(box(.72, .6, .66, x, upper + .89, z));
   }
+  const details: BufferGeometry[] = [], exhibits: BufferGeometry[] = [], exhibitFrames: BufferGeometry[] = [];
+  // Barrel-roof standing seams terminate in continuous eave gutters and downpipes.
+  for (const z of [-3.71, -2.48, -1.24, 0, 1.24, 2.48, 3.71]) details.push(stroke(t => {
+    const x = (t - .5) * 11.25; return new Vector3(x, archHeight(x) + .025, z);
+  }, .018, 32));
+  for (const side of [-1, 1]) {
+    details.push(box(.14, .12, 7.75, side * 5.52, 5.88, 0));
+    details.push(stroke(t => new Vector3(side * 5.43, 1.15 + t * 4.72, -3.64), .046, 2));
+    for (const y of [1.4, 3.3, 5.4]) details.push(box(.16, .05, .16, side * 5.43, y, -3.64));
+    // Sill flashings and facade joints follow actual structural bays.
+    for (const z of [-2.34, 0, 2.34]) {
+      details.push(box(.18, .065, 2.1, side * 5.31, 1.7, z));
+    }
+    for (const y of [2.8, 4.28]) details.push(box(.035, .045, 7.0, side * 5.415, y, 0));
+    details.push(box(.035, .43, .045, side * .25, 2.13, 3.675));
+  }
+  for (const x of [-4.38, 4.38]) for (const z of [-.8, 1.42]) {
+    exhibits.push(new TorusGeometry(.19, .055, 6, 16).rotateY(x < 0 ? .35 : -.35).translate(x, upper + .88, z));
+    exhibits.push(box(.045, .24, .045, x, upper + .69, z));
+    exhibitFrames.push(box(.43, .03, .4, x, upper + .58, z));
+    for (const side of [-1, 1]) exhibitFrames.push(box(.018, .62, .66, x + side * .36, upper + .88, z));
+    exhibitFrames.push(box(.74, .02, .68, x, upper + 1.19, z));
+  }
+  const planting: BufferGeometry[] = [], plantingWood: BufferGeometry[] = [], plantingBeds: BufferGeometry[] = [];
+  for (const side of [-1, 1]) for (const z of [-2.95, 2.9]) {
+    const garden = createFacadeGarden({ width: .64, height: 4.45, seed: side + Math.round(z) + 9 });
+    for (const [part, geometry] of Object.entries(garden)) {
+      geometry.rotateY(side * Math.PI / 2).translate(side * 5.27, floor, z);
+      (part === 'planter' ? plantingBeds : part === 'wood' || part === 'trellis' ? plantingWood : planting).push(geometry);
+    }
+  }
   return {
+    details: combine(details), exhibits: combine(exhibits), exhibitFrames: combine(exhibitFrames),
+    planting: combine(planting), plantingWood: combine(plantingWood), plantingBeds: combine(plantingBeds),
     base: floorSlab('history-foundation', [floorRectangle(0, 0, 11.2, 7.7)], 1.01, .21, 'foundation'),
     walls: combine(parts.walls), windows: combine(parts.glass), frames: combine(parts.frames), roof, gables, ribs: combine(ribs), gallery, steps: stair.steps, rails,
     cases: combine(cases), caseGlass: combine(caseGlass),
@@ -129,6 +172,12 @@ export function makeHistoryMuseum() {
 export function HistoryMuseum(props: ModelProps) {
   const material = usePalette(props, 'history');
   const geometry = useResources(makeHistoryMuseum);
+  const [gardenMaterial] = useState(() => new MeshPhysicalMaterial({ name: 'history-grape-foliage', color: '#ffffff', vertexColors: true, side: DoubleSide, roughness: .93, metalness: 0, envMapIntensity: .12 }));
+  const gardenDisposal = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => {
+    clearTimeout(gardenDisposal.current);
+    return () => { gardenDisposal.current = setTimeout(() => gardenMaterial.dispose(), 0); };
+  }, [gardenMaterial]);
   return <group dispose={null}>
     <mesh name="history-museum-foundation" geometry={geometry.base} material={material.paving} receiveShadow />
     <mesh name="history-museum-opaque-shell" geometry={geometry.walls} material={material.porcelain} castShadow receiveShadow />
@@ -144,6 +193,12 @@ export function HistoryMuseum(props: ModelProps) {
     <mesh name="history-continuous-upper-gallery" geometry={geometry.gallery} material={material.paving} receiveShadow />
     <mesh name="history-upper-exhibit-plinths" geometry={geometry.cases} material={material.porcelain} castShadow />
     <mesh name="history-exhibit-vitrines" geometry={geometry.caseGlass} material={material.glass} />
+    <mesh name="history-seams-gutters-and-hardware" geometry={geometry.details} material={material.navy} castShadow />
+    <mesh name="history-gallery-artifacts" geometry={geometry.exhibits} material={material.gold} castShadow />
+    <mesh name="history-vitrine-frames" geometry={geometry.exhibitFrames} material={material.edge} />
+    <mesh name="history-climbing-side-gardens" geometry={geometry.planting} material={gardenMaterial} castShadow />
+    <mesh name="history-attached-garden-trellises" geometry={geometry.plantingWood} material={material.navy} castShadow />
+    <mesh name="history-floor-supported-planters" geometry={geometry.plantingBeds} material={material.paving} castShadow receiveShadow />
     <FurnishedInterior name="history-visible-galleries" build={createHistoryInterior} />
   </group>;
 }

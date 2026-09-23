@@ -226,6 +226,10 @@ function makeLandscape(plan: LandscapePlan) {
       float ripple = sin(groundXZ.x*13. + groundXZ.y*7. + sin(groundXZ.y*2.3)*2.7)*.0025;
       sand += ripple*(1.-grass);
       vec3 seabed = mix(vec3(.55,.74,.60),vec3(.16,.43,.38),smoothstep(.4,3.5,depth));
+      float seabedGrain = groundNoise(groundXZ*64.);
+      seabed *= .82 + seabedGrain*.32;
+      float rubble = smoothstep(.58,.75,groundNoise(groundXZ*5.3));
+      seabed = mix(seabed,seabed*vec3(.70,.76,.72),rubble*smoothstep(1.1,3.6,depth));
       sand = mix(sand,seabed,smoothstep(0.,.6,depth));
       float wash = shoreWave(coast,groundXZ,uShoreTime,shoreExposure).y;
       sand = mix(sand,vec3(.73,.84,.80),wash*.22);

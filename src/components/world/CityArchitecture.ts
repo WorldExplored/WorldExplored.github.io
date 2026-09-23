@@ -1,5 +1,6 @@
 import { BoxGeometry, BufferGeometry, CylinderGeometry, Float32BufferAttribute, ExtrudeGeometry, Shape, SphereGeometry, TubeGeometry, CatmullRomCurve3, Vector3 } from 'three';
 import { floorSlab, floorRectangle, floorEllipse, type FloorPolygon } from './InteriorKit';
+import { createFacadeGarden } from './FacadeGarden';
 import { cityEntrances, type CityBuilding, type CityPoint } from './city';
 
 export type CityFinish = 'porcelain' | 'glass' | 'aqua' | 'garden' | 'window' | 'stone' | 'wood' | 'fabric' | 'metal';
@@ -216,6 +217,20 @@ export function buildCityArchitecture(building: Readonly<CityBuilding>, shellAdd
         for(let slat=0;slat<Math.floor(depth/.18);slat++)box(sx+side*.065,y+height/2,z-depth*.42+slat*.18,.04,height-.12,.025,'wood');
       }
     }
+    // Climbers grow from floor-supported beds beside each side facade. Rear lift
+    // apertures and every front entrance remain outside their planting envelope.
+    for (const side of family === 'public-station' ? [] : [-1, 1]) {
+      const seed = variant + building.id.length + (side > 0 ? 3 : 0);
+      if (y > .21 && seed % 3 === 0) continue;
+      const gardenWidth = Math.min(1.05, depth * .45);
+      const garden = createFacadeGarden({ width: gardenWidth, height: height - .23, seed });
+      const px = x + side * (width / 2 - .04), pz = z - depth * .08;
+      for (const [part, geometry] of Object.entries(garden)) {
+        geometry.userData.facadeGarden = { building: building.id, room: roomId, role: part, floor, seed };
+        const finish: CityFinish = part === 'planter' ? 'stone' : part === 'wood' ? 'wood' : part === 'trellis' ? 'metal' : 'garden';
+        add(geometry, finish, px, floor, pz, 1, 1, 1, side * Math.PI / 2);
+      }
+    }
     wall('front-lintel',x,y+height-.065,front,width,.13,.10,'aqua');
     // All front entrances and planted terraces have their own clear doorway.
     const frontDoor=y<.21 || balcony;
@@ -311,6 +326,14 @@ export function buildCityArchitecture(building: Readonly<CityBuilding>, shellAdd
       // Curved residences keep the center aisle clear between front and lift doors.
       furnishRoom(0,y+.15,0,rx*1.65,rz*1.5,n,pitch-.15);
       roomViews.push({building:building.id,window:[-.65,y+.9,Math.sqrt(1-(.65/(rx-.1))**2)*(rz-.1)],target:[-.65,y+.7,0],floor:y+.14,width:rx*1.65,height:pitch,depth:rz*1.5});
+    }
+    for (const side of [-1, 1]) {
+      const garden = createFacadeGarden({ width: .72, height: h - .95, seed: side + 6 });
+      for (const [part, geometry] of Object.entries(garden)) {
+        geometry.userData.facadeGarden = { building: building.id, role: part, floor: .34 };
+        const finish: CityFinish = part === 'planter' ? 'stone' : part === 'wood' ? 'wood' : part === 'trellis' ? 'metal' : 'garden';
+        add(geometry, finish, side * (w / 2 - .26), .34, 0, 1, 1, 1, side * Math.PI / 2);
+      }
     }
     add(new CylinderGeometry(1, 1, .15, 32), 'porcelain', 0, h - .25, 0, w / 2 - .24, 1, d / 2 - .22);
     // Unserved roof remains an unoccupied weather enclosure.

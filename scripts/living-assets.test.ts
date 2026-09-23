@@ -4,6 +4,8 @@ import { Mesh, Vector3 } from 'three';
 import { createCoastalFerry, ferryPontoonGeometry } from '../src/components/world/CoastalFerry';
 import { createCityFerryRoute, FERRY_DWELL, cityFerryDistance } from '../src/components/world/cityInfrastructure';
 import { treeBranches, treeFoliageGeometry, treeWoodGeometry } from '../src/components/world/TreeGeometry';
+import { makeHistoryMuseum } from '../src/components/world/CivicLandmarks';
+import { createFacadeGarden } from '../src/components/world/FacadeGarden';
 import { createSeaweedGeometry } from '../src/components/world/Seaweed';
 
 test('ferry hull displaces water and fittings remain on one rigid vessel hierarchy',()=>{
@@ -44,4 +46,37 @@ test('botanical assets have different crown envelopes, raised leaf midribs and d
   }
   foliage.dispose();[0,1,2].forEach(form=>{const wood=treeWoodGeometry(form);wood.computeBoundingBox();assert.ok(wood.boundingBox!.min.y<0);wood.dispose();});
   const seaweed=[0,1,2].map(createSeaweedGeometry);assert.equal(new Set(seaweed.map(g=>g.userData.form)).size,3);seaweed.forEach(g=>g.dispose());
+});
+
+
+test('espalier plants have cupped lobed leaves and branching rooted stems within a bounded panel', () => {
+  const garden = createFacadeGarden({ width: .9, height: 2.1, seed: 7 });
+  try {
+    garden.planter.computeBoundingBox();
+    assert.ok(Math.abs(garden.planter.boundingBox!.min.y) < 1e-6);
+    const leaves = garden.foliage.attributes.position;
+    garden.foliage.computeBoundingBox();
+    assert.ok(garden.foliage.boundingBox!.max.y > 1.8);
+    assert.ok(garden.foliage.boundingBox!.max.x - garden.foliage.boundingBox!.min.x > .7);
+    for (let i = 0; i < leaves.count; i++) assert.ok(Number.isFinite(leaves.getX(i)) && Number.isFinite(leaves.getY(i)) && Number.isFinite(leaves.getZ(i)));
+    assert.ok(garden.foliage.boundingBox!.max.z - garden.foliage.boundingBox!.min.z > .1, 'leaves have depth rather than a flat wall decal');
+    assert.ok(garden.fruit.attributes.position.count > 100);
+  } finally { Object.values(garden).forEach(geometry => geometry.dispose()); }
+});
+
+test('History detailing provides actual artifacts, drainage and grounded facade gardens', () => {
+  const geometry = makeHistoryMuseum();
+  try {
+    const names = ['details', 'exhibits', 'exhibitFrames', 'planting', 'plantingWood', 'plantingBeds'] as const;
+    let triangles = 0;
+    for (const name of names) {
+      const mesh = geometry[name]; mesh.computeBoundingBox();
+      assert.ok(mesh.attributes.position.count > 12);
+      for (const value of mesh.attributes.position.array) assert.ok(Number.isFinite(value));
+      triangles += (mesh.index?.count ?? mesh.attributes.position.count) / 3;
+    }
+    assert.ok(Math.abs(geometry.plantingBeds.boundingBox!.min.y - 1.075) < 1e-5);
+    assert.ok(geometry.exhibits.boundingBox!.min.y > 4.85, 'artifacts stand on gallery case plinths');
+    assert.ok(triangles < 30000, `History added ${triangles} triangles`);
+  } finally { Object.values(geometry).forEach(value => value.dispose()); }
 });

@@ -27,6 +27,8 @@ import { LighthouseAccess } from './LighthouseAccess';
 import { Bridges } from './Bridges';
 import { GardenRover } from './GardenRover';
 import { Seaweed } from './Seaweed';
+import { BenthicLife } from './BenthicLife';
+import { CityPathEdges } from './CityPathEdges';
 import { Water } from './Water';
 import { QualityController } from './QualityController';
 import { ReflectiveObject } from './ReflectiveObject';
@@ -154,6 +156,8 @@ export function AeroWorld(props: WorldProps & { runtime: MutableRefObject<SceneR
     {stage >= 3 && <ReefLife runtime={runtime} paused={stopped} quality={tier} />}
     {stage >= 3 && <CityVentilation runtime={runtime} paused={stopped} quality={tier} />}
     {stage >= 3 && <Seaweed runtime={runtime} paused={stopped} quality={tier} />}
+    {stage >= 3 && <BenthicLife quality={tier} />}
+    {stage >= 3 && <CityPathEdges />}
     {stage >= 4 && <Flora runtime={runtime} paused={stopped} quality={tier} />}
     {stage >= 4 && <Wildlife runtime={runtime} paused={stopped} quality={tier} />}
     {stage >= 5 && <GardenRover runtime={runtime} paused={stopped} quality={tier} active={false} />}

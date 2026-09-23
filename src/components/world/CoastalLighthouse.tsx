@@ -73,6 +73,22 @@ export function createLighthouseGeometry(){
     threshold:new BoxGeometry(.65,.08,.35).translate(0,1.02,1.02),
     drainage:combine([stroke(t=>{const y=1.27+t*3.86,r=lighthouseRadius(y)+.037;return new Vector3(-r*.94,y,-r*.34);},.025,40),...Array.from({length:5},(_,i)=>{const y=1.45+i*.75,r=lighthouseRadius(y)+.037;return new TorusGeometry(.029,.008,6,12).rotateX(Math.PI/2).translate(-r*.94,y,-r*.34);}),new CylinderGeometry(.032,.032,.20,10).rotateZ(.7).translate(-.85,1.20,-.29)]),
     maintenance:combine([new BoxGeometry(.22,.29,.07).translate(.30,5.75,-.55),...Array.from({length:4},(_,i)=>new BoxGeometry(.25,.02,.065).translate(.30,5.65+i*.065,-.605)),new CylinderGeometry(.04,.045,.20,12).translate(.45,6.77,-.16),new CylinderGeometry(.07,.07,.045,12).translate(.45,6.88,-.16)]),
+    serviceLadder:combine([
+      ...[-.16,.16].map(x=>strut(new Vector3(x,1.24,-.94),new Vector3(x,5.34,-.69),.018)),
+      ...Array.from({length:17},(_,i)=>{const y=1.36+i*.235,z=-.94+(y-1.24)/4.1*.25;return strut(new Vector3(-.17,y,z),new Vector3(.17,y,z),.016);}),
+      ...[1.45,2.5,3.55,4.6].flatMap(y=>[-.16,.16].map(x=>strut(new Vector3(x,y,-.94+(y-1.24)/4.1*.25),new Vector3(x,y,-lighthouseRadius(y)+.025),.017))),
+    ]),
+    doorPanels:combine([
+      ...[1.29,1.73].map(y=>new BoxGeometry(.33,.28,.016).translate(0,y,.755)),
+      ...[1.18,1.86].map(y=>new BoxGeometry(.075,.033,.033).translate(-.19,y,.768)),
+      new BoxGeometry(.13,.018,.035).translate(.115,1.48,.80),
+      new BoxGeometry(.51,.028,.21).translate(0,2.09,.83),
+    ]),
+    lanternVentRing:combine([
+      stroke(circle(.65,5.43),.021,48),stroke(circle(.65,6.43),.021,48),
+      ...Array.from({length:24},(_,i)=>{const a=i*TAU/24;return new BoxGeometry(.045,.065,.018).rotateY(a).translate(Math.sin(a)*.645,6.445,Math.cos(a)*.645);}),
+      ...Array.from({length:8},(_,i)=>{const a=i*TAU/8;return new BoxGeometry(.072,.035,.052).rotateY(a).translate(Math.sin(a)*.64,5.49,Math.cos(a)*.64);}),
+    ]),
     hitbox:new CylinderGeometry(.82,.82,1.24,24),
     beam:new CylinderGeometry(1.35,.08,10,32,1,true).rotateZ(Math.PI/2).translate(-5,0,0),
   };
@@ -82,9 +98,9 @@ function createLighthouseResources(){
   const parts=createLighthouseGeometry();
   return {...parts,
     stoneBatch:combine([parts.foundation,parts.sills,parts.threshold].map(part=>part.clone())),
-    metalBatch:combine([parts.rails,parts.frames,parts.roofSeams,parts.finial,parts.windowFrames,parts.drainage].map(part=>part.clone())),
+    metalBatch:combine([parts.rails,parts.frames,parts.roofSeams,parts.finial,parts.windowFrames,parts.drainage,parts.serviceLadder,parts.lanternVentRing].map(part=>part.clone())),
     porcelainBatch:combine([parts.balcony,parts.cap,parts.doorFrames].map(part=>part.clone())),
-    navyBatch:combine([parts.balconyBrackets,parts.door,parts.maintenance].map(part=>part.clone())),
+    navyBatch:combine([parts.balconyBrackets,parts.door,parts.maintenance,parts.doorPanels].map(part=>part.clone())),
   };
 }
 
