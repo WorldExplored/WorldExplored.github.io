@@ -2,18 +2,18 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { act, create } from '@react-three/test-renderer';
 import { InstancedMesh, MeshStandardMaterial, type WebGLProgramParametersWithUniforms } from 'three';
-import { createSeaweedGeometry, createSeaweedLayout, SEAWEED_COVES, SEAWEED_REACH, Seaweed } from '../src/components/world/Seaweed';
+import { createSeaweedGeometry, createSeaweedLayout, SEAWEED_COVES, SEAWEED_REACH, SEAWEED_FORMS, Seaweed } from '../src/components/world/Seaweed';
 import { createLandscapePlan, distanceToSegment, landDistance, terrainHeight } from '../src/components/world/terrain';
 import { coastExposure } from '../src/components/world/waves';
 import { createSceneRuntime, type QualityTier } from '../src/content/world';
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
-test('seaweed occupies five sparse sheltered beds with seabed roots and structural clearance', () => {
+test('seaweed occupies dense irregular sheltered beds with seabed roots and structural clearance', () => {
   const plan = createLandscapePlan();
   const sites = createSeaweedLayout(plan);
   assert.deepEqual(sites, createSeaweedLayout(plan));
-  assert.ok(sites.length >= 50 && sites.length <= 100);
+  assert.ok(sites.length >= 600 && sites.length <= 750);
   assert.equal(new Set(sites.map(site => site.cove)).size, 5);
   for (const site of sites) {
     const distance = landDistance(site.x, site.z);
@@ -31,7 +31,7 @@ test('seaweed occupies five sparse sheltered beds with seabed roots and structur
 });
 
 test('every blade stays submerged and inside its reserved footprint through slow sway', () => {
-  const geometries = [0, 1, 2].map(createSeaweedGeometry);
+  const geometries = SEAWEED_FORMS.map((_, variant) => createSeaweedGeometry(variant));
   try {
     for (const site of createSeaweedLayout()) {
       const vertices = geometries[site.variant].getAttribute('position');
@@ -60,10 +60,11 @@ test('quality and reduced motion retain seaweed resources without pointer interc
   const shader = { uniforms: {}, vertexShader: '#include <begin_vertex>', fragmentShader: '' } as WebGLProgramParametersWithUniforms;
   (meshes[0].material as MeshStandardMaterial).onBeforeCompile(shader, {} as never);
   try {
-    assert.equal(meshes.length, 3);
-    for (const [quality, population] of [['high', 80], ['medium', 61], ['low', 41]] as const) {
+    assert.equal(meshes.length, SEAWEED_FORMS.length);
+    for (const [quality, population] of [['high', 1], ['medium', .75], ['low', .5]] as const) {
       await renderer.update(render(quality));
-      assert.equal(meshes.reduce((sum, mesh) => sum + mesh.count, 0), population);
+      const sites = createSeaweedLayout();
+      assert.equal(meshes.reduce((sum, mesh) => sum + mesh.count, 0), SEAWEED_FORMS.reduce((sum, _, variant) => sum + Math.ceil(sites.filter(site => site.variant === variant).length * population), 0));
       assert.deepEqual(meshes.map(mesh => mesh.geometry), geometry);
       assert.deepEqual(meshes.map(mesh => mesh.material), materials);
       for (const mesh of meshes) { const hits: unknown[] = []; mesh.raycast({} as never, hits as never); assert.equal(hits.length, 0); }
@@ -76,4 +77,27 @@ test('quality and reduced motion retain seaweed resources without pointer interc
     await act(async () => { await renderer.advanceFrames(60, 1 / 60); });
     assert.equal(shader.uniforms.seaweedTime.value, 12);
   } finally { await renderer.unmount(); }
+});
+
+
+test('beds mix silhouettes, sizes and colors locally rather than separating them by row', () => {
+  const sites = createSeaweedLayout();
+  for(let cove=0;cove<SEAWEED_COVES.length;cove++) {
+    const bed=sites.filter(site=>site.cove===cove);
+    assert.equal(new Set(bed.map(site=>site.variant)).size,8);
+    assert.ok(Math.max(...bed.map(site=>site.width))-Math.min(...bed.map(site=>site.width))>.4);
+    assert.ok(Math.max(...bed.map(site=>site.tint))-Math.min(...bed.map(site=>site.tint))>.8);
+    const distances=bed.map(site=>Math.min(...bed.filter(other=>other!==site).map(other=>Math.hypot(other.x-site.x,other.z-site.z))));
+    assert.ok(distances.filter(distance=>distance<.45).length/bed.length>.8,'most roots belong to overlapping clumps');
+    assert.ok(Math.max(...distances)-Math.min(...distances)>.1,'bed density has irregular margins');
+  }
+  const mixed=sites.filter(site=>new Set(sites.filter(other=>Math.hypot(other.x-site.x,other.z-site.z)<1).map(other=>other.variant)).size>=4);
+  assert.ok(mixed.length/sites.length>.8,'most one-metre patches contain at least four silhouettes');
+  const geometries=SEAWEED_FORMS.map((_,variant)=>createSeaweedGeometry(variant));
+  try {
+    assert.equal(new Set(geometries.map(geometry=>geometry.userData.form)).size,8);
+    assert.equal(new Set(geometries.map(geometry=>Array.from(geometry.getAttribute('position').array).join(','))).size,8);
+    const triangles=sites.reduce((sum,site)=>sum+geometries[site.variant].index!.count/3,0);
+    assert.ok(triangles<250000, `bounded instanced foliage triangles: ${triangles}`);
+  } finally {geometries.forEach(geometry=>geometry.dispose());}
 });

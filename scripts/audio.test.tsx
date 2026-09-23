@@ -222,3 +222,29 @@ test('technology cleanup disconnects completed voices and immediately stops acti
     context.currentTime=2;engine.technology({kind:'hover',position:[0,0,0]});assert.equal(context.oscillators.length,2);assert.equal(context.closed,true);
   }finally{coastalSoundScene.listener=previous;}
 });
+
+
+test('relative audio URLs recognize browser playing events and resume after pausing', () => {
+  class RelativeMedia extends EventTarget {
+    private path = '';
+    volume = 1; muted = false; paused = true; currentSrc = ''; calls = 0;
+    get src() { return this.path ? new URL(this.path, 'https://worldexplored.github.io/').href : ''; }
+    set src(value: string) { this.path = value; }
+    getAttribute(name: string) { return name === 'src' ? this.path || null : null; }
+    removeAttribute() { this.path = ''; this.currentSrc = ''; }
+    load() {}
+    pause() { this.paused = true; }
+    play() { this.calls++; this.paused = false; this.currentSrc = this.src; this.dispatchEvent(new Event('playing')); return Promise.resolve(); }
+  }
+  const media = new RelativeMedia();
+  const player = new AudioPlaylist(media as unknown as HTMLAudioElement, [{ playbackUrl: '/audio/music/lease.mp3' }], () => {}, { reducedMotion: () => true });
+  try {
+    player.play();
+    assert.equal(media.calls, 1);
+    assert.equal(player.snapshot.state, 'playing');
+    assert.equal(media.volume, .25);
+    player.pause(); player.play();
+    assert.equal(player.snapshot.state, 'playing');
+    assert.equal(media.calls, 2);
+  } finally { player.dispose(); }
+});

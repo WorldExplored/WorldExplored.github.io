@@ -10,10 +10,16 @@ export function SectionContent({ id }: { id: SectionId }) {
     </a>)}</div>
   </>;
   if (id === 'experience') return <div className="timeline">{profile.experience.map(item => <article className="timeline-entry" key={item.company}>
-    <div className="timeline-marker" aria-hidden="true" /><div><p className="venue">{item.dates} · {item.location}</p><h3>{item.company}</h3><p className="byline">{item.role}</p><ul>{item.details.map(detail => <li key={detail}>{detail}</li>)}</ul></div>
+    <div className="timeline-marker" aria-hidden="true" /><div><p className="venue">{[item.dates, item.location].filter(Boolean).join(' · ')}</p><h3>{item.company}</h3>{item.role && <p className="byline">{item.role}</p>}<ul>{item.details.map(detail => <li key={detail}>{detail}</li>)}</ul></div>
   </article>)}</div>;
-  if (id === 'research') return <div className="research-collection">{profile.research.map(item => <article className="research-paper" key={item.title}><p className="venue">{item.venue}</p><h3><a className="paper-title-link" href={item.url} target="_blank" rel="noopener noreferrer">{item.title}</a></h3><p className="byline">{item.attribution}</p><p>{item.description}</p><h4>Research question</h4><p>{item.question}</p><h4>Data and setup</h4><p>{item.setup}</p><h4>Methods</h4><p>{item.methods}</p><h4>My contribution</h4><p>{item.role}</p><h4>Reported findings</h4><p>{item.findings}</p><h4>Limitations</h4><p>{item.limitations}</p><ul className="tags" aria-label={profile.ui.topics}>{item.tags.map(tag => <li key={tag}>{tag}</li>)}</ul></article>)}</div>;
-  if (id === 'purdue') return <div className="education"><h3>{profile.university}</h3><p>{profile.degree}</p><p className="graduation">{profile.graduation}</p></div>;
+  if (id === 'research') return <div className="research-collection">{profile.research.map(item => <article className="research-paper" key={item.title}>
+    <p className="venue">{item.venue}</p>
+    <h3><a className="paper-title-link" href={item.url} target="_blank" rel="noopener noreferrer">{item.title}</a></h3>
+    <p className="byline">{item.attribution}</p>
+    <ul className="research-highlights">{(['description', 'methods', 'role', 'findings', 'limitations'] as const).map(key => <li key={key}><strong>{profile.researchLabels[key]}:</strong> {item[key]}</li>)}</ul>
+    <ul className="tags" aria-label={profile.ui.topics}>{item.tags.map(tag => <li key={tag}>{tag}</li>)}</ul>
+  </article>)}</div>;
+  if (id === 'purdue') return <div className="education"><h3>{profile.university}</h3><p>{profile.degree}</p></div>;
   if (id === 'history') return <div className="timeline history-timeline">
     {profile.historyMilestones.map(item => <article className="timeline-entry" key={`${item.date}-${item.title}`}>
       <div className="timeline-marker" aria-hidden="true" /><div><p className="venue">{item.date}</p><h3><a className="timeline-link" href={item.href} {...(item.href.startsWith('http') ? { target: '_blank', rel: 'noopener noreferrer' } : {})}>{item.title}</a></h3><p>{item.description}</p></div>

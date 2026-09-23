@@ -1,5 +1,6 @@
 import { architectureFootprints, type LandscapePath } from './terrain';
 import { cityBuildings } from './city';
+import { world } from '../../content/world';
 import { BRIDGES } from './bridgePlan';
 import { entranceRiseAt } from './circulation';
 
@@ -12,6 +13,9 @@ const smoothWeight=(distance:number,extent:number)=>{const t=Math.max(0,Math.min
 export function createGroundRoutes(paths: readonly LandscapePath[], baseHeight:(x:number,z:number)=>number) {
   const cells=new Map<string,RouteCell>();
   const bearings=[...architectureFootprints(),...cityBuildings];
+  const museum=world.landmarks.find(item=>item.id==='history')!;
+  const pavingExclusions=[...cityBuildings.map(b=>({x:b.x,z:b.z,rotation:b.rotation,halfX:b.width/2+.24,halfZ:b.depth/2+.24})),
+    {x:museum.position[0],z:museum.position[2],rotation:museum.rotationY??0,halfX:5.6,halfZ:3.85}];
   const bridgeApproaches=BRIDGES.flatMap(bridge=>[false,true].map(end=>{
     const p=bridge.samples[end?bridge.samples.length-1:0].point,q=bridge.samples[end?bridge.samples.length-2:1].point;
     const length=Math.hypot(q.x-p.x,q.z-p.z);return{x:p.x,z:p.z,dx:(q.x-p.x)/length,dz:(q.z-p.z)/length,half:bridge.width/2};
@@ -78,6 +82,13 @@ export function createGroundRoutes(paths: readonly LandscapePath[], baseHeight:(
     if(graded<base)for(const p of bearings){
       const support=smoothWeight(Math.hypot(x-p.x,z-p.z)-p.radius-.1,.6);
       graded+=(base-graded)*support;
+    }
+    // Stop paving at foundations, including rounded doorway endpoint caps.
+    for(const p of pavingExclusions){
+      const dx=x-p.x,dz=z-p.z,c=Math.cos(p.rotation),s=Math.sin(p.rotation);
+      const ax=Math.abs(dx*c-dz*s)-p.halfX,az=Math.abs(dx*s+dz*c)-p.halfZ;
+      const signed=Math.hypot(Math.max(0,ax),Math.max(0,az))+Math.min(0,Math.max(ax,az));
+      distance=Math.max(distance,.025-signed);
     }
     return {distance,height:graded,weight:1};
   };

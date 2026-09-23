@@ -1,4 +1,5 @@
 import cityStreetRoutes from './cityStreetRoutes.json';
+import { world } from '../../content/world';
 import { BRIDGES } from './bridgePlan';
 import { cityBuildings, cityEntranceWorld, citySecondaryEntrances } from './city';
 import { landDistance, type LandscapePath, type PathPoint } from './terrain';
@@ -95,19 +96,39 @@ export function createCirculationGraph() {
   edge('main-dock',mainDock,mainBoat,[],1.1,'dock');
   for(const bridge of BRIDGES){const ends=bridge.id==='garden'?[gardenNorth,gardenSouth]:[purdueWest,purdueEast];const e=edge(`bridge-${bridge.id}`,ends[0],ends[1],[],bridge.width,'bridge');e.bridge=true;e.bridgeId=bridge.id;e.points=bridge.samples.map(p=>({x:p.point.x,z:p.point.z}));}
   const cityWest=node('city-west-street',-19.5,-74.7),cityCenter=node('city-center-street',-5,-74.2),cityEast=node('city-east-street',13,-72);
-  const history=node('history',19.96,-68.4,'entrance',1.07),historyCourt=node('history-court',17.5,-69.2,'park');
+  const museum=world.landmarks.find(item=>item.id==='history')!,angle=museum.rotationY??0;
+  const museumPoint=(x:number,z:number)=>({x:museum.position[0]+x*Math.cos(angle)+z*Math.sin(angle),z:museum.position[2]-x*Math.sin(angle)+z*Math.cos(angle)});
+  const threshold=museumPoint(0,4.17),forecourt=museumPoint(0,5.7);
+  const history=node('history',threshold.x,threshold.z,'entrance',1.07),historyCourt=node('history-court',forecourt.x,forecourt.z,'park');
   const waterfront=node('city-waterfront',-15.5,-65.4,'park'),cityDock=node('city-dock-land',-12,-65,'dock',1.06),cityBoat=node('city-dock-boarding',-12.7,-60,'dock',1.06);
-  const hubs=[cityWest,cityCenter,cityEast,waterfront];
   // These primary streets are authored town geometry. The router remains a
   // validator and supplies the short secondary building approaches below.
   edge('town-main-street-west',cityWest,cityCenter,[{x:-14.8,z:-73.85},{x:-9.5,z:-73.95}],1.12);
   edge('town-main-street-east',cityCenter,cityEast,[{x:0,z:-72.35},{x:6,z:-71.65}],1.22);
   edge('town-waterfront-route',cityWest,waterfront,[{x:-21.6,z:-79.6},{x:-27.6,z:-80.4},{x:-29,z:-75},{x:-25.5,z:-69.25},{x:-20.5,z:-66.2}],1.05);
   edge('town-dock-walk',waterfront,cityDock,[{x:-14.2,z:-64.75}],1.08);
+  edge('town-south-promenade',waterfront,cityEast,[{x:-12,z:-64.7},{x:-5,z:-64.5},{x:3,z:-64.3},{x:8,z:-64.7},{x:10.7,z:-65.25},{x:12,z:-66.5}],1.05);
   edge('history-threshold',history,historyCourt,[],1.35);
-  edge('history-promenade',historyCourt,cityEast,[{x:16.2,z:-70},{x:14.5,z:-71.2}],1.35);
+  edge('history-promenade',historyCourt,cityEast,[museumPoint(-4.8,5.7),museumPoint(-6.7,4.9),museumPoint(-7.2,2.2)],1.35);
   const park=node('city-park',-16.2,-68.51,'park');const parkEdge=edge('city-park-walk',park,cityWest,[],.5);parkEdge.points=routeCityWalk(park,cityWest,.5);
   edge('fountain-plaza',park,park,Array.from({length:47},(_,i)=>({x:-16.2+Math.sin((i+1)/48*Math.PI*2)*1.49,z:-70+Math.cos((i+1)/48*Math.PI*2)*1.49})),.5);
+  const streets=edges.filter(e=>e.id.startsWith('town-')&&e.id!=='town-dock-walk');
+  const joinStreet=(id:string,portal:CirculationNode)=>{
+    let best:{street:CirculationEdge;point:PathPoint;segment:number;distance:number}|undefined;
+    for(const street of streets)for(let i=1;i<street.points.length;i++){
+      const a=street.points[i-1],b=street.points[i],dx=b.x-a.x,dz=b.z-a.z;
+      const t=Math.max(0,Math.min(1,((portal.x-a.x)*dx+(portal.z-a.z)*dz)/(dx*dx+dz*dz)));
+      const point={x:a.x+dx*t,z:a.z+dz*t},distance=Math.hypot(point.x-portal.x,point.z-portal.z);
+      if((!best||distance<best.distance)&&cityGroundClear(point.x,point.z,.525))best={street,point,segment:i,distance};
+    }
+    if(!best)throw new Error(`No nearby street for ${id}`);
+    const junction=node(`${id}-junction`,best.point.x,best.point.z);
+    const approach=edge(`${id}-street`,portal,junction,[],.95);approach.points=routeCityWalk(portal,junction);
+    // Reuse the exact street centreline to connect the graph. Paving is a union,
+    // so an entrance never gets a second diagonal shortcut across the lawn.
+    const from=nodes.find(n=>n.id===best.street.from)!;
+    edge(`${id}-street-link`,from,junction,best.street.points.slice(1,best.segment),best.street.width);
+  };
   for(const building of cityBuildings){
     const entrance=cityEntranceWorld(building),n=node(building.id,entrance.x,entrance.z,'entrance',entrance.y);
     if(building.archetype==='transit-hall'){
@@ -117,10 +138,9 @@ export function createCirculationGraph() {
     }
     const portal=node(`${building.id}-plaza`,n.x+Math.sin(building.rotation)*1.1,n.z+Math.cos(building.rotation)*1.1,'landing');
     edge(`${building.id}-threshold`,n,portal,[],1.05);
-    const nearest=hubs.toSorted((a,b)=>Math.hypot(a.x-portal.x,a.z-portal.z)-Math.hypot(b.x-portal.x,b.z-portal.z))[0];
-    const e=edge(`${building.id}-street`,portal,nearest,[],.95);e.points=routeCityWalk(portal,nearest);
+    joinStreet(building.id,portal);
   }
-  for(const entry of citySecondaryEntrances){const [x,y,z]=entry.world;const n=node('station-lobby',x,z,'entrance',y),p=node('station-lobby-plaza',x+.65,z+2,'landing');edge('station-lobby-threshold',n,p,[{x:x+.65,z}],.8);const e=edge('station-lobby-walk',p,cityEast,[],.95);e.points=routeCityWalk(p,cityEast);}
+  for(const entry of citySecondaryEntrances){const [x,y,z]=entry.world;const n=node('station-lobby',x,z,'entrance',y),p=node('station-lobby-plaza',x+.65,z+2,'landing');edge('station-lobby-threshold',n,p,[{x:x+.65,z}],.8);joinStreet('station-lobby',p);}
   edge('city-dock',cityDock,cityBoat,[{x:-12,z:-60}],1.1,'dock');edge('water-taxi',mainBoat,cityBoat,[],1,'boat');
   const beacon=node('building',-76,-34.805,'entrance',2.86),beaconCourt=node('beacon-court',-74.1,-34,'park');
   const overlook=node('beacon-overlook',-73.5,-33.3,'park');

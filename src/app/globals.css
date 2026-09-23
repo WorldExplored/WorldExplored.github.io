@@ -98,7 +98,10 @@ h1 { font-weight: 470; font-size: clamp(54px,5.8vw,88px); letter-spacing: -.035e
 .education { border-left: 4px solid #c9a650; padding: 9px 0 9px 23px; }
 .education h3 { font-size: 29px; font-weight: 600; line-height: 1.2; }
 .education p { font-size: 22px; margin-top: 10px; }
-.education .graduation { color: #805e17; font-weight: 500; }
+.research-highlights { list-style: disc; padding-left: 22px; margin: 18px 0 24px; color: #294d5d; }
+.research-highlights li { padding-left: 3px; line-height: 1.65; }
+.research-highlights li + li { margin-top: 12px; }
+.research-highlights strong { color: #124d67; font-weight: 600; }
 .lead-copy { font-size: 23px; line-height: 1.5; letter-spacing: -.01em; }
 .about-copy .primary-link { margin-top: 27px; }
 .availability { margin-top: 26px; color: #31586a; font-size: 16px; }

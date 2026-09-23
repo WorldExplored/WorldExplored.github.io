@@ -86,7 +86,7 @@ test('essential portfolio content is rendered in semantic sections without WebGL
   }
   for (const item of profile.experience) for (const value of [item.company, item.role, item.dates, item.location, ...item.details]) containsText(sectionBody('experience'), value);
   for (const item of profile.research) for (const value of [item.title, item.venue, item.attribution, item.description, item.role]) containsText(sectionBody('research'), value);
-  for (const value of [profile.university, profile.degree, profile.graduation]) containsText(sectionBody('purdue'), value);
+  for (const value of [profile.university, profile.degree]) containsText(sectionBody('purdue'), value);
   for (const item of profile.history) for (const value of [item.organization, item.role, item.school, item.dates, item.description].filter(Boolean)) containsText(sectionBody('history'), value);
   containsText(sectionBody('about'), profile.about);
   if (profile.showAvailability) containsText(sectionBody('contact'), profile.availability);
@@ -127,12 +127,16 @@ test('the unannounced-project teaser appears once in rendered HTML', () => {
 });
 
 test('experience and history preserve stated chronology without invented organizations or outcomes', () => {
-  assert.deepEqual(profile.experience.map(item => item.company), ['Zero-True', 'Equiwiz']);
+  assert.deepEqual(profile.experience.map(item => item.company), ['Air Labs']);
   assert.deepEqual(profile.history.map(item => item.organization), ['Computer Science Club', 'High School Artificial Intelligence Club', 'Game Development Club']);
+  assert.doesNotMatch(plainText(bodyHtml), /Zero-True|Equiwiz|second.year|sophomore|2029/i);
+  assert.equal(profile.research.length, 2);
+  containsText(bodyHtml, '2 published research papers');
+  assert.equal((sectionBody('research').match(/class="research-highlights"/g) ?? []).length, 2);
   assert.equal(profile.history.length, 3);
   assert.equal(profile.history[2].dates, '');
   assert.equal(profile.history[2].description, '');
-  for (const milestone of ['Open-source ML systems work', 'Purdue University', 'Ukrainian Resilience', 'AI Reinforcement Learning Traffic System Implementations and Limitations', 'Zero-True internship', 'Equiwiz internship']) {
+  for (const milestone of ['Open-source ML systems work', 'Purdue University', 'Ukrainian Resilience', 'AI Reinforcement Learning Traffic System Implementations and Limitations', 'Air Labs']) {
     assert.ok(profile.historyMilestones.some(item => item.title === milestone), milestone);
   }
   for (const item of profile.historyMilestones) for (const value of [item.date, item.title, item.description]) containsText(sectionBody('history'), value);

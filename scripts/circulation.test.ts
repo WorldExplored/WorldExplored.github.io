@@ -14,7 +14,7 @@ import { createSceneRuntime, world } from '../src/content/world';
 import { buildCityArchitecture } from '../src/components/world/CityArchitecture';
 import { createCirculationGraph, circulationPaths, STATION_ACCESS } from '../src/components/world/circulation';
 import { DoubleSide, Mesh, MeshBasicMaterial, Raycaster, Vector3 } from 'three';
-import { archipelagoGeometry, terrainHeight, createLandscapePlan, distanceToSegment, pathGeometry, terrainMeshHeight } from '../src/components/world/terrain';
+import { archipelagoGeometry, groundRouteAt, terrainHeight, createLandscapePlan, distanceToSegment, pathGeometry, terrainMeshHeight } from '../src/components/world/terrain';
 import { cityBuildings, cityEntranceWorld, citySecondaryEntrances, cityLocalToWorld } from '../src/components/world/city';
 import { stationAccessPlan } from '../src/components/world/StationAccess';
 
@@ -210,4 +210,61 @@ test('graded ground supports actual foundations and stays below finished floors'
       samples(geometry.attributes.position,ids,top,(px,py,pz)=>cityLocalToWorld(building,[px,py,pz]),geometry.userData.floor.name,kind==='foundation');
     }finally{geometry.dispose();}
   });
+});
+
+
+test('history approaches stay outside its complete rotated foundation and meet its front threshold',()=>{
+  const museum=world.landmarks.find(item=>item.id==='history')!,angle=museum.rotationY??0,c=Math.cos(angle),s=Math.sin(angle);
+  const paths=circulationPaths().filter(path=>path.id?.startsWith('history-'));
+  for(const path of paths){
+    const geometry=pathGeometry([path]);
+    try{
+      const p=geometry.attributes.position;
+      for(let i=0;i<p.count;i++){
+        const dx=p.getX(i)-museum.position[0],dz=p.getZ(i)-museum.position[2],x=dx*c-dz*s,z=dx*s+dz*c;
+        assert.ok(Math.abs(x)>=5.6||Math.abs(z)>=3.85,`${path.id} cuts beneath museum at ${x},${z}`);
+      }
+    }finally{geometry.dispose();}
+  }
+  const entry=createCirculationGraph().nodes.find(n=>n.id==='history')!;
+  const dx=entry.x-museum.position[0],dz=entry.z-museum.position[2];
+  assert.ok(Math.abs(dx*c-dz*s)<1e-6&&Math.abs(dx*s+dz*c-4.17)<1e-6,'Approach meets actual front edge of threshold');
+});
+
+test('rendered paving stays continuous on narrow walks and never bleeds through foundations',()=>{
+  const geometry=archipelagoGeometry(),position=geometry.attributes.position,paving=geometry.attributes.aPaving,index=geometry.index!;
+  const cells=new Map<string,number[]>();
+  for(let offset=0;offset<index.count;offset+=3){
+    const ids=[index.getX(offset),index.getX(offset+1),index.getX(offset+2)],xs=ids.map(i=>position.getX(i)),zs=ids.map(i=>position.getZ(i));
+    for(let z=Math.floor(Math.min(...zs));z<=Math.floor(Math.max(...zs));z++)for(let x=Math.floor(Math.min(...xs));x<=Math.floor(Math.max(...xs));x++){
+      const key=`${x},${z}`,cell=cells.get(key)??[];if(!cells.has(key))cells.set(key,cell);cell.push(offset);
+    }
+  }
+  // Interpolate the shader's actual indexed vertex attribute, not a ribbon proxy
+  // or the analytic route field that originally hid missing paving pixels.
+  const renderedDistance=(x:number,z:number)=>{
+    for(const offset of cells.get(`${Math.floor(x)},${Math.floor(z)}`)??[]){
+      const a=index.getX(offset),b=index.getX(offset+1),c=index.getX(offset+2);
+      const ax=position.getX(a),az=position.getZ(a),bx=position.getX(b),bz=position.getZ(b),cx=position.getX(c),cz=position.getZ(c);
+      const denominator=(bz-cz)*(ax-cx)+(cx-bx)*(az-cz);if(Math.abs(denominator)<1e-10)continue;
+      const u=((bz-cz)*(x-cx)+(cx-bx)*(z-cz))/denominator,v=((cz-az)*(x-cx)+(ax-cx)*(z-cz))/denominator,w=1-u-v;
+      if(Math.min(u,v,w)>=-.00001)return u*paving.getX(a)+v*paving.getX(b)+w*paving.getX(c);
+    }
+    throw new Error(`Missing rendered ground at ${x},${z}`);
+  };
+  try{
+    for(const path of circulationPaths().filter(p=>!p.bridge))for(const point of path.points){
+      if(groundRouteAt(point.x,point.z).distance>-.08)continue; // covered doorway floor
+      assert.ok(renderedDistance(point.x,point.z)<-.035,`${path.id}: broken rendered paving at ${point.x},${point.z}`);
+    }
+    const museum=world.landmarks.find(item=>item.id==='history')!,angle=museum.rotationY??0;
+    for(let z=-3.6;z<=3.6;z+=.3)for(let x=-5.4;x<=5.4;x+=.3){
+      const wx=museum.position[0]+x*Math.cos(angle)+z*Math.sin(angle),wz=museum.position[2]-x*Math.sin(angle)+z*Math.cos(angle);
+      assert.ok(renderedDistance(wx,wz)>.02,'Paving spills into the museum interior');
+    }
+    for(const building of cityBuildings){
+      const [x,,z]=cityLocalToWorld(building,[0,0,building.depth/2-.1]);
+      assert.ok(renderedDistance(x,z)>.02,`${building.id}: rounded route cap shows through its entrance floor`);
+    }
+  }finally{geometry.dispose();}
 });

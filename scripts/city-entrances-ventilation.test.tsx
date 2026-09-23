@@ -20,8 +20,8 @@ function architecture(id: string) {
   return { meshes, dispose() { meshes.forEach(mesh => mesh.geometry.dispose()); material.dispose(); } };
 }
 
-test('all thirteen city buildings have legible, supported ground doors and physically open center aisles', () => {
-  let count = 0;
+test('city doors rest closed at homes while public lobbies retain clear entry aisles', () => {
+  let count = 0, closed = 0, publicOpen = 0;
   for (const building of cityBuildings) {
     const model = architecture(building.id);
     try {
@@ -29,7 +29,7 @@ test('all thirteen city buildings have legible, supported ground doors and physi
       const heads = doors.filter(mesh => mesh.geometry.userData.entranceDoor.role === 'head');
       assert.ok(heads.length, `${building.id} needs a real ground entrance`);
       for (const head of heads) {
-        const { room, floor, x, z, opening, height } = head.geometry.userData.entranceDoor;
+        const { room, floor, x, z, opening, height, open } = head.geometry.userData.entranceDoor;
         const parts = doors.filter(mesh => mesh.geometry.userData.entranceDoor.room === room);
         for (const role of ['jamb', 'glazing', 'leaf-stile', 'leaf-rail', 'kick-panel', 'pull', 'hinge', 'threshold', 'canopy', 'entry-light']) {
           assert.ok(parts.some(mesh => mesh.geometry.userData.entranceDoor.role === role), `${room}: missing ${role}`);
@@ -38,18 +38,23 @@ test('all thirteen city buildings have legible, supported ground doors and physi
         const ray = new Raycaster(new Vector3(), new Vector3(0, 0, -1), 0, .85);
         for (const offset of [-.30, -.20, -.10, 0, .10, .20, .30].map(fraction => fraction * opening)) for (const elevation of [.35, height * .49, height * .7]) {
           ray.ray.origin.set(x + offset, floor + elevation, z + .70);
-          assert.equal(ray.intersectObjects(model.meshes, false).length, 0, `${room}: blocked entrance at ${offset}, ${elevation}`);
+          const hits=ray.intersectObjects(model.meshes, false);
+          if(open)assert.equal(hits.length,0,`${room}: public entrance blocked at ${offset}, ${elevation}`);
+          else assert.ok(hits.some(hit=>hit.object instanceof Mesh&&hit.object.geometry.userData.entranceDoor?.room===room),`${room}: closed leaf does not span its doorway`);
         }
         ray.set(new Vector3(x, floor + .1, z), new Vector3(0, -1, 0)); ray.far = .12;
         assert.ok(ray.intersectObjects(model.meshes).length, `${room}: floating threshold`);
         const leaf = parts.find(mesh => mesh.geometry.userData.entranceDoor.role === 'glazing')!;
         const bounds = new Box3().setFromObject(leaf);
         assert.ok(bounds.max.x - bounds.min.x > .18, `${room}: door appears edge-on from public path`);
+        if(open)publicOpen++;else closed++;
         count++;
       }
     } finally { model.dispose(); }
   }
   assert.ok(count >= 19, 'Individual wings and rowhouses retain separate front doors');
+  assert.ok(closed>publicOpen*3,'Most city doors should rest closed');
+  assert.ok(publicOpen>=3,'Public glasshouse, gallery and station remain welcoming');
 });
 
 test('station platform has a genuine guideway slot and an uninterrupted access-side boarding floor', () => {

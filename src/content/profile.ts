@@ -47,11 +47,9 @@ export const profile = {
   siteUrl: 'https://worldexplored.github.io',
   lastVerified: '2026-09-16',
   edition: 'ML systems & open-source work',
-  education: 'Purdue University · B.S. Data Science · Expected May 2029',
-  degree: 'B.S. Data Science',
+  education: 'Data Science student at Purdue University',
+  degree: 'Data Science student',
   university: 'Purdue University',
-  graduation: 'Expected May 2029',
-  graduationYear: '2029',
   titleSuffix: 'ML Systems & GPU Performance',
   metaEvidence: 'CUDA kernels, attention selection, compilation caching, and multimodal serving.',
   focus: 'ML systems. LLM inference. GPU performance.',
@@ -71,33 +69,7 @@ export const profile = {
     contributions: 'https://github.com/vllm-project/vllm/pulls?q=is%3Apr+author%3AWorldExplored',
   },
   experience: [
-    {
-      company: 'Zero-True',
-      role: 'AI and Database Analyst Intern',
-      dates: 'January – July 2024',
-      location: 'Remote',
-      details: [
-        'Built and evaluated LLM forecasting workflows in Zero-True notebooks, comparing model behavior inside the product’s notebook environment.',
-        'Prepared data and API components for the platform’s component library and connected them to existing product workflows.',
-        'Tested model responses and product experiments, then recorded implementation behavior and failure cases for development and demonstrations.',
-        'Wrote technical documentation for the workflows and their API-facing components.',
-        'The publicly verified role describes evaluation, integration, experimentation, and documentation; it does not state production-scale metrics or deployment ownership.',
-      ],
-    },
-    {
-      company: 'Equiwiz',
-      role: 'Machine Learning Engineer Intern',
-      dates: 'November 2023 – January 2024',
-      location: 'Remote',
-      details: [
-        'Evaluated third-party AI APIs and integrated selected providers into product prototypes.',
-        'Built web-scraping, cleaning, and data-processing workflows for model-facing inputs.',
-        'Created Pinecone vector indexes and tested semantic retrieval behavior for prototype search flows.',
-        'Compared models, frameworks, and APIs for capability, integration, and implementation trade-offs.',
-        'Documented technical setup and observed limits so experiments could be reproduced and reviewed.',
-        'The verified scope covers prototypes and evaluation; no production outcome or business metric is claimed.',
-      ],
-    },
+    { company: 'Air Labs', role: '', dates: 'Present', location: '', details: ['Currently working at Air Labs.'] },
   ],
   research: [
     {
@@ -138,6 +110,7 @@ export const profile = {
     },
   ],
   historyMilestones: [
+    { date: 'Current', title: 'Air Labs', description: 'Currently working at Air Labs.', href: '#experience' },
     {
       date: 'Current',
       title: 'Open-source ML systems work',
@@ -145,9 +118,9 @@ export const profile = {
       href: '#work',
     },
     {
-      date: 'Expected May 2029',
+      date: 'Current',
       title: 'Purdue University',
-      description: 'B.S. Data Science.',
+      description: 'Data Science student at Purdue University.',
       href: '#purdue',
     },
     {
@@ -161,18 +134,6 @@ export const profile = {
       title: 'AI Reinforcement Learning Traffic System Implementations and Limitations',
       description: 'Ran a comparative traffic-signal study across MaxPressure, DQN, PPO, and PPO_PFRL variants in LibSignal and CityFlow; published in the International Journal of High School Research.',
       href: 'https://terra-docs.s3.us-east-2.amazonaws.com/IJHSR/Articles/volume6-issue4/IJHSR_2024_64_99.pdf',
-    },
-    {
-      date: 'January – July 2024',
-      title: 'Zero-True internship',
-      description: 'Built notebook-based LLM forecasting experiments, connected data and API components, tested model behavior, and documented the implementation as a remote AI and Database Analyst Intern.',
-      href: '#experience',
-    },
-    {
-      date: 'November 2023 – January 2024',
-      title: 'Equiwiz internship',
-      description: 'Evaluated AI APIs, built scraping and processing workflows, and tested Pinecone vector retrieval in prototypes as a remote Machine Learning Engineer Intern.',
-      href: '#experience',
     },
   ],
   history: [
@@ -208,9 +169,10 @@ export const profile = {
     { id: 'contact', label: 'Contact', title: 'Contact', dock: true },
     { id: 'building', label: 'Building something impactful...', title: 'Building something impactful...', dock: false },
   ] as { id: SectionId; label: string; title: string; dock: boolean }[],
+  researchLabels: { description: 'Overview', question: 'Question', setup: 'Data and setup', methods: 'Methods', role: 'My contribution', findings: 'Findings', limitations: 'Limitations' },
   ui: {
     skip: 'Open-source work', github: 'GitHub', linkedin: 'LinkedIn', email: 'Email',
-    paper: 'Read the paper', researchEvidence: 'EMNLP 2024 co-author',
+    paper: 'Read the paper', researchEvidence: '2 published research papers',
     source: 'GitHub profile', topics: 'Topics', projectLabel: 'vLLM',
     landscapeNavigation: 'Destinations in the world', mainNavigation: 'Main navigation',
     close: 'Close', home: 'Return to overview',

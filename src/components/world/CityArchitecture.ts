@@ -150,17 +150,18 @@ export function buildCityArchitecture(building: Readonly<CityBuilding>, shellAdd
     });
   };
   const entranceDoor = (roomId: string, x: number, floor: number, z: number, opening: number, height: number, primary: boolean) => {
+    const open = primary && ['winter-glasshouse', 'civic-gallery', 'public-station'].includes(building.family);
     const part = (role: string, width: number, tall: number, depth: number, px: number, py: number, pz: number, finish: CityFinish, yaw = 0) => {
       const geometry = new BoxGeometry(width, tall, depth);
-      geometry.userData.entranceDoor = { building: building.id, room: roomId, role, primary, opening, floor, x, z, height };
+      geometry.userData.entranceDoor = { building: building.id, room: roomId, role, primary, opening, floor, x, z, height, open };
       add(geometry, finish, px, py, pz, 1, 1, 1, yaw);
     };
     for (const side of [-1, 1]) part('jamb', .07, height + .05, .15, x + side * (opening / 2 + .02), floor + height / 2, z + .018, 'aqua');
     part('head', opening + .11, .075, .17, x, floor + height + .025, z + .018, 'aqua');
     part('threshold', opening + .12, .025, .25, x, floor + .0125, z + .055, 'metal');
-    // A full-size door swings out beyond its jamb, leaving the center aisle open.
-    // The dark frame, cedar kick panel and bright pull remain legible from the street.
-    const yaw = 110 * Math.PI / 180, leafWidth = opening - .045, hinge = x + opening / 2;
+    // Public lobbies welcome visitors; residential and terrace doors rest closed.
+    // Glazed leaves retain views into furnished rooms behind their cedar panels.
+    const yaw = open ? 110 * Math.PI / 180 : 0, leafWidth = opening - .045, hinge = x + opening / 2;
     const leaf = (role: string, width: number, tall: number, depth: number, offset: number, py: number, finish: CityFinish, face = 0) => {
       part(role, width, tall, depth, hinge + offset * Math.cos(yaw) + face * Math.sin(yaw), py, z - offset * Math.sin(yaw) + face * Math.cos(yaw), finish, yaw);
     };

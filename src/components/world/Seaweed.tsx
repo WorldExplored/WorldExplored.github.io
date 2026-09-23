@@ -11,18 +11,19 @@ import { coastExposure } from './waves';
 import type { EnvironmentProps } from './Water';
 
 export interface SeaweedSite {
-  x: number; y: number; z: number; height: number; width: number; rotation: number; variant: number; cove: number;
+  x: number; y: number; z: number; height: number; width: number; rotation: number; variant: number; cove: number; tint: number; spread: number;
 }
 
-// Small sheltered beds leave the exposed beaches and most of the shelf open.
+// Overlapping clumps form broken meadow edges; exposed surf and landing approaches stay open.
 export const SEAWEED_COVES = [
-  { x: -13, z: 11, radius: 3.5 },
-  { x: 9, z: 13, radius: 3.7 },
-  { x: 18, z: 1, radius: 3.1 },
-  { x: 18, z: -13, radius: 3.2 },
-  { x: -2, z: -25, radius: 3.5 },
+  { x: -13, z: 11, radius: 5.6 },
+  { x: 9, z: 13, radius: 5.8 },
+  { x: 18, z: 1, radius: 4.9 },
+  { x: 18, z: -13, radius: 5.2 },
+  { x: -2, z: -25, radius: 5.6 },
 ] as const;
-export const SEAWEED_REACH = 0.52;
+export const SEAWEED_REACH = 0.62;
+export const SEAWEED_FORMS = ['strap-leaved eelgrass', 'ruffled broad kelp', 'paired branching algae', 'twisting ribbon kelp', 'pleated sea fan', 'low seagrass turf', 'forked bladderwrack', 'serrated red algae'] as const;
 
 export function seaweedSiteClear(x: number, z: number, plan: LandscapePlan) {
   const distance = landDistance(x, z);
@@ -43,18 +44,24 @@ export function seaweedSiteClear(x: number, z: number, plan: LandscapePlan) {
 export function createSeaweedLayout(plan = createLandscapePlan()): SeaweedSite[] {
   const random = seededRandom(80317);
   const sites: SeaweedSite[] = [];
-  // Interleaving the beds preserves each ecological location at lower quality.
-  for (let round = 0; round < 16; round++) {
+  const clumps = SEAWEED_COVES.map(cove => Array.from({ length: 8 }, () => {
+    const angle = random() * Math.PI * 2, radius = Math.sqrt(random()) * cove.radius * .8;
+    return { x: cove.x + Math.cos(angle) * radius, z: cove.z + Math.sin(angle) * radius, radius: .65 + random() * 1.65 };
+  }));
+  // Round-robin ordering keeps complete beds and all forms on the low tier.
+  for (let round = 0; round < 144; round++) {
     SEAWEED_COVES.forEach((cove, coveIndex) => {
-      for (let attempt = 0; attempt < 90; attempt++) {
-        const angle = random() * Math.PI * 2;
-        const radius = Math.sqrt(random()) * cove.radius;
-        const x = cove.x + Math.cos(angle) * radius;
-        const z = cove.z + Math.sin(angle) * radius;
-        if (!seaweedSiteClear(x, z, plan) || sites.some(site => Math.hypot(x - site.x, z - site.z) < 0.48)) continue;
-        const y = terrainHeight(x, z) - 0.025;
-        const height = Math.min(0.4 + random() * 0.72, -0.32 - y);
-        sites.push({ x, y, z, height, width: 0.72 + random() * 0.28, rotation: random() * Math.PI * 2, variant: round % 3, cove: coveIndex });
+      for (let attempt = 0; attempt < 80; attempt++) {
+        const clump = clumps[coveIndex][Math.floor(random() * clumps[coveIndex].length)];
+        const angle = random() * Math.PI * 2, radius = Math.pow(random(), .7) * clump.radius;
+        const x = clump.x + Math.cos(angle) * radius, z = clump.z + Math.sin(angle) * radius;
+        if (Math.hypot(x - cove.x, z - cove.z) > cove.radius || !seaweedSiteClear(x, z, plan)
+          || sites.some(site => Math.hypot(x - site.x, z - site.z) < .19)) continue;
+        const y = terrainHeight(x, z) - .025;
+        const variant = Math.floor(random() * SEAWEED_FORMS.length);
+        const height = Math.min((variant === 5 ? .26 : .55) + random() * (variant === 5 ? .35 : .85), -.32 - y);
+        sites.push({ x, y, z, height, width: .68 + random() * .5, spread: .7 + random() * .45,
+          rotation: random() * Math.PI * 2, variant, cove: coveIndex, tint: random() });
         break;
       }
     });
@@ -62,17 +69,18 @@ export function createSeaweedLayout(plan = createLandscapePlan()): SeaweedSite[]
   return sites;
 }
 
-export function createSeaweedGeometry(variant: number) {
+export function createSeaweedGeometry(variant: number, seed = 0) {
   const positions: number[] = [], colors: number[] = [], indices: number[] = [];
-  const random = seededRandom(694 + variant);
-  const tint = new Color(['#3d795b', '#69813e', '#547e57'][variant]);
+  const random = seededRandom(694 + variant + seed * 71);
+  const tint = new Color(['#547e52', '#8b8c46', '#618552', '#a79550', '#74966b', '#537d47', '#858847', '#a57367'][variant % 8]);
   function blade(angle:number,length:number,breadth:number,lean:number,base=0,side=0) {
     const start=positions.length/3;
-    for(let row=0;row<=8;row++)for(let rib=0;rib<=2;rib++){
-      const t=row/8,v=rib-1;
-      const edge=variant===1?1+Math.sin(t*39+angle)*.17:1;
+    const segments = variant === 2 || variant === 6 || variant === 7 ? 4 : 8;
+    for(let row=0;row<=segments;row++)for(let rib=0;rib<=2;rib++){
+      const t=row/segments,v=rib-1;
+      const edge=variant===1||variant===7?1+Math.sin(t*(variant===7?65:39)+angle)*.22:1;
       const width=Math.pow(Math.sin(t*Math.PI),variant===0?.45:.75)*breadth*edge;
-      const along=lean*t*t+side*t;
+      const along=lean*t*t+side*t+Math.sin(t*6+angle)*t*.018;
       const fold=(1-Math.abs(v))*.008*Math.sin(t*Math.PI);
       const across=v*width;
       positions.push(Math.sin(angle)*along+Math.cos(angle)*across,base+t*length+fold,Math.cos(angle)*along-Math.sin(angle)*across);
@@ -87,7 +95,7 @@ export function createSeaweedGeometry(variant: number) {
   }else if(variant===1){
     // Broad kelp rises from one holdfast; ruffled edges and raised stipes are part of the mesh.
     for(let leaf=0;leaf<4;leaf++)blade(leaf*2.399,.69+random()*.27,.065+random()*.025,.12+random()*.05);
-  }else{
+  }else if(variant===2){
     // A branched algal frond has paired lateral blades attached along each central stipe.
     for(let stem=0;stem<3;stem++){
       const angle=stem*2.399;blade(angle,.86,.008,.012);
@@ -96,11 +104,31 @@ export function createSeaweedGeometry(variant: number) {
       }
     }
   }
+  if(variant===3){
+    for(let leaf=0;leaf<6;leaf++) blade(leaf*2.399,.65+random()*.32,.027+random()*.022,.22+random()*.08);
+  }else if(variant===4){
+    // A fan shares a holdfast and spreads into pleated lobes rather than repeating upright straps.
+    for(let leaf=0;leaf<9;leaf++) blade(.4+(leaf%2)*Math.PI,.38+Math.sin(leaf/8*Math.PI)*.39,.035+random()*.028,.02,0,(leaf-4)*.075);
+  }else if(variant===5){
+    for(let leaf=0;leaf<13;leaf++) blade(leaf*2.399,.32+random()*.42,.008+random()*.01,.09+random()*.18);
+  }else if(variant===6){
+    for(let stem=0;stem<3;stem++){
+      const angle=stem*2.399;blade(angle,.88,.013,.04);
+      for(let level=1;level<=4;level++)for(const side of [-1,1]){
+        blade(angle+side*.18,.32-level*.018,.02,.02,level*.13,side*(.28-level*.025));
+      }
+    }
+  }else if(variant===7){
+    for(let stem=0;stem<4;stem++){
+      const angle=stem*2.399;blade(angle,.75+random()*.2,.018,.05);
+      for(let level=1;level<=4;level++)for(const side of [-1,1])blade(angle,.18,.03,.02,level*.14,side*(.22-level*.015));
+    }
+  }
   const geometry = new BufferGeometry();
   geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
   geometry.setAttribute('color', new Float32BufferAttribute(colors, 3));
   geometry.setIndex(indices);geometry.computeVertexNormals();geometry.computeBoundingBox();geometry.computeBoundingSphere();
-  geometry.userData.form=['strap-leaved eelgrass','ruffled broad kelp','paired branching algae'][variant];
+  geometry.userData.form=SEAWEED_FORMS[variant % SEAWEED_FORMS.length];
   return geometry;
 }
 
@@ -109,7 +137,7 @@ export function Seaweed({ runtime, paused, quality }: EnvironmentProps) {
     const sites = createSeaweedLayout();
     const time = { value: 0 };
     const transform = new Object3D();
-    const batches = [0, 1, 2].map(variant => {
+    const batches = SEAWEED_FORMS.map((_, variant) => {
       const entries = sites.filter(site => site.variant === variant);
       const geometry = createSeaweedGeometry(variant);
       const material = new MeshStandardMaterial({ vertexColors: true, roughness: 0.86, metalness: 0, side: DoubleSide });
@@ -122,7 +150,7 @@ export function Seaweed({ runtime, paused, quality }: EnvironmentProps) {
           transformed.z += cos(seaweedTime * .31 + phase) * .055 * tip;
         `);
       };
-      material.customProgramCacheKey = () => 'sheltered-seaweed-v1';
+      material.customProgramCacheKey = () => 'sheltered-seaweed-v2';
       const mesh = new InstancedMesh(geometry, material, entries.length);
       mesh.name = `submerged-seaweed-${variant}`;
       mesh.raycast = () => {};
@@ -130,11 +158,13 @@ export function Seaweed({ runtime, paused, quality }: EnvironmentProps) {
       entries.forEach((site, index) => {
         transform.position.set(site.x, site.y, site.z);
         transform.rotation.set(0, site.rotation, 0);
-        transform.scale.set(site.width, site.height, site.width);
+        transform.scale.set(site.width, site.height, site.width * site.spread);
         transform.updateMatrix();
         mesh.setMatrixAt(index, transform.matrix);
+        mesh.setColorAt(index, new Color().setHSL(.10 + site.tint * .1, .13 + site.tint * .12, .72 + site.tint * .22));
       });
       mesh.instanceMatrix.needsUpdate = true;
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
       return { mesh, geometry, material, count: entries.length };
     });
     return { batches, time, timer: undefined as ReturnType<typeof setTimeout> | undefined };

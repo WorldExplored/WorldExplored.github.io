@@ -258,7 +258,21 @@ export function archipelagoGeometry() {
     }
     return {inside,outside};
   }
-  const emit=(polygon:number[])=>{for(let i=1;i<polygon.length-1;i++)indices.push(polygon[0],polygon[i],polygon[i+1]);};
+  const midpoints=new Map<string,number>();
+  const midpoint=(a:number,b:number)=>{
+    const key=a<b?`${a},${b}`:`${b},${a}`;let index=midpoints.get(key);
+    if(index!==undefined)return index;
+    index=interpolate(a,b,.5);midpoints.set(key,index);
+    paving[index]=Math.min(2,groundRouteAt(positions[index*3],positions[index*3+2]).distance);
+    return index;
+  };
+  const emitTriangle=(a:number,b:number,c:number,depth=0)=>{
+    // Refine paving edges to 0.1m while retaining the existing ground plane.
+    const nearPath=Math.min(paving[a],paving[b],paving[c])<.55&&Math.max(paving[a],paving[b],paving[c])>-.3;
+    if(depth<2&&nearPath){const ab=midpoint(a,b),bc=midpoint(b,c),ca=midpoint(c,a);emitTriangle(a,ab,ca,depth+1);emitTriangle(ab,b,bc,depth+1);emitTriangle(ca,bc,c,depth+1);emitTriangle(ab,bc,ca,depth+1);}
+    else indices.push(a,b,c);
+  };
+  const emit=(polygon:number[])=>{for(let i=1;i<polygon.length-1;i++)emitTriangle(polygon[0],polygon[i],polygon[i+1]);};
   function face(triangle:number[]) {
     const xs=triangle.map(i=>positions[i*3]),zs=triangle.map(i=>positions[i*3+2]);
     const near=cuts.filter(c=>Math.max(...xs)>c.minX&&Math.min(...xs)<c.maxX&&Math.max(...zs)>c.minZ&&Math.min(...zs)<c.maxZ);

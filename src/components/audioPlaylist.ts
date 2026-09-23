@@ -52,7 +52,11 @@ export class AudioPlaylist {
   private publish(patch: Partial<PlaylistSnapshot>) { this.snapshot = { ...this.snapshot, ...patch }; if (!this.disposed) this.changed(this.snapshot); }
   private clearWait() { if (this.timer !== null) this.cancel(this.timer); this.timer = null; }
   private clearFade() { if (this.fadeTimer !== null) this.cancel(this.fadeTimer); this.fadeTimer = null; }
-  private currentEvent() { return !this.disposed && this.intent && (!this.media.currentSrc || this.media.currentSrc === this.tracks[this.snapshot.index]?.playbackUrl); }
+  private currentEvent() {
+    // Browsers resolve currentSrc/src to absolute URLs, while the configured path may be relative.
+    return !this.disposed && this.intent && this.media.getAttribute('src') === this.tracks[this.snapshot.index]?.playbackUrl
+      && (!this.media.currentSrc || this.media.currentSrc === this.media.src);
+  }
   private watch() { if (this.timer !== null) return; const serial = this.serial; this.timer = this.schedule(() => { if (serial === this.serial) this.fail(); }, 20000); }
   private ramp(target: number, duration: number, done?: () => void) {
     this.clearFade(); if (this.options.reducedMotion?.()) duration = 0;
