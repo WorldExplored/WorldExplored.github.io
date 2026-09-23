@@ -347,7 +347,7 @@ export function buildCityArchitecture(building: Readonly<CityBuilding>, shellAdd
   if(family!=='public-station'&&sideFaces.length) {
     for(const side of [-1,1]) {
       const ground=sideFaces.filter(face=>face.y<.21).sort((a,b)=>side*(b.x+side*b.width/2-a.x-side*a.width/2))[0];
-      const seed=building.id.length*13+(side>0?7:2),height=Math.min(h-.5,(.64+(seed%4)*.065)*h);
+      const seed=[...building.id].reduce((value,letter)=>(value*31+letter.charCodeAt(0))%65521,17)+(side>0?7:2),height=Math.min(h-.5,(.64+(seed%4)*.065)*h);
       const width=Math.min(.8,ground.depth*(.19+(seed%3)*.035));
       const garden=createFacadeGarden({width,height,seed});
       const z=ground.z-ground.depth*.22;
