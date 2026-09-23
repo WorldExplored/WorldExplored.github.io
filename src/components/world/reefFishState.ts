@@ -17,7 +17,7 @@ function obstacles() {
   if (obstacleGrid) return obstacleGrid;
   obstacleGrid = new Map();
   const habitat = getReefHabitat();
-  for (const obstacle of [...habitat.colonies, ...habitat.rocks]) {
+  for (const obstacle of [...habitat.colonies, ...habitat.rocks, ...habitat.kelp.map(plant=>({...plant,radius:plant.width*.36}))]) {
     const radius = obstacle.radius + REEF_FISH_RADIUS;
     for (let x = Math.floor((obstacle.x - radius) / CELL); x <= Math.floor((obstacle.x + radius) / CELL); x++) {
       for (let z = Math.floor((obstacle.z - radius) / CELL); z <= Math.floor((obstacle.z + radius) / CELL); z++) {

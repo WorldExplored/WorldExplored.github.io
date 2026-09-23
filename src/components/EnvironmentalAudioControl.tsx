@@ -50,8 +50,7 @@ export function EnvironmentalAudioControl({ ref, visible = true, children }: { r
     finally { setLoading(false); }
   };
   useImperativeHandle(ref, () => ({ start }));
-  if (!visible) return null;
-  return <details className="ambience-control ambience-settings" role="group" aria-label={profile.soundSettings.group} data-audio-state={active ? 'playing' : started ? 'ready' : 'unstarted'} data-bell-strikes={bellCount}>
+  return <details hidden={!visible} className="ambience-control ambience-settings" role="group" aria-label={profile.soundSettings.group} data-audio-state={active ? 'playing' : started ? 'ready' : 'unstarted'} data-bell-strikes={bellCount}>
     <summary className="audio-control__button">◖ {profile.soundSettings.label}</summary>
     <div className="ambience-settings__panel">
     <label className="sound-setting"><span>{profile.soundSettings.ambience}</span><input type="checkbox" aria-label={profile.soundSettings.ambience} checked={active && !preferences.muted} disabled={loading} onChange={event => { const enabled = event.target.checked; persist({ ...preferences, muted: !enabled }); if (enabled) void start(); }} /></label>

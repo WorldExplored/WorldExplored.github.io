@@ -16,6 +16,7 @@ export function createBenthicLayout(): BenthicSite[] {
   const surface = (x: number, z: number) => Math.max(reefFloorHeight(x, z), ...plan.rocks.filter(rock => Math.hypot(x - rock.x, z - rock.z) < rock.radius).map(rock => reefRockSurfaceHeight(rock, x, z)));
   for (let host = 0; host < plan.rocks.length; host++) {
     const rock = plan.rocks[host];
+    if(rock.patch>=200)continue; // Small talus cannot support a full ledge colony.
     for (const kind of [0, 1, 2, 2]) for (let attempt = 0; attempt < 18; attempt++) {
       const angle = random() * Math.PI * 2, radius = rock.radius * (.35 + random() * .55);
       const x = rock.x + Math.cos(angle) * radius, z = rock.z + Math.sin(angle) * radius;
@@ -32,8 +33,9 @@ export function createBenthicLayout(): BenthicSite[] {
     }
   }
   // Small crabs occupy sand beside outcrops, never the coral canopy or the water surface.
+  const ledges=plan.rocks.filter(rock=>rock.patch<200);
   for (let index = 0; index < 45; index++) for (let attempt = 0; attempt < 35; attempt++) {
-    const rock = plan.rocks[Math.floor(random() * plan.rocks.length)], angle = random() * Math.PI * 2;
+    const rock = ledges[Math.floor(random() * ledges.length)], angle = random() * Math.PI * 2;
     const x = rock.x + Math.cos(angle) * (rock.radius + .6), z = rock.z + Math.sin(angle) * (rock.radius + .6);
     const y = reefFloorHeight(x, z);
     if (y > -2 || y < -12 || plan.rocks.some(other => Math.hypot(x - other.x, z - other.z) < other.radius + .4)

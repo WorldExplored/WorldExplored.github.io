@@ -9,6 +9,8 @@ import { createFacadeGarden } from '../src/components/world/FacadeGarden';
 import { tuftGeometry } from '../src/components/world/AmbientSystem';
 import { createShoreDetails } from '../src/components/world/ShoreDetails';
 import { createLandscapePlan, terrainMeshHeight, distanceToSegment, islandAt, ISLANDS } from '../src/components/world/terrain';
+import { createTownDrainage } from '../src/components/world/TownLandscape';
+import { groundRouteAt } from '../src/components/world/terrain';
 import { createSeaweedGeometry } from '../src/components/world/Seaweed';
 
 test('ferry hull displaces water and fittings remain on one rigid vessel hierarchy',()=>{
@@ -131,4 +133,15 @@ test('mineral, shell and wrack patches span every island, rooted to the beach an
     }
     assert.ok(triangles<100000,`${triangles} strandline triangles`);
   } finally {shore.dispose();}
+});
+
+test('town catch basins sit along paved edges with clear spacing and ground contact', () => {
+  const sites = createTownDrainage(createLandscapePlan());
+  assert.ok(sites.length >= 4 && sites.length <= 16, `drain count ${sites.length}`);
+  for (const [index, site] of sites.entries()) {
+    const edge = groundRouteAt(site.x, site.z).distance;
+    assert.ok(edge > -.21 && edge < -.08);
+    assert.equal(site.y, terrainMeshHeight(site.x, site.z));
+    assert.ok(sites.slice(index + 1).every(other => Math.hypot(site.x - other.x, site.z - other.z) > 8));
+  }
 });

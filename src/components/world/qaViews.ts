@@ -2,6 +2,11 @@ import type { CameraPose } from '../../content/world';
 
 /** Deterministic inspection poses used by the local visual-QA capture server. */
 export const QA_VIEWS = Object.freeze({
+  'kelp-forest': { position: [-22, 8, -19], target: [-33, -4, -30] },
+  'kelp-close': { position: [-27, .5, -24], target: [-34, -4, -32] },
+  'mineral-shallows': { position: [-60, 3, -33], target: [-67, -2, -38] },
+  'city-gallery-front': { position: [3.5, 3, -62.8], target: [0, 1.6, -69] },
+  'city-setback-roofs': { position: [-12, 17, -72], target: [-12, 5, -85] },
   tree: { position: [5.5, 4.3, 24.8], target: [-.14, 2.7, 21.85] },
   street: { position: [-5.4, 5.5, -66.1], target: [-14.2, 1.7, -77.4] },
   gull: { position: [-68.4, 10.6, -28.8], target: [-74.9, 7.8, -36] },

@@ -28,7 +28,7 @@ const layouts: Array<[string, CityArchetype, number, number, number, number, num
   ['waterfront-west', 'pavilion', -21, -72, 5.2, 3.6, 3.4, -.12],
   ['winter-garden', 'dome', -11, -69.5, 6, 4, 3.6, .08],
   ['waterfront-gallery', 'pavilion', 0, -69, 4.8, 3.2, 3.3, .08],
-  ['waterfront-east', 'dome', 8, -68, 4.2, 3.4, 3.5, -.15],
+  ['waterfront-east', 'dome', 8, -68, 4.2, 3.4, 4.6, -.15],
   ['transit-garden', 'transit-hall', -5, -68, 3.2, 2.8, 4.8, Math.PI / 2],
 ];
 

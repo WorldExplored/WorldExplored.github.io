@@ -19,6 +19,7 @@ test('seafloor invertebrates attach to rock ledges or actual sand and retain eve
         assert.ok(Math.abs(site.y - reefFloorHeight(site.x, site.z) - .095) < 1e-6);
         assert.ok(plan.rocks.every(rock => Math.hypot(rock.x - site.x, rock.z - site.z) >= rock.radius + .4));
       } else {
+        assert.ok(plan.rocks[site.host].patch<200,'tiny mineral chips do not create full benthic colonies');
         assert.ok(Math.abs(site.y - reefRockSurfaceHeight(plan.rocks[site.host], site.x, site.z) - .012) < 1e-6);
       }
     }

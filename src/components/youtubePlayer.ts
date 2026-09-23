@@ -1,5 +1,8 @@
 export interface YouTubePlayer {
   playVideo(): void;
+  unMute(): void;
+  loadVideoById(videoId: string): void;
+  getCurrentTime(): number;
   pauseVideo(): void;
   setVolume(value: number): void;
   setLoop(value: boolean): void;

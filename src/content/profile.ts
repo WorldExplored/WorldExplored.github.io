@@ -25,7 +25,7 @@ export const profile = {
     eyebrow: 'A little closer to the future we imagined.',
     title: 'Travel back to the future.',
     description: 'An island of ideas, open-source work, and things still to discover.',
-    sound: 'Coastal ambience',
+    sound: 'Music & coastal ambience',
     enter: 'Enter the world',
     hint: 'Drag to explore · Choose a building to step inside',
   },
@@ -35,6 +35,8 @@ export const profile = {
   },
   soundtrack: {
     audioTracks: [] as readonly BackgroundMusicTrack[],
+    player: 'World music player', track: 'Track', retry: 'Play music',
+    states: { preparing: 'Preparing music…', ready: 'Ready', loading: 'Starting music…', playing: 'Playing', paused: 'Paused', blocked: 'Tap Play music to start playback.', unavailable: 'Music could not load. Try again.' },
     settings: 'Music', volume: 'Music volume', trackUnavailable: 'unavailable', external: 'Listen on YouTube',
     source: 'Your inspiration mix', reference: 'https://www.youtube.com/watch?v=Cz2YCRmDOFk',
     tracks: [

@@ -5,7 +5,7 @@ import { useFrame } from '@react-three/fiber';
 import { BufferGeometry, Color, CylinderGeometry, DoubleSide, Float32BufferAttribute, Group, InstancedBufferAttribute, InstancedMesh, Mesh, MeshBasicMaterial, MeshStandardMaterial, Object3D, PlaneGeometry, ShaderChunk, Vector3 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { applySurface, surfaceTexture } from './surfaceMaterials';
-import { createSeaweedGeometry } from './Seaweed';
+import { createSeaweedGeometry, createForestKelpGeometry } from './Seaweed';
 import { getReefHabitat, reefFloorHeight, reefFloorVertexHeight, reefRockMesh, type ReefObstacle } from './reefHabitat';
 import { landDistance, smooth } from './terrain';
 import type { EnvironmentProps } from './Water';
@@ -63,7 +63,7 @@ export function reefSeafloorGeometry() {
     const shelf=[.55*(1-blend)+.16*blend,.74*(1-blend)+.43*blend,.60*(1-blend)+.38*blend];
     const openSand=smooth(6.8,12,-distance)*.62;
     const shade=1+smooth(6.8,9,-distance)*(.025*Math.sin(x*.27+z*.13)+.015*Math.cos(x*.69-z*.52));
-    colors.push((shelf[0]*(1-openSand)+.39*openSand)*shade,(shelf[1]*(1-openSand)+.57*openSand)*shade,(shelf[2]*(1-openSand)+.44*openSand)*shade);
+    colors.push((shelf[0]*(1-openSand)+.61*openSand)*shade,(shelf[1]*(1-openSand)+.59*openSand)*shade,(shelf[2]*(1-openSand)+.46*openSand)*shade);
     if (row && col) { const i=row*width+col; indices.push(i,i-width,i-1,i-1,i-width,i-width-1); }
   }
   const geometry = new BufferGeometry();
@@ -180,14 +180,16 @@ export function createReefHabitat() {
     shader.fragmentShader=`uniform sampler2D reefRockNormal; uniform sampler2D reefRockRoughness; varying vec2 sandXZ; varying float reefDepth;\n${shader.fragmentShader}`.replace('#include <map_fragment>',`
       float dune = sin(sandXZ.x * 3.7 + sandXZ.y * 7. + sin(sandXZ.x * .6) * 1.4);
       float fineGrain = fract(sin(dot(floor(sandXZ * 48.), vec2(127.1,311.7))) * 43758.5453);
-      float stone = smoothstep(3.1, 5.8, reefDepth);
+      float sandPocket = smoothstep(-.15,.48,sin(sandXZ.x*.21+sin(sandXZ.y*.16)*1.3)*cos(sandXZ.y*.17));
+      float stone = smoothstep(3.1, 5.8, reefDepth) * (1.-sandPocket*.68);
       float fracture = abs(sin(sandXZ.x * .8 + sin(sandXZ.y * .62) * 2.));
       diffuseColor.rgb *= .88 + dune * .028 + fineGrain * .17;
       diffuseColor.rgb *= mix(1., .79 + fracture * .17, stone);
+      diffuseColor.rgb = mix(diffuseColor.rgb,vec3(.48,.48,.36)*(.92+fineGrain*.10+dune*.024),sandPocket*.38);
     `).replace('#include <normal_fragment_maps>',ShaderChunk.normal_fragment_maps.replaceAll('texture2D( normalMap, vNormalMapUv ).xyz','mix(texture2D(normalMap, vNormalMapUv * 2.).xyz, texture2D(reefRockNormal, vNormalMapUv * .65).xyz, smoothstep(3.1, 5.8, reefDepth))'))
       .replace('#include <roughnessmap_fragment>',ShaderChunk.roughnessmap_fragment.replace('texture2D( roughnessMap, vRoughnessMapUv )','mix(texture2D(roughnessMap, vRoughnessMapUv * 2.), texture2D(reefRockRoughness, vRoughnessMapUv * .65), smoothstep(3.1, 5.8, reefDepth))'));
   };
-  floorMaterial.customProgramCacheKey=()=> 'continuous-submerged-sand-rock-v3';materials.push(floorMaterial);
+  floorMaterial.customProgramCacheKey=()=> 'layered-submerged-sand-rock-v4';materials.push(floorMaterial);
   const floorGeometry=reefSeafloorGeometry();geometries.push(floorGeometry);
   const floor=new Mesh(floorGeometry,floorMaterial);floor.name='continuous-rippled-sand-seafloor';floor.receiveShadow=true;floor.raycast=()=>{};root.add(floor);
   const contact=createReefContactShade([...plan.rocks,...plan.colonies]);geometries.push(contact.geometry);materials.push(contact.material);root.add(contact.mesh);
@@ -226,10 +228,11 @@ export function createReefHabitat() {
     const colors:number[]=[],uvs:number[]=[];
     for(let i=0;i<data.positions.length;i+=3) {
       const [x,y,z]=data.positions.slice(i,i+3),strata=.69+y*.16+.07*Math.sin(y*54+x*3)+.03*Math.cos(z*31);
-      colors.push(strata,strata*.95,strata*.81);uvs.push(x*2,z*2+y);
+      colors.push(strata,strata*.99,strata*.96);uvs.push(x*2,z*2+y);
     }
     geometry.setAttribute('color',new Float32BufferAttribute(colors,3));geometry.setAttribute('uv',new Float32BufferAttribute(uvs,2));geometry.computeVertexNormals();
-    instances(`reef-weathered-limestone-${form}`,geometry,rockMaterial,plan.rocks.filter(entry=>entry.form===form),entry=>[entry.radius,entry.height,entry.radius]);
+    const minerals=['#989c9d','#a9a49b','#828c94','#b7b0a1','#9a9794','#bac0bd'];
+    instances(`reef-weathered-limestone-${form}`,geometry,rockMaterial,plan.rocks.filter(entry=>entry.form===form),entry=>[entry.radius,entry.height,entry.radius],entry=>minerals[entry.patch>=200?entry.color:Math.abs(Math.floor(entry.x*3+entry.z*7))%minerals.length]);
   }
 
   for(let form=0;form<3;form++) {
@@ -246,6 +249,18 @@ export function createReefHabitat() {
     const entries=plan.plants.filter(entry=>entry.form===form);
     instances(`reef-seagrass-${form}`,createSeaweedGeometry(form),material,entries,entry=>[(entry as typeof entries[number]).width,entry.height,(entry as typeof entries[number]).width]);
   }
+  const kelpMaterial=new MeshStandardMaterial({vertexColors:true,roughness:.83,side:DoubleSide});materials.push(kelpMaterial);
+  kelpMaterial.onBeforeCompile=shader=>{
+    shader.uniforms.kelpTime=time;
+    shader.vertexShader=`uniform float kelpTime;\n${shader.vertexShader}`.replace('#include <begin_vertex>',`#include <begin_vertex>
+      float phase=instanceMatrix[3].x*.37+instanceMatrix[3].z*.28;
+      float flex=position.y*position.y;
+      transformed.x+=(sin(kelpTime*.31+phase)*.16+sin(kelpTime*.53-phase)*.045)*flex;
+      transformed.z+=cos(kelpTime*.24+phase)*.13*flex;
+    `);
+  };
+  kelpMaterial.customProgramCacheKey=()=> 'submerged-forest-kelp-v1';
+  for(let form=0;form<2;form++)instances(`reef-kelp-forest-${form}`,createForestKelpGeometry(form),kelpMaterial,plan.kelp.filter(entry=>entry.form===form),entry=>[(entry as typeof plan.kelp[number]).width,entry.height,(entry as typeof plan.kelp[number]).width],entry=>['#bec69c','#a0b881','#c2b18a','#91ac88','#b8c099'][entry.color]);
   let timer:ReturnType<typeof setTimeout>|undefined;
   function dispose(){geometries.forEach(geometry=>geometry.dispose());materials.forEach(material=>material.dispose());batches.forEach(batch=>batch.mesh.dispose());contact.mesh.dispose();}
   function setQuality(quality:EnvironmentProps['quality']){

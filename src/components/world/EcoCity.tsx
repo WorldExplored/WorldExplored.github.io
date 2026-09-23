@@ -62,10 +62,10 @@ function supplyFinishColors(geometry: BufferGeometry, finish: CityFinish) {
 function makeFinishes() {
   return {
     porcelain: new MeshPhysicalMaterial({ color: '#edf6ef', roughness: .62, metalness: .025, clearcoat: .12, clearcoatRoughness: .3 }),
-    glass: new MeshPhysicalMaterial({ color: '#77b7c2', roughness: .10, metalness: .02, clearcoat: .4, envMapIntensity: .65, transparent: true, opacity: .22, depthWrite: false, side: DoubleSide, forceSinglePass: true }),
+    glass: new MeshPhysicalMaterial({ color: '#77b7c2', roughness: .10, metalness: .02, clearcoat: .4, envMapIntensity: 1.1, transparent: true, opacity: .30, depthWrite: false, side: DoubleSide, forceSinglePass: true }),
     aqua: new MeshPhysicalMaterial({ color: '#067eae', roughness: .25, metalness: .20, clearcoat: .65, clearcoatRoughness: .18 }),
     garden: new MeshPhysicalMaterial({ color: '#ffffff', vertexColors: true, side: DoubleSide, roughness: .93, metalness: 0, envMapIntensity: .15 }),
-    window: new MeshPhysicalMaterial({ color: '#65a7b6', roughness: .09, metalness: .025, clearcoat: .45, envMapIntensity: .7, transparent: true, opacity: .23, depthWrite: false, side: DoubleSide, forceSinglePass: true }),
+    window: new MeshPhysicalMaterial({ color: '#65a7b6', roughness: .09, metalness: .025, clearcoat: .45, envMapIntensity: 1.2, transparent: true, opacity: .34, depthWrite: false, side: DoubleSide, forceSinglePass: true }),
     stone: new MeshPhysicalMaterial({ color: '#a3b9b5', roughness: .91, metalness: 0 }),
     wood: new MeshPhysicalMaterial({ color: '#986345', roughness: .76, metalness: 0 }),
     fabric: new MeshPhysicalMaterial({ color: '#ffffff', vertexColors: true, roughness: 1, metalness: 0 }),

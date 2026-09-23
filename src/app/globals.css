@@ -331,3 +331,8 @@ html[data-world-boot] .portfolio .canvas-host { background: transparent !importa
 }
 @media (max-height: 580px) { .world-entry__orb { display: none; } .world-entry__body { padding: 14px 24px; } .world-entry__eyebrow { margin-top: 0; } .ambience-settings { left: auto; right: 16px; bottom: 100px; } .ambience-settings__panel { right: 0; left: auto; } }
 @media (forced-colors: active) { .world-entry,.world-entry__body,.world-entry__go { background: Canvas; color: CanvasText; border: 1px solid CanvasText; } }
+
+.ambience-settings[hidden] { display: none; }
+.sound-music__player { width: 100%; min-height: 200px; overflow: hidden; border-radius: 8px; background: #072c40; }
+.sound-music__player iframe { width: 100%; height: 200px; border: 0; }
+.sound-track select { display: block; width: 100%; min-height: 40px; margin-top: 6px; border: 1px solid #7fc6d3; border-radius: 6px; background: #efffff; color: #125775; font: inherit; }

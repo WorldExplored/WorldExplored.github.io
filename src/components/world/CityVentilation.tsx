@@ -11,11 +11,11 @@ import type { QualityTier } from '@/content/world';
 // Flat, non-solar service roofs. Heights are finished roof surfaces in building coordinates.
 export const CITY_VENTILATION_MOUNTS: readonly { building: string; local: CityPoint }[] = [
   { building: 'waterfront-gallery', local: [1.45, 2.93, -.30] },
-  { building: 'waterfront-east', local: [.55, 3.30, -.40] },
-  { building: 'residence-east', local: [-1.0865, 10.23, -.20] },
-  { building: 'residence-east', local: [1.0865, 8.25, .10] },
-  { building: 'residence-cove', local: [-.70, 8.425, 0] },
-  { building: 'residence-cove', local: [.70, 8.425, 0] },
+  { building: 'waterfront-east', local: [.55, 4.45, -.40] },
+  { building: 'residence-east', local: [-.95, 10.23, -.20] },
+  { building: 'residence-east', local: [.55, 10.23, -.20] },
+  { building: 'residence-cove', local: [-.70, 8.35, 0] },
+  { building: 'residence-cove', local: [.70, 8.35, 0] },
 ];
 
 function combine(parts: BufferGeometry[]) {

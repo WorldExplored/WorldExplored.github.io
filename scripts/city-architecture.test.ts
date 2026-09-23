@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { DoubleSide, Mesh, MeshBasicMaterial, Object3D, Raycaster, Vector3 } from 'three';
+import { DoubleSide, Mesh, MeshBasicMaterial, Object3D, Raycaster, Triangle, Vector3 } from 'three';
 import { buildCityArchitecture, type CityFinish } from '../src/components/world/CityArchitecture';
 import { CITY_BASE_Y, cityBuildings, cityEntranceLocal, cityEntranceWorld, cityRoofMounts, type CityBuilding } from '../src/components/world/city';
 
@@ -173,7 +173,7 @@ test('every occupied upper floor connects to a served lift through a covered cor
       }
     } finally {meshes.forEach(mesh=>mesh.geometry.dispose());material.dispose();}
   }
-  assert.ok(checked>30,'All modeled upper rooms are audited, including both wings and conservatory');
+  assert.equal(checked,26,'Every occupied upper floor, including the conservatory, is audited');
 });
 
 test('balcony planting is integrated into reachable terraces and all room floors contain furnishings', () => {
@@ -303,4 +303,103 @@ test('maisonette offset bears on grounded columns and its exposed lower roof is 
       assert.ok(ray.intersectObjects(weather).length,`No open lower roof below offset upper room at ${x}, ${z}`);
     }
   } finally {item.dispose();}
+});
+
+
+test('every occupied room has actual weather enclosure on four walls and across its complete ceiling',()=>{
+  let checked=0,wallRays=0,roofRays=0;
+  for(const building of cityBuildings) {
+    const item=fixture(building);
+    try {
+      const shell=item.meshes.filter(mesh=>!mesh.geometry.userData.furniture&&!mesh.geometry.userData.facadeGarden);
+      for(const floorMesh of item.meshes.filter(mesh=>mesh.geometry.userData.roomAccess)) {
+        const room=floorMesh.geometry.userData.roomAccess;
+        floorMesh.geometry.computeBoundingBox();const floor=floorMesh.geometry.boundingBox!;
+        const ceilingMesh=item.meshes.find(mesh=>mesh.geometry.userData.weatherCeiling?.room===room.room)!;
+        assert.ok(ceilingMesh,`${room.room}: structural ceiling missing`);
+        ceilingMesh.geometry.computeBoundingBox();const ceiling=ceilingMesh.geometry.boundingBox!.min.y;
+        // Probe only positions proven to lie on the actual finished room floor.
+        for(let x=floor.min.x+.021;x<floor.max.x;x+=.097)for(let z=floor.min.z+.029;z<floor.max.z;z+=.103) {
+          const down=new Raycaster(new Vector3(x,room.floor+.01,z),new Vector3(0,-1,0),0,.02);
+          if(!down.intersectObject(floorMesh).length)continue;
+          const up=new Raycaster(new Vector3(x,room.floor+.02,z),new Vector3(0,1,0),0,ceiling-room.floor+.03);
+          const hit=up.intersectObject(ceilingMesh)[0];roofRays++;
+          assert.ok(hit&&Math.abs(hit.point.y-ceiling)<1e-4,`${room.room}: open roof at ${x},${z}`);
+        }
+        if(building.family==='rounded-housing'){checked++;continue;}
+        const door=item.meshes.find(mesh=>mesh.geometry.userData.entranceDoor?.room===room.room)?.geometry.userData.entranceDoor;
+        for(let y=room.floor+.043;y<ceiling-.01;y+=.1137) {
+          for(let x=floor.min.x+.017;x<floor.max.x;x+=.071) {
+            const rearOpening=Math.abs(x-room.rear[0])<room.opening/2-.019&&y<room.floor+room.height;
+            const frontOpening=door?.open&&Math.abs(x-door.x)<door.opening/2+.02&&y<door.floor+door.height+.06;
+            if(!rearOpening) {
+              const ray=new Raycaster(new Vector3(x,y,room.rear[1]+.08),new Vector3(0,0,-1),0,.15);wallRays++;
+              assert.ok(ray.intersectObjects(shell).length,`${room.room}: open rear at ${x},${y}`);
+            }
+            if(!frontOpening) {
+              const ray=new Raycaster(new Vector3(x,y,room.front[1]-.04),new Vector3(0,0,1),0,.15);wallRays++;
+              assert.ok(ray.intersectObjects(shell).length,`${room.room}: open front at ${x},${y}`);
+            }
+          }
+          for(let z=floor.min.z+.019;z<floor.max.z;z+=.079)for(const side of [-1,1]) {
+            const x=side<0?floor.min.x+.01:floor.max.x-.01;
+            const ray=new Raycaster(new Vector3(x,y,z),new Vector3(side,0,0),0,.15);wallRays++;
+            assert.ok(ray.intersectObjects(shell).length,`${room.room}: open side ${side} at ${y},${z}`);
+          }
+        }
+        checked++;
+      }
+    } finally {item.dispose();}
+  }
+  assert.equal(checked,40);assert.ok(wallRays>40000&&roofRays>15000);
+});
+
+test('wall panes are single surfaces and structural ceilings meet rather than overlap adjacent room floors',()=>{
+  for(const building of cityBuildings) {
+    const item=fixture(building);
+    try {
+      for(const mesh of item.meshes.filter(mesh=>mesh.geometry.userData.roomWall&&item.finishes[item.meshes.indexOf(mesh)]==='window')) {
+        const p=mesh.geometry.attributes.position;
+        if(mesh.geometry.userData.roomWall.role==='ellipse')continue;
+        mesh.geometry.computeBoundingBox();const b=mesh.geometry.boundingBox!;
+        assert.ok(Math.min(b.max.x-b.min.x,b.max.z-b.min.z)<1e-6,'One plane, not front/back alpha layers');
+        assert.equal(p.count,4,'Rectangular glass has four corners and no doubled rear surface');
+      }
+      const ceilings=item.meshes.filter(mesh=>mesh.geometry.userData.weatherCeiling),floors=item.meshes.filter(mesh=>mesh.geometry.userData.roomAccess);
+      for(const ceiling of ceilings)for(const floor of floors) {
+        ceiling.geometry.computeBoundingBox();floor.geometry.computeBoundingBox();
+        const a=ceiling.geometry.boundingBox!,b=floor.geometry.boundingBox!;
+        if(b.min.y<a.min.y)continue;
+        assert.ok(b.min.y>=a.max.y-1e-5,`${building.id}: ceiling overlaps the floor above`);
+      }
+    } finally {item.dispose();}
+  }
+});
+
+test('continuous vine stems stay against real wall or setback roof surfaces and below the local roof',()=>{
+  for(const building of cityBuildings.filter(value=>value.family!=='public-station')) {
+    const item=fixture(building);
+    try {
+      const structure=item.meshes.filter(mesh=>!mesh.geometry.userData.furniture&&!mesh.geometry.userData.facadeGarden&&item.finishes[item.meshes.indexOf(mesh)]!=='garden');
+      structure.forEach(mesh=>mesh.geometry.computeBoundingBox());
+      const triangle=new Triangle(),nearest=new Vector3();
+      const stems=item.meshes.filter(mesh=>mesh.geometry.userData.facadeGarden?.role==='wood');
+      for(const stem of stems) {
+        const p=stem.geometry.attributes.position;
+        for(let i=0;i<p.count;i+=41) {
+          const origin=new Vector3(p.getX(i),p.getY(i),p.getZ(i));if(origin.y<.24)continue;
+          const nearby=structure.some(mesh=>{
+            const geometry=mesh.geometry;if(geometry.boundingBox!.distanceToPoint(origin)>.10)return false;
+            const vertices=geometry.attributes.position,index=geometry.index,count=index?.count??vertices.count;
+            for(let j=0;j<count;j+=3){triangle.a.fromBufferAttribute(vertices,index?index.getX(j):j);triangle.b.fromBufferAttribute(vertices,index?index.getX(j+1):j+1);triangle.c.fromBufferAttribute(vertices,index?index.getX(j+2):j+2);triangle.closestPointToPoint(origin,nearest);if(nearest.distanceTo(origin)<.10)return true;}
+            return false;
+          });
+          assert.ok(nearby,`${building.id}: vine floats at ${origin.toArray()}`);
+        }
+        stem.geometry.computeBoundingBox();
+        const ceilings=item.meshes.filter(mesh=>mesh.geometry.userData.weatherCeiling).map(mesh=>{mesh.geometry.computeBoundingBox();return mesh.geometry.boundingBox!.max.y;});
+        assert.ok(stem.geometry.boundingBox!.max.y<Math.max(...ceilings)-.1);
+      }
+    } finally {item.dispose();}
+  }
 });

@@ -1,5 +1,5 @@
 import { createCityFerryRoute } from './cityInfrastructure';
-import { landDistance, seededRandom, smooth, terrainBaseHeight } from './terrain';
+import { landDistance, seededRandom, smooth, terrainBaseHeight, terrainMeshHeight, ISLANDS, islandContour } from './terrain';
 
 export interface ReefObstacle {
   x: number; y: number; z: number; radius: number; height: number;
@@ -7,7 +7,7 @@ export interface ReefObstacle {
 }
 export interface ReefPlant extends ReefObstacle { width: number }
 export interface ReefHabitatPlan {
-  colonies: ReefObstacle[]; rocks: ReefObstacle[]; plants: ReefPlant[];
+  colonies: ReefObstacle[]; rocks: ReefObstacle[]; plants: ReefPlant[]; kelp: ReefPlant[];
 }
 
 /** The reef shelf spans the channel and both sheltered arms of the lighthouse triangle. */
@@ -22,6 +22,8 @@ function shelfInfluence(x: number, z: number) {
   return Math.max(...REEF_BASINS.map(basin => 1 - smooth(1, 1.8, Math.hypot((x - basin.x) / basin.rx, (z - basin.z) / basin.rz))));
 }
 
+export const KELP_POCKET = {x:-33,z:-30,rx:7.2,rz:5.8};
+export const KELP_TOP = -2.45;
 const floorVertices = new Map<string, number>();
 
 /** Integer vertices are shared by the floor mesh, collision queries and benthic life. */
@@ -34,7 +36,12 @@ export function reefFloorVertexHeight(x: number, z: number) {
   const basin = (1 - smooth(.65, 1.35, Math.hypot((x + 2) / 34, (z + 42) / 24))) * smooth(7, 12, -distance);
   const shelf = shelfInfluence(x, z);
   const fractures = shelf * smooth(10, 17, -distance) * (.25 * Math.sin(x * .22 + z * .35) + .19 * Math.sin(x * .67 - z * .38));
-  const floor = terrainBaseHeight(x, z) - .36 + smooth(6.9, 9, -distance) * (waves + ripples) - basin * 1.9 + fractures;
+  const shelfBand=Math.sin(x*.115+z*.071+Math.sin(z*.09)*.45);
+  const terraces=(smooth(-.3,.15,shelfBand)-.5)*1.05;
+  const hollow=Math.exp(-(((x+34)/11)**2+((z+30)/8)**2))*1.35;
+  const trough=Math.exp(-(((x+52)/7)**2+((z+45)/14)**2))*.95;
+  const relief=shelf*smooth(7,12,-distance)*(terraces-hollow-trough);
+  const floor = terrainBaseHeight(x, z) - .36 + smooth(6.9, 9, -distance) * (waves + ripples) - basin * 1.9 + fractures + relief;
   const height = Math.min(-2.4, floor) - smooth(22, 75, -distance) * 35 * (1 - shelf);
   floorVertices.set(key, height);
   return height;
@@ -47,6 +54,9 @@ export function reefFloorHeight(x: number, z: number) {
   const c = reefFloorVertexHeight(ix, iz + 1), d = reefFloorVertexHeight(ix + 1, iz + 1);
   return u + v <= 1 ? a * (1 - u - v) + b * u + c * v : d * (u + v - 1) + b * (1 - v) + c * (1 - u);
 }
+
+/** The island shelf is the visible upper surface until its existing mesh ends. */
+export function marineFloorHeight(x:number,z:number){return landDistance(x,z)>=-6.5?terrainMeshHeight(x,z):reefFloorHeight(x,z);}
 
 export function reefHabitatContains(x: number, z: number, margin = 0) {
   const inside = REEF_BASINS.some(basin => {
@@ -118,7 +128,7 @@ let cached: ReefHabitatPlan | undefined;
 export function getReefHabitat(): ReefHabitatPlan {
   if (cached) return cached;
   const random = seededRandom(894125);
-  const colonies: ReefObstacle[] = [], rocks: ReefObstacle[] = [], plants: ReefPlant[] = [];
+  const colonies: ReefObstacle[] = [], rocks: ReefObstacle[] = [], plants: ReefPlant[] = [], kelp: ReefPlant[] = [];
   // Overlapping ridges form continuous reef walls around branching sand canyons.
   const ridges = [
     [[-26,-46],[-22,-43],[-18,-40],[-14,-38],[-11,-34]],
@@ -154,6 +164,24 @@ export function getReefHabitat(): ReefHabitatPlan {
       rocks.push({ x, z, y: floor, radius: small, height: Math.min(.55 + random() * 1.2, -3 - floor), rotation: random() * Math.PI * 2, form: Math.floor(random() * 4), color: 0, patch });
     }
   }));
+  // Talus gathers around ridge feet and in irregular shoal pockets across all islands.
+  const mineralRandom=seededRandom(40291),ridgeHosts=rocks.slice();
+  for(let i=0;i<350;i++)for(let attempt=0;attempt<28;attempt++){
+    let x:number,z:number;
+    if(i%3===0){
+      const island=ISLANDS[i%ISLANDS.length],a=mineralRandom()*Math.PI*2,edge=islandContour(island,a),offset=4.4+mineralRandom()*3.1;
+      x=island.x+Math.cos(a)*(island.rx*edge+offset);z=island.z+Math.sin(a)*(island.rz*edge+offset);
+    }else{
+      const host=ridgeHosts[Math.floor(mineralRandom()*ridgeHosts.length)],a=mineralRandom()*Math.PI*2,r=host.radius*(.8+mineralRandom()*.9);
+      x=host.x+Math.cos(a)*r;z=host.z+Math.sin(a)*r;
+    }
+    const distance=landDistance(x,z);if(distance> -4.8||distance< -23)continue;
+    const floor=marineFloorHeight(x,z),boulder=i%11===0;
+    const radius=boulder?.65+mineralRandom()*.65:.17+Math.pow(mineralRandom(),1.6)*.52;
+    const height=Math.min(boulder?.45+mineralRandom()*.60:.07+mineralRandom()*.20,-1.84-floor);
+    if(height<.06||rocks.some(rock=>Math.hypot(x-rock.x,z-rock.z)<(rock.radius+radius)*.72))continue;
+    rocks.push({x,z,y:floor-.055,radius,height,rotation:mineralRandom()*Math.PI*2,form:boulder?3:i%2?0:2,color:i%6,patch:200+i%ISLANDS.length});break;
+  }
   // Sink every perimeter vertex into the sampled floor, extending the rock downward
   // instead of letting a flat base hover over the sloping canyon floor.
   for (const rock of rocks) {
@@ -162,12 +190,13 @@ export function getReefHabitat(): ReefHabitatPlan {
     for (let i = 0; i < positions.length; i += 3) if (positions[i + 1] === 0) {
       const x = rock.x + rock.radius * (c * positions[i] + s * positions[i + 2]);
       const z = rock.z + rock.radius * (-s * positions[i] + c * positions[i + 2]);
-      base = Math.min(base, reefFloorHeight(x, z) - .08);
+      base = Math.min(base, (rock.patch>=200 ? marineFloorHeight(x,z) : reefFloorHeight(x, z)) - .08);
     }
     rock.height += rock.y - base;
     rock.y = base;
   }
   for (const host of rocks) {
+    if(host.patch>=200)continue;
     const count = Math.ceil(host.radius * host.radius * (host.patch < 6 ? 1.5 : .82));
     for (let n = 0; n < count; n++) for (let attempt = 0; attempt < 35; attempt++) {
       const angle = random() * Math.PI * 2, distance = Math.sqrt(random()) * host.radius * .9;
@@ -185,7 +214,7 @@ export function getReefHabitat(): ReefHabitatPlan {
   }
   // Dense irregular meadows occupy canyon edges, with open sand through the middle.
   for (let i = 0; i < 1100; i++) for (let attempt = 0; attempt < 25; attempt++) {
-    const host = rocks[Math.floor(random() * rocks.length)], a = random() * Math.PI * 2, r = host.radius * (.8 + random() * .75);
+    const host = ridgeHosts[Math.floor(random() * ridgeHosts.length)], a = random() * Math.PI * 2, r = host.radius * (.8 + random() * .75);
     const x = host.x + Math.cos(a) * r, z = host.z + Math.sin(a) * r;
     if (!reefHabitatContains(x, z, .25) || rocks.some(rock => reefRockSurfaceHeight(rock,x,z) > reefFloorHeight(x,z) + .15) || plants.some(plant => Math.hypot(x-plant.x,z-plant.z)<.23)) continue;
     const height = .3 + random() * .85, width = .36 + random() * .65;
@@ -202,9 +231,19 @@ export function getReefHabitat(): ReefHabitatPlan {
     if(rocks.some(rock=>Math.hypot(x-rock.x,z-rock.z)<rock.radius+width*.3&&reefRockSurfaceHeight(rock,x,z)>floor+.1)||colonies.some(coral=>Math.hypot(x-coral.x,z-coral.z)<coral.radius+width*.35)||plants.some(plant=>Math.hypot(x-plant.x,z-plant.z)<.22))continue;
     plants.push({x,z,y:floor-.035,radius:width*.55,height:.20+random()*.45,width,rotation:random()*Math.PI*2,form:i%2,color:0,patch:100+meadow.patch});break;
   }
+  const forestRandom=seededRandom(56903);
+  const groves=Array.from({length:7},()=>({x:KELP_POCKET.x+(forestRandom()-.5)*KELP_POCKET.rx*1.1,z:KELP_POCKET.z+(forestRandom()-.5)*KELP_POCKET.rz*1.1}));
+  for(let i=0;i<170;i++)for(let attempt=0;attempt<70;attempt++){
+    const grove=groves[i%groves.length],a=forestRandom()*Math.PI*2,r=Math.pow(forestRandom(),.65)*3.2;
+    const x=grove.x+Math.cos(a)*r,z=grove.z+Math.sin(a)*r;
+    if(Math.hypot((x-KELP_POCKET.x)/KELP_POCKET.rx,(z-KELP_POCKET.z)/KELP_POCKET.rz)>1||!reefHabitatContains(x,z,.4))continue;
+    const y=reefFloorHeight(x,z)-.025,width=.74+forestRandom()*.55,height=Math.min(3+forestRandom()*2.7,KELP_TOP-y);
+    if(height<2.7||rocks.some(rock=>Math.hypot(x-rock.x,z-rock.z)<rock.radius+.25&&reefRockSurfaceHeight(rock,x,z)>y+.14)||kelp.some(plant=>Math.hypot(x-plant.x,z-plant.z)<.47))continue;
+    kelp.push({x,y,z,width,height,radius:width*.5,rotation:forestRandom()*Math.PI*2,form:i%2,color:i%5,patch:i%groves.length});break;
+  }
   // Prefix-based quality tiers retain growth across every ridge, not just the first few.
   for (const entries of [colonies, plants]) for (let i = entries.length - 1; i > 0; i--) {
     const j = Math.floor(random() * (i + 1)); [entries[i], entries[j]] = [entries[j], entries[i]];
   }
-  cached = { colonies, rocks, plants }; return cached;
+  cached = { colonies, rocks, plants, kelp }; return cached;
 }

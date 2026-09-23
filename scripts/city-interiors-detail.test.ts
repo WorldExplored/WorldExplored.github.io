@@ -105,3 +105,65 @@ test('upholstery has rectangular cushion faces and room-specific textile colors 
   }
   assert.ok(colors.size >= 10, 'base upholstery and lighter borders vary across seeded room schemes');
 });
+
+test('every domestic room has wall-aligned, normally proportioned bedding and complementary storage', () => {
+  const domestic = new Set(['terraced-apartments', 'narrow-mixed-use', 'split-wings', 'rounded-housing', 'greenhouse-residences', 'split-level-homes', 'waterfront-rowhouses', 'stacked-maisonettes']);
+  for (const building of cityBuildings.filter(value => domestic.has(value.family))) {
+    const rooms = buildCityArchitecture(building, geometry => geometry.dispose());
+    for (const [variant, room] of rooms.entries()) {
+      const item = fixture(building, room.width, room.depth, variant, room.height);
+      try {
+        const get = (name: string) => item.meshes.find(mesh => mesh.geometry.userData.furniture.name === name);
+        const mattress = get('mattress'), head = get('headboard');
+        assert.ok(mattress && head, `${building.id} floor ${variant} must contain a bed`);
+        mattress.geometry.computeBoundingBox(); head.geometry.computeBoundingBox();
+        const size = mattress.geometry.boundingBox!.getSize(new Vector3());
+        assert.ok(size.x >= .66 && size.z / size.x <= 2.4 && size.z / size.x >= 1.3, `${building.id} room ${variant}: bed ${size.x.toFixed(2)}×${size.z.toFixed(2)} requires a wider room`);
+        const headBox = head.geometry.boundingBox!;
+        let rear = -room.depth / 2;
+        if (building.family === 'rounded-housing') {
+          const outerX = Math.max(Math.abs(headBox.min.x), Math.abs(headBox.max.x));
+          rear = Math.max(rear, -room.depth / 1.5 * Math.sqrt(1 - (outerX / (room.width / 1.65)) ** 2));
+        }
+        assert.ok(headBox.min.z - rear >= -.001 && headBox.min.z - rear < .065, `${building.id} headboard drifts off the rear enclosure`);
+        assert.ok(get('folded-duvet') && get('pillow') && get('headboard-reading-light'));
+        assert.ok(get('wardrobe-carcass') || get('kitchen-cabinet'), `${building.id} has no domestic storage`);
+        assert.ok(get('bedside-table') || get('dining-tabletop') || get('sofa-seat'), `${building.id} lacks a second occupied area`);
+      } finally { item.dispose(); }
+    }
+  }
+});
+
+test('seating stays compact and the waterfront gallery is a furnished exhibition room', () => {
+  for (const building of cityBuildings) {
+    const rooms = buildCityArchitecture(building, geometry => geometry.dispose());
+    for (const [variant, room] of rooms.entries()) {
+      const item = fixture(building, room.width, room.depth, variant, room.height);
+      try {
+        for (const seat of item.meshes.filter(mesh => mesh.geometry.userData.furniture.name === 'sofa-seat')) {
+          seat.geometry.computeBoundingBox(); const size = seat.geometry.boundingBox!.getSize(new Vector3());
+          assert.ok(size.x <= .58 && size.z <= .95 && size.z / size.x <= 1.85, 'a sofa cannot stretch to fill a room strip');
+        }
+        if (building.family === 'civic-gallery') {
+          const names = new Set(item.meshes.map(mesh => mesh.geometry.userData.furniture.name));
+          for (const name of ['gallery-art-frame', 'gallery-art-print', 'gallery-plinth', 'gallery-sculpture', 'sofa-seat', 'dining-tabletop', 'book-pages', 'lamp-shade']) assert.ok(names.has(name), `gallery lacks ${name}`);
+          assert.equal(item.meshes.filter(mesh => mesh.geometry.userData.furniture.name === 'gallery-art-frame').length, 2);
+        }
+      } finally { item.dispose(); }
+    }
+  }
+});
+
+test('workshop equipment remains on its actual capped desk surface', () => {
+  const building = cityBuildings.find(value => value.family === 'arched-apartments')!;
+  const item = fixture(building, 4.1, 2.6, 0, 1.8);
+  try {
+    const table = item.meshes.find(mesh => mesh.geometry.userData.furniture.name === 'dining-tabletop')!;
+    const stand = item.meshes.find(mesh => mesh.geometry.userData.furniture.name === 'monitor-stand')!;
+    table.geometry.computeBoundingBox(); stand.geometry.computeBoundingBox();
+    const support = table.geometry.boundingBox!, equipment = stand.geometry.boundingBox!;
+    assert.ok(equipment.min.x >= support.min.x && equipment.max.x <= support.max.x);
+    assert.ok(equipment.min.z >= support.min.z && equipment.max.z <= support.max.z);
+    assert.ok(equipment.min.y <= support.max.y && equipment.max.y > support.max.y);
+  } finally { item.dispose(); }
+});

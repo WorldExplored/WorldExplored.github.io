@@ -42,6 +42,10 @@ test('city doors rest closed at homes while public lobbies retain clear entry ai
           if(open)assert.equal(hits.length,0,`${room}: public entrance blocked at ${offset}, ${elevation}`);
           else assert.ok(hits.some(hit=>hit.object instanceof Mesh&&hit.object.geometry.userData.entranceDoor?.room===room),`${room}: closed leaf does not span its doorway`);
         }
+        if(!open)for(let elevation=.027;elevation<height;elevation+=.023)for(const offset of [-.4,-.2,0,.2,.4]) {
+          ray.set(new Vector3(x+offset*opening,floor+elevation,z+.3),new Vector3(0,0,-1));ray.far=.6;
+          assert.ok(ray.intersectObjects(parts).length,`${room}: gap between closed door panes and rails at ${elevation}`);
+        }
         ray.set(new Vector3(x, floor + .1, z), new Vector3(0, -1, 0)); ray.far = .12;
         assert.ok(ray.intersectObjects(model.meshes).length, `${room}: floating threshold`);
         const leaf = parts.find(mesh => mesh.geometry.userData.entranceDoor.role === 'glazing')!;
@@ -52,7 +56,7 @@ test('city doors rest closed at homes while public lobbies retain clear entry ai
       }
     } finally { model.dispose(); }
   }
-  assert.ok(count >= 19, 'Individual wings and rowhouses retain separate front doors');
+  assert.equal(count,cityBuildings.length+1,'Each building retains an entrance and both rowhouses have separate doors');
   assert.ok(closed>publicOpen*3,'Most city doors should rest closed');
   assert.ok(publicOpen>=3,'Public glasshouse, gallery and station remain welcoming');
 });

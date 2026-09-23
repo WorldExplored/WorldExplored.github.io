@@ -201,3 +201,32 @@ export function Seaweed({ runtime, paused, quality }: EnvironmentProps) {
   useFrame(() => { if (!paused) seaweed.time.value = runtime.current.elapsed; });
   return <group name="sheltered-seaweed-beds" dispose={null}>{seaweed.batches.map(batch => <primitive key={batch.mesh.name} object={batch.mesh} />)}</group>;
 }
+
+/** Metre-tall kelp uses a flexible central stipe and separate drooping lateral fronds. */
+export function createForestKelpGeometry(variant:number) {
+  const positions:number[]=[],colors:number[]=[],indices:number[]=[],random=seededRandom(1849+variant);
+  const stem=(t:number)=>({x:Math.sin(t*5+variant)*.07*t,z:Math.sin(t*7+variant*.9)*.05*t});
+  const vertex=(x:number,y:number,z:number,leaf=false)=>{
+    positions.push(x,y,z);const light=.65+y*.35;
+    colors.push((leaf?.28:.30)*light,(leaf?.39:.28)*light,(leaf?.12:.10)*light);
+  };
+  const rings=16,sides=5;
+  for(let ring=0;ring<=rings;ring++)for(let side=0;side<sides;side++){
+    const t=ring/rings,a=side/sides*Math.PI*2,c=stem(t),r=.019*(1-t*.7);
+    vertex(c.x+Math.cos(a)*r,t,c.z+Math.sin(a)*r);
+    if(ring){const i=ring*sides+side,next=ring*sides+(side+1)%sides;indices.push(i,next,i-sides,next,next-sides,i-sides);}
+  }
+  const levels=variant?10:13;
+  for(let level=0;level<levels;level++)for(let side=0;side<2;side++){
+    const base=.12+level/levels*.81,c=stem(base),a=level*(variant?1.8:.64)+side*Math.PI;
+    const length=.19+random()*.20,breadth=(variant?.048:.03)+random()*.016,start=positions.length/3;
+    for(let row=0;row<=5;row++)for(let rib=0;rib<3;rib++){
+      const t=row/5,lateral=(rib-1)*breadth*Math.sin(t*Math.PI)*(1+.16*Math.sin(t*25+level));
+      const along=length*t,y=base+Math.sin(t*Math.PI)*.028-t*t*.037;
+      vertex(c.x+Math.cos(a)*along-Math.sin(a)*lateral,y+(rib===1?.006*Math.sin(t*Math.PI):0),c.z+Math.sin(a)*along+Math.cos(a)*lateral,true);
+      if(row&&rib){const n=start+row*3+rib;indices.push(n,n-3,n-1,n-1,n-3,n-4);}
+    }
+  }
+  const geometry=new BufferGeometry();geometry.setAttribute('position',new Float32BufferAttribute(positions,3));geometry.setAttribute('color',new Float32BufferAttribute(colors,3));geometry.setIndex(indices);geometry.computeVertexNormals();geometry.computeBoundingBox();geometry.computeBoundingSphere();
+  geometry.userData.form=variant?'broad-frond canopy kelp':'spiral feather kelp';return geometry;
+}

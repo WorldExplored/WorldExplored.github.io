@@ -40,7 +40,7 @@ export function buildCityInterior(building: Readonly<CityBuilding>, add: CityAdd
     cylinder('lamp-bulb', 'aqua', px, floor + .275, pz, scale * .18, .035);
   };
   const cabinet = (side: number, pz: number, sh: number, sd: number, kitchen = false) => {
-    const px = side * center, sw = zone * .94;
+    const sw = Math.min(.76, zone * .94), px = side * (w / 2 - .04 - sw / 2);
     if (kitchen) box('kitchen-cabinet', 'wood', px, sh / 2, pz, sw, sh, sd);
     else {
       // A framed cupboard has a genuine open top cubby above its inset doors.
@@ -58,10 +58,15 @@ export function buildCityInterior(building: Readonly<CityBuilding>, add: CityAdd
     return { px, top: sh, sw, sd };
   };
   const sleeping = (side: number) => {
-    const px = side * center, sw = zone * .95, length = Math.min(1.45, d * .72), pz = d * .07;
+    const sw = Math.min(.78 + seed % 3 * .045, zone - .035), length = Math.min(1.55, d - .16);
+    const px = side * (w / 2 - .04 - sw / 2);
+    const wallRear = curved ? -depth / 1.5 * Math.sqrt(1 - ((Math.abs(px) + sw / 2) / (width / 1.65)) ** 2) : -d / 2;
+    const pz = Math.max(-depth / 2, wallRear) + .04 + length / 2;
     for (const dx of [-.36, .36]) for (const dz of [-.38, .38]) box('bed-leg', 'wood', px + dx * sw, .065, pz + dz * length, Math.min(.045, sw * .14), .13, .045);
     box('bed-frame', 'wood', px, .15, pz, sw, .12, length);
     box('headboard', 'wood', px, .36, pz - length / 2 + .018, sw, .5, .035);
+    box('headboard-light-bracket', 'metal', px + side * sw * .29, .57, pz - length / 2 + .06, .04, .04, .11);
+    cylinder('headboard-reading-light', 'porcelain', px + side * sw * .29, .65, pz - length / 2 + .10, .055, .13, .035);
     soft('mattress', 'porcelain', px, .27, pz, sw * .96, .18, length * .98);
     // A shallow mesh drapes over the mattress with displaced folds and a turned top edge.
     const points: number[] = [], indices: number[] = [], cols = 8, rows = 10;
@@ -90,12 +95,13 @@ export function buildCityInterior(building: Readonly<CityBuilding>, add: CityAdd
     box('folded-bed-throw', 'fabric', px, .365, pz + length * .31, sw * .97, .028, length * .16);
   };
   const lounge = (side: number) => {
-    const px = side * center, sw = zone * .95, length = Math.min(.97, d * .55), pz = d * .14;
-    const rugLength = Math.min(d * .7, 1.3);
-    box('woven-rug', 'fabric', px, .008, pz, zone * .99, .015, rugLength);
+    const sw = Math.min(.60, zone - .03), length = Math.min(.96, sw * 1.7), pz = d / 2 - .08 - length / 2;
+    const px = side * (w / 2 - .04 - sw / 2);
+    const rugWidth = Math.min(zone - .015, sw + .07), rugLength = Math.min(length + .08, d - .14);
+    box('woven-rug', 'fabric', px, .008, pz, rugWidth, .015, rugLength);
     for (const side of [-1, 1]) {
-      box('rug-woven-border', 'fabric', px + side * zone * .445, .017, pz, zone * .05, .006, rugLength * .94);
-      box('rug-woven-border', 'fabric', px, .017, pz + side * rugLength * .45, zone * .9, .006, rugLength * .04);
+      box('rug-woven-border', 'fabric', px + side * rugWidth * .445, .017, pz, rugWidth * .05, .006, rugLength * .94);
+      box('rug-woven-border', 'fabric', px, .017, pz + side * rugLength * .45, rugWidth * .9, .006, rugLength * .04);
     }
     for (const dx of [-.34, .34]) for (const dz of [-.35, .35]) box('sofa-foot', 'wood', px + dx * sw, .09, pz + dz * length, .035, .18, .035);
     box('sofa-frame', 'wood', px, .22, pz, sw, .13, length);
@@ -105,7 +111,7 @@ export function buildCityInterior(building: Readonly<CityBuilding>, add: CityAdd
     soft('loose-sofa-cushion', 'porcelain', px + side * sw * .20, .46, pz - length * .23, sw * .42, .20, length * .25);
   };
   const dining = (side: number) => {
-    const px = side * center, sw = zone * .86, pz = d * .10, sd = Math.min(.46, d * .27);
+    const sw = Math.min(.72, zone * .86), px = side * (w / 2 - .04 - sw / 2), pz = d * .10, sd = Math.min(.46, d * .27);
     box('dining-tabletop', 'wood', px, .57, pz, sw, .05, sd);
     for (const dx of [-.35, .35]) for (const dz of [-.32, .32]) box('dining-leg', 'metal', px + dx * sw, .28, pz + dz * sd, .025, .56, .025);
     const seatZ = pz + sd * .5 + .13;
@@ -113,6 +119,7 @@ export function buildCityInterior(building: Readonly<CityBuilding>, add: CityAdd
     for (const dx of [-.27, .27]) box('stool-support', 'wood', px + dx * sw, .15, seatZ, .024, .30, .15);
     cylinder('ceramic-mug', 'porcelain', px, .638, pz, Math.min(.045, sw * .18), .085);
     book(px, .595, pz - sd * .28, sw * .52, sd * .30, seed);
+    return { px, pz, sw };
   };
   const kitchen = (side: number) => {
     const sd = Math.min(.35, d * .23), pz = -d / 2 + sd / 2 + .07;
@@ -126,7 +133,7 @@ export function buildCityInterior(building: Readonly<CityBuilding>, add: CityAdd
     box('kitchen-backsplash', 'porcelain', c.px, .83, pz - sd * .48, c.sw, .32, .025);
   };
   const shelf = (side: number, pz: number) => {
-    const px = side * center, sw = zone * .88, sd = Math.min(.22, d * .17), sh = Math.min(1.13, tall);
+    const sw = Math.min(.65, zone * .88), px = side * (w / 2 - .04 - sw / 2), sd = Math.min(.22, d * .17), sh = Math.min(1.13, tall);
     for (const dx of [-.47, .47]) box('bookcase-upright', 'wood', px + dx * sw, sh / 2, pz, .025, sh, sd);
     for (let level = 0; level < 3; level++) {
       const floor = .06 + level * (sh - .14) / 3;
@@ -141,16 +148,35 @@ export function buildCityInterior(building: Readonly<CityBuilding>, add: CityAdd
   const domestic = ['terraced-apartments', 'narrow-mixed-use', 'split-wings', 'rounded-housing', 'greenhouse-residences', 'split-level-homes', 'waterfront-rowhouses', 'stacked-maisonettes'].includes(building.family);
   const side = seed % 2 ? -1 : 1;
   if (domestic) {
-    if (scheme === 1 || scheme === 4) { lounge(side); kitchen(-side); dining(-side); }
-    else {
-      sleeping(side);
-      cabinet(-side, -d * .28, tall, Math.min(.31, d * .25));
-      const tableZ = d * .18, px = -side * center;
-      box('bedside-table', 'wood', px, .22, tableZ, zone * .9, .44, Math.min(.35, d * .23));
-      box('bedside-drawer', accent, px, .28, tableZ + Math.min(.175, d * .115) + .012, zone * .75, .15, .022);
-      lamp(px, .44, tableZ, Math.min(.22, zone * .75));
-      book(px, .44, tableZ - .10, zone * .68, Math.min(.15, d * .10), seed);
-      if (scheme === 3 && d > 1.9) shelf(-side, d * .38);
+    // Every dwelling is a furnished studio: the sleeping zone is always present,
+    // with its headboard against the rear enclosure and a reading fixture attached.
+    sleeping(side);
+    const cabinetDepth = Math.min(.34, d * .20);
+    if (scheme !== 2) {
+      const wardrobe = cabinet(-side, -d / 2 + cabinetDepth / 2 + .04, tall, cabinetDepth);
+      book(wardrobe.px, tall, -d / 2 + cabinetDepth / 2 + .04, wardrobe.sw * .50, cabinetDepth * .55, seed);
+    }
+    if (scheme === 1 || scheme === 4) {
+      lounge(-side);
+      // A small occasional table sits beside the bed's foot, outside the walking lane.
+      if (d > 2.02) {
+        const tableWidth = Math.min(.28, zone * .4), tableZ = d / 2 - .21;
+        const px = side * (w / 2 - .04 - tableWidth / 2);
+        box('bedside-table', 'wood', px, .21, tableZ, tableWidth, .42, .28);
+        book(px, .42, tableZ, tableWidth * .80, .15, seed);
+      }
+    } else if (scheme === 2) {
+      // This wall has enough run for a compact kitchenette and a front dining setting.
+      kitchen(-side);
+      dining(-side);
+    } else {
+      const tableWidth = Math.min(.52, zone * .80), tableZ = .02;
+      const px = -side * (w / 2 - .04 - tableWidth / 2);
+      box('bedside-table', 'wood', px, .22, tableZ, tableWidth, .44, .34);
+      box('bedside-drawer', accent, px, .28, tableZ + .18, tableWidth * .82, .15, .022);
+      lamp(px, .44, tableZ, .18);
+      book(px, .44, tableZ - .10, tableWidth * .54, .15, seed);
+      shelf(-side, d / 2 - .16);
     }
   } else if (building.family === 'civic-gallery') {
     for (const side of [-1, 1]) {
@@ -158,7 +184,16 @@ export function buildCityInterior(building: Readonly<CityBuilding>, add: CityAdd
       box('gallery-plinth', 'stone', px, .26, -d * .24, zone * .75, .52, Math.min(.42, d * .25));
       emit('gallery-sculpture', new TorusGeometry(Math.min(zone * .25, .17), .038, 6, 15).rotateY(side * .3), 'aqua', px, .76, -d * .24);
     }
-    lounge(-1);
+    lounge(-1); dining(1);
+    // A complete community gallery has framed work, physical exhibits and a reading table.
+    for (const side of [-1, 1]) {
+      const px = side * center, frameWidth = Math.min(.82, zone * .76), rear = -d / 2 + .035;
+      box('gallery-art-frame', 'metal', px, 1.04, rear, frameWidth, .64, .045);
+      box('gallery-art-mat', 'porcelain', px, 1.04, rear + .027, frameWidth * .91, .55, .015);
+      box('gallery-art-print', 'fabric', px, 1.04, rear + .038, frameWidth * .73, .40, .012);
+      for (let stripe = 0; stripe < 3; stripe++) box('gallery-print-relief', 'aqua', px + (stripe - 1) * frameWidth * .15, 1.04 + (stripe % 2 ? .045 : -.035), rear + .048, frameWidth * .065, .24 - stripe * .04, .012);
+    }
+    lamp(-center, 0, d * .28, .20);
   } else if (building.family === 'winter-glasshouse') {
     for (const side of [-1, 1]) {
       const px = side * center;
@@ -177,11 +212,11 @@ export function buildCityInterior(building: Readonly<CityBuilding>, add: CityAdd
     }
   } else {
     // Maker and office rooms keep a real workbench, task seat and storage instead of beds.
-    dining(side); cabinet(-side, -d * .28, tall, Math.min(.32, d * .25));
-    box('workshop-monitor', 'metal', side * center, .81, d * .10 - .10, zone * .76, .34, .045);
-    box('monitor-screen', 'aqua', side * center, .81, d * .10 - .073, zone * .67, .27, .012);
-    box('monitor-stand', 'metal', side * center, .65, d * .10 - .10, .03, .14, .07);
-    book(-side * center, tall, -d * .28, zone * .55, .17, seed);
+    const desk = dining(side), storage = cabinet(-side, -d * .28, tall, Math.min(.32, d * .25));
+    box('workshop-monitor', 'metal', desk.px, .81, desk.pz - .10, desk.sw * .76, .34, .045);
+    box('monitor-screen', 'aqua', desk.px, .81, desk.pz - .073, desk.sw * .67, .27, .012);
+    box('monitor-stand', 'metal', desk.px, .65, desk.pz - .10, .03, .14, .07);
+    book(storage.px, tall, -d * .28, storage.sw * .55, .17, seed);
   }
   // Flush ceiling fixture stays above headroom and does not introduce an aisle obstruction.
   box('ceiling-diffuser', 'porcelain', 0, height - .055, 0, Math.min(.28, w * .3), .035, Math.min(.22, d * .24));
