@@ -2,12 +2,13 @@
 
 import { useEffect, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { BufferGeometry, Color, CylinderGeometry, DoubleSide, Float32BufferAttribute, Group, InstancedBufferAttribute, InstancedMesh, Mesh, MeshBasicMaterial, MeshStandardMaterial, Object3D, PlaneGeometry, ShaderChunk, Vector3 } from 'three';
+import { BufferGeometry, Color, CylinderGeometry, DoubleSide, Float32BufferAttribute, Group, InstancedBufferAttribute, InstancedMesh, Mesh, MeshBasicMaterial, MeshStandardMaterial, MeshPhysicalMaterial, Object3D, PlaneGeometry, ShaderChunk, Vector3 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { coastalSandGLSL, createSandMicroNormal } from './coastMaterial';
 import { applySurface, surfaceTexture } from './surfaceMaterials';
 import { createSeaweedGeometry, createForestKelpGeometry } from './Seaweed';
 import { getReefHabitat, reefFloorHeight, reefFloorVertexHeight, reefRockMesh, type ReefObstacle } from './reefHabitat';
-import { landDistance, smooth } from './terrain';
+import { landDistance } from './terrain';
 import type { EnvironmentProps } from './Water';
 
 /** One translucent instance batch seats each colony in the actual rippled sand surface. */
@@ -51,24 +52,19 @@ export function createReefContactShade(entries:ReefObstacle[]) {
 }
 
 export function reefSeafloorGeometry() {
-  const positions: number[] = [], colors: number[] = [], uvs: number[] = [], indices: number[] = [];
+  const positions: number[] = [], colors: number[] = [], uvs: number[] = [], indices: number[] = [], coasts:number[]=[];
   const width = 206, depth = 216;
   for (let row = 0; row < depth; row++) for (let col = 0; col < width; col++) {
     const x = col - 115, z = row - 140, distance = landDistance(x,z);
     const y = reefFloorVertexHeight(x,z);
     positions.push(x,y,z); uvs.push(x*.3,z*.3);
-    // Match the island shader's submerged shelf before introducing pale sand further out.
-    // The source named sand-color is dark mossy rock, so its raw albedo is unsuitable here.
-    const depth = Math.max(0,-reefFloorHeight(x,z)-.18), blend=smooth(.4,3.5,depth);
-    const shelf=[.55*(1-blend)+.16*blend,.74*(1-blend)+.43*blend,.60*(1-blend)+.38*blend];
-    const openSand=smooth(6.8,12,-distance)*.62;
-    const shade=1+smooth(6.8,9,-distance)*(.025*Math.sin(x*.27+z*.13)+.015*Math.cos(x*.69-z*.52));
-    colors.push((shelf[0]*(1-openSand)+.61*openSand)*shade,(shelf[1]*(1-openSand)+.59*openSand)*shade,(shelf[2]*(1-openSand)+.46*openSand)*shade);
+    colors.push(1,1,1);coasts.push(distance);
     if (row && col) { const i=row*width+col; indices.push(i,i-width,i-1,i-1,i-width,i-width-1); }
   }
   const geometry = new BufferGeometry();
   geometry.setAttribute('position',new Float32BufferAttribute(positions,3));
   geometry.setAttribute('color',new Float32BufferAttribute(colors,3));
+  geometry.setAttribute('aCoast',new Float32BufferAttribute(coasts,1));
   geometry.setAttribute('uv',new Float32BufferAttribute(uvs,2));
   geometry.setIndex(indices); geometry.computeVertexNormals(); geometry.computeBoundingSphere();
   return geometry;
@@ -170,26 +166,27 @@ export function createReefHabitat() {
   const root=new Group();root.name='full-channel-reef-habitat';
   const geometries:BufferGeometry[]=[],materials:(MeshStandardMaterial|MeshBasicMaterial)[]=[],batches:{mesh:InstancedMesh;count:number;structural:boolean}[]=[];
   const time={value:0}, transform=new Object3D(),color=new Color(),plan=getReefHabitat();
-  const floorMaterial=new MeshStandardMaterial({color:'#ffffff',vertexColors:true,roughness:.94,envMapIntensity:.2});
-  floorMaterial.normalMap=surfaceTexture('sand','normal');floorMaterial.normalScale.set(.48,.48);
-  floorMaterial.roughnessMap=surfaceTexture('sand','arm');floorMaterial.aoMap=floorMaterial.roughnessMap;floorMaterial.aoMapIntensity=.3;
+  const floorMaterial=new MeshPhysicalMaterial({color:'#ffffff',vertexColors:true,roughness:.97,envMapIntensity:.2,specularIntensity:.16});
+  const sandNormal=createSandMicroNormal();floorMaterial.normalMap=sandNormal;floorMaterial.normalScale.set(.16,.16);
   floorMaterial.onBeforeCompile=shader=>{
     shader.uniforms.reefRockNormal={value:surfaceTexture('mineral','normal')};
     shader.uniforms.reefRockRoughness={value:surfaceTexture('mineral','arm')};
-    shader.vertexShader=`varying vec2 sandXZ; varying float reefDepth;\n${shader.vertexShader}`.replace('#include <begin_vertex>','#include <begin_vertex>\n sandXZ = position.xz; reefDepth = -position.y;');
-    shader.fragmentShader=`uniform sampler2D reefRockNormal; uniform sampler2D reefRockRoughness; varying vec2 sandXZ; varying float reefDepth;\n${shader.fragmentShader}`.replace('#include <map_fragment>',`
+    shader.vertexShader=`attribute float aCoast; varying float reefCoast; varying vec2 sandXZ; varying float reefDepth;\n${shader.vertexShader}`.replace('#include <begin_vertex>','#include <begin_vertex>\n sandXZ = position.xz; reefDepth = -position.y; reefCoast=aCoast;');
+    shader.fragmentShader=`uniform sampler2D reefRockNormal; uniform sampler2D reefRockRoughness; varying float reefCoast; varying vec2 sandXZ; varying float reefDepth;\n${coastalSandGLSL}\n${shader.fragmentShader}`.replace('#include <map_fragment>',`
+      float coastDetail=smoothstep(6.8,11.,-reefCoast);
       float dune = sin(sandXZ.x * 3.7 + sandXZ.y * 7. + sin(sandXZ.x * .6) * 1.4);
-      float fineGrain = fract(sin(dot(floor(sandXZ * 48.), vec2(127.1,311.7))) * 43758.5453);
       float sandPocket = smoothstep(-.15,.48,sin(sandXZ.x*.21+sin(sandXZ.y*.16)*1.3)*cos(sandXZ.y*.17));
       float stone = smoothstep(3.1, 5.8, reefDepth) * (1.-sandPocket*.68);
       float fracture = abs(sin(sandXZ.x * .8 + sin(sandXZ.y * .62) * 2.));
-      diffuseColor.rgb *= .88 + dune * .028 + fineGrain * .17;
-      diffuseColor.rgb *= mix(1., .79 + fracture * .17, stone);
-      diffuseColor.rgb = mix(diffuseColor.rgb,vec3(.48,.48,.36)*(.92+fineGrain*.10+dune*.024),sandPocket*.38);
-    `).replace('#include <normal_fragment_maps>',ShaderChunk.normal_fragment_maps.replaceAll('texture2D( normalMap, vNormalMapUv ).xyz','mix(texture2D(normalMap, vNormalMapUv * 2.).xyz, texture2D(reefRockNormal, vNormalMapUv * .65).xyz, smoothstep(3.1, 5.8, reefDepth))'))
-      .replace('#include <roughnessmap_fragment>',ShaderChunk.roughnessmap_fragment.replace('texture2D( roughnessMap, vRoughnessMapUv )','mix(texture2D(roughnessMap, vRoughnessMapUv * 2.), texture2D(reefRockRoughness, vRoughnessMapUv * .65), smoothstep(3.1, 5.8, reefDepth))'));
+      diffuseColor.rgb *= submergedSand(reefDepth) * sandGrain(sandXZ);
+      diffuseColor.rgb *= 1. + (dune*.012 + (fracture-.5)*.08*stone)*coastDetail;
+      diffuseColor.rgb = mix(diffuseColor.rgb,vec3(.52,.51,.38)*sandGrain(sandXZ),sandPocket*.22*coastDetail);
+    `).replace('#include <normal_fragment_maps>',ShaderChunk.normal_fragment_maps.replaceAll('texture2D( normalMap, vNormalMapUv ).xyz','mix(texture2D(normalMap, vNormalMapUv).xyz, texture2D(reefRockNormal, vNormalMapUv * .65).xyz, smoothstep(3.1, 5.8, reefDepth)*coastDetail)'))
+      .replace('#include <roughnessmap_fragment>',`#include <roughnessmap_fragment>
+        roughnessFactor=mix(.97,texture2D(reefRockRoughness,sandXZ*.2).g,coastDetail*.5);
+      `);
   };
-  floorMaterial.customProgramCacheKey=()=> 'layered-submerged-sand-rock-v4';materials.push(floorMaterial);
+  floorMaterial.customProgramCacheKey=()=> 'continuous-apron-sand-rock-v5';materials.push(floorMaterial);
   const floorGeometry=reefSeafloorGeometry();geometries.push(floorGeometry);
   const floor=new Mesh(floorGeometry,floorMaterial);floor.name='continuous-rippled-sand-seafloor';floor.receiveShadow=true;floor.raycast=()=>{};root.add(floor);
   const contact=createReefContactShade([...plan.rocks,...plan.colonies]);geometries.push(contact.geometry);materials.push(contact.material);root.add(contact.mesh);
@@ -262,7 +259,7 @@ export function createReefHabitat() {
   kelpMaterial.customProgramCacheKey=()=> 'submerged-forest-kelp-v1';
   for(let form=0;form<2;form++)instances(`reef-kelp-forest-${form}`,createForestKelpGeometry(form),kelpMaterial,plan.kelp.filter(entry=>entry.form===form),entry=>[(entry as typeof plan.kelp[number]).width,entry.height,(entry as typeof plan.kelp[number]).width],entry=>['#bec69c','#a0b881','#c2b18a','#91ac88','#b8c099'][entry.color]);
   let timer:ReturnType<typeof setTimeout>|undefined;
-  function dispose(){geometries.forEach(geometry=>geometry.dispose());materials.forEach(material=>material.dispose());batches.forEach(batch=>batch.mesh.dispose());contact.mesh.dispose();}
+  function dispose(){sandNormal.dispose();geometries.forEach(geometry=>geometry.dispose());materials.forEach(material=>material.dispose());batches.forEach(batch=>batch.mesh.dispose());contact.mesh.dispose();}
   function setQuality(quality:EnvironmentProps['quality']){
     const fraction=quality==='high'?1:quality==='medium'?.76:.52;batches.forEach(batch=>{batch.mesh.count=Math.ceil(batch.count*(batch.structural?1:fraction));});
     const visible=new Set<ReefObstacle>();

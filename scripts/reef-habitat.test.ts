@@ -6,7 +6,7 @@ import { getReefHabitat, reefFloorHeight, reefFloorVertexHeight, reefHabitatCont
 import { createReefContactShade, createReefHabitat, reefCoralGeometry, reefSeafloorGeometry } from '../src/components/world/ReefHabitatScene';
 import { createForestKelpGeometry } from '../src/components/world/Seaweed';
 import { reefFishPositionClear } from '../src/components/world/reefFishState';
-import { landDistance, terrainBaseHeight, islandAt } from '../src/components/world/terrain';
+import { landDistance, terrainBaseHeight, terrainMeshHeight, islandAt } from '../src/components/world/terrain';
 
 test('connected large limestone ridges carry mixed coral growth and continue safely beneath the ferry',()=>{
   const plan=getReefHabitat();assert.equal(plan,getReefHabitat());
@@ -211,4 +211,22 @@ test('shared seabed contains broad shelves and a continuous deep kelp hollow',()
   }
   assert.ok(maximumSlope<1,'continuous shelf transitions have no vertical seams');
   assert.ok(maximumRelief>1.1,'broad relief is visible beyond small sand ripples');
+});
+
+
+test('outer island aprons meet the reef without intersecting or retaining a tall grid lip',()=>{
+  let sampled=0,minGap=Infinity,maxLip=0,maxSlope=0;const islands=new Set<string>();
+  for(let x=-100;x<65;x+=.37)for(let z=-115;z<65;z+=.37){
+    const coast=landDistance(x,z);
+    if(coast< -6.7||coast> -4.2)continue;
+    const height=terrainMeshHeight(x,z),gap=height-reefFloorHeight(x,z);
+    minGap=Math.min(minGap,gap);
+    if(coast< -6.1)maxLip=Math.max(maxLip,gap);
+    maxSlope=Math.max(maxSlope,Math.hypot(terrainMeshHeight(x+.02,z)-terrainMeshHeight(x-.02,z),terrainMeshHeight(x,z+.02)-terrainMeshHeight(x,z-.02))/.04);
+    sampled++;islands.add(islandAt(x,z).island.id);
+  }
+  assert.ok(sampled>10000);assert.equal(islands.size,7,'all seven coasts contribute actual interpolated terrain samples');
+  assert.ok(minGap>.025,`separate depth surfaces: ${minGap}`);
+  assert.ok(maxLip<.19,`outer transition lip: ${maxLip}`);
+  assert.ok(maxSlope<1.25,`bounded continuous bank slope: ${maxSlope}`);
 });

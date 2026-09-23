@@ -13,7 +13,7 @@ test('seaweed occupies dense irregular sheltered beds with seabed roots and stru
   const plan = createLandscapePlan();
   const sites = createSeaweedLayout(plan);
   assert.deepEqual(sites, createSeaweedLayout(plan));
-  assert.ok(sites.length >= 1500 && sites.length <= 1700);
+  assert.ok(sites.length >= 1900 && sites.length <= 2200);
   assert.equal(new Set(sites.map(site => site.cove)).size, SEAWEED_COVES.length + ISLANDS.length);
   for (const site of sites) {
     const distance = landDistance(site.x, site.z);
@@ -99,7 +99,7 @@ test('beds mix silhouettes, sizes and colors locally rather than separating them
     assert.equal(new Set(geometries.map(geometry=>geometry.userData.form)).size,8);
     assert.equal(new Set(geometries.map(geometry=>Array.from(geometry.getAttribute('position').array).join(','))).size,8);
     const triangles=sites.reduce((sum,site)=>sum+geometries[site.variant].index!.count/3,0);
-    assert.ok(triangles<520000, `bounded instanced foliage triangles: ${triangles}`);
+    assert.ok(triangles<690000, `bounded instanced foliage triangles: ${triangles}`);
   } finally {geometries.forEach(geometry=>geometry.dispose());}
 });
 

@@ -4,8 +4,9 @@ import { useEffect, useMemo } from 'react';
 import { Color, Group, IcosahedronGeometry, InstancedMesh, MeshStandardMaterial, Object3D } from 'three';
 import { circulationPaths } from './circulation';
 import { cityBuildings } from './city';
-import { groundRouteAt, landDistance, seededRandom, terrainMeshHeight } from './terrain';
+import { distanceToSegment, groundRouteAt, landDistance, seededRandom, terrainMeshHeight } from './terrain';
 import { world } from '../../content/world';
+import { BRIDGES } from './bridgePlan';
 import { applySurface } from './surfaceMaterials';
 
 export function cityEdgeClear(x: number, z: number) {
@@ -51,26 +52,53 @@ export function createCityPathEdging() {
   return sites;
 }
 
-export function createCityPathEdges() {
-  const sites = createCityPathEdging(), root = new Group(), transform = new Object3D();
-  root.name = 'city-pebble-path-edges';
-  const geometry = new IcosahedronGeometry(1, 1);
-  const material = applySurface(new MeshStandardMaterial({ roughness: .95, color: '#c5c7b4' }), 'mineral');
-  const mesh = new InstancedMesh(geometry, material, sites.length);
-  mesh.name = root.name; mesh.raycast = () => {}; mesh.receiveShadow = true;
-  sites.forEach((site, index) => {
-    transform.position.set(site.x, site.y + .027, site.z); transform.rotation.set(.12, site.yaw, -.05);
-    transform.scale.set(site.size * .72, .04, site.size); transform.updateMatrix(); mesh.setMatrixAt(index, transform.matrix);
-    mesh.setColorAt(index, new Color().setHSL(.11 + site.tint * .03, .08, .67 + site.tint * .2));
-  });
-  mesh.computeBoundingSphere(); root.add(mesh);
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const dispose = () => { geometry.dispose(); material.dispose(); mesh.dispose(); };
-  return { root, sites, retain() { clearTimeout(timer); return () => { timer = setTimeout(dispose, 0); }; }, dispose };
+export function createMainPathEdging() {
+  const random=seededRandom(51073),sites:ReturnType<typeof createCityPathEdging>=[],occupied:Array<[number,number]>=[];
+  const bounds={work:[-4.4,4.4,-2.5,2.65],experience:[-4.35,4.35,-3.2,3.98],research:[-3.9,3.9,-3.65,2.4]} as const;
+  const clear=(x:number,z:number)=>{
+    if(landDistance(x,z)<1.5)return false;
+    for(const [id,b]of Object.entries(bounds)) {
+      const item=world.landmarks.find(value=>value.id===id)!,a=item.rotationY??0,dx=x-item.position[0],dz=z-item.position[2],lx=dx*Math.cos(a)-dz*Math.sin(a),lz=dx*Math.sin(a)+dz*Math.cos(a);
+      if(lx>b[0]-.15&&lx<b[1]+.15&&lz>b[2]-.15&&lz<b[3]+.15)return false;
+    }
+    return BRIDGES.every(bridge=>bridge.samples.slice(1).every((sample,i)=>distanceToSegment(x,z,bridge.samples[i].point,sample.point)>bridge.width/2+.22));
+  };
+  for(const path of circulationPaths().filter(path=>!path.bridge&&path.points[0].x>-45&&path.points[0].x<18&&path.points[0].z>-25&&path.points[0].z<12)) {
+    let carry=0;
+    for(let index=1;index<path.points.length;index++) {
+      const a=path.points[index-1],b=path.points[index],dx=b.x-a.x,dz=b.z-a.z,length=Math.hypot(dx,dz);if(length<.0001)continue;
+      for(let distance=carry;distance<length;distance+=.34)for(const side of [-1,1]) {
+        const offset=side*(path.width/2+.19+(random()-.5)*.035),x=a.x+dx*distance/length+dz/length*offset,z=a.z+dz*distance/length-dx/length*offset;
+        const edge=groundRouteAt(x,z).distance;
+        if(edge<.145||edge>.23||!clear(x,z)||occupied.some(([px,pz])=>Math.hypot(px-x,pz-z)<.27))continue;
+        occupied.push([x,z]);sites.push({x,z,y:terrainMeshHeight(x,z),yaw:Math.atan2(dx,dz)+(random()-.5)*.9,size:.12+random()*.035,tint:random()});
+      }
+      carry=(carry-length)% .34;if(carry<0)carry+=.34;
+    }
+  }
+  return sites;
 }
 
+function createPathEdges(sites:ReturnType<typeof createCityPathEdging>,name:string) {
+  const root=new Group(),transform=new Object3D();root.name=name;
+  const geometry=new IcosahedronGeometry(1,1);
+  const material=applySurface(new MeshStandardMaterial({roughness:.95,color:'#c5c7b4'}),'mineral');
+  const mesh=new InstancedMesh(geometry,material,sites.length);mesh.name=name;mesh.raycast=()=>{};mesh.receiveShadow=true;
+  sites.forEach((site,index)=>{
+    transform.position.set(site.x,site.y+.027,site.z);transform.rotation.set(.12,site.yaw,-.05);
+    transform.scale.set(site.size*.72,.04,site.size);transform.updateMatrix();mesh.setMatrixAt(index,transform.matrix);
+    mesh.setColorAt(index,new Color().setHSL(.11+site.tint*.03,.08,.67+site.tint*.2));
+  });
+  mesh.computeBoundingSphere();root.add(mesh);
+  let timer:ReturnType<typeof setTimeout>|undefined;
+  const dispose=()=>{geometry.dispose();material.dispose();mesh.dispose();};
+  return {root,sites,retain(){clearTimeout(timer);return()=>{timer=setTimeout(dispose,0);};},dispose};
+}
+export function createCityPathEdges(){return createPathEdges(createCityPathEdging(),'city-pebble-path-edges');}
+export function createMainPathEdges(){return createPathEdges(createMainPathEdging(),'main-pebble-path-edges');}
+
 export function CityPathEdges() {
-  const edges = useMemo(() => createCityPathEdges(), []);
-  useEffect(() => edges.retain(), [edges]);
-  return <primitive object={edges.root} dispose={null} />;
+  const edges=useMemo(()=>createCityPathEdges(),[]),mainEdges=useMemo(()=>createMainPathEdges(),[]);
+  useEffect(()=>edges.retain(),[edges]);useEffect(()=>mainEdges.retain(),[mainEdges]);
+  return <group><primitive object={edges.root} dispose={null}/><primitive object={mainEdges.root} dispose={null}/></group>;
 }

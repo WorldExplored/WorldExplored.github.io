@@ -1,6 +1,6 @@
 'use client';
 
-import { CylinderGeometry, SphereGeometry, Vector3, type BufferGeometry } from 'three';
+import { CylinderGeometry, PlaneGeometry, SphereGeometry, Vector3, type BufferGeometry } from 'three';
 import { FurnishedInterior, InteriorBuilder, floorSlab, floorRectangle } from './InteriorKit';
 import { combine, stroke, usePalette, useResources, type ModelProps } from './BuildingKit';
 import { architecturalSurface as surface, architecturalBox as box, doorway, guardRail, stairFlight, windowBay, type ShellParts } from './LandmarkShellKit';
@@ -19,16 +19,16 @@ export function makeResearchInterior() {
       room.chair(-2.72, level, z + .55, Math.PI);
       for (let vial = 0; vial < 3; vial++) room.add('coolant', new CylinderGeometry(.043, .047, .15, 12).translate(-2.36 + vial * .13, level + .84, z + .15));
     }
-    room.shelf(-.63, level, -3.08, 1.1, 1.54, .26);
-    room.box('screen', .85, .6, .035, -1.27, level + 1.3, -3.18);
+    room.shelf(-2.72, level, -3.08, 1.1, 1.54, .26);
+    room.box('screen', .85, .6, .035, -2.72, level + 1.3, -3.18);
     room.lamp(-2.1, level + 2.32, -.9, 1.7);
   }
   // Specimen benches face the full-height eastern glazing; the circulation aisle stays clear.
   room.table(2.57, floor, -1.32, .82, 1.7, .72);
   for (const z of [-1.85, -1.3, -.75]) room.plant(2.6, floor + .76, z, .55);
-  room.table(2.45, RESEARCH_BUILDING.upper, -2.34, 1.25, .6, .7);
-  room.monitor(2.45, RESEARCH_BUILDING.upper + .76, -2.4);
-  room.chair(2.45, RESEARCH_BUILDING.upper, -1.75, Math.PI);
+  room.table(2.9,RESEARCH_BUILDING.upper,-2.76,.95,.6,.7);
+  room.monitor(2.9,RESEARCH_BUILDING.upper+.76,-2.82);
+  room.chair(2.9,RESEARCH_BUILDING.upper,-2.10,Math.PI);
   room.plant(2.9, floor, .89, 1.2);
   room.plant(-3.04, floor, 1.14, .9);
   room.lamp(2.2, 3.52, -.9, 1.4);
@@ -45,14 +45,22 @@ export function makeResearchBuilding() {
   }
   windowBay(parts, -2.94, 1.66, 1.48, floor, 3.65);
   doorway(parts, -1.33, 1.66, 1.42, floor, 3.65);
-  windowBay(parts, .32, 1.66, 1.5, floor, 3.65, 0, .22);
-  windowBay(parts, 2.43, 1.66, 2.47, floor, 3.65, 0, .22);
+  windowBay(parts, .3375, 1.66, 1.595, floor, 3.65, 0, .22);
+  windowBay(parts, 2.4075, 1.66, 2.545, floor, 3.65, 0, .22);
   // The second level steps back at the east, revealing a usable greenhouse terrace.
   for (const x of [-2.77, -.94]) windowBay(parts, x, 1.66, 1.82, upper, 6.4, 0, .32);
-  windowBay(parts, 2.33, -1.18, 2.67, upper, 6.4, 0, .12);
+  // The terrace is reached through a genuine open door, not an unbroken glass wall.
+  const portalX=2.12,portalWidth=1.1,portalTop=upper+2.18;
+  windowBay(parts,1.2225,-1.18,.455,upper,6.4,0,.12);
+  windowBay(parts,3.2275,-1.18,.875,upper,6.4,0,.12);
+  for(const side of [-1,1])parts.walls.push(box(.12,6.4-upper,.2,portalX+side*(portalWidth/2+.06),(upper+6.4)/2,-1.18));
+  parts.walls.push(box(portalWidth,6.4-portalTop,.2,portalX,(portalTop+6.4)/2,-1.18));
+  parts.glass.push(new PlaneGeometry(1.02,2.1).rotateY(Math.PI/2).translate(portalX+portalWidth/2-.02,upper+1.07,-.68));
+  for(const side of [-1,1])parts.frames.push(box(.035,2.18,.1,portalX+side*portalWidth/2,upper+1.09,-1.18));
+  parts.frames.push(box(portalWidth,.055,.12,portalX,portalTop,-1.18));
   for (const z of [-.56, .84]) windowBay(parts, -.05, z, 1.4, upper, 6.4, Math.PI / 2, .1);
-  const floors = [floorRectangle(-1.845, -.87, 3.39, 4.9), floorRectangle(2.54, -2.27, 1.98, 2.1), floorRectangle(.71, -3.06, 1.72, .52)];
-  const stair = stairFlight(.72, 1.28, 1.12, floor, upper, 16, .27);
+  const floors = [floorRectangle(-1.845, -.87, 3.39, 4.9), floorRectangle(2.54, -2.27, 1.98, 2.1), floorRectangle(.71,-2.973,1.72,.694)];
+  const stair = stairFlight(.72,.86,1.12,floor,upper,15,.24);
   const terrace = floorSlab('research-accessible-terrace', [floorRectangle(2.54, .18, 1.98, 2.8)], upper, .18, 'balcony');
   const roof = combine([box(4.17, .2, 5.43, -1.72, 6.5, -.86), box(3.38, .2, 2.59, 2.11, 6.5, -2.22)]);
   const glassRoof = surface((u, v) => new Vector3(.25 + u * 3.56, 6.44, -1.25 + v * 3.05), 18, 4, .065);
@@ -74,7 +82,7 @@ export function makeResearchBuilding() {
     upperRails: combine([guardRail(-.2, 1.42, -.2, -2.65, upper), guardRail(1.58, 1.42, 1.58, -2.65, upper), guardRail(1.5, 1.53, 3.57, 1.53, upper)]),
     bands: combine([box(7.59, .18, .24, 0, 3.735, -3.44), box(7.59, .18, .24, 0, 3.735, 1.7), box(.24, .18, 4.9, -3.67, 3.735, -.87), box(.24, .18, 4.9, 3.67, 3.735, -.87), box(.16, .18, 5.39, -3.78, 6.49, -.87), box(7.58, .18, .16, 0, 6.49, -3.57)]),
     entry: combine([box(2.08, .13, .88, -1.33, 3.27, 1.93), box(.08, 2.18, .08, -2.26, 2.165, 2.24), box(.08, 2.18, .08, -.4, 2.165, 2.24), box(.22, .32, .22, -2.26, .92, 2.24), box(.22, .32, .22, -.4, .92, 2.24)]),
-    threshold: floorSlab('research-door-threshold', [floorRectangle(-1.33, 1.85, 1.46, .42)], 1.07, .27, 'threshold'),
+    threshold: floorSlab('research-door-threshold', [floorRectangle(-1.33,1.8125,1.46,.495)], 1.07, .27, 'threshold'),
     planters: combine(planters), planting: combine(planting),
   };
 }

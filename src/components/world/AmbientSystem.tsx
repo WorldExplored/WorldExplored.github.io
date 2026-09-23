@@ -3,6 +3,7 @@
 // Frame callbacks update retained Three.js resources outside React rendering.
 /* eslint-disable react-hooks/immutability */
 
+import { coastalSandGLSL, createSandMicroNormal } from './coastMaterial';
 import { surfaceTexture } from './surfaceMaterials';
 import { measureConstruction } from './renderDiagnostics';
 import { rockImpactPosition } from './ShoreImpacts';
@@ -201,10 +202,10 @@ function makeLandscape(plan: LandscapePlan) {
   const grassColor = surfaceTexture('grass', 'color') ?? texture;
   const grassNormal = surfaceTexture('grass', 'normal') ?? texture;
   const grassArm = surfaceTexture('grass', 'arm') ?? texture;
-  const groundNormal = surfaceTexture('sand', 'normal') ?? texture;
-  material.normalMap = groundNormal; material.normalScale.set(.24, .24);
-  material.roughnessMap = surfaceTexture('sand', 'arm');
-  material.aoMap = material.roughnessMap; material.aoMapIntensity = .3;
+  const groundNormal = createSandMicroNormal();
+  material.normalMap = groundNormal; material.normalScale.set(.16, .16);
+  material.roughnessMap = null;
+  material.aoMap = null;
   material.onBeforeCompile = shader => {
     shader.uniforms.uShoreTime = shoreTime;
     shader.uniforms.uSandColor = { value: sandColor };
@@ -216,6 +217,7 @@ function makeLandscape(plan: LandscapePlan) {
     shader.vertexShader = `attribute vec3 aTerrain; attribute vec3 aEcology; attribute float aPaving; varying vec3 ecology; varying float paving; attribute float aExposure; varying float shoreExposure; varying vec3 vTerrain; varying vec2 groundXZ;\n${shader.vertexShader}`.replace('#include <begin_vertex>', '#include <begin_vertex>\n vTerrain = aTerrain; ecology=aEcology; paving=aPaving; shoreExposure = aExposure; groundXZ = position.xz;');
     shader.fragmentShader = `uniform sampler2D uSandColor; uniform sampler2D uForestColor; uniform sampler2D uGrassColor; uniform sampler2D uGrassNormal; uniform sampler2D uGrassArm; uniform float uShoreTime; varying vec3 ecology; varying float paving; varying float shoreExposure; varying vec3 vTerrain; varying vec2 groundXZ;
       ${shorelineWaveGLSL}
+      ${coastalSandGLSL}
       float groundHash(vec2 p) { return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453); }
       float groundNoise(vec2 p) { vec2 c=floor(p), f=fract(p); f=f*f*(3.-2.*f); return mix(mix(groundHash(c),groundHash(c+vec2(1.,0.)),f.x),mix(groundHash(c+vec2(0.,1.)),groundHash(c+1.),f.x),f.y); }
       ${shader.fragmentShader}`.replace('#include <map_fragment>', `
@@ -234,16 +236,12 @@ function makeLandscape(plan: LandscapePlan) {
       vec3 sandScan = texture2D(uSandColor,groundXZ*.27).rgb;
       vec3 forestScan = texture2D(uForestColor,mat2(.8,-.6,.6,.8)*groundXZ*.22).rgb;
       float sandRelief = dot(sandScan,vec3(.333));
-      vec3 drySand = mix(vec3(.52,.39,.21),vec3(.74,.62,.38),sandRelief) * (.94 + grain*.10);
-      vec3 wetSand = vec3(.19,.19,.14) * (.96 + grain*.05);
+      vec3 drySand = vec3(.73,.66,.46) * sandGrain(groundXZ);
+      vec3 wetSand = vec3(.37,.34,.24) * sandGrain(groundXZ);
       vec3 sand = mix(drySand,wetSand,wet*.9);
       float ripple = sin(groundXZ.x*13. + groundXZ.y*7. + sin(groundXZ.y*2.3)*2.7)*.0025;
       sand += ripple*(1.-grass);
-      vec3 seabed = mix(vec3(.55,.74,.60),vec3(.16,.43,.38),smoothstep(.4,3.5,depth));
-      float seabedGrain = groundNoise(groundXZ*64.);
-      seabed *= .82 + seabedGrain*.32;
-      float rubble = smoothstep(.58,.75,groundNoise(groundXZ*5.3));
-      seabed = mix(seabed,seabed*vec3(.70,.76,.72),rubble*smoothstep(1.1,3.6,depth));
+      vec3 seabed = submergedSand(depth) * sandGrain(groundXZ);
       sand = mix(sand,seabed,smoothstep(0.,.6,depth));
       float wash = shoreWave(coast,groundXZ,uShoreTime,shoreExposure).y;
       sand = mix(sand,vec3(.73,.84,.80),wash*.22);
@@ -275,7 +273,7 @@ function makeLandscape(plan: LandscapePlan) {
         roughnessFactor=mix(roughnessFactor,texture2D(uGrassArm,grassUv).g,grass*ecology.y*(1.-pathMask));
       `);
   };
-  material.customProgramCacheKey = () => 'coastal-pbr-organic-meadow-v5';
+  material.customProgramCacheKey = () => 'coastal-pbr-continuous-sand-v6';
   const rockResources=createCoastalRocks(plan.rocks),rocks=rockResources.root;
   const shoreDetails=createShoreDetails(plan),townLandscape=createTownLandscape(plan);
   const transform=new Object3D();
@@ -353,7 +351,7 @@ function makeLandscape(plan: LandscapePlan) {
   return { ground, material, rocks, trunks, crowns, shells, shoreDetails, townLandscape, canopyWind, shoreTime, plan, dispose() {
     [ground, ...trunkGeometries, crownGeometry, shellGeometry].forEach(geometry => geometry.dispose());
     [material, trunkMaterial, crownMaterial, shellMaterial].forEach(value => value.dispose());
-    bark.dispose(); leafVeins.dispose(); texture.dispose(); shoreDetails.dispose(); townLandscape.dispose(); shells.dispose(); rockResources.dispose(); woodMeshes.forEach(mesh => mesh.dispose()); crowns.dispose();
+    bark.dispose(); leafVeins.dispose(); texture.dispose(); groundNormal.dispose(); shoreDetails.dispose(); townLandscape.dispose(); shells.dispose(); rockResources.dispose(); woodMeshes.forEach(mesh => mesh.dispose()); crowns.dispose();
   } };
 }
 

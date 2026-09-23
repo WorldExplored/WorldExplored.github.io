@@ -167,3 +167,50 @@ test('workshop equipment remains on its actual capped desk surface', () => {
     assert.ok(equipment.min.y <= support.max.y && equipment.max.y > support.max.y);
   } finally { item.dispose(); }
 });
+
+test('office floors form complete grounded working and meeting areas with separated furniture footprints', () => {
+  for (const building of cityBuildings.filter(value => ['courtyard-block', 'arched-apartments'].includes(value.family))) {
+    const rooms = buildCityArchitecture(building, geometry => geometry.dispose());
+    for (const [variant, room] of rooms.entries()) {
+      const item = fixture(building, room.width, room.depth, variant, room.height);
+      try {
+        const find = (name: string) => item.meshes.find(mesh => mesh.geometry.userData.furniture.name === name);
+        for (const name of ['task-chair-seat', 'task-chair-back', 'chair-caster', 'keyboard-base', 'computer-mouse', 'computer-tower', 'lamp-shade', 'office-bookshelf', 'office-book', 'file-cabinet', 'meeting-tabletop', 'sofa-seat', 'microwave-cabinet', 'fridge-door', 'oven-window']) assert.ok(find(name), `${building.id} floor ${variant} lacks ${name}`);
+        const names = ['dining-tabletop', 'task-chair-seat', 'file-cabinet', 'sofa-seat', 'meeting-tabletop', 'kitchen-cabinet'] as const;
+        const bounds = names.map(name => { const mesh = find(name)!; mesh.geometry.computeBoundingBox(); return mesh.geometry.boundingBox!; });
+        for (let a = 0; a < bounds.length; a++) for (let b = a + 1; b < bounds.length; b++) {
+          const overlapX = Math.min(bounds[a].max.x, bounds[b].max.x) - Math.max(bounds[a].min.x, bounds[b].min.x);
+          const overlapZ = Math.min(bounds[a].max.z, bounds[b].max.z) - Math.max(bounds[a].min.z, bounds[b].min.z);
+          assert.ok(overlapX <= 0 || overlapZ <= 0, `${building.id}: ${names[a]} intersects ${names[b]} in plan`);
+        }
+        for (const name of ['file-cabinet', 'computer-tower', 'chair-caster', 'meeting-table-foot']) {
+          const mesh = find(name)!; mesh.geometry.computeBoundingBox();
+          assert.ok(Math.abs(mesh.geometry.boundingBox!.min.y) < 1e-5, `${name} does not rest on the finished floor`);
+        }
+        const chair = find('task-chair-seat')!; chair.geometry.computeBoundingBox();
+        const chairSize = chair.geometry.boundingBox!.getSize(new Vector3());
+        assert.ok(chairSize.x > .38 && chairSize.z > .37, 'chair is not scaled down to fit leftover space');
+      } finally { item.dispose(); }
+    }
+  }
+});
+
+test('kitchen appliances stay supported and ceiling fixtures touch the ceiling', () => {
+  for (const building of cityBuildings) {
+    const rooms = buildCityArchitecture(building, geometry => geometry.dispose());
+    for (const [variant, room] of rooms.entries()) {
+      const item = fixture(building, room.width, room.depth, variant, room.height);
+      try {
+        const find = (name: string) => item.meshes.find(mesh => mesh.geometry.userData.furniture.name === name);
+        const ceiling = find('ceiling-diffuser')!; ceiling.geometry.computeBoundingBox();
+        assert.ok(Math.abs(ceiling.geometry.boundingBox!.max.y - room.height) < 1e-5);
+        const microwave = find('microwave-cabinet');
+        if (microwave) {
+          assert.ok(find('appliance-wall-bracket') && find('fridge-door') && find('oven-window') && find('hob-ring'));
+          microwave.geometry.computeBoundingBox();
+          assert.ok(microwave.geometry.boundingBox!.max.y <= room.height - .05);
+        }
+      } finally { item.dispose(); }
+    }
+  }
+});

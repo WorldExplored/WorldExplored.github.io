@@ -32,7 +32,7 @@ export function createShoreDetails(plan:LandscapePlan) {
     shellPoints.setXYZ(i,x*rib,shellPoints.getY(i)*.31,z*rib*.75);
   }
   shell.computeVertexNormals();
-  const kinds:Array<[string,BufferGeometry,string,number]>=[['beach-pebbles',pebble(0),'#a6a08d',420],['beach-slate-chips',pebble(1),'#69756e',250],['beach-warm-stones',pebble(2),'#b69c75',210],['beach-small-shells',shell,'#e1d8bf',160],['beached-driftwood',drift,'#a59474',28],['beached-kelp',weed,'#626845',115]];
+  const kinds:Array<[string,BufferGeometry,string,number]>=[['beach-pebbles',pebble(0),'#a6a08d',640],['beach-slate-chips',pebble(1),'#69756e',350],['beach-warm-stones',pebble(2),'#b69c75',290],['beach-small-shells',shell,'#e1d8bf',160],['beached-driftwood',drift,'#a59474',28],['beached-kelp',weed,'#626845',115]];
   const patches=ISLANDS.flatMap((island,islandIndex)=>Array.from({length:18},()=>{
     const a=random()*Math.PI*2,contour=islandContour(island,a),inset=.6+random()*1.8;
     return {x:island.x+Math.cos(a)*(island.rx*contour-inset),z:island.z+Math.sin(a)*(island.rz*contour-inset),radius:.3+random()*.85,islandIndex};
@@ -46,7 +46,7 @@ export function createShoreDetails(plan:LandscapePlan) {
       if([...plan.structures,...plan.rocks].some(v=>Math.hypot(x-v.x,z-v.z)<v.radius+.7))continue;
       if(plan.paths.some(p=>p.points.slice(1).some((b,i)=>distanceToSegment(x,z,p.points[i],b)<p.width/2+.7)))continue;
       const mineral=name.startsWith('beach-');
-      const size=mineral?.035+Math.pow(random(),2)*.18:.45+random()*.75;
+      const size=mineral?.035+Math.pow(random(),2)*(name==='beach-small-shells'?.18:.28):.45+random()*.75;
       transform.position.set(x,terrainMeshHeight(x,z)+(name==='beached-driftwood'?.04:.005),z);transform.rotation.set(0,random()*Math.PI*2,0);transform.scale.setScalar(size);transform.updateMatrix();mesh.setMatrixAt(placed,transform.matrix);
       mesh.setColorAt(placed,tint.setHSL(.10+random()*.05,.06+random()*.08,.74+random()*.23));placed++;
     }

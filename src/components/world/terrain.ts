@@ -1,3 +1,4 @@
+import { coastalApronHeight } from './coastalApron';
 import { circulationPaths } from './circulation';
 import { createGroundRoutes } from './groundRoutes';
 import { coastalBiome } from './coastalBiome';
@@ -88,7 +89,7 @@ export function groundRouteAt(x:number,z:number) {
   return routeField(x,z);
 }
 export function terrainHeight(x:number,z:number) {
-  if(landDistance(x,z)<.15)return terrainBaseHeight(x,z);
+  if(landDistance(x,z)<.15)return coastalApronHeight(x,z);
   return groundRouteAt(x,z).height;
 }
 export function terrainBaseMeshHeight(x:number,z:number) {
@@ -232,7 +233,7 @@ export function archipelagoGeometry() {
     const key = `${ix},${iz}`;
     const existing = vertices.get(key); if (existing !== undefined) return existing;
     const x = ix * step, z = iz * step, distance = landDistance(x,z), route=groundRouteAt(x,z);
-    const y=distance<.15?terrainBaseHeight(x,z):route.height;
+    const y=distance<.15?coastalApronHeight(x,z):route.height;
     meshHeightSamples.set(key,y);
     const index = positions.length / 3; vertices.set(key, index);
     positions.push(x, y, z); uvs.push(x / 4, z / 4); colors.push(1, 1, 1);

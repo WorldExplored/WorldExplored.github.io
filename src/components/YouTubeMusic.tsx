@@ -15,9 +15,9 @@ export function YouTubeMusic({ ref }: { ref?: Ref<WorldMusicHandle> }) {
   const volume = useRef(25);
   const [level, setLevel] = useState(25), [index, setIndex] = useState(0);
   const [state, setState] = useState<MusicState>('preparing'), [attempt, setAttempt] = useState(0);
-  const [elapsed, setElapsed] = useState(0);
+  const [elapsed, setElapsed] = useState(0), [errorCode, setErrorCode] = useState<number | null>(null);
   function start() {
-    requested.current = true;
+    requested.current = true; setErrorCode(null);
     if (state === 'unavailable') { setState('preparing'); setAttempt(value => value + 1); return; }
     setState('loading');
     if (ready.current) { player.current?.unMute(); player.current?.setVolume(volume.current); player.current?.playVideo(); }
@@ -41,7 +41,7 @@ export function YouTubeMusic({ ref }: { ref?: Ref<WorldMusicHandle> }) {
             if (disposed) return;
             clearTimeout(timeout); ready.current = true; player.current = target;
             target.setVolume(volume.current); setLevel(volume.current);
-            if (requested.current && !document.hidden) { target.unMute(); target.playVideo(); setState('loading'); }
+            if (requested.current) { target.unMute(); target.playVideo(); setState('loading'); }
             else setState('ready');
           },
           onStateChange: ({ data }) => {
@@ -58,7 +58,7 @@ export function YouTubeMusic({ ref }: { ref?: Ref<WorldMusicHandle> }) {
             }
           },
           onAutoplayBlocked: () => { if (!disposed) setState('blocked'); },
-          onError: () => { clearTimeout(timeout); if (!disposed) setState('unavailable'); },
+          onError: ({ data }) => { clearTimeout(timeout); if (!disposed) { setErrorCode(data); setState('unavailable'); } },
         },
       });
       player.current = instance;
@@ -68,12 +68,11 @@ export function YouTubeMusic({ ref }: { ref?: Ref<WorldMusicHandle> }) {
       iframe.allow = 'autoplay; encrypted-media; fullscreen; picture-in-picture';
     }).catch(() => { clearTimeout(timeout); if (!disposed) setState('unavailable'); });
     const progress = setInterval(() => { if (ready.current && requested.current) setElapsed(Math.floor(player.current?.getCurrentTime() ?? 0)); }, 1000);
-    const hide = () => { if (document.hidden) { requested.current = false; instance?.pauseVideo(); setState('paused'); } };
-    document.addEventListener('visibilitychange', hide);
-    return () => { disposed = true; clearTimeout(timeout); clearInterval(progress); document.removeEventListener('visibilitychange', hide); instance?.destroy(); player.current = null; ready.current = false; };
+    // Keep the listening intent across tab changes and collapsed settings.
+    return () => { disposed = true; clearTimeout(timeout); clearInterval(progress); instance?.destroy(); player.current = null; ready.current = false; };
   }, [attempt]);
   const active = state === 'playing' || state === 'loading';
-  return <div className="sound-music" role="group" aria-label={profile.soundtrack.settings} data-music-state={state} data-music-seconds={elapsed}>
+  return <div className="sound-music" role="group" aria-label={profile.soundtrack.settings} data-music-state={state} data-music-seconds={elapsed} data-music-error={errorCode ?? undefined}>
     <label className="sound-setting"><span>{profile.soundtrack.settings}</span><input type="checkbox" aria-label={profile.soundtrack.settings} checked={active} onChange={event => event.target.checked ? start() : pause()} /></label>
     <label className="ambience-control__volume"><span>{profile.soundtrack.volume}</span><input aria-label={profile.soundtrack.volume} type="range" min="0" max="100" step="1" value={level} onChange={event => {
       const value = Number(event.target.value); volume.current = value; setLevel(value); player.current?.setVolume(value);

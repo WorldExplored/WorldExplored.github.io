@@ -9,7 +9,7 @@ import { architecturalSurface as surface, architecturalBox as box, doorway, guar
 
 function createExperienceInterior() {
   const b = new InteriorBuilder(); const floor = 1.075;
-  b.floor('experience-studio-floor', [floorRectangle(0, 0, 7.65, 5.28)], floor, .025);
+  b.floor('experience-studio-floor', [floorRectangle(0, 0, 7.84, 5.56)], floor, .025);
   for (const x of [-2.15, 0, 2.15]) {
     b.table(x, floor, -.65, 1.35, .58, .7);
     b.monitor(x, floor + .7, -.73);
@@ -26,7 +26,7 @@ function createExperienceInterior() {
 export function makeExperienceStudio() {
   const parts: ShellParts = { walls: [], glass: [], frames: [] };
   const bottom = 1.075, top = 4.6;
-  for (const x of [-2.86, 2.86]) windowBay(parts, x, 2.88, 2.28, bottom, top, 0, .26);
+  for (const x of [-2.66, 2.66]) windowBay(parts, x, 2.88, 2.72, bottom, top, 0, .26);
   doorway(parts, 0, 2.88, 2.28, bottom, top);
   for (const side of [-1, 1]) for (const z of [-1.44, 1.44]) windowBay(parts, side * 4.02, z, 2.88, bottom, top, Math.PI / 2, .3);
   for (const x of [-2.68, 0, 2.68]) windowBay(parts, x, -2.88, 2.68, bottom, top, 0, .6);
@@ -54,7 +54,7 @@ export function makeExperienceStudio() {
     walls: combine(parts.walls), windows: combine(parts.glass), frames: combine(parts.frames), roof,
     ribs: combine(ribs), clerestory: combine(clerestory), shades: combine(shades), canopy,
     gutter: stroke(t => new Vector3(0, 4.78, -3.22 + t * 6.44), .085, 2),
-    threshold: floorSlab('experience-threshold', [floorRectangle(0, 3.1, 2.3, .58)], 1.08, .23, 'threshold'),
+    threshold: floorSlab('experience-threshold', [floorRectangle(0, 3.075, 2.3, .63)], 1.08, .23, 'threshold'),
   };
 }
 

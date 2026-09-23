@@ -268,3 +268,26 @@ test('rendered paving stays continuous on narrow walks and never bleeds through 
     }
   }finally{geometry.dispose();}
 });
+
+
+test('main island walking surfaces limit longitudinal grades and crossfall across their full rendered width',()=>{
+  let maximumGrade=0,maximumCrossfall=0,samples=0;
+  for(const path of circulationPaths().filter(path=>!path.bridge&&path.points[0].x>-45&&path.points[0].x<18&&path.points[0].z>-25&&path.points[0].z<12)) {
+    for(let i=1;i<path.points.length;i++) {
+      const a=path.points[i-1],b=path.points[i],dx=b.x-a.x,dz=b.z-a.z,length=Math.hypot(dx,dz);if(length<.0001)continue;
+      for(const t of [0,.25,.5,.75]) {
+        const x=a.x+dx*t,z=a.z+dz*t;
+        for(const cross of [-.5,-.25,0,.25,.5]) {
+          const px=x+dz/length*path.width*cross,pz=z-dx/length*path.width*cross,height=terrainMeshHeight(px,pz);
+          const slope=Math.abs(terrainMeshHeight(px+dx/length*.05,pz+dz/length*.05)-terrainMeshHeight(px-dx/length*.05,pz-dz/length*.05))/.1;
+          maximumGrade=Math.max(maximumGrade,slope);samples++;
+          assert.ok(height>=.83&&height<=1.11,`${path.id}: hill or hole in the walking surface ${height}`);
+          assert.ok(slope<.085,`${path.id}: rendered longitudinal grade ${slope}`);
+        }
+        const crossfall=Math.abs(terrainMeshHeight(x+dz/length*path.width/2,z-dx/length*path.width/2)-terrainMeshHeight(x-dz/length*path.width/2,z+dx/length*path.width/2))/path.width;
+        maximumCrossfall=Math.max(maximumCrossfall,crossfall);assert.ok(crossfall<.075,`${path.id}: excessive crossfall ${crossfall}`);
+      }
+    }
+  }
+  assert.ok(samples>4000);console.log({maximumGrade,maximumCrossfall,mainPathSamples:samples});
+});

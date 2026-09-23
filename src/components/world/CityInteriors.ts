@@ -125,11 +125,28 @@ export function buildCityInterior(building: Readonly<CityBuilding>, add: CityAdd
     const sd = Math.min(.35, d * .23), pz = -d / 2 + sd / 2 + .07;
     const c = cabinet(side, pz, .63, sd, true);
     box('kitchen-worktop', 'stone', c.px, .655, pz, c.sw, .045, sd + .025);
-    box('inset-sink-rim', 'metal', c.px, .683, pz, c.sw * .7, .012, sd * .66);
-    box('sink-basin', 'window', c.px, .69, pz, c.sw * .54, .014, sd * .47);
+    const sinkX = c.px + c.sw * .21;
+    box('inset-sink-rim', 'metal', sinkX, .683, pz, c.sw * .43, .012, sd * .66);
+    box('sink-basin', 'window', sinkX, .69, pz, c.sw * .34, .014, sd * .47);
+    box('ceramic-cooktop', 'metal', c.px - c.sw * .26, .685, pz, c.sw * .38, .012, sd * .70);
+    for (const offset of [-.18, .18]) cylinder('hob-ring', 'stone', c.px - c.sw * .26, .695, pz + offset * sd, Math.min(.045, c.sw * .075), .008);
+    box('oven-window', 'metal', c.px - c.sw * .25, .35, pz + sd / 2 + .027, c.sw * .38, .25, .019);
+    box('oven-inner-glass', 'window', c.px - c.sw * .25, .35, pz + sd / 2 + .04, c.sw * .30, .18, .009);
+    box('fridge-door', 'porcelain', c.px + c.sw * .25, .32, pz + sd / 2 + .031, c.sw * .41, .47, .014);
+    box('fridge-freezer-seam', 'metal', c.px + c.sw * .25, .43, pz + sd / 2 + .040, c.sw * .38, .009, .007);
+    box('fridge-pull', 'metal', c.px + c.sw * .12, .34, pz + sd / 2 + .05, .018, .14, .022);
+    for (let vent = 0; vent < 3; vent++) box('fridge-base-vent', 'metal', c.px + c.sw * .25, .12 + vent * .024, pz + sd / 2 + .040, c.sw * .28, .009, .007);
+    box('oven-handle', 'metal', c.px - c.sw * .25, .49, pz + sd / 2 + .05, c.sw * .28, .025, .023);
+    for (const offset of [-.09, .09]) cylinder('oven-control', 'stone', c.px - c.sw * .25 + offset * c.sw, .54, pz + sd / 2 + .04, .016, .015);
+    // A shallow microwave cabinet is physically fixed to the rear backsplash wall.
+    const applianceZ = pz - sd * .16;
+    box('microwave-cabinet', 'porcelain', c.px, 1.10, applianceZ, c.sw * .82, .25, sd * .65);
+    box('microwave-window', 'metal', c.px - c.sw * .06, 1.10, applianceZ + sd * .33, c.sw * .52, .17, .015);
+    box('microwave-control-panel', 'aqua', c.px + c.sw * .29, 1.10, applianceZ + sd * .34, c.sw * .11, .15, .017);
+    for (const support of [-1, 1]) box('appliance-wall-bracket', 'metal', c.px + support * c.sw * .27, 1.07, pz - sd * .46, .025, .35, .08);
     const radius = Math.min(.065, c.sw * .16);
-    emit('curved-faucet', new TorusGeometry(radius, .01, 5, 10, Math.PI).rotateY(Math.PI / 2), 'metal', c.px, .72, pz - sd * .23);
-    cylinder('faucet-base', 'metal', c.px, .70, pz - sd * .23 - radius, .014, .07);
+    emit('curved-faucet', new TorusGeometry(radius, .01, 5, 10, Math.PI).rotateY(Math.PI / 2), 'metal', sinkX, .72, pz - sd * .23);
+    cylinder('faucet-base', 'metal', sinkX, .70, pz - sd * .23 - radius, .014, .07);
     box('kitchen-backsplash', 'porcelain', c.px, .83, pz - sd * .48, c.sw, .32, .025);
   };
   const shelf = (side: number, pz: number) => {
@@ -142,6 +159,64 @@ export function buildCityInterior(building: Readonly<CityBuilding>, add: CityAdd
         const bh = .13 + (n + seed + level) % 3 * .025;
         box('upright-book-pages', 'porcelain', px + (n - 1) * sw * .26, floor + .025 + bh / 2, pz, sw * .18, bh, sd * .72);
         box('colored-book-spine', (n + level) % 2 ? accent : 'fabric', px + (n - 1) * sw * .26, floor + .025 + bh / 2, pz + sd * .38, sw * .19, bh, .014);
+      }
+    }
+  };
+  const workstation = (side: number) => {
+    const sw = Math.min(.98, zone - .08), sd = .52;
+    const px = side * (w / 2 - .065 - sw / 2), pz = -d / 2 + sd / 2 + .07;
+    box('dining-tabletop', 'wood', px, .62, pz, sw, .055, sd);
+    for (const dx of [-.43, .43]) for (const dz of [-.38, .38]) box('desk-leg', 'metal', px + dx * sw, .2975, pz + dz * sd, .035, .595, .035);
+    box('workshop-monitor', 'metal', px, .91, pz - .08, sw * .57, .33, .045);
+    box('monitor-screen', 'aqua', px, .91, pz - .053, sw * .51, .27, .012);
+    box('monitor-stand', 'metal', px, .73, pz - .08, .036, .20, .05);
+    box('monitor-foot', 'metal', px, .659, pz - .065, .17, .025, .12);
+    box('keyboard-base', 'metal', px - sw * .05, .660, pz + .13, sw * .43, .020, .115);
+    for (let row = 0; row < 3; row++) for (let key = 0; key < 7; key++) box('keyboard-key', 'porcelain', px - sw * .05 + (key - 3) * sw * .048, .674, pz + .10 + row * .030, sw * .038, .008, .021);
+    soft('computer-mouse', 'porcelain', px + sw * .32, .675, pz + .13, .052, .035, .085);
+    lamp(px - sw * .38, .6475, pz - .015, .16);
+    const towerX = px + side * sw * .33;
+    box('computer-tower', 'metal', towerX, .24, pz, .17, .48, .32);
+    box('computer-front', 'porcelain', towerX, .24, pz + .166, .14, .43, .012);
+    for (let vent = 0; vent < 5; vent++) box('computer-vent', 'metal', towerX, .15 + vent * .034, pz + .175, .09, .013, .008);
+    box('computer-power-light', 'aqua', towerX, .40, pz + .176, .015, .018, .009);
+    const chairZ = pz + .55;
+    cylinder('chair-column', 'metal', px, .2035, chairZ, .026, .243);
+    for (let leg = 0; leg < 5; leg++) {
+      const angle = leg * Math.PI * 2 / 5;
+      emit('chair-base-spoke', new BoxGeometry(.18, .026, .027).rotateY(-angle), 'metal', px + Math.cos(angle) * .085, .069, chairZ + Math.sin(angle) * .085);
+      emit('chair-caster', new CylinderGeometry(.028, .028, .026, 8).rotateX(Math.PI / 2), 'metal', px + Math.cos(angle) * .16, .028, chairZ + Math.sin(angle) * .16);
+    }
+    soft('task-chair-seat', 'fabric', px, .37, chairZ, .40, .09, .39);
+    box('chair-back-support', 'metal', px, .48, chairZ + .155, .035, .35, .035);
+    soft('task-chair-back', 'fabric', px, .60, chairZ + .19, .37, .40, .075);
+    for (const arm of [-1, 1]) {
+      box('chair-arm-support', 'metal', px + arm * .19, .45, chairZ, .025, .18, .025);
+      soft('chair-armrest', 'metal', px + arm * .19, .54, chairZ, .055, .035, .23);
+    }
+    box('office-pinboard-frame', 'wood', px, 1.29, -d / 2 + .035, sw * .88, .38, .036);
+    box('office-pinboard', 'fabric', px, 1.29, -d / 2 + .057, sw * .81, .32, .014);
+    for (let note = 0; note < 3; note++) box('pinned-note', note % 2 ? 'porcelain' : 'aqua', px + (note - 1) * sw * .20, 1.29 + (note % 2 ? .045 : -.025), -d / 2 + .069, .11, .14, .008);
+  };
+  const officeStorage = (side: number) => {
+    const sw = Math.min(.48, zone * .35), px = side * (aisle + .08 + sw / 2), pz = -d / 2 + .20;
+    box('file-cabinet', 'wood', px, .37, pz, sw, .74, .31);
+    for (let drawer = 0; drawer < 3; drawer++) {
+      const py = .14 + drawer * .225;
+      box('file-drawer', 'porcelain', px, py, pz + .165, sw * .88, .20, .025);
+      box('file-label', 'aqua', px, py + .035, pz + .18, sw * .31, .035, .008);
+      box('file-drawer-pull', 'metal', px, py - .025, pz + .188, sw * .35, .018, .021);
+    }
+    book(px, .74, pz, sw * .74, .20, seed);
+    // A tall shallow bookcase occupies the front end of the working wall.
+    const sx = side * (w / 2 - .04 - .28), shelfZ = d / 2 - .17;
+    for (const edge of [-1, 1]) box('office-bookshelf-side', 'wood', sx + edge * .27, .65, shelfZ, .026, 1.30, .23);
+    for (let level = 0; level < 4; level++) {
+      const floor = .04 + level * .30;
+      box('office-bookshelf', 'wood', sx, floor, shelfZ, .56, .026, .23);
+      for (let bookIndex = 0; bookIndex < 5; bookIndex++) {
+        const bx = sx + (bookIndex - 2) * .095, bh = .17 + (bookIndex + seed) % 3 * .022;
+        box('office-book', bookIndex % 2 ? 'fabric' : 'porcelain', bx, floor + .02 + bh / 2, shelfZ, .067, bh, .17);
       }
     }
   };
@@ -211,13 +286,18 @@ export function buildCityInterior(building: Readonly<CityBuilding>, add: CityAdd
       box('waiting-perch-back', 'wood', px + side * zone * .42, .60, 0, zone * .10, .38, length);
     }
   } else {
-    // Maker and office rooms keep a real workbench, task seat and storage instead of beds.
-    const desk = dining(side), storage = cabinet(-side, -d * .28, tall, Math.min(.32, d * .25));
-    box('workshop-monitor', 'metal', desk.px, .81, desk.pz - .10, desk.sw * .76, .34, .045);
-    box('monitor-screen', 'aqua', desk.px, .81, desk.pz - .073, desk.sw * .67, .27, .012);
-    box('monitor-stand', 'metal', desk.px, .65, desk.pz - .10, .03, .14, .07);
-    book(storage.px, tall, -d * .28, storage.sw * .55, .17, seed);
+    workstation(side);
+    kitchen(-side);
+    officeStorage(side);
+    lounge(-side);
+    // A small discussion table complements seating without claiming the door-to-lift lane.
+    const meetingX = -side * (aisle + .31), meetingZ = d / 2 - .56;
+    cylinder('meeting-table-foot', 'metal', meetingX, .025, meetingZ, .12, .05);
+    cylinder('meeting-table-column', 'metal', meetingX, .24, meetingZ, .026, .43);
+    cylinder('meeting-tabletop', 'wood', meetingX, .46, meetingZ, .23, .045);
+    book(meetingX, .484, meetingZ, .18, .18, seed);
+    cylinder('meeting-cup', 'porcelain', meetingX + .12, .525, meetingZ + .06, .033, .08);
   }
   // Flush ceiling fixture stays above headroom and does not introduce an aisle obstruction.
-  box('ceiling-diffuser', 'porcelain', 0, height - .055, 0, Math.min(.28, w * .3), .035, Math.min(.22, d * .24));
+  box('ceiling-diffuser', 'porcelain', 0, height - .0175, 0, Math.min(.28, w * .3), .035, Math.min(.22, d * .24));
 }

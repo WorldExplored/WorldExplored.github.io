@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createBenthicLife, BENTHIC_KINDS } from '../src/components/world/BenthicLife';
-import { createCityPathEdges, cityEdgeClear } from '../src/components/world/CityPathEdges';
+import { createCityPathEdges, createMainPathEdges, cityEdgeClear } from '../src/components/world/CityPathEdges';
 import { getReefHabitat, reefFloorHeight, reefRockSurfaceHeight } from '../src/components/world/reefHabitat';
 import { createReefFishState, REEF_FISH_COUNTS, reefFishPositionClear } from '../src/components/world/reefFishState';
 import { groundRouteAt, terrainMeshHeight } from '../src/components/world/terrain';
@@ -57,4 +57,23 @@ test('every fish quality tier populates both the old reef and western lighthouse
     assert.ok(fish.filter(fish => fish.position.x > -25).length > count * .4);
     for (const { position } of fish) assert.ok(reefFishPositionClear(position.x, position.y, position.z));
   }
+});
+
+
+test('main-island stone borders are grounded and leave the complete walking union unobstructed',()=>{
+  const edges=createMainPathEdges();
+  try {
+    assert.ok(edges.sites.length>300&&edges.sites.length<650);
+    assert.equal(edges.root.children.length,1,'All main path stones share one instanced draw');
+    for(const site of edges.sites) {
+      assert.ok(Math.abs(site.y-terrainMeshHeight(site.x,site.z))<1e-6);
+      assert.ok(groundRouteAt(site.x,site.z).distance>=.145,'Junctions and entrances remain open');
+      // The narrow axis faces the path; verify the actual rotated stone footprint.
+      for(const angle of [0,Math.PI/2,Math.PI,Math.PI*1.5]) {
+        const lx=Math.cos(angle)*site.size*.72,lz=Math.sin(angle)*site.size;
+        const x=site.x+lx*Math.cos(site.yaw)+lz*Math.sin(site.yaw),z=site.z-lx*Math.sin(site.yaw)+lz*Math.cos(site.yaw);
+        assert.ok(groundRouteAt(x,z).distance>.012,'Stone footprint intrudes into paving');
+      }
+    }
+  } finally {edges.dispose();}
 });

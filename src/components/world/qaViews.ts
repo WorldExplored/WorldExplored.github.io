@@ -2,6 +2,11 @@ import type { CameraPose } from '../../content/world';
 
 /** Deterministic inspection poses used by the local visual-QA capture server. */
 export const QA_VIEWS = Object.freeze({
+  'main-path-grades': { position: [-1, 14, 15], target: [-9, 1, 0] },
+  'main-path-close': { position: [-1, 2.9, 7], target: [-4, 1.1, 4] },
+  'experience-door': { position: [-24.4, 2.6, 6.5], target: [-26.6, 1.75, 1.1] },
+  'research-terrace': { position: [10, 5.7, -3], target: [6, 4.7, -8] },
+  'shore-seam': { position: [2, 9, -29], target: [-3, -1, -20] },
   'kelp-forest': { position: [-22, 8, -19], target: [-33, -4, -30] },
   'kelp-close': { position: [-27, .5, -24], target: [-34, -4, -32] },
   'mineral-shallows': { position: [-60, 3, -33], target: [-67, -2, -38] },
@@ -84,7 +89,7 @@ export const QA_VIEWS = Object.freeze({
   'city-residence-cove-floor-3': { position: [12.53, 6.04, -88.081], target: [11.714, 5.76, -83.074] },
   'city-residence-cove-floor-4': { position: [12.53, 8.04, -88.081], target: [11.714, 7.76, -83.074] },
   'city-office-west-floor-1': { position: [-25.864, 4.7, -84.034], target: [-24.749, 1.75, -79.085] },
-  'city-office-west-floor-2': { position: [-25.864, 4.113, -84.034], target: [-24.749, 3.833, -79.085] },
+  'city-office-west-floor-2': { position: [-26, 4.4, -70.6], target: [-25, 3.8, -77] },
   'city-office-west-floor-3': { position: [-25.864, 6.197, -84.034], target: [-24.749, 5.917, -79.085] },
   'city-office-courtyard-floor-1': { position: [-16.002, 3.5, -70.712], target: [-13.781, 1.75, -75.683] },
   'city-office-courtyard-floor-2': { position: [-16.002, 4.363, -70.712], target: [-13.781, 4.083, -75.683] },

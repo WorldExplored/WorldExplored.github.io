@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { create } from '@react-three/test-renderer';
 import { Box3, BufferGeometry, DoubleSide, Float32BufferAttribute, Mesh, MeshBasicMaterial, Object3D, Raycaster, Vector3 } from 'three';
 import { ComputeBuilding } from '../src/components/world/ComputeBuilding';
-import { ResearchInstitute, makeResearchBuilding } from '../src/components/world/ResearchInstitute';
+import { ResearchInstitute, makeResearchBuilding, makeResearchInterior } from '../src/components/world/ResearchInstitute';
 import { CampusHall } from '../src/components/world/CampusHall';
 import { GardenGallery } from '../src/components/world/GardenGallery';
 import { ReceptionTerminal } from '../src/components/world/ReceptionTerminal';
@@ -21,7 +21,7 @@ const disk=(x:number,z:number,cx:number,cz:number,rx:number,rz=rx)=>((x-cx)/rx)*
 // These limits come from enclosing wall faces, independently of floor constructors.
 const rooms:Record<string,(x:number,z:number)=>boolean>={
   work:(x,z)=>(Math.abs(x)>=1.63-eps&&Math.abs(x)<=4.08+eps&&z>=-2.13-eps&&z<=2.24+eps)||rect(x,z,-1.64,1.64,-1.9,2.18)||rect(x,z,-1.37,1.37,2.18,2.31),
-  experience:(x,z)=>rect(x,z,-3.825,3.825,-2.64,2.64),
+  experience:(x,z)=>rect(x,z,-3.92,3.92,-2.78,2.78),
   research:(x,z)=>rect(x,z,-3.58,3.58,-3.32,1.58),
   purdue:(x,z)=>rect(x,z,-3.24,3.24,-3.2,1.435)||rect(x,z,-.725,.725,1.435,1.515),
   history:(x,z)=>rect(x,z,-5.275,5.275,-3.55,3.55),
@@ -202,4 +202,46 @@ test('experience folded roof has real portal supports meeting the underside',()=
       assert.ok(roofHit&&supportHit&&Math.abs(roofHit.point.y-supportHit.point.y)<.07,'Roof bearing must remain connected to its column or rib');
     }
   }finally{Object.values(geometry).forEach(g=>g.dispose());material.dispose();}
+});
+
+
+test('Experience front wall closes beside the doorway and both repaired entries have continuous finished floors',async()=>{
+  const material=new MeshBasicMaterial({side:DoubleSide});
+  for(const [Component,doorX,endZ]of [[ExperienceStudio,0,3.36],[ResearchInstitute,-1.33,2.04]] as const) {
+    const renderer=await create(<Component active={false} paused quality="high" runtime={{current:createSceneRuntime()}}/>);
+    const meshes=renderer.scene.findAll(node=>node.instance.type==='Mesh').map(node=>new Mesh((node.instance as Mesh).geometry,material));
+    try {
+      const floorMeshes=meshes.filter(mesh=>mesh.geometry.userData.floor||mesh.geometry.userData.floors?.length);
+      const startZ=Component===ExperienceStudio?2.52:1.4;
+      for(let z=startZ;z<endZ;z+=.017)for(const x of [doorX-.5,doorX,doorX+.5]) {
+        const hit=new Raycaster(new Vector3(x,1.12,z),new Vector3(0,-1,0),0,.08).intersectObjects(floorMeshes)[0];
+        assert.ok(hit&&hit.point.y>=1.059,`Unfloored entry joint at ${x},${z}`);
+      }
+      if(Component===ResearchInstitute)for(const x of [-.445,1.08,1.12,1.16])for(const y of [1.2,1.5,2.4,3.4])assert.ok(new Raycaster(new Vector3(x,y,1.91),new Vector3(0,0,-1),0,.38).intersectObjects(meshes).length,`Research front bay hole at ${x},${y}`);
+      if(Component===ExperienceStudio)for(const side of [-1,1])for(let x=1.16;x<1.82;x+=.023)for(const y of [1.2,1.5,2.4,3.9,4.4]) {
+        const hit=new Raycaster(new Vector3(side*x,y,3.12),new Vector3(0,0,-1),0,.38).intersectObjects(meshes)[0];
+        assert.ok(hit,`Experience door-side wall hole at ${side*x},${y}`);
+      }
+    } finally {await renderer.unmount();}
+  }
+  material.dispose();
+});
+
+test('Research upper landing connects both laboratories and the planted terrace with standing clearance',()=>{
+  const building=makeResearchBuilding(),interior=makeResearchInterior(),material=new MeshBasicMaterial({side:DoubleSide});
+  const all=[...Object.values(building),...Object.values(interior)].filter(geometry=>geometry.getAttribute('position')?.count).map(geometry=>new Mesh(geometry,material));
+  const floors=[building.upper,building.terrace,building.steps].map(geometry=>new Mesh(geometry,material)),upper=3.825;
+  const routes=[[[.72,-2.973],[-1.3,-2.973],[-1.3,.7]],[[.72,-2.973],[2.05,-2.973],[2.05,.9]]];
+  try {
+    for(const route of routes)for(let i=1;i<route.length;i++) {
+      const a=route[i-1],b=route[i],dx=b[0]-a[0],dz=b[1]-a[1],length=Math.hypot(dx,dz);
+      for(let distance=0;distance<=length;distance+=.045)for(const offset of [-.27,0,.27]) {
+        const x=a[0]+dx/length*distance+dz/length*offset,z=a[1]+dz/length*distance-dx/length*offset;
+        const ground=new Raycaster(new Vector3(x,upper+.03,z),new Vector3(0,-1,0),0,.05).intersectObjects(floors)[0];
+        assert.ok(ground&&Math.abs(ground.point.y-upper)<.001,`Research route loses its floor at ${x},${z}`);
+        const ray=new Raycaster(new Vector3(x,upper+.12,z),new Vector3(0,1,0),0,1.72);
+        assert.equal(ray.intersectObjects(all).length,0,`Research route obstructed at ${x},${z}`);
+      }
+    }
+  } finally {Object.values(building).forEach(g=>g.dispose());Object.values(interior).forEach(g=>g.dispose());material.dispose();}
 });

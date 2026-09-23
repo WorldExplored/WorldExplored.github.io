@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, statSync } from 'node:fs';
-import { MeshStandardMaterial } from 'three';
+import { MeshStandardMaterial, NoColorSpace, LinearMipmapLinearFilter } from 'three';
+import { createSandMicroNormal } from '../src/components/world/coastMaterial';
 import { applySurface } from '../src/components/world/surfaceMaterials';
 import { lighthouseAccessCurve, createLighthouseAccess } from '../src/components/world/LighthouseAccess';
 import { terrainMeshHeight } from '../src/components/world/terrain';
@@ -27,4 +28,16 @@ test('lighthouse coastal route has continuous bearings, bounded treads and a con
 test('active page omits the unapproved music control while preserving its implementation',()=>{
   const page=readFileSync('src/components/Habitat.tsx','utf8');
   assert.doesNotMatch(page,/<AudioControl\b/);assert.match(readFileSync('src/components/AudioControl.tsx','utf8'),/export function AudioControl/);
+});
+
+
+test('shore mineral grain is neutral, subtle and filtered instead of coarse rocky relief',()=>{
+  const texture=createSandMicroNormal();
+  try {
+    assert.equal(texture.colorSpace,NoColorSpace);assert.equal(texture.minFilter,LinearMipmapLinearFilter);assert.ok(texture.generateMipmaps);
+    const {data,width,height}=texture.image;assert.ok(data);assert.equal(width,128);assert.equal(height,128);
+    let x=0,y=0;
+    for(let i=0;i<data.length;i+=4){assert.ok(data[i]>=116&&data[i]<=140);assert.ok(data[i+1]>=116&&data[i+1]<=140);assert.equal(data[i+2],254);x+=data[i];y+=data[i+1];}
+    assert.ok(Math.abs(x/(width*height)-128)<.2);assert.ok(Math.abs(y/(width*height)-128)<.2);
+  }finally{texture.dispose();}
 });
