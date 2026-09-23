@@ -76,7 +76,7 @@ test('every city room floor is bounded by the inner faces of its actual generate
       for(const floor of floors){
         const name=floor.userData.floor.name,walls=geometries.filter(g=>g.userData.roomWall?.room===name);
         const curved=walls.find(g=>g.userData.roomWall.role==='ellipse');
-        if(curved){const b=curved.boundingBox!;assertContained(floor,(x,z)=>disk(x,z,0,0,Math.max(Math.abs(b.min.x),Math.abs(b.max.x)),Math.max(Math.abs(b.min.z),Math.abs(b.max.z))),name);continue;}
+        if(curved){const b=new Box3();for(const wall of walls.filter(g=>g.userData.roomWall.role==='ellipse'))b.union(wall.boundingBox!);assertContained(floor,(x,z)=>disk(x,z,0,0,Math.max(Math.abs(b.min.x),Math.abs(b.max.x)),Math.max(Math.abs(b.min.z),Math.abs(b.max.z))),name);continue;}
         const bound=(role:string)=>walls.find(g=>g.userData.roomWall.role===role||(role==='back'&&g.userData.roomWall.role==='back-left'))!.boundingBox!;
         const left=bound('left').max.x,right=bound('right').min.x,back=bound('back').max.z,front=bound('front').min.z;
         assertContained(floor,(x,z)=>rect(x,z,left,right,back,front),name);
@@ -85,7 +85,7 @@ test('every city room floor is bounded by the inner faces of its actual generate
       const ground=geometries.filter(g=>g.userData.roomWall?.ground), envelopes:Array<(x:number,z:number)=>boolean>=[];
       for(const id of new Set(ground.map(g=>g.userData.roomWall.room))){
         const walls=ground.filter(g=>g.userData.roomWall.room===id),ellipse=walls.find(g=>g.userData.roomWall.role==='ellipse');
-        if(ellipse){const b=ellipse.boundingBox!;envelopes.push((x,z)=>disk(x,z,0,0,b.max.x+.08,b.max.z+.08));continue;}
+        if(ellipse){const b=new Box3();for(const wall of walls.filter(g=>g.userData.roomWall.role==='ellipse'))b.union(wall.boundingBox!);envelopes.push((x,z)=>disk(x,z,0,0,b.max.x+.08,b.max.z+.08));continue;}
         const bounds=new Box3();for(const wall of walls)bounds.union(wall.boundingBox!);
         envelopes.push((x,z)=>rect(x,z,bounds.min.x-.025,bounds.max.x+.025,bounds.min.z-.025,bounds.max.z+.025));
       }
@@ -95,6 +95,11 @@ test('every city room floor is bounded by the inner faces of its actual generate
         const columns=geometries.map(g=>g.boundingBox!).filter(b=>Math.abs(b.min.y)<eps&&Math.abs(b.max.y-2.14)<eps&&Math.abs(b.max.x-b.min.x-.12)<eps&&Math.abs(b.max.z-b.min.z-.12)<eps);
         assert.equal(columns.length,4,'Station canopy retains four grounded supports');
         for(const column of columns)envelopes.push((x,z)=>rect(x,z,column.min.x-.021,column.max.x+.021,column.min.z-.021,column.max.z+.021));
+      }
+      if(building.family==='stacked-maisonettes') {
+        const columns=geometries.filter(g=>g.userData.structuralSupport?.role==='column');
+        assert.equal(columns.length,2,'Offset maisonette retains two ground-bearing columns');
+        for(const column of columns){const b=column.boundingBox!;assert.ok(Math.abs(b.min.y)<eps);envelopes.push((x,z)=>rect(x,z,b.min.x-.046,b.max.x+.046,b.min.z-.046,b.max.z+.046));}
       }
       const foundation=geometries.find(g=>g.userData.floor?.kind==='foundation')!;
       assertContained(foundation,(x,z)=>envelopes.some(contains=>contains(x,z)),`${building.id} foundation`);

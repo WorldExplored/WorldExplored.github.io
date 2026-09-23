@@ -61,7 +61,7 @@ test('dolphin anatomy is smaller than the two-unit ferry and uses outward normal
       const size=new Box3().setFromObject(animal).getSize(new Vector3());assert.ok(Math.max(size.x,size.z)<1.23);
       for(const name of ['horizontal-tail-flukes','eyes-mouth-and-blowhole','separated-lower-jaw'])assert.ok(animal.getObjectByName(name));
     }
-    life.setQuality('low');assert.equal(life.root.children.filter(o=>o.name==='offshore-shark'&&o.visible).length,0);
+    life.setQuality('low');assert.equal(life.root.children.filter(o=>o.name==='offshore-shark'&&o.visible).length,1);
     life.setQuality('high');assert.equal(life.root.children.filter(o=>o.name==='offshore-shark'&&o.visible).length,2);
     life.update(.05); const positions=dolphins.map(o=>o.position.toArray());life.update(5,true);assert.deepEqual(dolphins.map(o=>o.position.toArray()),positions);
   }finally{life.dispose();}
@@ -71,9 +71,12 @@ test('offshore sharks remain seaward with smaller bodies and pause with the worl
     const state=createDolphinState(index,true),previous=state.position.clone();
     for(let frame=0;frame<36000;frame++){
       assert.equal(stepDolphin(state,1/60),false);
-      assert.ok(state.position.distanceTo(previous)*60<.55);
+      assert.ok(state.position.distanceTo(previous)*60<.7);
       if(frame%60===0)assert.ok(dolphinCoastClearance(state.position.x,state.position.z)>4);
-      assert.ok(state.position.y<-.24&&state.position.y>-.30);
+      const surface=harborWaterHeight(state.position.x,state.position.z,state.time);
+      assert.ok(surface-state.position.y>=.269&&surface-state.position.y<=.411);
+      assert.ok(state.position.y+.52*.28<surface-.1,'whole back remains submerged');
+      assert.ok(state.position.y+.52*.98>surface+.08,'dorsal tip is visible above the waves');
       previous.copy(state.position);
     }
     const position=state.position.clone(),time=state.time;stepDolphin(state,2,true);assert.equal(state.time,time);assert.deepEqual(state.position,position);

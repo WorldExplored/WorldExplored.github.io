@@ -53,7 +53,7 @@ export function createDolphinLife() {
   const add = (group: Group, name: string, geometry: BufferGeometry, mat: MeshStandardMaterial) => { geometries.add(geometry); const mesh = new Mesh(geometry,mat); mesh.name = name; mesh.raycast = () => {}; group.add(mesh); return mesh; };
   const states = [createDolphinState(0),createDolphinState(1),createDolphinState(2),createDolphinState(0,true),createDolphinState(1,true)];
   const shared = [false,true].map(shark => {
-    const details: BufferGeometry[] = [fin([[-.46,.21],[-.39,.55],[-.28,.72],[-.16,.58],[-.13,.39],[.12,.27]])];
+    const details: BufferGeometry[] = [fin(shark ? [[-.54,.20],[-.45,.46],[-.16,.98],[-.10,.97],[-.12,.62],[.13,.25]] : [[-.46,.21],[-.39,.55],[-.28,.72],[-.16,.58],[-.13,.39],[.12,.27]])];
     const features: BufferGeometry[] = [];
     const eyeX = shark ? 1.04 : .81, eyeZ = shark ? .2 : .167;
     for (const side of [-1,1]) {
@@ -72,7 +72,7 @@ export function createDolphinLife() {
   });
   shared.forEach(parts => Object.values(parts).forEach(geometry => geometries.add(geometry)));
   const creatures = states.map(state => {
-    const animal = new Group(); animal.name = state.shark ? 'offshore-shark' : 'bottlenose-dolphin'; animal.scale.setScalar(state.shark ? .45 : .34); root.add(animal);
+    const animal = new Group(); animal.name = state.shark ? 'offshore-shark' : 'bottlenose-dolphin'; animal.scale.setScalar(state.shark ? .52 : .34); root.add(animal);
     const geometry = shared[Number(state.shark)], skin = skins[Number(state.shark)];
     add(animal,'countershaded-fusiform-body',geometry.body,bodyMaterial);
     add(animal,'rostrum-dorsal-and-paired-flippers',geometry.details,skin);
@@ -96,7 +96,7 @@ export function createDolphinLife() {
       if (stepDolphin(state,delta,false,waterTime)) onContact?.(state.splash);
       const {animal,tail} = creatures[i]; animal.position.copy(state.position); animal.rotation.set(0,state.heading,0); animal.rotateZ(state.pitch);
       if (state.shark) tail.rotation.y = state.tail; else tail.rotation.z = state.tail;
-      if (state.shark) animal.visible = quality !== 'low';
+      if (state.shark) animal.visible = quality !== 'low' || state.index === 0;
       if (i > 2) return;
       const {ring,drops} = splashes[i], age = state.splashAge; ring.visible = drops.visible = age < 1.1;
       if (age >= 1.1) return;
@@ -110,7 +110,7 @@ export function createDolphinLife() {
       drops.instanceMatrix.needsUpdate = true;
     });
   }
-  function setQuality(tier: EnvironmentProps['quality']) { quality=tier; creatures.forEach((creature,i) => { creature.animal.visible = i < 3 || tier !== 'low'; }); }
+  function setQuality(tier: EnvironmentProps['quality']) { quality=tier; creatures.forEach((creature,i) => { creature.animal.visible = i < 4 || tier !== 'low'; }); }
   update(0);
   // Shared geometry is retained across Strict Mode's effect replay.
   let timer: ReturnType<typeof setTimeout>;

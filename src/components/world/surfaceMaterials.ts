@@ -1,6 +1,6 @@
 import { MeshStandardMaterial, RepeatWrapping, SRGBColorSpace, TextureLoader, Vector2, type Texture } from 'three';
 
-export type SurfaceName = 'mineral' | 'sand' | 'forest' | 'cedar';
+export type SurfaceName = 'mineral' | 'sand' | 'forest' | 'cedar' | 'grass';
 export const surfacePalette = {
   porcelain: '#edf6ef', cobalt: '#1262c4', aqua: '#06abc1', glazing: '#124b62',
   lime: '#83b92b', foliage: '#287843', youngLeaf: '#58a432', cedar: '#986345',

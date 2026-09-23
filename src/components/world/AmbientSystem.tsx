@@ -43,7 +43,7 @@ const plantVertex = /* glsl */ `
     local.y -= bend * .045;
     vec4 mv = modelViewMatrix * local;
     vTint = aTint;
-    vLight = .64 + min(position.y,1.) * .5;
+    vLight = .57 + min(position.y * 1.7,1.) * .46;
     vDistance = length(mv.xyz);
     gl_Position = projectionMatrix * mv;
   }
@@ -62,15 +62,15 @@ const plantFragment = /* glsl */ `
   }
 `;
 
-function tuftGeometry() {
+export function tuftGeometry() {
   const positions: number[] = [];
   const indices: number[] = [];
-  for (let blade = 0; blade < 7; blade++) {
+  for (let blade = 0; blade < 10; blade++) {
     const angle = blade * 2.399;
-    const cx = Math.cos(angle) * .25;
-    const cz = Math.sin(angle) * .25;
-    const height = .25 + (blade % 3) * .10;
-    const width = .024;
+    const cx = Math.cos(angle) * (.08 + (blade % 4) * .057);
+    const cz = Math.sin(angle) * (.08 + (blade % 4) * .057);
+    const height = .17 + ((blade * 7) % 11) * .034;
+    const width = .008 + (blade % 3) * .004;
     const start = positions.length / 3;
     for (const [x, y, z] of [[-width, 0, 0], [width, 0, 0], [-width * .8, height * .48, .025], [width * .8, height * .48, .025], [-width * .4, height * .83, .08], [width * .4, height * .83, .08], [.04, height, .14]]) {
       positions.push(cx + x * Math.cos(angle) - z * Math.sin(angle), y, cz + x * Math.sin(angle) + z * Math.cos(angle));
@@ -130,8 +130,9 @@ function makePlants(plan: LandscapePlan, flowers: boolean, prepared?: PlantPosit
   const colors = new Float32Array(maximum * 3);
   const transform = new Object3D();
   const tint = new Color();
-  const dark = new Color('#286a35');
-  const light = new Color('#70a847');
+  const dark = new Color('#344e2b');
+  const light = new Color('#81935a');
+  const dry = new Color('#9c9266');
   const random = seededRandom(flowers ? 713 : 914);
   const occupied = new Uint16Array(160 * 160);
   for (let index = 0; index < maximum; index++) {
@@ -142,7 +143,13 @@ function makePlants(plan: LandscapePlan, flowers: boolean, prepared?: PlantPosit
     transform.updateMatrix();
     mesh.setMatrixAt(index, transform.matrix);
     phases[index] = plant.phase;
-    if (flowers) tint.set('#ffffff'); else tint.copy(dark).lerp(light, .25 + random() * .5);
+    if (flowers) tint.set('#ffffff'); else {
+      const patch = .5 + .5 * Math.sin(plant.x * .73 + Math.sin(plant.z * .31) * 2.3) * Math.cos(plant.z * .51);
+      tint.copy(dark).lerp(light, .12 + patch * .58 + random() * .2);
+      if (random() < .13 + patch * .14) tint.lerp(dry, .25 + random() * .42);
+      transform.scale.y *= .58 + patch * .5 + random() * .2;
+      transform.updateMatrix();mesh.setMatrixAt(index, transform.matrix);
+    }
     colors.set([tint.r, tint.g, tint.b], index * 3);
     const x = Math.floor((plant.x + 120) / 1.5);
     const z = Math.floor((plant.z + 120) / 1.5);
@@ -187,21 +194,27 @@ function makeLandscape(plan: LandscapePlan) {
     }
   }
   const texture = mineralTexture();
-  const material = new MeshPhysicalMaterial({ color: '#ffffff', specularIntensity: .32, vertexColors: true, map: texture, roughness: .94, clearcoat: 0, envMapIntensity: .2 });
+  const material = new MeshPhysicalMaterial({ color: '#ffffff', specularIntensity: .16, vertexColors: true, map: texture, roughness: .94, clearcoat: 0, envMapIntensity: .2 });
   const shoreTime = { value: 0 };
   const sandColor = surfaceTexture('sand', 'color') ?? texture;
   const forestColor = surfaceTexture('forest', 'color') ?? texture;
+  const grassColor = surfaceTexture('grass', 'color') ?? texture;
+  const grassNormal = surfaceTexture('grass', 'normal') ?? texture;
+  const grassArm = surfaceTexture('grass', 'arm') ?? texture;
   const groundNormal = surfaceTexture('sand', 'normal') ?? texture;
-  material.normalMap = groundNormal; material.normalScale.set(.14, .14);
+  material.normalMap = groundNormal; material.normalScale.set(.24, .24);
   material.roughnessMap = surfaceTexture('sand', 'arm');
   material.aoMap = material.roughnessMap; material.aoMapIntensity = .3;
   material.onBeforeCompile = shader => {
     shader.uniforms.uShoreTime = shoreTime;
     shader.uniforms.uSandColor = { value: sandColor };
     shader.uniforms.uForestColor = { value: forestColor };
+    shader.uniforms.uGrassColor = { value: grassColor };
+    shader.uniforms.uGrassNormal = { value: grassNormal };
+    shader.uniforms.uGrassArm = { value: grassArm };
     if (diagnostics) return;
     shader.vertexShader = `attribute vec3 aTerrain; attribute vec3 aEcology; attribute float aPaving; varying vec3 ecology; varying float paving; attribute float aExposure; varying float shoreExposure; varying vec3 vTerrain; varying vec2 groundXZ;\n${shader.vertexShader}`.replace('#include <begin_vertex>', '#include <begin_vertex>\n vTerrain = aTerrain; ecology=aEcology; paving=aPaving; shoreExposure = aExposure; groundXZ = position.xz;');
-    shader.fragmentShader = `uniform sampler2D uSandColor; uniform sampler2D uForestColor; uniform float uShoreTime; varying vec3 ecology; varying float paving; varying float shoreExposure; varying vec3 vTerrain; varying vec2 groundXZ;
+    shader.fragmentShader = `uniform sampler2D uSandColor; uniform sampler2D uForestColor; uniform sampler2D uGrassColor; uniform sampler2D uGrassNormal; uniform sampler2D uGrassArm; uniform float uShoreTime; varying vec3 ecology; varying float paving; varying float shoreExposure; varying vec3 vTerrain; varying vec2 groundXZ;
       ${shorelineWaveGLSL}
       float groundHash(vec2 p) { return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453); }
       float groundNoise(vec2 p) { vec2 c=floor(p), f=fract(p); f=f*f*(3.-2.*f); return mix(mix(groundHash(c),groundHash(c+vec2(1.,0.)),f.x),mix(groundHash(c+vec2(0.,1.)),groundHash(c+1.),f.x),f.y); }
@@ -211,7 +224,8 @@ function makeLandscape(plan: LandscapePlan) {
       float slope = vTerrain.z;
       float grain = groundNoise(groundXZ*39.);
       float broad = groundNoise(groundXZ*.62);
-      float grass = ecology.x * (1.-smoothstep(.48,.86,slope));
+      float meadow = groundNoise(groundXZ*1.9 + vec2(broad*2.));
+      float grass = ecology.x * (1.-smoothstep(.48,.86,slope)) * (.78 + .22*smoothstep(.16,.73,meadow));
       float pathAA=max(fwidth(paving)*1.6,.018);
       float pathMask=1.-smoothstep(-pathAA,pathAA*2.2,paving);
       float wet = 1.-smoothstep(.09,.40,elevation);
@@ -234,7 +248,13 @@ function makeLandscape(plan: LandscapePlan) {
       float wash = shoreWave(coast,groundXZ,uShoreTime,shoreExposure).y;
       sand = mix(sand,vec3(.73,.84,.80),wash*.22);
       vec3 soil = mix(vec3(.22,.16,.095),vec3(.33,.25,.14),broad);
-      vec3 groundcover=mix(vec3(.018,.115,.035),vec3(.07,.29,.065),broad) * (.7+dot(forestScan,vec3(.333))*1.2);
+      vec3 groundcover=mix(vec3(.045,.095,.024),vec3(.12,.20,.052),broad) * (.78+dot(forestScan,vec3(.333))*.82);
+      float thatch=smoothstep(.58,.77,groundNoise(groundXZ*8.1));
+      groundcover=mix(groundcover,vec3(.19,.17,.075),thatch*.29);
+      vec2 grassUv=mat2(.8,-.6,.6,.8)*groundXZ*.5;
+      vec3 grassScan=texture2D(uGrassColor,grassUv).rgb;
+      float grassAO=texture2D(uGrassArm,grassUv).r;
+      groundcover=mix(groundcover,grassScan*vec3(1.25,1.65,1.03),.67)*(.78+grassAO*.22);
       vec3 inland=mix(soil,groundcover,grass);
       vec3 townGravel=mix(vec3(.055,.12,.068),vec3(.15,.22,.095),broad)*(.91+grain*.12);
       inland=mix(inland,mix(townGravel,groundcover,grass),ecology.z);
@@ -245,9 +265,17 @@ function makeLandscape(plan: LandscapePlan) {
       pavingColor*=.92+grain*.12+sandRelief*.12;
       surface=mix(surface,pavingColor,pathMask);
       diffuseColor.rgb *= surface;
-      `).replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n roughnessFactor = mix(.94,.32,wet*(1.-grass)*(1.-smoothstep(.2,1.,depth)));');
+      `).replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+        vec3 meadowNormal=texture2D(uGrassNormal,grassUv).xyz*2.-1.;
+        meadowNormal.xy*=.48;
+        mat3 meadowFrame=getTangentFrame(-vViewPosition,normal,grassUv);
+        normal=normalize(mix(normal,meadowFrame*normalize(meadowNormal),grass*ecology.y*(1.-pathMask)));
+      `).replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
+        roughnessFactor = mix(.94,.32,wet*(1.-grass)*(1.-smoothstep(.2,1.,depth)));
+        roughnessFactor=mix(roughnessFactor,texture2D(uGrassArm,grassUv).g,grass*ecology.y*(1.-pathMask));
+      `);
   };
-  material.customProgramCacheKey = () => 'coastal-pbr-promenade-v4';
+  material.customProgramCacheKey = () => 'coastal-pbr-organic-meadow-v5';
   const rockResources=createCoastalRocks(plan.rocks),rocks=rockResources.root;
   const shoreDetails=createShoreDetails(plan),townLandscape=createTownLandscape(plan);
   const transform=new Object3D();

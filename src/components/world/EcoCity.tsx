@@ -33,13 +33,28 @@ function arch(points: Vector3[], radius = .065, segments = 28) {
 function finishSurface(material: MeshPhysicalMaterial, finish: Finish) {
   if (finish === 'stone' || finish === 'porcelain') applySurface(material, 'mineral', 1.5);
   if (finish === 'wood') applySurface(material, 'cedar', 1.2);
+  if (finish === 'window' || finish === 'glass') {
+    // Sky reflectance grows at grazing angles, making the enclosure visible without hiding rooms.
+    material.onBeforeCompile = shader => {
+      shader.fragmentShader = shader.fragmentShader.replace('#include <opaque_fragment>', `
+        float paneFresnel = pow(1. - abs(dot(normalize(vViewPosition), normal)), 3.);
+        vec3 paneReflection = inverseTransformDirection(reflect(-normalize(vViewPosition), normal), viewMatrix);
+        vec3 reflectedSky = mix(vec3(.24,.40,.42), vec3(.48,.72,.83), smoothstep(-.15,.20,paneReflection.y));
+        reflectedSky = mix(reflectedSky, vec3(.16,.40,.64), smoothstep(.20,.9,paneReflection.y));
+        outgoingLight = mix(outgoingLight, reflectedSky, .18 + paneFresnel * .72);
+        diffuseColor.a = min(.68, opacity + paneFresnel * .42);
+        #include <opaque_fragment>
+      `);
+    };
+    material.customProgramCacheKey = () => 'city-glazing-reflectance-v1';
+  }
   return material;
 }
 
-function supplyGardenColors(geometry: BufferGeometry) {
+function supplyFinishColors(geometry: BufferGeometry, finish: CityFinish) {
   if (geometry.hasAttribute('color')) return;
-  // Existing garden parts retain their original green when sharing the colored batch.
-  const color = new Color('#3c922f'), colors = new Float32Array(geometry.attributes.position.count * 3);
+  // Uncolored parts retain the original finish when sharing a vertex-colored batch.
+  const color = new Color(finish === 'fabric' ? '#1262c4' : '#3c922f'), colors = new Float32Array(geometry.attributes.position.count * 3);
   for (let i = 0; i < colors.length; i += 3) { colors[i] = color.r; colors[i + 1] = color.g; colors[i + 2] = color.b; }
   geometry.setAttribute('color', new Float32BufferAttribute(colors, 3));
 }
@@ -47,13 +62,13 @@ function supplyGardenColors(geometry: BufferGeometry) {
 function makeFinishes() {
   return {
     porcelain: new MeshPhysicalMaterial({ color: '#edf6ef', roughness: .62, metalness: .025, clearcoat: .12, clearcoatRoughness: .3 }),
-    glass: new MeshPhysicalMaterial({ color: '#126681', roughness: .17, metalness: .03, transparent: true, opacity: .28, depthWrite: false, side: DoubleSide }),
+    glass: new MeshPhysicalMaterial({ color: '#77b7c2', roughness: .10, metalness: .02, clearcoat: .4, envMapIntensity: .65, transparent: true, opacity: .22, depthWrite: false, side: DoubleSide, forceSinglePass: true }),
     aqua: new MeshPhysicalMaterial({ color: '#067eae', roughness: .25, metalness: .20, clearcoat: .65, clearcoatRoughness: .18 }),
     garden: new MeshPhysicalMaterial({ color: '#ffffff', vertexColors: true, side: DoubleSide, roughness: .93, metalness: 0, envMapIntensity: .15 }),
-    window: new MeshPhysicalMaterial({ color: '#3187a4', roughness: .12, metalness: .05, transparent: true, opacity: .25, depthWrite: false, side: DoubleSide }),
+    window: new MeshPhysicalMaterial({ color: '#65a7b6', roughness: .09, metalness: .025, clearcoat: .45, envMapIntensity: .7, transparent: true, opacity: .23, depthWrite: false, side: DoubleSide, forceSinglePass: true }),
     stone: new MeshPhysicalMaterial({ color: '#a3b9b5', roughness: .91, metalness: 0 }),
     wood: new MeshPhysicalMaterial({ color: '#986345', roughness: .76, metalness: 0 }),
-    fabric: new MeshPhysicalMaterial({ color: '#1262c4', roughness: 1, metalness: 0 }),
+    fabric: new MeshPhysicalMaterial({ color: '#ffffff', vertexColors: true, roughness: 1, metalness: 0 }),
     metal: new MeshPhysicalMaterial({ color: '#244f64', roughness: .46, metalness: .6 }),
   };
 }
@@ -69,13 +84,13 @@ function makeStaticCity(route: CityTransitRoute, materials: ReturnType<typeof ma
     matrix.multiplyMatrices(placement.matrix, local.matrix); geometry.applyMatrix4(matrix);
     const plain = geometry.index ? geometry.toNonIndexed() : geometry;
     if (plain !== geometry) geometry.dispose();
-    for (const name of Object.keys(plain.attributes)) if (name !== 'position' && name !== 'normal' && name !== 'uv' && !(finish === 'garden' && name === 'color')) plain.deleteAttribute(name);
+    for (const name of Object.keys(plain.attributes)) if (name !== 'position' && name !== 'normal' && name !== 'uv' && !(['garden', 'fabric'].includes(finish) && name === 'color')) plain.deleteAttribute(name);
     if (!plain.getAttribute('uv')) {
       const p=plain.getAttribute('position'),uv=new Float32Array(p.count*2);
       for(let i=0;i<p.count;i++){uv[i*2]=p.getX(i);uv[i*2+1]=p.getY(i)+p.getZ(i);}
       plain.setAttribute('uv',new Float32BufferAttribute(uv,2));
     }
-    if (finish === 'garden') supplyGardenColors(plain);
+    if (finish === 'garden' || finish === 'fabric') supplyFinishColors(plain, finish);
     parts[finish].push({ geometry: plain, building: owner });
   }
   const roomViews: CityRoomView[] = [];
@@ -158,13 +173,13 @@ function constructCityInterior(entry: DeferredCityInterior, materials: ReturnTyp
     geometry.applyMatrix4(matrix.multiplyMatrices(placement.matrix,local.matrix));
     const plain=geometry.index?geometry.toNonIndexed():geometry;
     if(plain!==geometry)geometry.dispose();
-    for(const name of Object.keys(plain.attributes))if(!['position','normal','uv'].includes(name) && !(finish === 'garden' && name === 'color'))plain.deleteAttribute(name);
+    for(const name of Object.keys(plain.attributes))if(!['position','normal','uv'].includes(name) && !(['garden', 'fabric'].includes(finish) && name === 'color'))plain.deleteAttribute(name);
     if(!plain.getAttribute('uv')) {
       const p=plain.getAttribute('position'),uv=new Float32Array(p.count*2);
       for(let i=0;i<p.count;i++){uv[i*2]=p.getX(i);uv[i*2+1]=p.getY(i)+p.getZ(i);}
       plain.setAttribute('uv',new Float32BufferAttribute(uv,2));
     }
-    if (finish === 'garden') supplyGardenColors(plain);
+    if (finish === 'garden' || finish === 'fabric') supplyFinishColors(plain, finish);
     const bucket=buckets.get(finish)??[];bucket.push(plain);buckets.set(finish,bucket);
   };
   entry.recipes.forEach(recipe=>recipe(add));

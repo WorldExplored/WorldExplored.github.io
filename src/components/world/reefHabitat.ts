@@ -192,6 +192,16 @@ export function getReefHabitat(): ReefHabitatPlan {
     plants.push({ x, z, y: reefFloorHeight(x,z)-.035, radius:width*.55, height, width, rotation: random()*Math.PI*2, form:Math.floor(random()*3), color:0, patch:host.patch });
     break;
   }
+  // Short grass fans colonize the open sand as asymmetric pockets, with sparse outliers.
+  const meadows=REEF_BASINS.flatMap((basin,patch)=>Array.from({length:7},()=>({x:basin.x+(random()-.5)*basin.rx*1.45,z:basin.z+(random()-.5)*basin.rz*1.4,radius:1.4+random()*2.6,patch})));
+  for(let i=0;i<600;i++)for(let attempt=0;attempt<35;attempt++){
+    const meadow=meadows[i%meadows.length],angle=random()*Math.PI*2,radius=Math.pow(random(),.7)*meadow.radius*(i%7===0?2.4:1);
+    const x=meadow.x+Math.cos(angle)*radius,z=meadow.z+Math.sin(angle)*radius;
+    if(!reefHabitatContains(x,z,.35))continue;
+    const floor=reefFloorHeight(x,z),width=.32+random()*.45;
+    if(rocks.some(rock=>Math.hypot(x-rock.x,z-rock.z)<rock.radius+width*.3&&reefRockSurfaceHeight(rock,x,z)>floor+.1)||colonies.some(coral=>Math.hypot(x-coral.x,z-coral.z)<coral.radius+width*.35)||plants.some(plant=>Math.hypot(x-plant.x,z-plant.z)<.22))continue;
+    plants.push({x,z,y:floor-.035,radius:width*.55,height:.20+random()*.45,width,rotation:random()*Math.PI*2,form:i%2,color:0,patch:100+meadow.patch});break;
+  }
   // Prefix-based quality tiers retain growth across every ridge, not just the first few.
   for (const entries of [colonies, plants]) for (let i = entries.length - 1; i > 0; i--) {
     const j = Math.floor(random() * (i + 1)); [entries[i], entries[j]] = [entries[j], entries[i]];

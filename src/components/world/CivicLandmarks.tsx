@@ -154,7 +154,7 @@ export function makeHistoryMuseum() {
   for (const side of [-1, 1]) for (const z of [-2.95, 2.9]) {
     const garden = createFacadeGarden({ width: .64, height: 4.45, seed: side + Math.round(z) + 9 });
     for (const [part, geometry] of Object.entries(garden)) {
-      geometry.rotateY(side * Math.PI / 2).translate(side * 5.27, floor, z);
+      geometry.rotateY(side * Math.PI / 2).translate(side * 5.27, 1.01, z);
       (part === 'planter' ? plantingBeds : part === 'wood' || part === 'trellis' ? plantingWood : planting).push(geometry);
     }
   }

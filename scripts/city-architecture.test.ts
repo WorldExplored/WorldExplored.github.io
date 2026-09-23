@@ -199,13 +199,15 @@ test('balcony planting is integrated into reachable terraces and all room floors
 });
 
 
-test('climbing gardens have supported containers, varied foliage and clear front entrances', () => {
+test('continuous climbing gardens are rooted at ground with varied foliage and clear entrances', () => {
   let triangles = 0;
   for (const building of cityBuildings.filter(value => value.family !== 'public-station')) {
     const item = fixture(building);
     try {
       const gardens = item.meshes.filter(mesh => mesh.geometry.userData.facadeGarden);
-      assert.ok(gardens.length >= 12, `${building.id} has gardens on both sides`);
+      assert.equal(new Set(gardens.map(mesh => mesh.geometry.userData.facadeGarden.seed)).size, 2, `${building.id} has two continuous vines`);
+      assert.ok(gardens.every(mesh => mesh.geometry.userData.facadeGarden.floor === 0));
+      assert.equal(gardens.filter(mesh => mesh.geometry.userData.facadeGarden.role === 'trellis').length, 0, 'No repeated rectangular trellis panels');
       const foliage = gardens.filter(mesh => ['foliage', 'light'].includes(mesh.geometry.userData.facadeGarden.role));
       const min = Math.min(...foliage.map(mesh => { mesh.geometry.computeBoundingBox(); return mesh.geometry.boundingBox!.min.y; }));
       const max = Math.max(...foliage.map(mesh => mesh.geometry.boundingBox!.max.y));
@@ -213,9 +215,10 @@ test('climbing gardens have supported containers, varied foliage and clear front
       assert.ok(gardens.some(mesh => mesh.geometry.userData.facadeGarden.role === 'fruit' && mesh.geometry.hasAttribute('color')));
       assert.ok(foliage.every(mesh => mesh.geometry.hasAttribute('color')), 'leaf colors share the original garden batch');
       const containers = gardens.filter(mesh => mesh.geometry.userData.facadeGarden.role === 'planter');
+      assert.equal(containers.length, 2, 'One ground root per vine, no per-floor planters');
       for (const mesh of containers) {
         mesh.geometry.computeBoundingBox();
-        assert.ok(Math.abs(mesh.geometry.boundingBox!.min.y - mesh.geometry.userData.facadeGarden.floor) < 1e-5, 'container starts on its mounting floor');
+        assert.ok(Math.abs(mesh.geometry.boundingBox!.min.y - mesh.geometry.userData.facadeGarden.floor) < 1e-5, 'root mound starts at ground level');
       }
       for (const front of item.meshes.filter(mesh => mesh.geometry.userData.roomAccess)) {
         const room = front.geometry.userData.roomAccess;
@@ -226,4 +229,78 @@ test('climbing gardens have supported containers, varied foliage and clear front
     } finally { item.dispose(); }
   }
   assert.ok(triangles < 180000, `climbing gardens use ${triangles} triangles`);
+});
+
+
+test('rounded occupied floors are enclosed at all angles except their usable door apertures', () => {
+  const building=cityBuildings.find(value=>value.family==='rounded-housing')!,item=fixture(building);
+  try {
+    const rooms=item.meshes.filter(mesh=>mesh.geometry.userData.roomAccess);
+    for(const [level,mesh] of rooms.entries()) {
+      const room=mesh.geometry.userData.roomAccess;
+      const shell=item.meshes.filter(part=>part.geometry.userData.roomWall?.room===room.room);
+      const top=Math.max(...shell.map(part=>{part.geometry.computeBoundingBox();return part.geometry.boundingBox!.max.y;}));
+      const rx=building.width/2-level*.08-.1,rz=building.depth/2-.33;
+      for(const fraction of [.025,.3,.68,.975])for(let sample=0;sample<256;sample++) {
+        const angle=sample*Math.PI*2/256,x=Math.sin(angle)*rx,z=Math.cos(angle)*rz,y=room.floor+(top-room.floor)*fraction;
+        const frontDoor=level===0&&z>0&&Math.abs(x)<.42,backDoor=z<0&&Math.abs(x)<.36;
+        if((frontDoor||backDoor)&&y<room.floor+room.height+.01)continue;
+        const direction=new Vector3(x,0,z).normalize(),origin=new Vector3(x,y,z).addScaledVector(direction,.12);
+        const ray=new Raycaster(origin,direction.negate(),0,.15);
+        assert.ok(ray.intersectObjects(shell).length,`${room.room}: open wall at angle ${angle.toFixed(3)}, y ${y.toFixed(3)}`);
+      }
+    }
+  } finally {item.dispose();}
+});
+
+test('rectangular curtain walls use thin recessed panes with joined floor edges', () => {
+  for(const building of cityBuildings.filter(value=>value.family!=='rounded-housing')) {
+    const item=fixture(building);
+    try {
+      for(const floor of item.meshes.filter(mesh=>mesh.geometry.userData.roomAccess)) {
+        const room=floor.geometry.userData.roomAccess,walls=item.meshes.filter(mesh=>mesh.geometry.userData.roomWall?.room===room.room);
+        const bounds=(role:string)=>{const mesh=walls.find(mesh=>mesh.geometry.userData.roomWall.role===role)!;mesh.geometry.computeBoundingBox();return mesh.geometry.boundingBox!;};
+        const front=bounds('front'),left=bounds('left'),right=bounds('right'),rear=bounds('back-left');
+        floor.geometry.computeBoundingBox();const slab=floor.geometry.boundingBox!;
+        for(const difference of [slab.min.x-left.max.x,right.min.x-slab.max.x,slab.min.z-rear.max.z,front.min.z-slab.max.z])assert.ok(Math.abs(difference)<.001,`${room.room}: floor/wall join ${difference}`);
+        for(const mesh of walls.filter(mesh=>item.finishes[item.meshes.indexOf(mesh)]==='window')) {
+          const b=mesh.geometry.boundingBox??(mesh.geometry.computeBoundingBox(),mesh.geometry.boundingBox!);
+          assert.ok(Math.min(b.max.x-b.min.x,b.max.z-b.min.z)<.019,`${room.room}: pane must have a single thin optical depth`);
+        }
+        assert.ok(front.max.z<room.front[1]-.005,`${room.room}: glass recessed behind front frame`);
+        const top=Math.max(...walls.map(mesh=>{mesh.geometry.computeBoundingBox();return mesh.geometry.boundingBox!.max.y;}));
+        for(const fraction of [.03,.5,.97])for(const t of [-.8,-.4,.4,.8]) {
+          const y=room.floor+(top-room.floor)*fraction;
+          for(const [x,z,dx,dz]of [[left.min.x-.08,(rear.min.z+front.max.z)/2+t*(front.max.z-rear.min.z)/2,1,0],[right.max.x+.08,(rear.min.z+front.max.z)/2+t*(front.max.z-rear.min.z)/2,-1,0]]) {
+            const ray=new Raycaster(new Vector3(x,y,z),new Vector3(dx,0,dz),0,.13);
+            assert.ok(ray.intersectObjects(walls).length,`${room.room}: side shell gap`);
+          }
+        }
+      }
+    } finally {item.dispose();}
+  }
+});
+
+test('maisonette offset bears on grounded columns and its exposed lower roof is weather-covered',()=>{
+  const building=cityBuildings.find(value=>value.family==='stacked-maisonettes')!,item=fixture(building);
+  try {
+    item.meshes.forEach(mesh=>mesh.geometry.computeBoundingBox());
+    const columns=item.meshes.filter(mesh=>mesh.geometry.userData.structuralSupport?.role==='column'),beams=item.meshes.filter(mesh=>mesh.geometry.userData.structuralSupport?.role==='transfer-beam');
+    const rooms=item.meshes.filter(mesh=>mesh.geometry.userData.roomAccess),lower=rooms[0].geometry.boundingBox!,upper=rooms[1].geometry.boundingBox!;
+    assert.equal(columns.length,2);assert.equal(beams.length,2);
+    for(const column of columns) {
+      const b=column.geometry.boundingBox!,x=(b.min.x+b.max.x)/2,z=(b.min.z+b.max.z)/2;
+      assert.ok(Math.abs(b.min.y)<1e-5,'Column reaches ground');
+      const ray=new Raycaster(new Vector3(x,b.max.y-.001,z),new Vector3(0,1,0),0,.002);
+      assert.ok(ray.intersectObjects(beams).length,'Column bears directly on transfer beam');
+      const down=new Raycaster(new Vector3(x,.21,z),new Vector3(0,-1,0),0,.22);
+      assert.ok(down.intersectObjects(item.meshes.filter(mesh=>mesh.geometry.userData.floor?.kind==='foundation')).length,'Column lands on foundation');
+    }
+    const weather=item.meshes.filter((mesh,index)=>!['garden','fabric'].includes(item.finishes[index])&&!mesh.geometry.userData.furniture&&!mesh.geometry.userData.facadeGarden);
+    for(let x=lower.min.x+.047;x<lower.max.x;x+=.11)for(let z=lower.min.z+.047;z<lower.max.z;z+=.11) {
+      const ray=new Raycaster(new Vector3(x,upper.max.y+.02,z),new Vector3(0,-1,0),0,.16);
+      // Corner posts and wall strips fill the perimeter beside the inset finished floor.
+      assert.ok(ray.intersectObjects(weather).length,`No open lower roof below offset upper room at ${x}, ${z}`);
+    }
+  } finally {item.dispose();}
 });

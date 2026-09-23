@@ -130,3 +130,15 @@ test('lighthouse triangle has grounded rock belts, coral and seaweed across both
   assert.ok(reefFloorHeight(-53,-39)>-8,'western shelf remains visible rather than dropping into deep offshore water');
   assert.ok(reefFloorHeight(-110,-120)<-20,'open ocean still deepens outside the archipelago');
 });
+
+
+test('short seagrass pockets and outliers grow on open canyon floors in all reef basins',()=>{
+  const plan=getReefHabitat(),meadows=plan.plants.filter(plant=>plant.patch>=100);
+  assert.ok(meadows.length>450);
+  for(let basin=0;basin<4;basin++)assert.ok(meadows.filter(plant=>plant.patch===100+basin).length>60);
+  for(const plant of meadows){
+    assert.ok(Math.abs(plant.y-reefFloorHeight(plant.x,plant.z)+.035)<1e-8);
+    assert.ok(plant.height<=.65,'short grass leaves room for reef fish above the beds');
+    for(const rock of plan.rocks)assert.ok(reefRockSurfaceHeight(rock,plant.x,plant.z)<=plant.y+.14);
+  }
+});

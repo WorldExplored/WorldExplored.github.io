@@ -1,53 +1,75 @@
-import { BoxGeometry, BufferGeometry, CatmullRomCurve3, Color, Float32BufferAttribute, SphereGeometry, TubeGeometry, Vector3 } from 'three';
+import { BufferGeometry, CatmullRomCurve3, Color, CylinderGeometry, Float32BufferAttribute, SphereGeometry, TubeGeometry, Vector3 } from 'three';
 import { combine } from './BuildingKit';
 
 export interface FacadeGardenOptions { width: number; height: number; seed: number }
 
-/** Wall-mounted espalier: a rooted trunk, branched canopy, cupped grape leaves and fruit. */
+/** A rooted climbing vine with an asymmetric, tapering canopy rather than a wall panel. */
 export function createFacadeGarden({ width, height, seed }: FacadeGardenOptions) {
-  const wood: BufferGeometry[] = [], foliage: BufferGeometry[] = [], light: BufferGeometry[] = [], fruit: BufferGeometry[] = [], trellis: BufferGeometry[] = [];
+  const wood: BufferGeometry[] = [], foliage: BufferGeometry[] = [], light: BufferGeometry[] = [], fruit: BufferGeometry[] = [];
   const noise = (i: number) => { const value = Math.sin(i * 127.1 + seed * 311.7) * 43758.5453; return value - Math.floor(value); };
-  const tube = (points: Vector3[], radius: number) => new TubeGeometry(new CatmullRomCurve3(points), 10, radius, 5, false);
-  // The planter bottom is the mounting floor; neither containers nor roots float.
-  const planter = new BoxGeometry(width + .12, .24, .34).translate(0, .12, -.14);
-  planter.userData.facadeGarden = { role: 'root-container', seed, floor: 0, width, height };
-  wood.push(new BoxGeometry(width + .04, .025, .26).translate(0, .25, -.14));
-  for (const side of [-1, 1]) trellis.push(new BoxGeometry(.035, height - .24, .035).translate(side * width * .44, (height + .24) / 2, .07));
-  for (let y = .44; y < height; y += .4) trellis.push(new BoxGeometry(width, .023, .025).translate(0, y, .07));
-  const trunk = (t: number) => new Vector3(Math.sin(t * 8 + seed) * width * .075, .25 + t * (height - .38), -.13 + Math.min(1, t * 5) * .23 + Math.sin(t * 9) * .025);
-  wood.push(tube(Array.from({ length: 9 }, (_, i) => trunk(i / 8)), .021));
-  const count = Math.max(5, Math.ceil(height / .36));
-  for (let branch = 0; branch < count; branch++) {
-    const side = branch % 2 ? 1 : -1;
-    const start = trunk(.1 + branch / count * .78);
-    const end = new Vector3(side * width * (.37 + noise(branch) * .08), Math.min(height - .12, start.y + .22 + noise(branch + 12) * .22), .14);
-    const middle = start.clone().lerp(end, .45).add(new Vector3(0, .04, .045));
-    const curve = new CatmullRomCurve3([start, middle, end]);
-    wood.push(new TubeGeometry(curve, 7, .01, 4, false));
-    for (let leaf = 0; leaf < 7; leaf++) {
-      const index = branch * 7 + leaf, t = .15 + leaf / 7 * .85;
-      const position = curve.getPoint(t);
-      const size = (.18 + noise(index + 51) * .1) * Math.min(1, width / .65);
-      // Five lobes surround a raised central vein; non-flat leaves catch different light.
-      const outline = [[0, 0], [-.4, .14], [-.65, .42], [-.36, .44], [-.5, .76], [-.2, .68], [0, 1], [.2, .68], [.5, .76], [.36, .44], [.65, .42], [.4, .14]];
-      const vertices = [0, size * .47, size * .18, ...outline.flatMap(([x, y]) => [x * size, y * size, 0])];
-      const indices: number[] = [];
-      for (let edge = 0; edge < outline.length; edge++) indices.push(0, edge + 1, (edge + 1) % outline.length + 1);
-      const geometry = new BufferGeometry(); geometry.setAttribute('position', new Float32BufferAttribute(vertices, 3)); geometry.setAttribute('uv', new Float32BufferAttribute([.5, .47, ...outline.flatMap(([x, y]) => [x + .5, y])], 2)); geometry.setIndex(indices); geometry.computeVertexNormals();
-      geometry.rotateZ((leaf % 2 ? -1 : 1) * (.8 + noise(index + 81) * 1.3)).rotateY((noise(index + 103) - .5) * 1.1).translate(position.x, position.y, position.z + .06);
-      geometry.userData.facadeGarden = { role: 'leaf', seed };
-      (index % 4 === 0 ? light : foliage).push(geometry);
+  const tube = (curve:CatmullRomCurve3, radius:number, segments=9) => {
+    const geometry=new TubeGeometry(curve,segments,radius,4,false),points=geometry.attributes.position;
+    for(let row=0;row<=segments;row++){
+      const center=curve.getPointAt(row/segments),taper=1-row/segments*.7;
+      for(let side=0;side<=4;side++){
+        const i=row*5+side;
+        points.setXYZ(i,center.x+(points.getX(i)-center.x)*taper,center.y+(points.getY(i)-center.y)*taper,center.z+(points.getZ(i)-center.z)*taper);
+      }
     }
-    if (branch % 3 === seed % 3) for (let grape = 0; grape < 9; grape++) {
-      const row = Math.floor(grape / 3), angle = grape * 2.399, radius = .05 * (1 - row * .22);
-      fruit.push(new SphereGeometry(.03, 6, 4).translate(end.x * .72 + Math.cos(angle) * radius, end.y - .06 - row * .05, .24 + Math.sin(angle) * radius));
+    geometry.computeVertexNormals();return geometry;
+  };
+  const rootRadius=Math.min(.16,width*.22);
+  const planter=new CylinderGeometry(rootRadius*.78,rootRadius,.045,7).translate(0,.0225,0);
+  planter.userData.facadeGarden={role:'root-mound',seed,floor:0,width,height};
+  // An empty attributed part preserves the callers' shared batching API without a trellis.
+  const trellis=new BufferGeometry();
+  for(const [name,size] of [['position',3],['normal',3],['uv',2]] as const)trellis.setAttribute(name,new Float32BufferAttribute([],size));
+  const trunk=(t:number)=>new Vector3((Math.sin(t*6.7+seed)-Math.sin(seed))*width*.085*t,t*(height-.10),.015+Math.sin(t*8+seed)*.025*t);
+  wood.push(tube(new CatmullRomCurve3(Array.from({length:13},(_,i)=>trunk(i/12))),.024,18));
+  for(let root=0;root<4;root++){
+    const a=root*2.399+seed;
+    wood.push(tube(new CatmullRomCurve3([new Vector3(Math.cos(a)*rootRadius,0,Math.sin(a)*rootRadius),new Vector3(Math.cos(a)*rootRadius*.3,.06,Math.sin(a)*rootRadius*.3),trunk(.08)]),.013,5));
+  }
+  const count=Math.max(7,Math.ceil(height/.24));
+  for(let branch=0;branch<count;branch++){
+    const t=.08+branch/count*.84,side=noise(branch+7)>.45?1:-1,start=trunk(t);
+    const spread=(.2+noise(branch+91)*.30)*(1-t*.42);
+    const end=new Vector3(side*width*spread,Math.min(height-.06,start.y+.13+noise(branch+12)*height*.16),.10+noise(branch+40)*.10);
+    const middle=start.clone().lerp(end,.52).add(new Vector3(side*width*.035,.025+noise(branch+4)*.06,.035));
+    const curve=new CatmullRomCurve3([start,middle,end]);wood.push(tube(curve,.011,6));
+    const leafCount=5+Math.floor(noise(branch+101)*5);
+    for(let leaf=0;leaf<leafCount;leaf++){
+      const index=branch*13+leaf,position=curve.getPoint(.13+leaf/leafCount*.87);
+      const size=(.095+noise(index+51)*.085)*Math.min(1,width/.6);
+      const lobed=noise(index+35)>.35;
+      const outline=lobed?[[0,0],[-.4,.14],[-.65,.42],[-.36,.44],[-.5,.76],[-.2,.68],[0,1],[.2,.68],[.5,.76],[.36,.44],[.65,.42],[.4,.14]]:[[0,0],[-.4,.18],[-.55,.5],[-.3,.8],[0,1],[.3,.8],[.55,.5],[.4,.18]];
+      const cup=.11+noise(index+12)*.17;
+      const vertices=[0,size*.47,size*cup,...outline.flatMap(([x,y])=>[x*size,y*size,size*.025*Math.sin(y*8+index)])];
+      const indices:number[]=[];
+      for(let edge=0;edge<outline.length;edge++)indices.push(0,edge+1,(edge+1)%outline.length+1);
+      const geometry=new BufferGeometry();geometry.setAttribute('position',new Float32BufferAttribute(vertices,3));geometry.setAttribute('uv',new Float32BufferAttribute([.5,.47,...outline.flatMap(([x,y])=>[x+.5,y])],2));geometry.setIndex(indices);geometry.computeVertexNormals();
+      const turn=(noise(index+81)-.5)*3.7;
+      geometry.rotateZ(turn).rotateY((noise(index+103)-.5)*1.2).rotateX((noise(index+112)-.5)*.7).translate(position.x,position.y,position.z+.028);
+      (index%4===0?light:foliage).push(geometry);
+      // Raised midribs give the small leaves legible folded surfaces in oblique light.
+      if(index%5===0){
+        const vein=tube(new CatmullRomCurve3([new Vector3(),new Vector3(0,size*.45,size*cup),new Vector3(0,size*.84,size*.03)]),.0022,4);
+        vein.rotateZ(turn).rotateY((noise(index+103)-.5)*1.2).rotateX((noise(index+112)-.5)*.7).translate(position.x,position.y,position.z+.030);light.push(vein);
+      }
+    }
+    if(branch%3===1){
+      const points=Array.from({length:18},(_,i)=>{const t=i/17,a=t*Math.PI*3.6;return end.clone().add(new Vector3(side*(t*.10+Math.sin(a)*.028),t*.10+Math.cos(a)*.026-.026,.02+t*.03));});
+      wood.push(tube(new CatmullRomCurve3(points),.004,12));
+    }
+    if(branch%5===seed%5)for(let grape=0;grape<7;grape++){
+      const row=Math.floor(grape/3),a=grape*2.399,r=.027*(1-row*.22);
+      fruit.push(new SphereGeometry(.020,5,3).translate(end.x*.85+Math.cos(a)*r,end.y-.04-row*.035,end.z+.03+Math.sin(a)*r));
     }
   }
-  const tint = (parts: BufferGeometry[], hex: string) => {
-    const geometry = combine(parts), color = new Color(hex), values = new Float32Array(geometry.attributes.position.count * 3);
-    for (let i = 0; i < values.length; i += 3) { values[i] = color.r; values[i + 1] = color.g; values[i + 2] = color.b; }
-    geometry.setAttribute('color', new Float32BufferAttribute(values, 3));
-    return geometry;
+  const tint=(parts:BufferGeometry[],hex:string)=>{
+    const geometry=combine(parts),color=new Color(hex),values=new Float32Array(geometry.attributes.position.count*3);
+    for(let i=0;i<values.length;i+=3){const variation=.87+noise(Math.floor(i/36))* .24;values[i]=color.r*variation;values[i+1]=color.g*variation;values[i+2]=color.b*variation;}
+    geometry.setAttribute('color',new Float32BufferAttribute(values,3));return geometry;
   };
-  return { planter, wood: combine(wood), trellis: combine(trellis), foliage: tint(foliage, '#3c922f'), light: tint(light, '#78ad3b'), fruit: tint(fruit, '#503663') };
+  return {planter,wood:combine(wood),trellis,foliage:tint(foliage,'#487941'),light:tint(light,'#84a44d'),fruit:tint(fruit,'#51405d')};
 }

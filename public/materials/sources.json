@@ -1,6 +1,6 @@
 {
   "license": "https://polyhaven.com/license",
-  "processing": "1K JPEG sources resized to 512\u00d7512 WebP. Mineral albedo neutralized and lightened for pearlescent aggregate; timber albedo brightened and desaturated. Color maps sRGB; OpenGL normals and packed AO/roughness/metal linear.",
+  "processing": "1K JPEG sources resized to 512×512 WebP. Mineral albedo neutralized and lightened for pearlescent aggregate; timber albedo brightened and desaturated. Color maps sRGB; OpenGL normals and packed AO/roughness/metal linear.",
   "files": [
     {
       "file": "public/materials/sand-color.webp",
@@ -73,6 +73,30 @@
       "asset": "concrete_wall_006",
       "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/concrete_wall_006/concrete_wall_006_arm_1k.jpg",
       "license": "CC0-1.0"
+    },
+    {
+      "file": "public/materials/grass-color.webp",
+      "asset": "sparse_grass",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/sparse_grass/sparse_grass_diff_1k.jpg",
+      "license": "CC0-1.0",
+      "author": "Amal Kumar",
+      "sourcePage": "https://polyhaven.com/a/sparse_grass"
+    },
+    {
+      "file": "public/materials/grass-normal.webp",
+      "asset": "sparse_grass",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/sparse_grass/sparse_grass_nor_gl_1k.jpg",
+      "license": "CC0-1.0",
+      "author": "Amal Kumar",
+      "sourcePage": "https://polyhaven.com/a/sparse_grass"
+    },
+    {
+      "file": "public/materials/grass-arm.webp",
+      "asset": "sparse_grass",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/sparse_grass/sparse_grass_arm_1k.jpg",
+      "license": "CC0-1.0",
+      "author": "Amal Kumar",
+      "sourcePage": "https://polyhaven.com/a/sparse_grass"
     }
   ]
 }

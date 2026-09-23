@@ -42,12 +42,19 @@ export function createDolphinState(index: number, shark = false): DolphinState {
   writePose(state); return state;
 }
 const tangent = new Vector3();
-function writePose(state: DolphinState) {
+function writePose(state: DolphinState, waterTime = state.time) {
   const t = state.time;
   if (state.shark) {
-    const a = t * .021 + state.index * 2.1;
-    state.position.set(53 + Math.cos(a) * (9 + Math.sin(t * .007)), -.27 + Math.sin(t * .28) * .025, -42 + Math.sin(a) * 21);
-    state.heading = Math.atan2(-Math.cos(a) * 21, -Math.sin(a) * 9); state.pitch = 0; state.tail = Math.sin(t * 3.3 + state.index) * .22; return;
+    // Separate offshore territories keep the visible fins away from beaches and ferries.
+    const rate = state.index ? -.017 : .019, a = t * rate + state.index * 2.1;
+    const radius = 9 + Math.sin(t * .007), center = state.index ? -97 : 53;
+    const x = center + Math.cos(a) * radius, z = -42 + Math.sin(a) * 23;
+    const dx = -Math.sin(a) * radius * rate + Math.cos(a) * Math.cos(t * .007) * .007;
+    const dz = Math.cos(a) * 23 * rate;
+    // The body stays submerged as the dorsal fin rises and dips with the actual waves.
+    const depth = .27 + .14 * (.5 + .5 * Math.sin(t * .037 + state.index * 2));
+    state.position.set(x, harborWaterHeight(x, z, waterTime) - depth, z);
+    state.heading = Math.atan2(-dz, dx); state.pitch = 0; state.tail = Math.sin(t * 2.4 + state.index) * .18; return;
   }
   const u = state.distance / state.course.length;
   state.course.curve.getPointAt(u, state.position); state.course.curve.getTangentAt(u, tangent);
@@ -79,7 +86,7 @@ export function stepDolphin(state: DolphinState, delta: number, paused = false, 
       } else state.nextJump = state.time + 3;
     }
   }
-  writePose(state);
+  writePose(state, waterTime);
   const wt = waterTime ?? state.time;
   const before = py - harborWaterHeight(px, pz, wt - dt);
   const after = state.position.y - harborWaterHeight(state.position.x, state.position.z, wt);

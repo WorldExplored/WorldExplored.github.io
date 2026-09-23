@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { act, create } from '@react-three/test-renderer';
 import { InstancedMesh, MeshStandardMaterial, type WebGLProgramParametersWithUniforms } from 'three';
 import { createSeaweedGeometry, createSeaweedLayout, SEAWEED_COVES, SEAWEED_REACH, SEAWEED_FORMS, Seaweed } from '../src/components/world/Seaweed';
-import { createLandscapePlan, distanceToSegment, landDistance, terrainHeight } from '../src/components/world/terrain';
+import { createLandscapePlan, distanceToSegment, landDistance, terrainMeshHeight, ISLANDS } from '../src/components/world/terrain';
 import { coastExposure } from '../src/components/world/waves';
 import { createSceneRuntime, type QualityTier } from '../src/content/world';
 
@@ -13,16 +13,16 @@ test('seaweed occupies dense irregular sheltered beds with seabed roots and stru
   const plan = createLandscapePlan();
   const sites = createSeaweedLayout(plan);
   assert.deepEqual(sites, createSeaweedLayout(plan));
-  assert.ok(sites.length >= 800 && sites.length <= 1140);
-  assert.equal(new Set(sites.map(site => site.cove)).size, SEAWEED_COVES.length);
+  assert.ok(sites.length >= 1500 && sites.length <= 1700);
+  assert.equal(new Set(sites.map(site => site.cove)).size, SEAWEED_COVES.length + ISLANDS.length);
   for (const site of sites) {
     const distance = landDistance(site.x, site.z);
     assert.ok(distance < -1.5 && distance > -5);
-    assert.ok(coastExposure(site.x, site.z, distance) <= 0.3);
-    assert.ok(Math.abs(site.y - terrainHeight(site.x, site.z) + 0.025) < 1e-10);
+    assert.ok(coastExposure(site.x, site.z, distance) <= (site.cove < 0 ? .7 : .3));
+    assert.ok(Math.abs(site.y - terrainMeshHeight(site.x, site.z) + 0.025) < 1e-10);
     assert.ok(site.y + site.height <= -0.32 + 1e-10);
     const cove = SEAWEED_COVES[site.cove];
-    assert.ok(Math.hypot(site.x - cove.x, site.z - cove.z) <= cove.radius);
+    if(cove) assert.ok(Math.hypot(site.x - cove.x, site.z - cove.z) <= cove.radius);
     for (const item of [...plan.structures, ...plan.rocks]) assert.ok(Math.hypot(site.x - item.x, site.z - item.z) > item.radius + SEAWEED_REACH + 0.59);
     for (const path of plan.paths.filter(item => item.bridge)) for (let index = 1; index < path.points.length; index++) {
       assert.ok(distanceToSegment(site.x, site.z, path.points[index - 1], path.points[index]) > path.width / 2 + SEAWEED_REACH + 0.74);
@@ -91,13 +91,25 @@ test('beds mix silhouettes, sizes and colors locally rather than separating them
     assert.ok(distances.filter(distance=>distance<.45).length/bed.length>.8,'most roots belong to overlapping clumps');
     assert.ok(Math.max(...distances)-Math.min(...distances)>.1,'bed density has irregular margins');
   }
-  const mixed=sites.filter(site=>new Set(sites.filter(other=>Math.hypot(other.x-site.x,other.z-site.z)<1).map(other=>other.variant)).size>=4);
-  assert.ok(mixed.length/sites.length>.8,'most one-metre patches contain at least four silhouettes');
+  const beds=sites.filter(site=>site.cove>=0);
+  const mixed=beds.filter(site=>new Set(sites.filter(other=>Math.hypot(other.x-site.x,other.z-site.z)<1).map(other=>other.variant)).size>=4);
+  assert.ok(mixed.length/beds.length>.8,'most one-metre patches contain at least four silhouettes');
   const geometries=SEAWEED_FORMS.map((_,variant)=>createSeaweedGeometry(variant));
   try {
     assert.equal(new Set(geometries.map(geometry=>geometry.userData.form)).size,8);
     assert.equal(new Set(geometries.map(geometry=>Array.from(geometry.getAttribute('position').array).join(','))).size,8);
     const triangles=sites.reduce((sum,site)=>sum+geometries[site.variant].index!.count/3,0);
-    assert.ok(triangles<390000, `bounded instanced foliage triangles: ${triangles}`);
+    assert.ok(triangles<520000, `bounded instanced foliage triangles: ${triangles}`);
   } finally {geometries.forEach(geometry=>geometry.dispose());}
+});
+
+
+test('stray seaweed covers every island and remains represented in low quality prefixes',()=>{
+  const sites=createSeaweedLayout(),low=SEAWEED_FORMS.flatMap((_,variant)=>{
+    const batch=sites.filter(site=>site.variant===variant);return batch.slice(0,Math.ceil(batch.length*.5));
+  });
+  for(let island=0;island<ISLANDS.length;island++){
+    assert.ok(sites.filter(site=>site.cove===-1-island).length>=65);
+    assert.ok(low.filter(site=>site.cove===-1-island).length>=15);
+  }
 });

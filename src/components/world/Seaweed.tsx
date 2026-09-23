@@ -6,7 +6,7 @@
 import { useEffect, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { BufferGeometry, Color, DoubleSide, Float32BufferAttribute, InstancedMesh, MeshStandardMaterial, Object3D } from 'three';
-import { createLandscapePlan, distanceToSegment, landDistance, seededRandom, terrainHeight, type LandscapePlan } from './terrain';
+import { createLandscapePlan, distanceToSegment, landDistance, seededRandom, terrainMeshHeight, ISLANDS, islandContour, type LandscapePlan } from './terrain';
 import { coastExposure } from './waves';
 import type { EnvironmentProps } from './Water';
 
@@ -30,10 +30,10 @@ export const SEAWEED_COVES = [
 export const SEAWEED_REACH = 0.62;
 export const SEAWEED_FORMS = ['strap-leaved eelgrass', 'ruffled broad kelp', 'paired branching algae', 'twisting ribbon kelp', 'pleated sea fan', 'low seagrass turf', 'forked bladderwrack', 'serrated red algae'] as const;
 
-export function seaweedSiteClear(x: number, z: number, plan: LandscapePlan) {
+export function seaweedSiteClear(x: number, z: number, plan: LandscapePlan, sheltered = true) {
   const distance = landDistance(x, z);
-  const seabed = terrainHeight(x, z);
-  if (distance > -1.6 || distance < -4.7 || seabed > -0.66 || seabed < -2.0 || coastExposure(x, z, distance) > 0.3) return false;
+  const seabed = terrainMeshHeight(x, z);
+  if (distance > -1.6 || distance < -4.7 || seabed > -0.66 || seabed < -2.0 || coastExposure(x, z, distance) > (sheltered ? .3 : .7)) return false;
   for (const item of [...plan.structures, ...plan.rocks]) {
     if (Math.hypot(x - item.x, z - item.z) < item.radius + SEAWEED_REACH + 0.6) return false;
   }
@@ -62,7 +62,7 @@ export function createSeaweedLayout(plan = createLandscapePlan()): SeaweedSite[]
         const x = clump.x + Math.cos(angle) * radius, z = clump.z + Math.sin(angle) * radius;
         if (Math.hypot(x - cove.x, z - cove.z) > cove.radius || !seaweedSiteClear(x, z, plan)
           || sites.some(site => Math.hypot(x - site.x, z - site.z) < .19)) continue;
-        const y = terrainHeight(x, z) - .025;
+        const y = terrainMeshHeight(x, z) - .025;
         const variant = Math.floor(random() * SEAWEED_FORMS.length);
         const height = Math.min((variant === 5 ? .26 : .55) + random() * (variant === 5 ? .35 : .85), -.32 - y);
         sites.push({ x, y, z, height, width: .68 + random() * .5, spread: .7 + random() * .45,
@@ -71,7 +71,21 @@ export function createSeaweedLayout(plan = createLandscapePlan()): SeaweedSite[]
       }
     });
   }
-  return sites;
+  const strays:SeaweedSite[]=[];
+  for(let round=0;round<72;round++)for(let islandIndex=0;islandIndex<ISLANDS.length;islandIndex++){
+    const island=ISLANDS[islandIndex];
+    for(let attempt=0;attempt<60;attempt++){
+      const angle=random()*Math.PI*2,contour=islandContour(island,angle),offshore=1.8+random()*3.4;
+      const x=island.x+Math.cos(angle)*(island.rx*contour+offshore),z=island.z+Math.sin(angle)*(island.rz*contour+offshore);
+      if(!seaweedSiteClear(x,z,plan,false)||sites.some(site=>Math.hypot(x-site.x,z-site.z)<.28)||strays.some(site=>Math.hypot(x-site.x,z-site.z)<.42))continue;
+      const y=terrainMeshHeight(x,z)-.025,variant=[0,1,3,5][Math.floor(random()*4)];
+      strays.push({x,y,z,height:Math.min(.25+random()*.62,-.32-y),width:.48+random()*.43,spread:.7+random()*.4,rotation:random()*Math.PI*2,variant,cove:-1-islandIndex,tint:random()});break;
+    }
+  }
+  // Distributed strays remain visible at every quality tier instead of being a trailing batch.
+  const mixed:SeaweedSite[]=[];
+  for(let i=0;i<Math.max(sites.length,strays.length);i++){if(sites[i])mixed.push(sites[i]);if(strays[i])mixed.push(strays[i]);}
+  return mixed;
 }
 
 export function createSeaweedGeometry(variant: number, seed = 0) {

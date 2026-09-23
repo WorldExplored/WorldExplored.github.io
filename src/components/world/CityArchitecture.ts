@@ -1,5 +1,6 @@
 import { BoxGeometry, BufferGeometry, CylinderGeometry, Float32BufferAttribute, ExtrudeGeometry, Shape, SphereGeometry, TubeGeometry, CatmullRomCurve3, Vector3 } from 'three';
 import { floorSlab, floorRectangle, floorEllipse, type FloorPolygon } from './InteriorKit';
+import { buildCityInterior } from './CityInteriors';
 import { createFacadeGarden } from './FacadeGarden';
 import { cityEntrances, type CityBuilding, type CityPoint } from './city';
 
@@ -25,6 +26,7 @@ export function buildCityArchitecture(building: Readonly<CityBuilding>, shellAdd
   let roomIndex=0;
   const access: { room: string; x: number; back: number; floor: number; height: number }[] = [];
   const fronts: { x: number; z: number; width: number; floor: number }[] = [];
+  const sideFaces: { x: number; y: number; z: number; width: number; depth: number; height: number; room: string }[] = [];
   const { width: w, depth: d, height: h, family } = building;
   const glazed = ['terraced-apartments', 'narrow-mixed-use', 'rounded-housing', 'greenhouse-residences', 'winter-glasshouse'].includes(family);
   const cladding: CityFinish = ['waterfront-rowhouses','split-level-homes','stacked-maisonettes'].includes(family) ? 'wood' : family === 'arched-apartments' ? 'metal' : 'stone';
@@ -60,87 +62,7 @@ export function buildCityArchitecture(building: Readonly<CityBuilding>, shellAdd
       add(new SphereGeometry(.043,8,6),'garden',x-width*.35+bunch*width*.23+Math.cos(a)*r,y+1.5-row*.055,z+.10+Math.sin(a)*r);
     }
   };
-  const chair = (x: number, y: number, z: number, yaw = 0) => {
-    box(x, y + .3, z, .36, .10, .34, 'fabric', yaw);
-    box(x - Math.sin(yaw) * .14, y + .5, z - Math.cos(yaw) * .14, .36, .31, .055, 'wood', yaw);
-    for (const dx of [-.12, .12]) for (const dz of [-.11, .11]) box(x + dx, y + .14, z + dz, .035, .28, .035, 'metal');
-  };
-  const furnishing = (x: number, y: number, z: number, width: number, depth: number, variant: number, height = 1.8) => {
-    // The middle 0.62m stays clear from entrance to rear service corridor.
-    const left = x - width * .30, right = x + width * .30;
-    const back = z - depth * .27, forward=Math.min(.48,depth*.5-.22);
-    const layout = (variant + building.id.length) % 5;
-    const furniture = (name: string, geometry: BufferGeometry, finish: CityFinish, px: number, py: number, pz: number) => {
-      geometry.userData.furniture = { building: building.id, name, floor: y };
-      add(geometry, finish, px, py, pz);
-    };
-    if (family.includes('glasshouse') || family === 'greenhouse-residences') {
-      for (const side of [-1,1]) {
-        const bx = x + side * width * .32;
-        furniture('cultivation-bed', cityRoundedBox(Math.min(.43,width*.24),.28,depth*.62,.05),'stone',bx,y,z);
-        box(bx,y+.285,z,Math.min(.35,width*.20),.025,depth*.56,'wood');
-        for (const dz of [-.24, .24]) plant(bx,y+.30,z+dz,.7);
-        box(bx,y+.34,z, .018,.018,depth*.52,'aqua');
-      }
-    } else if (family === 'civic-gallery') {
-      for (const side of [-1,1]) {
-        const bx=x+side*width*.32;
-        furniture('gallery-plinth',cityRoundedBox(.44,.54,.44,.07),'stone',bx,y,back);
-        add(new SphereGeometry(.15,20,14),'aqua',bx,y+.73,back,.7,1.3,.7);
-        for(let slat=0;slat<5;slat++) box(bx,y+.33,z+.25,.6,.04,.038,'wood');
-        for(const dz of [-.13,.13])box(bx,y+.15,z+.25+dz,.42,.3,.045,'metal');
-      }
-      box(left,y+.9,back-.08,.62,.48,.035,'aqua');
-    } else if (layout === 0 || family === 'arched-apartments') {
-      const deskWidth=Math.min(.68,width*.30);
-      furniture('workbench',cityRoundedBox(deskWidth,.055,.55,.035),'wood',left,y+.54,z);
-      for(const dx of [-deskWidth*.38,deskWidth*.38])box(left+dx,y+.26,z,.035,.52,.42,'metal');
-      chair(left,y,z+forward,Math.PI);
-      box(left,y+.79,z-.12,.34,.23,.036,'metal');
-      box(left,y+.79,z-.097,.30,.19,.008,'aqua');
-      box(left,y+.63,z-.12,.034,.15,.032,'metal');
-      box(left,y+.58,z+.12,.25,.014,.11,'metal');
-      // Tall utility cabinet has inset panels, pulls, ventilation and a counter.
-      box(right,y+.45,back,.30,.88,.35,'metal');
-      for(let shelf=0;shelf<3;shelf++) {box(right,y+.15+shelf*.26,back+.181,.25,.21,.015,'aqua');box(right+.075,y+.15+shelf*.26,back+.2,.018,.08,.018,'metal');}
-      for(let vent=0;vent<5;vent++)box(right-.08+vent*.04,y+.81,back+.19,.015,.06,.012,'wood');
-    } else if (layout === 1 || layout === 4) {
-      const seatWidth=Math.min(.64,width*.33);
-      furniture('upholstered-lounge',cityRoundedBox(seatWidth,.16,.65,.08),'fabric',left,y+.22,z);
-      furniture('lounge-back',cityRoundedBox(seatWidth,.38,.1,.04),'fabric',left,y+.27,z-.27);
-      for(const side of [-1,1])box(left+side*(seatWidth/2-.035),y+.37,z,.055,.16,.6,'wood');
-      for(const dx of [-seatWidth*.3,seatWidth*.3])for(const dz of [-.22,.22])box(left+dx,y+.10,z+dz,.035,.20,.035,'metal');
-      add(new CylinderGeometry(.18,.17,.045,24),'wood',right,y+.40,z+.12);
-      add(new CylinderGeometry(.025,.065,.37,12),'metal',right,y+.2,z+.12);
-      box(right,y+.44,z+.12,.13,.022,.18,'aqua');
-      // A reading lamp is attached to a weighted foot, stem and shade.
-      add(new CylinderGeometry(.12,.13,.035,18),'metal',right,y+.02,back);
-      box(right,y+.50,back,.025,.96,.025,'metal');
-      add(new CylinderGeometry(.09,.15,.13,20,1,true),'aqua',right,y+.96,back);
-    } else if (layout === 2) {
-      furniture('residential-bed',cityRoundedBox(Math.min(.68,width*.33),.18,Math.min(1.35,depth*.7),.07),'wood',left,y+.12,z-.05);
-      furniture('bed-linen',cityRoundedBox(Math.min(.65,width*.31),.11,Math.min(1.30,depth*.67),.09),'fabric',left,y+.30,z-.05);
-      furniture('pillow',cityRoundedBox(Math.min(.48,width*.25),.09,.24,.08),'porcelain',left,y+.41,back);
-      box(right,y+.27,back,.29,.54,.34,'wood');
-      box(right,y+.28,back+.177,.25,.46,.012,'aqua');
-      box(right-.08,y+.39,back+.195,.02,.11,.025,'metal');
-    } else {
-      furniture('breakfast-counter',cityRoundedBox(Math.min(.65,width*.33),.06,.43,.04),'wood',left,y+.59,z);
-      for(const dx of [-.16,.16])box(left+dx,y+.28,z,.035,.56,.31,'metal');
-      chair(left,y,z+forward,Math.PI);
-      add(new CylinderGeometry(.055,.045,.11,16),'aqua',left,y+.69,z);
-      box(right,y+.4,back,.3,.78,.36,'metal');
-      box(right,y+.71,back+.188,.25,.13,.015,'window');
-      box(right+.075,y+.46,back+.20,.018,.18,.02,'metal');
-    }
-    if (width>1.7) {
-      const sw=Math.min(.48,width*.24);
-      for(const dx of [-sw/2,sw/2])box(right+dx,y+.53,back,.03,1.06,.18,'wood');
-      for(let shelf=0;shelf<3;shelf++)box(right,y+.15+shelf*.3,back,sw,.035,.18,'wood');
-      for(let book=0;book<5;book++)box(right-sw*.37+book*sw*.18,y+.28,back,.035,.20+book%2*.04,.13,book%2?'aqua':'fabric');
-    }
-    box(x, y + height - .13, z, .24, .035, .17, 'porcelain');
-  };
+  const furnishing=(x:number,y:number,z:number,width:number,depth:number,variant:number,height=1.8)=>buildCityInterior(building,add,x,y,z,width,depth,variant,height);
   const furnishRoom = (...args: Parameters<typeof furnishing>) => {
     if (!deferInterior) { furnishing(...args); return; }
     // Capture dimensions only. No furniture geometry exists until the camera approaches.
@@ -183,10 +105,12 @@ export function buildCityArchitecture(building: Readonly<CityBuilding>, shellAdd
     const roomId = `${building.id}-room-${roomIndex++}`;
     const floor = y + .13, rear = z-depth/2+.055, front=z+depth/2;
     const opening=Math.min(.74,width-.26), doorHeight=Math.min(1.45,height-.22);
-    const slabGeometry=floorSlab(roomId,[floorRectangle(x,z+.045,width-.24,depth-.15)],floor,.13);
+    const innerWidth=width-(glazed?.178:.22);
+    const slabGeometry=floorSlab(roomId,[floorRectangle(x,z+.0405,innerWidth,depth-.139)],floor,.13);
     slabGeometry.userData.roomAccess={room:roomId,building:building.id,floor,front:[x,front],rear:[x,rear],opening,height:doorHeight};
     add(slabGeometry,'wood');
     if(y<.21)foundationPolygons.push(floorRectangle(x,z+.02,width+.02,depth+.08));
+    sideFaces.push({x,y,z,width,depth,height,room:roomId});
     const wall=(role:string,cx:number,cy:number,cz:number,ww:number,hh:number,dd:number,finish:CityFinish)=>{
       if(ww<=0 || hh<=0 || dd<=0)return;
       const geometry=new BoxGeometry(ww,hh,dd);geometry.userData.roomWall={room:roomId,role,ground:y<.21};add(geometry,finish,cx,cy,cz);
@@ -207,28 +131,14 @@ export function buildCityArchitecture(building: Readonly<CityBuilding>, shellAdd
     for(const side of [-1,1]) {
       const sx=x+side*(width/2-.055);
       const sideFinish:CityFinish=glazed?'window':cladding;
-      wall(side<0?'left':'right',sx,y+height/2,z,.11,height,depth-.11,sideFinish);
+      wall(side<0?'left':'right',glazed?x+side*(width/2-.08):sx,y+height/2,z,glazed?.018:.11,height,depth-.11,sideFinish);
       for(const end of [-1,1])box(sx,y+height/2,z+end*(depth/2-.055),.11,height,.11,'metal');
       if(glazed) {
-        box(sx,y+height*.48,z,.12,.055,depth-.12,'metal');
-        for(const dz of [-.27,.27])box(sx,y+height/2,z+dz*depth,.08,height,.055,'metal');
+        box(sx,y+height*.48,z,.14,.055,depth-.12,'metal');
+        for(const dz of [-.27,.27])box(sx,y+height/2,z+dz*depth,.13,height,.055,'metal');
       } else {
         // A continuous ventilated rainscreen avoids alternating pasted-on color bands.
         for(let slat=0;slat<Math.floor(depth/.18);slat++)box(sx+side*.065,y+height/2,z-depth*.42+slat*.18,.04,height-.12,.025,'wood');
-      }
-    }
-    // Climbers grow from floor-supported beds beside each side facade. Rear lift
-    // apertures and every front entrance remain outside their planting envelope.
-    for (const side of family === 'public-station' ? [] : [-1, 1]) {
-      const seed = variant + building.id.length + (side > 0 ? 3 : 0);
-      if (y > .21 && seed % 3 === 0) continue;
-      const gardenWidth = Math.min(1.05, depth * .45);
-      const garden = createFacadeGarden({ width: gardenWidth, height: height - .23, seed });
-      const px = x + side * (width / 2 - .04), pz = z - depth * .08;
-      for (const [part, geometry] of Object.entries(garden)) {
-        geometry.userData.facadeGarden = { building: building.id, room: roomId, role: part, floor, seed };
-        const finish: CityFinish = part === 'planter' ? 'stone' : part === 'wood' ? 'wood' : part === 'trellis' ? 'metal' : 'garden';
-        add(geometry, finish, px, floor, pz, 1, 1, 1, side * Math.PI / 2);
       }
     }
     wall('front-lintel',x,y+height-.065,front,width,.13,.10,'aqua');
@@ -236,12 +146,12 @@ export function buildCityArchitecture(building: Readonly<CityBuilding>, shellAdd
     const frontDoor=y<.21 || balcony;
     if(frontDoor) {
       for(const side of [-1,1]) {
-        wall('front',x+side*(opening+wing)/2,floor+(height-.26)/2,front,wing-.025,height-.26,.018,'window');
+        wall('front',x+side*(opening+wing)/2,floor+(height-.26)/2,front-.02,wing-.025,height-.26,.018,'window');
       }
-      wall('door-transom',x,floor+doorHeight+(height-.13-doorHeight)/2,front,opening,height-.13-doorHeight,.018,'window');
+      wall('door-transom',x,floor+doorHeight+(height-.13-doorHeight)/2,front-.02,opening,height-.13-doorHeight,.018,'window');
       entranceDoor(roomId, x, floor, front, opening, doorHeight, y < .21);
     } else {
-      wall('front',x,floor+(height-.26)/2,front,width-.12,height-.26,.018,'window');
+      wall('front',x,floor+(height-.26)/2,front-.02,width-.12,height-.26,.018,'window');
       box(x,floor+(height-.26)/2,front,.045,height-.26,.065,'metal');
     }
     furnishRoom(x,floor+.015,z,width-.24,depth-.24,_furnish?variant:variant+2,height-.14);
@@ -307,33 +217,50 @@ export function buildCityArchitecture(building: Readonly<CityBuilding>, shellAdd
     for (let n = 0; n < 4; n++) {
       const y = .2 + n * pitch; const rx = w / 2 - n * .08; const rz = d / 2 - .23;
       const roomId=`${building.id}-room-${roomIndex++}`;
-      const curvedPolygon=floorEllipse(0,0,rx-.16,rz-.16,64).map(([px,pz])=>[px,Math.max(pz,-rz+.19)] as const);
-      const curvedFloor=floorSlab(roomId,[curvedPolygon],y+.14,.14);
-      curvedFloor.userData.roomAccess={room:roomId,building:building.id,floor:y+.14,front:[0,rz-.1],rear:[0,-rz+.1],opening:.62,height:Math.min(1.42,pitch-.22)};
+      const floor=y+.14, roofY=y+pitch, doorHeight=Math.min(1.42,pitch-.22), radiusX=rx-.1,radiusZ=rz-.1;
+      const rearCut=-rz+.19;
+      const curvedPolygon=floorEllipse(0,0,radiusX,radiusZ,128).map(([px,pz])=>[px,Math.max(pz,rearCut)] as const);
+      const curvedFloor=floorSlab(roomId,[curvedPolygon],floor,.14);
+      curvedFloor.userData.roomAccess={room:roomId,building:building.id,floor,front:[0,radiusZ],rear:[0,-rz+.1],opening:.62,height:doorHeight};
       add(curvedFloor,'wood');
-      for(const start of [.25,Math.PI+.25]) {
-        const glazing=new CylinderGeometry(1,1,pitch-.16,48,1,true,start,Math.PI-.5);glazing.userData.roomWall={room:roomId,role:'ellipse',ground:n===0};
-        add(glazing,'window',0,y+pitch/2+.1,0,rx-.1,1,rz-.1);
-      }
-      add(floorSlab(`${roomId}-cornice`,[floorEllipse(0,0,rx,rz,64)],y+pitch+.10,.1,'threshold'),'aqua');
-      access.push({room:roomId,x:0,back:-rz+.19,floor:y+.14,height:Math.min(1.42,pitch-.22)});
+      const frontAngle=n===0?Math.asin(.405/radiusX):0,backAngle=Math.asin(.345/radiusX);
+      const curvedPane=(start:number,length:number,bottom:number,top:number)=>{
+        // Share cardinal grid vertices with the floor ellipse so wall and floor edges meet.
+        const end=start+length,step=Math.PI*2/128,angles=[start];
+        for(let a=Math.ceil((start+1e-8)/step)*step;a<end-1e-8;a+=step)angles.push(a);
+        angles.push(end);
+        const positions:number[]=[],uv:number[]=[],indices:number[]=[];
+        for(const a of angles)for(const level of [-.5,.5]){positions.push(Math.sin(a),level*(top-bottom),Math.cos(a));uv.push((a-start)/length,level+.5);}
+        for(let i=0;i<angles.length-1;i++){const k=i*2;indices.push(k,k+1,k+2,k+1,k+3,k+2);}
+        const glazing=new BufferGeometry();glazing.setAttribute('position',new Float32BufferAttribute(positions,3));glazing.setAttribute('uv',new Float32BufferAttribute(uv,2));glazing.setIndex(indices);glazing.computeVertexNormals();
+        glazing.userData.roomWall={room:roomId,role:'ellipse',ground:n===0};
+        glazing.userData.cityGlazing={room:roomId,bottom,top,frontClosed:n>0};
+        add(glazing,'window',0,(bottom+top)/2,0,radiusX,1,radiusZ);
+      };
+      curvedPane(frontAngle,Math.PI-backAngle-frontAngle,floor,roofY);
+      curvedPane(Math.PI+backAngle,Math.PI-backAngle-frontAngle,floor,roofY);
+      // Doors alone interrupt the weather wall; every upper front remains fully glazed.
+      curvedPane(Math.PI-backAngle,backAngle*2,floor+doorHeight,roofY);
+      if(n===0)curvedPane(-frontAngle,frontAngle*2,floor+doorHeight,roofY);
+      const rearJambZ=-radiusZ*Math.cos(backAngle),revealDepth=rearCut-rearJambZ;
+      for(const side of [-1,1])box(side*.328,floor+doorHeight/2,rearJambZ+revealDepth/2,.04,doorHeight,revealDepth+.035,'metal');
+      box(0,floor+doorHeight+.027,rearJambZ,.7,.055,.08,'metal');
+      add(floorSlab(`${roomId}-cornice`,[floorEllipse(0,0,rx,rz,128)],y+pitch+.10,.1,'threshold'),'aqua');
+      access.push({room:roomId,x:0,back:rearCut,floor,height:doorHeight});
       if(n===0) {
-        fronts.push({x:0,z:rz-.1,width:1.2,floor:y+.14});
-        entranceDoor(roomId, 0, y + .14, rz - .1, .74, Math.min(1.42, pitch - .22), true);
+        fronts.push({x:0,z:radiusZ,width:1.2,floor});
+        entranceDoor(roomId,0,floor,radiusZ,.74,doorHeight,true);
+        foundationPolygons.push(floorEllipse(0,0,rx-.08,rz-.08,128));
       }
-      if(n===0)foundationPolygons.push(floorEllipse(0,0,rx-.08,rz-.08,64));
-      for (let k = 0; k < 10; k++) { const a = k * Math.PI / 5; box(Math.cos(a) * (rx - .08), y + pitch / 2, Math.sin(a) * (rz - .08), .065, pitch, .065, 'metal'); }
+      for(let k=0;k<12;k++) {
+        const a=k*Math.PI/6;
+        if(Math.abs(Math.sin(a))<.01)continue;
+        box(Math.sin(a)*(rx-.075),y+pitch/2,Math.cos(a)*(rz-.075),.065,pitch,.065,'metal');
+      }
+      sideFaces.push({x:0,y,z:0,width:rx*2,depth:rz*2,height:pitch,room:roomId});
       // Curved residences keep the center aisle clear between front and lift doors.
       furnishRoom(0,y+.15,0,rx*1.65,rz*1.5,n,pitch-.15);
       roomViews.push({building:building.id,window:[-.65,y+.9,Math.sqrt(1-(.65/(rx-.1))**2)*(rz-.1)],target:[-.65,y+.7,0],floor:y+.14,width:rx*1.65,height:pitch,depth:rz*1.5});
-    }
-    for (const side of [-1, 1]) {
-      const garden = createFacadeGarden({ width: .72, height: h - .95, seed: side + 6 });
-      for (const [part, geometry] of Object.entries(garden)) {
-        geometry.userData.facadeGarden = { building: building.id, role: part, floor: .34 };
-        const finish: CityFinish = part === 'planter' ? 'stone' : part === 'wood' ? 'wood' : part === 'trellis' ? 'metal' : 'garden';
-        add(geometry, finish, side * (w / 2 - .26), .34, 0, 1, 1, 1, side * Math.PI / 2);
-      }
     }
     add(new CylinderGeometry(1, 1, .15, 32), 'porcelain', 0, h - .25, 0, w / 2 - .24, 1, d / 2 - .22);
     // Unserved roof remains an unoccupied weather enclosure.
@@ -372,9 +299,28 @@ export function buildCityArchitecture(building: Readonly<CityBuilding>, shellAdd
     box(-w * .22, 3.05, -.25, w * .44, .25, d * .54, 'window'); slab(-w * .22, 3.16, -.25, w * .49, d * .6, 'porcelain');
     for (const side of [-1, 1]) box(side * w * .42, 1.4, d / 2 - .05, .18, 2.6, .18, 'stone');
   } else if (family === 'stacked-maisonettes') {
-    room(-.28, .2, 0, w - .6, d - .5, 1.5, 0, true);
-    room(.25, 1.7, -.25, w - .7, d - .8, 1.45, 1, true, true);
-    roof(.25, 3.17, -.25, w - .65, d - .75);
+    const lowerX=-.28,lowerW=w-.6,lowerD=d-.5,upperX=.25,upperZ=-.25,upperW=w-.7,upperD=d-.8;
+    room(lowerX,.2,0,lowerW,lowerD,1.5,0,true);
+    room(upperX,1.7,upperZ,upperW,upperD,1.45,1,true,true);
+    const lx0=lowerX-lowerW/2,lx1=lowerX+lowerW/2,lz0=-lowerD/2,lz1=lowerD/2;
+    const ux0=upperX-upperW/2,ux1=upperX+upperW/2,uz0=upperZ-upperD/2,uz1=upperZ+upperD/2;
+    const exposed:FloorPolygon[]=[];
+    if(ux0>lx0)exposed.push(floorRectangle((lx0+ux0)/2,0,ux0-lx0,lowerD));
+    if(lx1>ux1)exposed.push(floorRectangle((ux1+lx1)/2,0,lx1-ux1,lowerD));
+    const commonLeft=Math.max(lx0,ux0),commonRight=Math.min(lx1,ux1);
+    if(uz0>lz0)exposed.push(floorRectangle((commonLeft+commonRight)/2,(lz0+uz0)/2,commonRight-commonLeft,uz0-lz0));
+    if(lz1>uz1)exposed.push(floorRectangle((commonLeft+commonRight)/2,(uz1+lz1)/2,commonRight-commonLeft,lz1-uz1));
+    const lowerRoof=floorSlab(`${building.id}-exposed-lower-roof`,exposed,1.83,.13,'balcony');
+    lowerRoof.userData.structuralSupport={role:'weather-roof'};add(lowerRoof,'porcelain');
+    // Transfer beams bear on the lower side walls and carry the offset upper wall.
+    for(const z of [uz0+.07,uz1-.07]) {
+      const beam=new BoxGeometry(upperW+.36,.20,.16);beam.userData.structuralSupport={role:'transfer-beam'};
+      add(beam,'metal',upperX,1.70,z);
+      const postX=ux1-.065,post=new BoxGeometry(.13,1.6,.13);post.userData.structuralSupport={role:'column'};
+      add(post,'metal',postX,.8,z);
+      foundationPolygons.push(floorRectangle(postX,z,.22,.22));
+    }
+    roof(upperX,3.17,upperZ,w-.65,d-.75);
   } else {
     // Ground lobby is a furnished open-front room; the upper boarding path remains clear.
     room(-.82, .2, 0, 1.25, d - .35, 1.78, 0, true);
@@ -397,6 +343,36 @@ export function buildCityArchitecture(building: Readonly<CityBuilding>, shellAdd
     for (const z of [-.20, .20]) box(-w * .42, 2.57, z, .08, .43, .08, 'metal');
     // Top landing is kept open around local [1.6, 2.32, 0].
     for (const z of [-d / 2 + .05, d / 2 - .05]) box(w * .38, 2.72, z, w * .18, .065, .065, 'metal');
+  }
+  if(family!=='public-station'&&sideFaces.length) {
+    for(const side of [-1,1]) {
+      const ground=sideFaces.filter(face=>face.y<.21).sort((a,b)=>side*(b.x+side*b.width/2-a.x-side*a.width/2))[0];
+      const seed=building.id.length*13+(side>0?7:2),height=Math.min(h-.5,(.64+(seed%4)*.065)*h);
+      const width=Math.min(.8,ground.depth*(.19+(seed%3)*.035));
+      const garden=createFacadeGarden({width,height,seed});
+      const z=ground.z-ground.depth*.22;
+      const surfaceX=(face:typeof ground,pz:number)=>family==='rounded-housing'
+        ? face.x+side*((face.width/2)*Math.sqrt(Math.max(0,1-((pz-face.z)/(face.depth/2))**2))+.05)
+        : face.x+side*(face.width/2+.08);
+      const baseX=surfaceX(ground,z)+side*.04;
+      for(const [part,geometry]of Object.entries(garden)) {
+        if(!geometry.getAttribute('position')?.count){geometry.dispose();continue;}
+        geometry.rotateY(side*Math.PI/2);
+        // Carry the stem around shallow floor setbacks instead of suspending it off the facade.
+        const p=geometry.getAttribute('position');
+        for(let i=0;i<p.count;i++) {
+          const level=Math.max(0,p.getY(i));p.setY(i,level);
+          const candidates=sideFaces.filter(face=>level>=face.y-.15&&level<=face.y+face.height+.15);
+          const face=candidates.sort((a,b)=>side*(b.x+side*b.width/2-a.x-side*a.width/2))[0]??ground;
+          const desired=surfaceX(face,z+p.getZ(i)),blend=Math.min(1,Math.max(0,level/.6));
+          p.setX(i,p.getX(i)+(desired-baseX)*blend);
+        }
+        geometry.computeVertexNormals();
+        geometry.userData.facadeGarden={building:building.id,role:part,floor:0,root:[baseX,0,z],seed,width,height};
+        const finish:CityFinish=part==='planter'?'stone':part==='wood'?'wood':part==='trellis'?'metal':'garden';
+        add(geometry,finish,baseX,0,z);
+      }
+    }
   }
   if (family !== 'public-station') {
     const entrance = cityEntrances.find(item => item.building === building.id)!.local;

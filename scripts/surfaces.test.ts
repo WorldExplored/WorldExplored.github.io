@@ -8,7 +8,7 @@ import { terrainMeshHeight } from '../src/components/world/terrain';
 
 test('optimized licensed material set stays below one megabyte and is browser-independent on the server', () => {
   const manifest=JSON.parse(readFileSync('public/materials/sources.json','utf8'));
-  assert.equal(manifest.files.length,12);
+  assert.equal(manifest.files.length,15);
   let bytes=0;
   for(const file of manifest.files){assert.equal(file.license,'CC0-1.0');assert.match(file.source,/^https:\/\/dl\.polyhaven\.org\//);bytes+=statSync(file.file).size;}
   assert.ok(bytes<1_000_000);
