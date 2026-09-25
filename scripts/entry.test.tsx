@@ -15,7 +15,7 @@ test('entry presents an accessible intentional sound choice without loading medi
   assert.match(html, /Enter the world/);
   assert.doesNotMatch(html, /<iframe|<audio|<script|https:/);
   assert.equal(entered, false);
-  assert.match(renderToStaticMarkup(<EnvironmentalAudioControl visible={false}><WorldMusic /></EnvironmentalAudioControl>), /<details hidden=""/);
+  assert.match(renderToStaticMarkup(<EnvironmentalAudioControl visible={false}><WorldMusic /></EnvironmentalAudioControl>), /data-settings-open="false"/);
 });
 
 test('Sound settings retain a prepared music host and honest playback controls', () => {
@@ -25,6 +25,10 @@ test('Sound settings retain a prepared music host and honest playback controls',
   assert.match(html, /data-music-state="preparing"/);
   assert.match(html, /type="checkbox"/);
   assert.match(html, /sound-music__player/);
+  const settings = renderToStaticMarkup(<EnvironmentalAudioControl visible={false}><WorldMusic /></EnvironmentalAudioControl>);
+  assert.match(settings, /is-collapsed/); assert.match(settings, /inert=""/);
+  assert.doesNotMatch(settings, /<details/);
+  assert.match(settings, /aria-controls="world-settings"/);
   assert.doesNotMatch(html, /Listen on YouTube|checked=""/);
   const direct = renderToStaticMarkup(<WorldMusic tracks={[{title:'Test',artist:'Test',playbackUrl:'/audio/test.mp3'}]} />);
   assert.match(direct, /aria-label="Music"/);

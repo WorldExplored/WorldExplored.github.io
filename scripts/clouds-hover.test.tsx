@@ -4,7 +4,7 @@ import { setTimeout as wait } from 'node:timers/promises';
 import { create, act, type ReactThreeTest } from '@react-three/test-renderer';
 import { Group, Object3D, Ray, Vector3, type Mesh } from 'three';
 import { Landmark, LANDMARK_HOVER_GRACE_MS } from '../src/components/world/Landmark';
-import { cloudInstanceCount, cloudInstanceRanges, cloudOrigin, cloudDeformation, cloudDensity, cloudBounds, createCloudClusters, updateCloudResponses } from '../src/components/world/clouds';
+import { cloudInstanceCount, cloudInstanceRanges, cloudOrigin, cloudVisibility, cloudDeformation, cloudDensity, cloudBounds, createCloudClusters, updateCloudResponses } from '../src/components/world/clouds';
 import { cloudSurfaceGeometry, makeClouds, writeCloudMatrices } from '../src/components/world/CloudSurface';
 import { createSceneRuntime, world, type LandmarkId, type SceneRuntime } from '../src/content/world';
 
@@ -20,7 +20,7 @@ test('the first ten clouds include five distinct graphs, profiles, depths and po
   assert.equal(new Set(first.map(cluster => cluster.speed)).size, 3, 'Three coherent wind layers.');
   assert.equal(new Set(first.map(cluster => cluster.density)).size, 10);
   assert.ok(Math.max(...first.map(cluster => cluster.center[2])) - Math.min(...first.map(cluster => cluster.center[2])) > 120);
-  for (const cluster of first) assert.ok(cluster.center[1] >= 20 && cluster.center[1] <= 40);
+  for (const cluster of first) assert.ok(cluster.center[1] >= 20 && cluster.center[1] <= 70);
   const profiles = first.slice(0, 5).map(cluster => {
     const width = Math.max(...cluster.puffs.map(puff => puff.offset[0] + puff.scale[0])) - Math.min(...cluster.puffs.map(puff => puff.offset[0] - puff.scale[0]));
     const height = Math.max(...cluster.puffs.map(puff => puff.offset[1] + puff.scale[1])) - Math.min(...cluster.puffs.map(puff => puff.offset[1] - puff.scale[1]));
@@ -108,8 +108,9 @@ test('cloud field fills all compass directions and has coherent diagonal wind wi
     assert.ok(Math.abs(next.x - first.x) > .5 && Math.abs(next.z - first.z) > .02, 'Both horizontal axes travel during the opening view.');
     for (let elapsed = 0; elapsed < 100000; elapsed += 131) {
       cloudOrigin(cloud, elapsed, first); cloudOrigin(cloud, elapsed + .1, next);
-      assert.ok(first.distanceTo(next) < .04, 'There is no reset at any wind-loop phase.');
-      assert.ok(Math.abs(first.x - cloud.center[0]) <= 80 && Math.abs(first.z - cloud.center[2]) <= 58);
+      if (first.distanceTo(next) > .1) assert.ok(cloudVisibility(cloud, elapsed) < .001 && cloudVisibility(cloud, elapsed + .1) < .001, 'Any recycling happens only beyond the fully faded sky.');
+      else assert.ok(next.x > first.x, 'Visible clouds always advance with the wind.');
+      assert.ok(Math.abs(first.x) <= 520);
     }
   }
   const a = clusters[0]; const b = clusters[3];

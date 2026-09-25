@@ -1,14 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { create, act } from '@react-three/test-renderer';
-import { renderToStaticMarkup } from 'react-dom/server';
 import { AdditiveBlending, DoubleSide, FrontSide, Mesh, MeshBasicMaterial, MeshPhysicalMaterial, Raycaster, Vector3 } from 'three';
-import { createLighthouseGeometry, CoastalLighthouse, LIGHTHOUSE_OPENINGS, lighthouseRadius, LighthouseFocusButton } from '../src/components/world/CoastalLighthouse';
-import { createLighthouseActivation, illuminateLighthouse, lighthouseSignal, stepLighthouseSignal } from '../src/components/world/lighthouseSignal';
+import { createLighthouseGeometry, CoastalLighthouse, LIGHTHOUSE_OPENINGS, lighthouseRadius } from '../src/components/world/CoastalLighthouse';
+import { createLighthouseActivation, lighthouseSignal, stepLighthouseSignal } from '../src/components/world/lighthouseSignal';
 import { createLandmarkMechanism, LandmarkMechanisms } from '../src/components/world/LandmarkMechanisms';
 import { createLighthouseAccess, lighthouseAccessCurve, LIGHTHOUSE_LANDING } from '../src/components/world/LighthouseAccess';
 import { terrainMeshHeight } from '../src/components/world/terrain';
-import { createSceneRuntime } from '../src/content/world';
+import { createSceneRuntime, world } from '../src/content/world';
+import { Landmark } from '../src/components/world/Landmark';
 
 Object.assign(globalThis,{IS_REACT_ACT_ENVIRONMENT:true});
 
@@ -60,29 +60,29 @@ test('demand-mode feedback invalidates only activation and bounded reset, with s
   controller.activate();assert.equal(invalidations,4);controller.dispose();assert.equal(cancellations,2);assert.equal(signal.intensity,0);assert.equal(invalidations,4,'unmount does not schedule a render');
 });
 
-test('one demand frame updates both lamp and beam; a wall-clock timeout resets paused feedback without animation',async context=>{
-  context.mock.timers.enable({apis:['setTimeout']});
-  const runtime={current:createSceneRuntime()};const signal=lighthouseSignal(runtime.current);
-  // Normal motion still fades through the same four-second response envelope.
-  illuminateLighthouse(runtime.current);for(let i=0;i<241;i++)stepLighthouseSignal(signal,1/60,false);assert.equal(signal.intensity,0);
-  const render=(quality:'high'|'low'='high')=><><CoastalLighthouse active={false} paused quality={quality} runtime={runtime}/><LandmarkMechanisms id="building" active={false} paused runtime={runtime}/></>;
+test('daylight keeps the lamp off and the complete tower opens its teaser instead of toggling a light',async()=>{
+  const runtime={current:createSceneRuntime()};Object.assign(runtime.current,{weather:{night:0}});
+  let destination='';
+  const config={...world.landmarks.find(item=>item.id==='building')!,position:[0,0,0] as [number,number,number]};
+  const render=()=> <Landmark config={config} runtime={runtime} paused onNavigate={id=>{destination=id;}}><CoastalLighthouse active={false} paused quality="high" runtime={runtime}/><LandmarkMechanisms id="building" active={false} paused runtime={runtime}/></Landmark>;
   const renderer=await create(render());
   try {
-    const root=renderer.scene.instance;const hit=root.getObjectByName('lighthouse-lantern-hit') as Mesh;assert.equal(hit.userData.cameraInteraction,true);const geometry=hit.geometry;
-    const beam=root.getObjectByName('signal-light-sweep') as Mesh;const material=beam.material as MeshPhysicalMaterial;
-    assert.equal(material.depthWrite,false);assert.equal(material.blending,AdditiveBlending);assert.equal(material.side,FrontSide);assert.equal(material.userData.softVolume,true);
+    const root=renderer.scene.instance,beam=root.getObjectByName('signal-light-sweep') as Mesh;
+    const material=beam.material as MeshPhysicalMaterial;
     const lamp=(root.getObjectByName('lighthouse-lens-prism') as Mesh).material as MeshPhysicalMaterial;
-    const lens=root.getObjectByName('lighthouse-rotating-fresnel-lens')!;const angle=beam.rotation.y;const lensAngle=lens.rotation.y;
-    context.mock.timers.tick(30000);
-    let stopped=false;await renderer.fireEvent(renderer.scene.findByProps({name:'lighthouse-lantern-hit'}),'click',{delta:0,stopPropagation(){stopped=true;}});assert.ok(stopped);assert.equal(signal.intensity,1);
-    // The first demand frame can be much later than the previous frame; it must still show the click.
-    await act(async()=>{await renderer.advanceFrames(1,30);});assert.ok(material.opacity>.04);assert.ok(lamp.emissiveIntensity>1.5,'lamp observes activation in the same rendered frame');
-    context.mock.timers.tick(3999);assert.equal(signal.intensity,1);
-    context.mock.timers.tick(1);assert.equal(signal.intensity,0,'timeout resets even with no intervening frames');
-    runtime.current.elapsed=50;await act(async()=>{await renderer.advanceFrames(1,4);});assert.equal(beam.rotation.y,angle);assert.equal(lens.rotation.y,lensAngle);assert.ok(material.opacity<.01);assert.ok(lamp.emissiveIntensity<.2);
-    await renderer.update(render('low'));assert.equal((root.getObjectByName('lighthouse-lantern-hit') as Mesh).geometry,geometry);
-    const button=renderToStaticMarkup(<LighthouseFocusButton activate={()=>{}}/>);assert.match(button,/aria-label="Illuminate lighthouse"/);assert.match(button,/lighthouse-focus-control/);assert.match(button,/width:44px/);assert.doesNotMatch(button,/outline:[^;]*#123e57/);assert.doesNotMatch(button,/>[^<]+</);
-  }finally{await renderer.unmount();context.mock.timers.tick(0);}
+    await act(async()=>{await renderer.advanceFrames(1,1/60);});
+    assert.equal(material.opacity,0);assert.equal(lamp.emissiveIntensity,0);assert.equal(beam.visible,false);
+    assert.equal(root.getObjectByName('lighthouse-lantern-hit'),undefined,'no competing lamp activation target');
+    const hit=root.getObjectByName('lighthouse-navigation-hit') as Mesh;assert.ok(hit);const geometry=hit.geometry;
+    await renderer.fireEvent(renderer.scene.findByProps({name:'landmark-building'}),'click',{delta:0,stopPropagation(){}});
+    assert.equal(destination,'building');assert.equal(lamp.emissiveIntensity,0);
+    Object.assign(runtime.current,{weather:{night:1}});
+    await act(async()=>{await renderer.advanceFrames(1,1/60);});
+    assert.ok(material.opacity>.04);assert.ok(lamp.emissiveIntensity>1.5);assert.equal(beam.visible,true);
+    assert.equal(material.depthWrite,false);assert.equal(material.blending,AdditiveBlending);assert.equal(material.side,FrontSide);
+    const angle=beam.rotation.y;runtime.current.elapsed=50;await act(async()=>{await renderer.advanceFrames(1,4);});assert.equal(beam.rotation.y,angle);
+    await renderer.update(render());assert.equal((root.getObjectByName('lighthouse-navigation-hit') as Mesh).geometry,geometry);
+  }finally{await renderer.unmount();}
 });
 
 test('water landing, actual stair faces and the stone court form a continuous supported boarding route',()=>{

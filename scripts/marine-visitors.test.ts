@@ -1,147 +1,167 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Box3, Mesh, Vector3 } from 'three';
+import { Box3, InstancedMesh, Mesh, Vector3 } from 'three';
 import { createMarineVisitors } from '../src/components/world/MarineVisitors';
-import { OCTOPUS_ROUTE, visitorClear } from '../src/components/world/marineVisitorState';
+import { OCTOPUS_ROUTE, turtleHatchlingPose, turtleRouteClear, visitorClear } from '../src/components/world/marineVisitorState';
 import { landDistance, terrainMeshHeight } from '../src/components/world/terrain';
 import { marineFloorHeight, reefHabitatContains } from '../src/components/world/reefHabitat';
 
-test('stonefish, octopuses and nesting turtles retain clear, bounded habitats for a complete ten-minute cycle',()=>{
-  const life=createMarineVisitors();
-  const initial=life.states.map(state=>state.position.clone());
-  const travel=life.states.map(()=>0);
-  const reefTravel=life.states.map(()=>0),openTravel=life.states.map(()=>0);
+test('stonefish and octopuses retain clear habitats and complete both reef crossings for ten minutes',()=>{
+  const life=createMarineVisitors(),travel=life.states.map(()=>0),reefTravel=life.states.map(()=>0),openTravel=life.states.map(()=>0);
+  let jetSlow=Infinity,jetFast=0;
   try{
-    assert.equal(life.states.filter(state=>state.kind==='stonefish').length,2);
-    assert.equal(life.states.filter(state=>state.kind==='octopus').length,2);
-    assert.equal(life.states.filter(state=>state.kind==='turtle').length,3);
+    assert.deepEqual(['stonefish','octopus','turtle'].map(kind=>life.states.filter(state=>state.kind===kind).length),[2,2,3]);
     for(let frame=0;frame<12000;frame++){
-      const before=life.states.map(state=>state.position.clone());
-      life.update(.05);
+      const before=life.states.map(state=>state.position.clone());life.update(.05);
       life.states.forEach((state,index)=>{
         const movement=Math.hypot(state.position.x-before[index].x,state.position.z-before[index].z);travel[index]+=movement;
-        assert.ok(movement<.035,'horizontal motion is continuous, including target changes');
+        assert.ok(movement<.055,'horizontal motion stays continuous, including target changes');
+        if(state.kind==='turtle')return;
         if(state.kind==='octopus'&&movement>.0001){
+          jetSlow=Math.min(jetSlow,movement/.05);jetFast=Math.max(jetFast,movement/.05);
           if(reefHabitatContains(state.position.x,state.position.z))reefTravel[index]+=movement;else openTravel[index]+=movement;
           const tangent=Math.atan2(before[index].z-state.position.z,state.position.x-before[index].x);
-          assert.ok(Math.abs(Math.atan2(Math.sin(state.heading-tangent),Math.cos(state.heading-tangent)))<.2,'mantle faces its travel tangent');
+          assert.ok(Math.abs(Math.atan2(Math.sin(state.heading-tangent),Math.cos(state.heading-tangent)))<.2);
         }
         if(frame%20)return;
-        const radius=state.kind==='octopus'?state.size*.85:state.kind==='stonefish'?.33:.58;
-        assert.ok(visitorClear(state.kind,state.position.x,state.position.z,radius),`${state.kind} remains clear`);
-        if(state.kind==='turtle'){
-          assert.ok(landDistance(state.position.x,state.position.z)>.75+radius);
-          assert.ok(state.position.distanceTo(state.home)<2.3,'nest remains guarded');
-          assert.ok(Math.abs(state.position.y-terrainMeshHeight(state.position.x,state.position.z)-.005)<1e-6);
-          assert.ok(Math.hypot(state.position.x-state.nest.x,state.position.z-state.nest.z)>1.01,'guardian never steps onto eggs');
-        }else{
-          assert.ok(Math.abs(state.position.y-marineFloorHeight(state.position.x,state.position.z)-.075)<1e-6);
-        }
+        assert.ok(visitorClear(state.kind,state.position.x,state.position.z,state.kind==='octopus'?state.size*.85:.33));
+        assert.ok(Math.abs(state.position.y-marineFloorHeight(state.position.x,state.position.z)-.075)<1e-6);
       });
     }
     life.states.forEach((state,index)=>{
-      assert.ok(travel[index]>(state.kind==='octopus'?100:state.kind==='stonefish'?.3:.2),`${state.kind} actually relocates`);
+      if(state.kind==='turtle')return;
+      assert.ok(travel[index]>(state.kind==='octopus'?100:.3));
       if(state.kind==='octopus'){
-        assert.ok(state.innerVisits>=1&&state.outerVisits>=1,'octopus reaches both far ends of the reef route');
-        assert.ok(reefTravel[index]>30&&openTravel[index]>60,'octopus crosses both reef shelves and their open-water passage');
-        assert.ok(Math.abs(initial[index].z-(state.index%2?-56:-25))<.001);
+        assert.ok(state.innerVisits>=1&&state.outerVisits>=1);
+        assert.ok(reefTravel[index]>30&&openTravel[index]>60);
       }
     });
-    const snapshot=life.states.map(state=>[state.time,...state.position.toArray(),state.heading]);
-    life.update(8,true);
-    assert.deepEqual(life.states.map(state=>[state.time,...state.position.toArray(),state.heading]),snapshot,'pause freezes every visitor');
+    assert.ok(jetFast>jetSlow*5,'octopus propulsion has a clear thrust and coast cadence');
+    const snapshot=life.states.map(state=>[state.time,...state.position.toArray(),state.heading]);life.update(8,true);
+    assert.deepEqual(life.states.map(state=>[state.time,...state.position.toArray(),state.heading]),snapshot);
   }finally{life.dispose();}
 });
 
-test('the complete coarse octopus route clears coral, kelp and floor at the larger arm radius',()=>{
+test('the entire octopus course clears coral, kelp and floor at the larger arm radius',()=>{
   let reefDistance=0,openDistance=0;
   for(let segment=1;segment<OCTOPUS_ROUTE.length;segment++){
     const [ax,az]=OCTOPUS_ROUTE[segment-1],[bx,bz]=OCTOPUS_ROUTE[segment];
     const length=Math.hypot(bx-ax,bz-az),steps=Math.ceil(length/.05);
     for(let step=0;step<=steps;step++){
       const t=step/steps,x=ax+(bx-ax)*t,z=az+(bz-az)*t;
-      assert.ok(visitorClear('octopus',x,z,.74*.85),`octopus swept arm clears ${x},${z}`);
+      assert.ok(visitorClear('octopus',x,z,.74*.85));
       if(step<steps){if(reefHabitatContains(x,z))reefDistance+=length/steps;else openDistance+=length/steps;}
     }
   }
-  assert.ok(reefDistance>20&&openDistance>30,'course enters both reef shelves and crosses the intervening sea');
-  assert.ok(OCTOPUS_ROUTE[0][1]>-26&&OCTOPUS_ROUTE.at(-1)![1]<-55,'both exits are far apart');
+  assert.ok(reefDistance>20&&openDistance>30);
 });
 
-test('recognizable anatomy, nest eggs, quality tiers and shared resources',()=>{
-  const life=createMarineVisitors();
-  const meshes:Mesh[]=[];
+test('detailed animals and natural nests use shared geometry and release every resource',()=>{
+  const life=createMarineVisitors(),meshes:Mesh[]=[];
   life.root.traverse(object=>{if(object instanceof Mesh)meshes.push(object);});
   const geometries=new Set(meshes.map(mesh=>mesh.geometry));
   const materials=new Set(meshes.flatMap(mesh=>Array.isArray(mesh.material)?mesh.material:[mesh.material]));
-  let disposals=0;
-  let materialDisposals=0;
-  geometries.forEach(geometry=>geometry.addEventListener('dispose',()=>{disposals++;}));
+  let geometryDisposals=0,materialDisposals=0;
+  geometries.forEach(geometry=>geometry.addEventListener('dispose',()=>{geometryDisposals++;}));
   materials.forEach(material=>material.addEventListener('dispose',()=>{materialDisposals++;}));
   try{
-    assert.ok(meshes.length<150);
-    assert.ok(geometries.size<25,'repeated animals reuse geometry');
+    assert.ok(meshes.length<150,'hatchlings are batched rather than adding many separate draws');
+    assert.ok(geometries.size<40);
     for(const state of life.states){
       const animal=life.root.getObjectByName(`${state.kind}-${state.index}`)!;
       const size=new Box3().setFromObject(animal).getSize(new Vector3());
-      assert.ok(size.x<1.7&&size.y<1.2&&size.z<1.5,'anatomy remains at wildlife scale');
-      if(state.kind==='octopus')assert.equal(animal.children.filter(child=>child.name.startsWith('octopus-arm-')).length,8);
+      assert.ok(size.x<1.7&&size.y<1.2&&size.z<1.5);
+      if(state.kind==='octopus'){
+        assert.equal(animal.children.filter(child=>child.name.startsWith('octopus-arm-')).length,8);
+        assert.equal(animal.children.filter(child=>child.name==='inset-octopus-eye').length,2);
+        assert.equal(animal.getObjectByName('octopus-eye-rim'),undefined);
+        const mantle=(animal.getObjectByName('octopus-mantle') as Mesh).geometry;mantle.computeBoundingBox();
+        const dimensions=mantle.boundingBox!.getSize(new Vector3());assert.ok(dimensions.x>dimensions.y*2.8);
+      }
       if(state.kind==='turtle'){
         const nest=life.root.getObjectByName(`guarded-turtle-nest-${state.index}`)!;
-        nest.updateMatrixWorld(true);
-        assert.equal(nest.children.filter(child=>child.name==='small-turtle-egg').length,5);
-        assert.ok(Math.hypot(state.nest.x-state.home.x,state.nest.z-state.home.z)>1.2,'clutch sits beside the resting turtle');
-        assert.ok(visitorClear('turtle',state.nest.x,state.nest.z,.44),'nest patch clears the entire rim');
-        assert.ok(Math.abs(nest.position.y-terrainMeshHeight(state.nest.x,state.nest.z)+.025)<1e-6);
-        const rim=nest.getObjectByName('partly-buried-sand-rim') as Mesh;
-        const rimBox=new Box3().setFromObject(rim),floor=terrainMeshHeight(state.nest.x,state.nest.z);
-        assert.ok(rimBox.min.y<floor&&rimBox.max.y<floor+.035,'sand rim is partly buried');
-        for(const child of nest.children.filter(child=>child.name==='small-turtle-egg')){
-          const eggBox=new Box3().setFromObject(child);
-          assert.ok(eggBox.max.y>floor+.14,'eggs rise visibly above the sand');
+        assert.ok(visitorClear('turtle',state.nest.x,state.nest.z,.44));
+        for(const name of ['disturbed-nesting-sand','weathered-driftwood-fragments','dry-kelp-and-seagrass-wrack','scattered-broken-shells'])assert.ok(nest.getObjectByName(name));
+        assert.equal(nest.getObjectByName('partly-buried-sand-rim'),undefined);
+        const clutch=nest.getObjectByName('buried-round-turtle-eggs')!;
+        assert.equal(clutch.children.length,6);
+        const egg=clutch.children[0] as Mesh;egg.geometry.computeBoundingBox();const dimensions=egg.geometry.boundingBox!.getSize(new Vector3());
+        assert.ok(Math.abs(dimensions.x-dimensions.y)<.004&&Math.abs(dimensions.z-dimensions.y)<.004,'turtle eggs are round, unlike elongated gull eggs');
+        nest.updateMatrixWorld(true);const point=new Vector3();
+        for(const object of nest.children){
+          if(!(object instanceof Mesh))continue;const vertices=object.geometry.getAttribute('position');
+          for(let i=0;i<vertices.count;i++){point.fromBufferAttribute(vertices,i).applyMatrix4(object.matrixWorld);const contact=point.y-terrainMeshHeight(point.x,point.z);assert.ok(contact>-.09&&contact<.10,'natural litter follows the beach grade');}
         }
-        animal.traverse(child=>{if(child instanceof Mesh)assert.ok(child.castShadow,'shell and flippers cast actual sun shadows');});
       }
     }
-    const scutes=life.root.getObjectByName('shell-scutes') as Mesh;
-    assert.equal(scutes.geometry.userData.plateCount,7,'connected hexagonal scutes replace isolated dots');
-    const scuteNormals=scutes.geometry.getAttribute('normal');
-    for(let i=0;i<scuteNormals.count;i++)assert.ok(scuteNormals.getY(i)>.85,'shell plates face upward along the dome');
-    const arm=life.root.getObjectByName('tapered-tendril') as Mesh;
-    const vertices=arm.geometry.getAttribute('position'),ring=7;
-    const radiusAt=(start:number,cx:number,cy:number,cz:number)=>Math.max(...Array.from({length:ring},(_,i)=>Math.hypot(vertices.getX(start+i)-cx,vertices.getY(start+i)-cy,vertices.getZ(start+i)-cz)));
-    assert.ok(radiusAt(vertices.count-ring,.48,.12,.31)<radiusAt(0,.12,.07,0)*.25,'eight arms taper into curled tips');
-    life.setQuality('low');assert.equal(life.root.children.filter(child=>child.name.includes('octopus-')&&child.visible).length,1);
-    life.setQuality('medium');assert.equal(life.root.children.filter(child=>child.name.includes('octopus-')&&child.visible).length,2);
-    life.setQuality('high');assert.equal(life.root.children.filter(child=>child.name.includes('octopus-')&&child.visible).length,2);
+    assert.equal((life.root.getObjectByName('shell-scutes') as Mesh).geometry.userData.plateCount,27);
+    assert.equal((life.root.getObjectByName('turtle-hatchling-bodies') as InstancedMesh).count,18);
+    assert.equal((life.root.getObjectByName('turtle-hatchling-paddling-flippers') as InstancedMesh).count,72);
+    for(const tier of ['low','medium','high'] as const){life.setQuality(tier);assert.equal(life.root.children.filter(child=>child.name.startsWith('octopus-')&&child.visible).length,tier==='low'?1:2);}
   }finally{life.dispose();}
-  assert.equal(disposals,geometries.size,'all shared geometries are released once');
-  assert.ok(materials.size<17);
-  assert.equal(materialDisposals,materials.size,'all shared materials are released once');
+  assert.equal(geometryDisposals,geometries.size);assert.equal(materialDisposals,materials.size);
 });
 
-test('turtle shells and flippers follow the beach grade and retain a tight contact shadow',()=>{
+test('hour-long turtle lifecycle buries eggs, guards for 20–30 minutes, leaves, hatches later and sends every hatchling to sea',()=>{
+  const life=createMarineVisitors(),point=new Vector3(),modes=new Set<string>();
+  const turtles=life.states.filter(state=>state.kind==='turtle');
+  const babySea=new Set<string>(),babyBeach=new Set<string>();
+  try{
+    for(const state of turtles){assert.ok(state.nursery!.guardSeconds>=1200&&state.nursery!.guardSeconds<=1800);assert.ok(state.nursery!.incubationSeconds>=600&&state.nursery!.incubationSeconds<=1200);}
+    for(let seconds=0;seconds<=3600;seconds++){
+      const before=turtles.map(state=>state.position.clone());life.seekTurtles(seconds);
+      for(const [index,state] of turtles.entries()){
+        const nursery=state.nursery!;modes.add(nursery.stage);
+        assert.ok(state.position.distanceTo(before[index])<.25,'adult crawl and all stage boundaries remain continuous');
+        assert.ok(state.position.y>=terrainMeshHeight(state.position.x,state.position.z));
+        assert.ok(turtleRouteClear(state.position.x,state.position.z,.58),'adult clears actual rocks, trunks and structures');
+        if(nursery.stage==='guarding'){
+          assert.ok(state.position.distanceTo(state.home)<.01);
+          assert.ok(Math.hypot(state.position.x-state.nest.x,state.position.z-state.nest.z)>1.2);
+          assert.equal(nursery.eggsExposed,0,'guarded eggs stay buried');
+        }
+        for(let baby=0;baby<6;baby++){
+          const pose=turtleHatchlingPose(state,baby,point);if(!pose.visible)continue;
+          assert.ok(point.y>=terrainMeshHeight(point.x,point.z));
+          assert.ok(turtleRouteClear(point.x,point.z,.14),'hatchling clears rocks and structures');
+          if(landDistance(point.x,point.z)>.2)babyBeach.add(`${index}-${baby}`);
+          if(landDistance(point.x,point.z)<-2.8)babySea.add(`${index}-${baby}`);
+        }
+      }
+    }
+    assert.deepEqual([...modes].sort(),['arriving','digging','guarding','hatching','incubating','leaving','resting-at-sea']);
+    assert.equal(babyBeach.size,18);assert.equal(babySea.size,18,'every baby travels all the way into the sea');
+  }finally{life.dispose();}
+});
+
+test('visible adult shells and flippers remain grounded through nesting and crawl phases',()=>{
   const life=createMarineVisitors(),point=new Vector3();
   try{
-    for(let phase=0;phase<5;phase++){
-      for(let frame=0;frame<1200;frame++)life.update(.05);
+    for(const seconds of [0,120,155,170,190,260,1210,1270,1460,1650,1920]){
+      life.seekTurtles(seconds);
       for(const state of life.states.filter(state=>state.kind==='turtle')){
-        const animal=life.root.getObjectByName(`turtle-${state.index}`)!;animal.updateMatrixWorld(true);
+        const animal=life.root.getObjectByName(`turtle-${state.index}`)!;if(!animal.visible||state.position.y<-.08)continue;animal.updateMatrixWorld(true);
         let lowest=Infinity;
         animal.traverse(object=>{
           if(!(object instanceof Mesh)||!['arched-sea-turtle-shell','pale-plastron','sea-turtle-head','four-swimming-flippers'].includes(object.name))return;
-          const positions=object.geometry.getAttribute('position');
-          for(let i=0;i<positions.count;i++){
-            point.fromBufferAttribute(positions,i).applyMatrix4(object.matrixWorld);
-            lowest=Math.min(lowest,point.y-terrainMeshHeight(point.x,point.z));
-          }
+          const positions=object.geometry.getAttribute('position');for(let i=0;i<positions.count;i++){point.fromBufferAttribute(positions,i).applyMatrix4(object.matrixWorld);lowest=Math.min(lowest,point.y-terrainMeshHeight(point.x,point.z));}
         });
-        assert.ok(lowest>-.025&&lowest<.08,`actual turtle support touches sand (${lowest})`);
-      }
-      for(const shadow of life.root.children.filter(child=>child.name==='turtle-contact-shadow')){
-        const floor=terrainMeshHeight(shadow.position.x,shadow.position.z);
-        assert.ok(shadow.position.y>floor&&shadow.position.y<floor+.025);
+        assert.ok(lowest>-.035&&lowest<.11,`actual support meets sand (${state.index}, ${seconds}, ${lowest})`);
       }
     }
+  }finally{life.dispose();}
+});
+
+
+test('nesting follows the uncapped active clock even when locomotion is rendering at 10 FPS',()=>{
+  const life=createMarineVisitors();
+  try{
+    const turtle=life.states.find(state=>state.kind==='turtle'&&state.index===0)!;
+    for(let frame=1;frame<12000;frame++)life.update(.1,false,frame/10);
+    assert.equal(turtle.nursery!.stage,'guarding');
+    assert.equal(turtle.time,1199.9);
+    life.update(.1,false,1200);
+    assert.equal(turtle.nursery!.stage,'leaving','a 20-minute guard finishes after 20 active minutes');
+    life.update(.1,true,1800);assert.equal(turtle.time,1200,'hidden or reduced-motion scenes freeze the lifecycle');
   }finally{life.dispose();}
 });

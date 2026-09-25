@@ -13,7 +13,7 @@ function cityGroundClear(x: number, z: number, margin: number) {
   if (landDistance(x,z) < 1.9) return false;
   if (Math.hypot(x - 21, z + 72) < 6.25 + margin) return false;
   const arcade = world.landmarks.find(item => item.id === 'arcade')!;
-  if (Math.abs(x - arcade.position[0]) < 2.94 + margin && Math.abs(z - arcade.position[2]) < 2.44 + margin) return false;
+  if (Math.abs(x - arcade.position[0]) < 3.48 + margin && Math.abs(z - (arcade.position[2] - .25)) < 2.78 + margin) return false;
   for (const b of cityBuildings) {
     const dx=x-b.x,dz=z-b.z,c=Math.cos(b.rotation),s=Math.sin(b.rotation);
     const lx=dx*c-dz*s,lz=dx*s+dz*c;

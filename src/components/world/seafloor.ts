@@ -6,6 +6,10 @@ export const REEF_BASINS = [
   { x: -46, z: -37, rx: 27, rz: 17 },
   { x: -46, z: -55, rx: 23, rz: 14 },
   { x: -61, z: -37, rx: 18, rz: 22 },
+  { x: -79, z: -36, rx: 22, rz: 23 },
+  { x: -7, z: -100, rx: 33, rz: 15 },
+  { x: 32, z: -79, rx: 18, rz: 26 },
+  { x: -46, z: -79, rx: 17, rz: 25 },
 ] as const;
 
 function shelfInfluence(x: number, z: number) {

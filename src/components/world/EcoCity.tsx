@@ -30,23 +30,34 @@ function arch(points: Vector3[], radius = .065, segments = 28) {
   return new TubeGeometry(new CatmullRomCurve3(points), segments, radius, 7, false);
 }
 
+const paneWeather = { value: 1 };
+const paneDusk = { value: 0 };
+
 function finishSurface(material: MeshPhysicalMaterial, finish: Finish) {
   if (finish === 'stone' || finish === 'porcelain') applySurface(material, 'mineral', 1.5);
-  if (finish === 'wood') applySurface(material, 'cedar', 1.2);
+  if (finish === 'wood') {
+    // Painted mineral composite retains a fine surface grain without brown timber cladding.
+    applySurface(material, 'mineral', 1.2); material.color.set('#ffffff');
+    material.roughness=.63; material.clearcoat=.16;
+  }
   if (finish === 'window' || finish === 'glass') {
     // Sky reflectance grows at grazing angles, making the enclosure visible without hiding rooms.
     material.onBeforeCompile = shader => {
+      shader.uniforms.paneDaylight=paneWeather; shader.uniforms.paneDusk=paneDusk;
+      shader.fragmentShader='uniform float paneDaylight; uniform float paneDusk;\n'+shader.fragmentShader;
       shader.fragmentShader = shader.fragmentShader.replace('#include <opaque_fragment>', `
         float paneFresnel = pow(1. - abs(dot(normalize(vViewPosition), normal)), 3.);
         vec3 paneReflection = inverseTransformDirection(reflect(-normalize(vViewPosition), normal), viewMatrix);
         vec3 reflectedSky = mix(vec3(.24,.40,.42), vec3(.48,.72,.83), smoothstep(-.15,.20,paneReflection.y));
         reflectedSky = mix(reflectedSky, vec3(.16,.40,.64), smoothstep(.20,.9,paneReflection.y));
+        reflectedSky = mix(vec3(.025,.04,.08), reflectedSky, paneDaylight);
+        reflectedSky = mix(reflectedSky, vec3(.46,.25,.35), paneDusk*.55);
         outgoingLight = mix(outgoingLight, reflectedSky, .18 + paneFresnel * .72);
         diffuseColor.a = min(.68, opacity + paneFresnel * .42);
         #include <opaque_fragment>
       `);
     };
-    material.customProgramCacheKey = () => 'city-glazing-reflectance-v1';
+    material.customProgramCacheKey = () => 'city-glazing-weather-v2';
   }
   return material;
 }
@@ -67,7 +78,7 @@ function makeFinishes() {
     garden: new MeshPhysicalMaterial({ color: '#ffffff', vertexColors: true, side: DoubleSide, roughness: .93, metalness: 0, envMapIntensity: .15 }),
     window: new MeshPhysicalMaterial({ color: '#65a7b6', roughness: .09, metalness: .025, clearcoat: .45, envMapIntensity: 1.2, transparent: true, opacity: .34, depthWrite: false, side: DoubleSide, forceSinglePass: true }),
     stone: new MeshPhysicalMaterial({ color: '#a3b9b5', roughness: .91, metalness: 0 }),
-    wood: new MeshPhysicalMaterial({ color: '#986345', roughness: .76, metalness: 0 }),
+    wood: new MeshPhysicalMaterial({ color: '#ffffff', vertexColors: true, roughness: .63, metalness: .03 }),
     fabric: new MeshPhysicalMaterial({ color: '#ffffff', vertexColors: true, roughness: 1, metalness: 0 }),
     metal: new MeshPhysicalMaterial({ color: '#244f64', roughness: .46, metalness: .6 }),
   };
@@ -84,13 +95,20 @@ function makeStaticCity(route: CityTransitRoute, materials: ReturnType<typeof ma
     matrix.multiplyMatrices(placement.matrix, local.matrix); geometry.applyMatrix4(matrix);
     const plain = geometry.index ? geometry.toNonIndexed() : geometry;
     if (plain !== geometry) geometry.dispose();
-    for (const name of Object.keys(plain.attributes)) if (name !== 'position' && name !== 'normal' && name !== 'uv' && !(['garden', 'fabric'].includes(finish) && name === 'color')) plain.deleteAttribute(name);
+    for (const name of Object.keys(plain.attributes)) if (name !== 'position' && name !== 'normal' && name !== 'uv' && !(['garden', 'fabric', 'wood'].includes(finish) && name === 'color')) plain.deleteAttribute(name);
     if (!plain.getAttribute('uv')) {
       const p=plain.getAttribute('position'),uv=new Float32Array(p.count*2);
       for(let i=0;i<p.count;i++){uv[i*2]=p.getX(i);uv[i*2+1]=p.getY(i)+p.getZ(i);}
       plain.setAttribute('uv',new Float32BufferAttribute(uv,2));
     }
     if (finish === 'garden' || finish === 'fabric') supplyFinishColors(plain, finish);
+    if (finish === 'wood') {
+      const index=cityBuildings.findIndex(building=>building.id===owner);
+      const tint=new Color(['#d6eee3','#79c3ce','#dee9cd','#8ebcb7','#a6cbdc'][Math.max(0,index)%5]);
+      const colors=new Float32Array(plain.attributes.position.count*3);
+      for(let i=0;i<colors.length;i+=3){colors[i]=tint.r;colors[i+1]=tint.g;colors[i+2]=tint.b;}
+      plain.setAttribute('color',new Float32BufferAttribute(colors,3));
+    }
     parts[finish].push({ geometry: plain, building: owner });
   }
   const roomViews: CityRoomView[] = [];
@@ -147,7 +165,7 @@ function makeStaticCity(route: CityTransitRoute, materials: ReturnType<typeof ma
       const material = building && ['window', 'aqua', 'porcelain'].includes(finish) ? materials[finish].clone() : materials[finish];
       // Families differ through structure and use, never alternating facade paint.
       finishSurface(material, finish);
-      if (material !== materials[finish] && finish !== 'porcelain') { material.emissive.set('#11c8e0'); material.emissiveIntensity=0; material.userData.hoverResponse = true; }
+      if (material !== materials[finish] && finish !== 'porcelain') { material.emissive.set('#11c8e0'); material.emissiveIntensity=0; material.userData.hoverResponse = true; material.userData.windowLight = finish === 'window'; }
       const mesh = new Mesh(geometry, material); mesh.name = `eco-city-${building || 'transit'}-${finish}`;
       mesh.castShadow = !material.transparent; mesh.receiveShadow = true; group.add(mesh);
     }
@@ -173,13 +191,20 @@ function constructCityInterior(entry: DeferredCityInterior, materials: ReturnTyp
     geometry.applyMatrix4(matrix.multiplyMatrices(placement.matrix,local.matrix));
     const plain=geometry.index?geometry.toNonIndexed():geometry;
     if(plain!==geometry)geometry.dispose();
-    for(const name of Object.keys(plain.attributes))if(!['position','normal','uv'].includes(name) && !(['garden', 'fabric'].includes(finish) && name === 'color'))plain.deleteAttribute(name);
+    for(const name of Object.keys(plain.attributes))if(!['position','normal','uv'].includes(name) && !(['garden', 'fabric', 'wood'].includes(finish) && name === 'color'))plain.deleteAttribute(name);
     if(!plain.getAttribute('uv')) {
       const p=plain.getAttribute('position'),uv=new Float32Array(p.count*2);
       for(let i=0;i<p.count;i++){uv[i*2]=p.getX(i);uv[i*2+1]=p.getY(i)+p.getZ(i);}
       plain.setAttribute('uv',new Float32BufferAttribute(uv,2));
     }
     if (finish === 'garden' || finish === 'fabric') supplyFinishColors(plain, finish);
+    if (finish === 'wood') {
+      const index=cityBuildings.findIndex(item=>item.id===building.id);
+      const tint=new Color(['#d6eee3','#79c3ce','#dee9cd','#8ebcb7','#a6cbdc'][Math.max(0,index)%5]);
+      const colors=new Float32Array(plain.attributes.position.count*3);
+      for(let i=0;i<colors.length;i+=3){colors[i]=tint.r;colors[i+1]=tint.g;colors[i+2]=tint.b;}
+      plain.setAttribute('color',new Float32BufferAttribute(colors,3));
+    }
     const bucket=buckets.get(finish)??[];bucket.push(plain);buckets.set(finish,bucket);
   };
   entry.recipes.forEach(recipe=>recipe(add));
@@ -256,23 +281,25 @@ export function EcoCity({ runtime, paused, quality }: EnvironmentProps) {
   const city = useMemo(() => measureConstruction('city', () => makeCity()), []);
   useEffect(() => retainCity(city), [city]);
   useFrame(({camera,invalidate}) => {
+    paneWeather.value = runtime.current.weather.daylight * (1 - runtime.current.weather.storm * .5);
+    paneDusk.value = runtime.current.weather.dusk;
     if(updateCityInteriors(city,camera.position,quality))invalidate();
     if(!paused)updateCityTransit(city,runtime.current.elapsed);
   });
   return <group name="coastal-eco-city" dispose={null}>
-    {city.buildings.map(group => <CityBuildingBoundary object={group} paused={paused} key={group.uuid} />)}
+    {city.buildings.map(group => <CityBuildingBoundary object={group} paused={paused} runtime={runtime} key={group.uuid} />)}
     {city.cars.map(car => <primitive object={car} key={car.uuid} />)}
     <StationAccess />
     <CityLife runtime={runtime} paused={paused} quality={quality} route={city.route} />
   </group>;
 }
 
-function CityBuildingBoundary({ object, paused }: { object: Group; paused: boolean }) {
+function CityBuildingBoundary({ object, paused, runtime }: { object: Group; paused: boolean; runtime: EnvironmentProps['runtime'] }) {
   const hover = useRef(false), exit = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const invalidate = useThree(state => state.invalidate);
   const materials = useMemo(() => object.children.flatMap(child => { const material = (child as Mesh).material as MeshPhysicalMaterial; return material?.userData.hoverResponse ? [material] : []; }), [object]);
   useEffect(() => () => clearTimeout(exit.current), []);
-  useFrame((_, delta) => { for (const material of materials) material.emissiveIntensity += ((hover.current ? .13 : 0) - material.emissiveIntensity) * (paused ? 1 : 1 - Math.exp(-12 * delta)); });
+  useFrame((_, delta) => { for (const material of materials) { const night=runtime.current.weather.night; material.emissive.set(material.userData.windowLight && night>.2 ? '#ffd7a0' : '#11c8e0'); material.emissiveIntensity += ((hover.current ? .13 : 0) + (material.userData.windowLight ? night*.65 : 0) - material.emissiveIntensity) * (paused ? 1 : 1 - Math.exp(-12 * delta)); } });
   const enter = (event: ThreeEvent<PointerEvent>) => { if (!object.userData.building) return; event.stopPropagation(); clearTimeout(exit.current); hover.current = event.pointerType !== 'touch'; invalidate(); };
   return <primitive object={object} onPointerOver={enter} onPointerMove={enter} onPointerOut={() => { clearTimeout(exit.current); exit.current = setTimeout(() => { hover.current = false; invalidate(); }, 120); }} />;
 }

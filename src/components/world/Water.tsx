@@ -55,6 +55,9 @@ const fragmentShader = /* glsl */ `
   uniform vec3 uSunDirection;
   uniform vec3 uSunColor;
   uniform float uSunIntensity;
+  uniform float uDaylight;
+  uniform float uDusk;
+  uniform float uStorm;
   varying vec3 vWorld;
   varying vec3 vNormal;
   ${shorelineWaveGLSL}
@@ -128,21 +131,42 @@ const fragmentShader = /* glsl */ `
     float causticNear = 1.-smoothstep(12.,38.,length(cameraPosition-vWorld));
     if (shallows*causticNear > .02) caustic = causticCell(p*3.9+vec2(seaNoise(p*1.4),seaNoise(p*1.7+3.))*1.8)*.008*shallows*causticNear*uDetail;
     color = mix(color, uHorizon*.68, fresnel * .48) + caustic;
-    float sheen = pow(max(dot(reflect(-normalize(vec3(-.4,.8,.25)),n), view),0.),24.);
-    color += vec3(.35,.55,.6) * sheen * .23;
+    color *= .19 + uDaylight * .81;
+    vec3 sunsetWater = mix(vec3(.16,.075,.25),vec3(.72,.41,.19),pow(max(dot(normalize(vec3(uSunDirection.x,0.,uSunDirection.z)),normalize(vec3(view.x,0.,view.z))),0.),3.));
+    color = mix(color, sunsetWater, uDusk * (.24 + fresnel * .28));
+    color = mix(color, color * vec3(.59,.69,.78), uStorm * .62);
     float sun = pow(max(dot(reflect(-uSunDirection, n), view), 0.), 110.);
     color += uSunColor * sun * uSunIntensity * .14;
     float haze = smoothstep(uFogRange.x, uFogRange.y, length(cameraPosition - vWorld));
     color = mix(color, uFog, haze);
-    gl_FragColor = vec4(color, clamp(1. - exp(-depth * .085) + fresnel * .12 * shallows + foam * .24, .06, .995));
+    float viewCosine = clamp(dot(view,n),0.,1.);
+    float absorption = 1. - exp(-depth * .085 / max(.08,viewCosine));
+    float grazingReflection = pow(1. - viewCosine,5.);
+    gl_FragColor = vec4(color, clamp(absorption + (1. - absorption) * grazingReflection + foam * .24, .06, .995));
     #include <colorspace_fragment>
   }
 `;
 
-function updateWater(material: ShaderMaterial, state: SceneRuntime) {
-  material.uniforms.uTime.value = state.elapsed * world.environment.waterSpeed;
-  material.uniforms.uRipple.value.set(state.ripple.x, state.ripple.z, state.elapsed - state.ripple.time, state.ripple.serial);
+const waterSunset = new Color('#ffc58a');
+const waterDayHorizon = new Color(world.lighting.horizon);
+const waterDuskHorizon = new Color('#ddb4a9');
+const waterDayFog = new Color('#c4eaff');
+const waterStormFog = new Color('#bdcbd9');
+
+function updateWater(material: ShaderMaterial, state: SceneRuntime, paused: boolean) {
+  if (!paused) {
+    material.uniforms.uTime.value = state.elapsed * world.environment.waterSpeed;
+    material.uniforms.uRipple.value.set(state.ripple.x, state.ripple.z, state.elapsed - state.ripple.time, state.ripple.serial);
+  }
   material.uniforms.uSunDirection.value.fromArray(state.sunDirection);
+  const weather = state.weather;
+  material.uniforms.uDaylight.value = weather?.daylight ?? 1;
+  material.uniforms.uDusk.value = weather?.dusk ?? 0;
+  material.uniforms.uStorm.value = weather?.storm ?? 0;
+  material.uniforms.uSunIntensity.value = (weather?.daylight ?? 1) * world.lighting.sunIntensity * (1 - (weather?.storm ?? 0) * .9);
+  material.uniforms.uSunColor.value.set('#fff8df').lerp(waterSunset, weather?.dusk ?? 0);
+  material.uniforms.uHorizon.value.set('#293a5a').lerp(waterDayHorizon, weather?.daylight ?? 1).lerp(waterDuskHorizon, (weather?.dusk ?? 0) * .75);
+  material.uniforms.uFog.value.set('#293a5a').lerp(waterDayFog, weather?.daylight ?? 1).lerp(waterSunset, (weather?.dusk ?? 0) * .67).lerp(waterStormFog, (weather?.storm ?? 0) * .75 * (weather?.daylight ?? 1));
 }
 
 function startRipple(state: SceneRuntime, x: number, z: number) {
@@ -189,6 +213,7 @@ export function Water({ runtime, paused, quality }: EnvironmentProps) {
       uSunDirection: { value: new Vector3(...world.lighting.sunPosition).normalize() },
       uSunColor: { value: new Color(world.lighting.sunColor) },
       uSunIntensity: { value: world.lighting.sunIntensity },
+      uDaylight: { value: 1 }, uDusk: { value: 0 }, uStorm: { value: 0 },
     },
   }), []);
   useEffect(() => {
@@ -211,8 +236,7 @@ export function Water({ runtime, paused, quality }: EnvironmentProps) {
   useEffect(() => () => { geometry.dispose(); material.uniforms.uCoast.value.dispose(); material.dispose(); }, [geometry, material]);
   useEffect(() => { material.uniforms.uDetail.value = detail; }, [material, detail]);
   useFrame(() => {
-    if (paused) return;
-    updateWater(material, runtime.current);
+    updateWater(material, runtime.current, paused);
   });
   function ripple(event: ThreeEvent<MouseEvent>) {
     if (paused || event.delta > 5) return;

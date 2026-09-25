@@ -28,9 +28,7 @@ function DirectWorldMusic({ ref, tracks }: { ref?: Ref<WorldMusicHandle>; tracks
   }
   useImperativeHandle(ref, () => ({ play }));
   useEffect(() => {
-    function hide() { if (document.hidden) controller.current?.pause(); }
-    document.addEventListener('visibilitychange', hide);
-    return () => { document.removeEventListener('visibilitychange', hide); controller.current?.dispose(); controller.current = null; };
+    return () => { controller.current?.dispose(); controller.current = null; };
   }, [tracks]);
   const playing = snapshot.active && ['playing', 'loading', 'buffering'].includes(snapshot.state);
   return <div className="sound-music" role="group" aria-label={profile.soundtrack.settings}>

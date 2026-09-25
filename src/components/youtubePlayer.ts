@@ -1,7 +1,8 @@
 export interface YouTubePlayer {
   playVideo(): void;
   unMute(): void;
-  loadVideoById(videoId: string): void;
+  loadVideoById(video: string | { videoId: string; startSeconds: number }): void;
+  getPlayerState(): number;
   getCurrentTime(): number;
   pauseVideo(): void;
   setVolume(value: number): void;
@@ -10,11 +11,11 @@ export interface YouTubePlayer {
   getIframe(): HTMLIFrameElement;
 }
 interface YouTubeOptions {
-  width: number;
-  height: number;
-  videoId: string;
-  host: string;
-  playerVars: Record<string, string | number>;
+  width?: number;
+  height?: number;
+  videoId?: string;
+  host?: string;
+  playerVars?: Record<string, string | number>;
   events: {
     onReady: (event: { target: YouTubePlayer }) => void;
     onError: (event: { data: number }) => void;

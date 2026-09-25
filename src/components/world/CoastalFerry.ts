@@ -25,6 +25,7 @@ export function createCoastalFerry() {
   const materials={
     shell:new MeshPhysicalMaterial({color:'#edf6ef',roughness:.28,metalness:.18,clearcoat:.65}),
     trim:new MeshPhysicalMaterial({color:'#1262c4',roughness:.27,metalness:.35,clearcoat:.55}),
+    solar:new MeshPhysicalMaterial({color:'#16375f',roughness:.3,metalness:.38,clearcoat:.45}),
     deck:new MeshPhysicalMaterial({color:'#986345',roughness:.8}),
     glass:new MeshPhysicalMaterial({color:'#124b62',roughness:.09,metalness:.12,transparent:true,opacity:.42,depthWrite:false,clearcoat:1}),
     rubber:new MeshPhysicalMaterial({color:'#233940',roughness:.91}),
@@ -82,6 +83,22 @@ export function createCoastalFerry() {
   add('ferry-mounted-fenders',[-1,1].flatMap(side=>[-.60,.54].map(z=>new CylinderGeometry(.045,.045,.19,12).rotateZ(Math.PI/2).translate(side*.57,.27,z))),materials.rubber);
   add('ferry-port-navigation-light',[new BoxGeometry(.035,.045,.075).translate(-.535,.93,.60)],materials.red);
   add('ferry-starboard-navigation-light',[new BoxGeometry(.035,.045,.075).translate(.535,.93,.60)],materials.green);
+  // Two supported photovoltaic modules sit over the aft canopy, clear of boarding.
+  const panelFrames:BufferGeometry[]=[],cells:BufferGeometry[]=[],conductors:BufferGeometry[]=[];
+  for(const side of [-1,1]) {
+    const cx=side*.25;
+    panelFrames.push(new BoxGeometry(.465,.025,.58).translate(cx,1.084,-.435));
+    for(let row=0;row<4;row++)for(let col=0;col<3;col++) {
+      const x=cx+(col-1)*.139,z=-.645+row*.14;
+      cells.push(new BoxGeometry(.131,.009,.132).translate(x,1.103,z));
+      conductors.push(new BoxGeometry(.002,.001,.127).translate(x,1.1085,z));
+    }
+    for(const z of [-.65,-.23])panelFrames.push(new BoxGeometry(.41,.055,.022).translate(cx,1.052,z));
+  }
+  add('ferry-aft-solar-supports',panelFrames,materials.shell);
+  add('ferry-aft-photovoltaic-cells',cells,materials.solar);
+  add('ferry-solar-cell-busbars',conductors,materials.trim);
+  add('ferry-solar-power-conduit',[strut(new Vector3(.48,1.06,-.54),new Vector3(.48,.31,-.54),.012),new BoxGeometry(.26,.13,.18).translate(.27,.36,-.56)],materials.rubber);
   add('ferry-electric-drive-and-dock-cleats',[-1,1].flatMap(side=>[
     new BoxGeometry(.12,.13,.25).translate(side*.43,-.15,-1.05),new CylinderGeometry(.047,.047,.08,12).rotateX(Math.PI/2).translate(side*.43,-.17,-1.19),
     new BoxGeometry(.12,.024,.04).translate(side*.42,.305,-.77),new BoxGeometry(.03,.05,.03).translate(side*.42,.28,-.77),

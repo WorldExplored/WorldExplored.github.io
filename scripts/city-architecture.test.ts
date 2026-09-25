@@ -16,13 +16,13 @@ function fixture(building: Readonly<CityBuilding>) {
   return { meshes, finishes, rooms, dispose() { meshes.forEach(mesh => mesh.geometry.dispose()); material.dispose(); } };
 }
 
-test('climbers use three distinct rooted branch and leaf habits',()=>{
-  const gardens=[0,1,2].map(seed=>createFacadeGarden({width:.7,height:3.2,seed}));
+test('climbers use five distinct rooted branch and leaf habits',()=>{
+  const gardens=[0,1,2,3,4].map(seed=>createFacadeGarden({width:.7,height:3.2,seed}));
   try{
-    assert.equal(VINE_HABITS.length,3);
-    assert.deepEqual([0,1,2].map(vineHabit),[0,1,2]);
-    assert.equal(new Set(gardens.map(garden=>garden.planter.userData.facadeGarden.habit)).size,3);
-    assert.equal(new Set(gardens.map(garden=>garden.foliage.attributes.position.count)).size,3);
+    assert.equal(VINE_HABITS.length,5);
+    assert.deepEqual([0,1,2,3,4].map(vineHabit),[0,1,2,3,4]);
+    assert.equal(new Set(gardens.map(garden=>garden.planter.userData.facadeGarden.habit)).size,5);
+    assert.equal(new Set(gardens.map(garden=>garden.foliage.attributes.position.count)).size,5);
     for(const garden of gardens){garden.planter.computeBoundingBox();assert.ok(Math.abs(garden.planter.boundingBox!.min.y)<1e-7);}
   }finally{gardens.forEach(garden=>Object.values(garden).forEach(geometry=>geometry.dispose()));}
 });

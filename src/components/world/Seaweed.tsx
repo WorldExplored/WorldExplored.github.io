@@ -77,17 +77,18 @@ export function createSeaweedLayout(plan = createLandscapePlan()): SeaweedSite[]
     return { x: cove.x + Math.cos(angle) * radius, z: cove.z + Math.sin(angle) * radius, radius: .65 + random() * 1.65 };
   }));
   // Round-robin ordering keeps complete beds and all forms on the low tier.
-  for (let round = 0; round < 114; round++) {
+  for (let round = 0; round < 190; round++) {
     SEAWEED_COVES.forEach((cove, coveIndex) => {
+      if((coveIndex===7||coveIndex===9)&&round>=100)return;
       for (let attempt = 0; attempt < 80; attempt++) {
         const clump = clumps[coveIndex][Math.floor(random() * clumps[coveIndex].length)];
         const angle = random() * Math.PI * 2, radius = Math.pow(random(), .7) * clump.radius;
         const x = clump.x + Math.cos(angle) * radius, z = clump.z + Math.sin(angle) * radius;
         if (Math.hypot(x - cove.x, z - cove.z) > cove.radius || !seaweedSiteClear(x, z, plan)
-          || nearRoot(x, z, .19)) continue;
+          || nearRoot(x, z, .16)) continue;
         const y = terrainMeshHeight(x, z) - .025;
         const variant = Math.floor(random() * SEAWEED_FORMS.length);
-        const height = Math.min((variant === 5 ? .26 : .55) + random() * (variant === 5 ? .35 : .85), -.32 - y);
+        const height = Math.min((variant === 5 ? .26 : .7) + random() * (variant === 5 ? .35 : 1.1), -.32 - y);
         const site = { x, y, z, height, width: .68 + random() * .5, spread: .7 + random() * .45,
           rotation: random() * Math.PI * 2, variant, cove: coveIndex, tint: random() };
         sites.push(site); remember(site);
@@ -96,14 +97,14 @@ export function createSeaweedLayout(plan = createLandscapePlan()): SeaweedSite[]
     });
   }
   const strays:SeaweedSite[]=[];
-  for(let round=0;round<86;round++)for(let islandIndex=0;islandIndex<ISLANDS.length;islandIndex++){
+  for(let round=0;round<150;round++)for(let islandIndex=0;islandIndex<ISLANDS.length;islandIndex++){
     const island=ISLANDS[islandIndex];
     for(let attempt=0;attempt<60;attempt++){
       const angle=random()*Math.PI*2,contour=islandContour(island,angle),offshore=1.8+random()*3.4;
       const x=island.x+Math.cos(angle)*(island.rx*contour+offshore),z=island.z+Math.sin(angle)*(island.rz*contour+offshore);
-      if(!seaweedSiteClear(x,z,plan,false)||nearRoot(x,z,.28,site=>site.cove>=0)||nearRoot(x,z,.42,site=>site.cove<0))continue;
+      if(!seaweedSiteClear(x,z,plan,false)||nearRoot(x,z,.28,site=>site.cove>=0)||nearRoot(x,z,.32,site=>site.cove<0))continue;
       const y=terrainMeshHeight(x,z)-.025,variant=[0,1,3,5][Math.floor(random()*4)];
-      const site={x,y,z,height:Math.min(.25+random()*.62,-.32-y),width:.48+random()*.43,spread:.7+random()*.4,rotation:random()*Math.PI*2,variant,cove:-1-islandIndex,tint:random()};
+      const site={x,y,z,height:Math.min(.35+random()*.85,-.32-y),width:.48+random()*.43,spread:.7+random()*.4,rotation:random()*Math.PI*2,variant,cove:-1-islandIndex,tint:random()};
       strays.push(site);remember(site);break;
     }
   }
@@ -237,14 +238,14 @@ export function createForestKelpGeometry(variant:number) {
   };
   const rings=16,sides=5;
   for(let ring=0;ring<=rings;ring++)for(let side=0;side<sides;side++){
-    const t=ring/rings,a=side/sides*Math.PI*2,c=stem(t),r=.019*(1-t*.7);
+    const t=ring/rings,a=side/sides*Math.PI*2,c=stem(t),r=(variant===2?.034:.019)*(1-t*.7);
     vertex(c.x+Math.cos(a)*r,t,c.z+Math.sin(a)*r);
     if(ring){const i=ring*sides+side,next=ring*sides+(side+1)%sides;indices.push(i,next,i-sides,next,next-sides,i-sides);}
   }
-  const levels=variant?10:13;
+  const levels=variant===0?13:variant===1?10:variant===2?8:11;
   for(let level=0;level<levels;level++)for(let side=0;side<2;side++){
     const base=.12+level/levels*.81,c=stem(base),a=level*(variant?1.8:.64)+side*Math.PI;
-    const length=.19+random()*.20,breadth=(variant?.048:.03)+random()*.016,start=positions.length/3;
+    const length=(variant===2?.25:.19)+random()*.20,breadth=(variant===2?.07:variant===3?.035:variant?.048:.03)+random()*.025,start=positions.length/3;
     for(let row=0;row<=5;row++)for(let rib=0;rib<3;rib++){
       const t=row/5,lateral=(rib-1)*breadth*Math.sin(t*Math.PI)*(1+.16*Math.sin(t*25+level));
       const along=length*t,y=base+Math.sin(t*Math.PI)*.028-t*t*.037;
@@ -253,5 +254,5 @@ export function createForestKelpGeometry(variant:number) {
     }
   }
   const geometry=new BufferGeometry();geometry.setAttribute('position',new Float32BufferAttribute(positions,3));geometry.setAttribute('color',new Float32BufferAttribute(colors,3));geometry.setIndex(indices);geometry.computeVertexNormals();geometry.computeBoundingBox();geometry.computeBoundingSphere();
-  geometry.userData.form=variant?'broad-frond canopy kelp':'spiral feather kelp';return geometry;
+  geometry.userData.form=['spiral feather kelp','broad-frond canopy kelp','bull kelp with broad blades','twining bronze kelp'][variant%4];return geometry;
 }

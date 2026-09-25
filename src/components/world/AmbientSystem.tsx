@@ -10,15 +10,16 @@ import { rockImpactPosition } from './ShoreImpacts';
 import { coastalSoundScene } from './coastalAudio';
 import { barkTexture, leafVeinTexture, treeFoliageGeometry, treeBranches, treeWoodGeometry } from './TreeGeometry';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
-import { BufferGeometry, Group, Color, DataTexture, DoubleSide, Float32BufferAttribute, InstancedBufferAttribute, InstancedMesh, LinearFilter, LinearMipmapLinearFilter, MeshPhysicalMaterial, Object3D, Points, PointsMaterial, Raycaster, RepeatWrapping, ShaderMaterial, SRGBColorSpace, SphereGeometry, Vector2, Vector3 } from 'three';
+import { BufferGeometry, Group, Color, DataTexture, DoubleSide, Float32BufferAttribute, InstancedBufferAttribute, InstancedMesh, LinearFilter, LinearMipmapLinearFilter, MeshPhysicalMaterial, Object3D, Points, PointsMaterial, RepeatWrapping, ShaderMaterial, SRGBColorSpace, SphereGeometry, Vector2, Vector3 } from 'three';
 import { world, type SceneRuntime } from '../../content/world';
 import { createLandscapePlan, generatePlantPositions, generatePlantPositionsAsync, archipelagoGeometry, seededRandom, vegetationSuitability, landDistance, terrainMeshHeight, terrainSlope, type LandscapePlan, type PlantPosition } from './terrain';
 import { createTownLandscape } from './TownLandscape';
 import { createShoreDetails } from './ShoreDetails';
 import { createCoastalRocks } from './coastalRocks';
-import { updateCloudResponses } from './clouds';
+import { advanceCloudPress, cloudOrigin } from './clouds';
+import { createRain } from './Rain';
 import { shorelineWaveGLSL } from './waves';
 import { makeClouds, writeCloudMatrices } from './CloudSurface';
 import type { EnvironmentProps } from './Water';
@@ -50,13 +51,15 @@ const plantVertex = /* glsl */ `
   }
 `;
 const plantFragment = /* glsl */ `
+  uniform float uDaylight;
+  uniform float uStorm;
   uniform vec3 uFog;
   uniform vec2 uFogRange;
   varying vec3 vTint;
   varying float vLight;
   varying float vDistance;
   void main() {
-    vec3 color = vTint * vLight;
+    vec3 color = vTint * vLight * (.24 + .76 * uDaylight) * (1. - uStorm * .24);
     color = mix(color, uFog, smoothstep(uFogRange.x, uFogRange.y, vDistance));
     gl_FragColor = vec4(color, 1.);
     #include <colorspace_fragment>
@@ -124,7 +127,7 @@ function makePlants(plan: LandscapePlan, flowers: boolean, prepared?: PlantPosit
   const positions = prepared ?? generatePlantPositions(maximum, plan, flowers ? 83 : 41);
   const geometry = flowers ? daisyGeometry() : tuftGeometry();
   const material = new ShaderMaterial({ vertexShader: flowers ? plantVertex.replace('vTint = aTint;', 'vTint = aTint * color;') : plantVertex, fragmentShader: plantFragment, vertexColors: flowers, side: DoubleSide,
-    uniforms: { uTime: { value: 0 }, uPointerStrength: { value: 0 }, uPointerWorld: { value: new Vector3() }, uFog: { value: new Color(world.lighting.fogColor) }, uFogRange: { value: new Vector2(world.lighting.fogNear, world.lighting.fogFar) } } });
+    uniforms: { uDaylight: { value: 1 }, uStorm: { value: 0 }, uTime: { value: 0 }, uPointerStrength: { value: 0 }, uPointerWorld: { value: new Vector3() }, uFog: { value: new Color(world.lighting.fogColor) }, uFogRange: { value: new Vector2(world.lighting.fogNear, world.lighting.fogFar) } } });
   const mesh = new InstancedMesh(geometry, material, maximum);
   mesh.name = flowers ? 'environment-flowers' : 'environment-grass';
   const phases = new Float32Array(maximum);
@@ -409,6 +412,7 @@ function TerrainSystem({ runtime, paused, quality }: EnvironmentProps) {
     <primitive object={landscape.shells} /><primitive object={landscape.shoreDetails.root} /><primitive object={landscape.townLandscape.root} /><primitive object={landscape.rocks} onClick={rockClick}/><primitive object={landscape.trunks} onClick={treeClick}/><primitive object={landscape.crowns} onClick={treeClick} />
   </group>;
 }
+const dayPlantFog = new Color(world.lighting.fogColor);
 function PlantSystem({ runtime, paused, quality, positions, onReady }: EnvironmentProps & { positions?: PlantPosition[]; onReady?: () => void }) {
   const plants = useMemo(() => {
     const plan = createLandscapePlan();
@@ -418,8 +422,13 @@ function PlantSystem({ runtime, paused, quality, positions, onReady }: Environme
   useEffect(() => retain(plants, () => { for (const resource of [plants.grass, plants.flowers]) { resource.geometry.dispose(); resource.material.dispose(); resource.mesh.dispose(); } }), [plants]);
   useEffect(() => { plants.grass.mesh.count = world.quality[quality].grass; plants.flowers.mesh.count = Math.round(260 * world.quality[quality].grass / world.quality.high.grass); }, [plants, quality]);
   useFrame((_, delta) => {
-    if (paused) return;
     const state = runtime.current;
+    for (const plant of [plants.grass, plants.flowers]) {
+      plant.material.uniforms.uDaylight.value = state.weather?.daylight ?? 1;
+      plant.material.uniforms.uStorm.value = state.weather?.storm ?? 0;
+      plant.material.uniforms.uFog.value.set('#293a5a').lerp(dayPlantFog, state.weather?.daylight ?? 1);
+    }
+    if (paused) return;
     plants.strength += ((state.pointerActive ? 1 : 0) - plants.strength) * (1 - Math.exp(-8 * Math.min(.05, delta)));
     updatePlantUniforms(plants.grass, state, plants.strength); updatePlantUniforms(plants.flowers, state, plants.strength);
     const near = state.pointerActive && nearPlants(state.pointerWorld, plants.grass.positions, plants.grass.occupied, plants.grass.mesh.count);
@@ -428,19 +437,77 @@ function PlantSystem({ runtime, paused, quality, positions, onReady }: Environme
   });
   return <group dispose={null}><primitive object={plants.grass.mesh}/><primitive object={plants.flowers.mesh}/></group>;
 }
-function CloudSystem({ runtime, paused, quality }: EnvironmentProps) {
+export function CloudSystem({ runtime, paused, quality }: EnvironmentProps) {
   const clouds = useMemo(() => measureConstruction('clouds', () => makeClouds(false)), []);
-  const pointer = useMemo(() => ({ raycaster: new Raycaster(), screen: new Vector2() }), []);
+  const rain = useMemo(() => createRain(900, 4.3, 24), []);
+  const capture = useRef<{ id: number; index: number; target: { releasePointerCapture: (id: number) => void } } | null>(null);
+  const { gl, invalidate } = useThree();
   useEffect(() => retain(clouds, () => clouds.dispose()), [clouds]);
-  useEffect(() => { clouds.activeCount = world.quality[quality].clouds; writeCloudMatrices(clouds, runtime.current.elapsed); }, [clouds, quality, runtime]);
-  useFrame(({ camera }, delta) => {
-    if (paused) return;
+  useEffect(() => retain(rain, () => rain.dispose()), [rain]);
+  useEffect(() => { clouds.activeCount = world.quality[quality].clouds; writeCloudMatrices(clouds, runtime.current.activeElapsed, runtime.current); }, [clouds, quality, runtime]);
+  useEffect(() => {
+    const release = () => {
+      const held = capture.current; capture.current = null;
+      if (held) { runtime.current.dragging = false; try { held.target.releasePointerCapture(held.id); } catch { /* The browser may have cancelled this pointer already. */ } }
+      if (gl.domElement?.style) gl.domElement.style.cursor = '';
+      advanceCloudPress(clouds.clusters, -1, .05, true);
+      rain.material.uniforms.uStrength.value = 0;
+      invalidate();
+    };
+    const view = gl.domElement?.ownerDocument?.defaultView;
+    const document = gl.domElement?.ownerDocument;
+    view?.addEventListener('blur', release);
+    document?.addEventListener('pointerup', release);
+    document?.addEventListener('pointercancel', release);
+    return () => { release(); view?.removeEventListener('blur', release); document?.removeEventListener('pointerup', release); document?.removeEventListener('pointercancel', release); };
+  }, [clouds, rain, runtime, gl, invalidate]);
+  useFrame((_, delta) => {
     const state = runtime.current;
-    if (state.pointerActive) { pointer.screen.set(...state.pointer); pointer.raycaster.setFromCamera(pointer.screen, camera); }
-    state.cloudInteraction += updateCloudResponses(clouds.clusters, state.pointerActive ? pointer.raycaster.ray : null, state.elapsed, delta, clouds.activeCount, false);
-    writeCloudMatrices(clouds, state.elapsed);
+    const held = capture.current;
+    if (!paused || held) advanceCloudPress(clouds.clusters, held?.index ?? -1, delta, paused);
+    // Time is frozen by SceneClock in reduced motion; input and clock colors still update.
+    if (!paused || held) writeCloudMatrices(clouds, state.activeElapsed, state);
+    else {
+      const time = clouds.mesh.userData.lastTime ?? 0;
+      writeCloudMatrices(clouds, time, state);
+    }
+    if (!paused) clouds.mesh.userData.lastTime = state.activeElapsed;
+    rain.mesh.visible = Boolean(held);
+    if (held) {
+      cloudOrigin(clouds.clusters[held.index], state.activeElapsed, rain.material.uniforms.uOrigin.value);
+      rain.material.uniforms.uHeight.value = Math.max(4, rain.material.uniforms.uOrigin.value.y - .2);
+      rain.material.uniforms.uTime.value = state.activeElapsed;
+      rain.material.uniforms.uStrength.value = clouds.clusters[held.index].response * (paused ? .18 : 1);
+      rain.material.uniforms.uWind.value.set(state.weather.wind[0], state.weather.wind[2]);
+    }
   });
-  return <primitive object={clouds.mesh} dispose={null}/>;
+  const press = (event: ThreeEvent<PointerEvent>) => {
+    const index = event.faceIndex;
+    if (event.button !== 0 || event.shiftKey || capture.current || index === undefined || index === null || index >= clouds.activeCount) return;
+    event.stopPropagation();
+    const target = event.target as unknown as { setPointerCapture: (id: number) => void; releasePointerCapture: (id: number) => void };
+    target.setPointerCapture(event.pointerId);
+    capture.current = { id: event.pointerId, index, target };
+    const cluster = clouds.clusters[index];
+    cloudOrigin(cluster, runtime.current.activeElapsed, clouds.origin);
+    cluster.interaction = event.point.clone().sub(clouds.origin).toArray();
+    runtime.current.dragging = true; runtime.current.cloudInteraction++;
+    gl.domElement.style.cursor = 'grabbing';
+    advanceCloudPress(clouds.clusters, index, .05, paused);
+    invalidate();
+  };
+  const release = () => {
+    const held = capture.current; if (!held) return;
+    capture.current = null; runtime.current.dragging = false;
+    try { held.target.releasePointerCapture(held.id); } catch { /* Pointer cancellation releases capture first. */ }
+    gl.domElement.style.cursor = '';
+    if (paused) advanceCloudPress(clouds.clusters, -1, .05, true);
+    rain.mesh.visible = false; invalidate();
+  };
+  return <group dispose={null}>
+    <primitive object={clouds.mesh} onPointerDown={press} onPointerUp={release} onPointerCancel={release} onLostPointerCapture={release} onClick={(event: ThreeEvent<MouseEvent>) => event.stopPropagation()}/>
+    <primitive object={rain.mesh}/>
+  </group>;
 }
 function MoteSystem({ runtime, paused, quality }: EnvironmentProps) {
   const motes = useMemo(() => makeMotes(), []);

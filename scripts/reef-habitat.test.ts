@@ -2,9 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { InstancedMesh, Mesh, Vector3, MeshStandardMaterial, type WebGLProgramParametersWithUniforms } from 'three';
 import { createCityFerryRoute } from '../src/components/world/cityInfrastructure';
-import { getReefHabitat, reefFloorHeight, reefFloorVertexHeight, reefHabitatContains, reefFerryClearance, reefRockMesh, reefRockSurfaceHeight, marineFloorHeight, KELP_TOP, KELP_POCKET } from '../src/components/world/reefHabitat';
+import { getReefHabitat, reefFloorHeight, reefFloorVertexHeight, reefHabitatContains, reefFerryClearance, reefRockMesh, reefRockSurfaceHeight, marineFloorHeight, KELP_TOP, KELP_POCKETS } from '../src/components/world/reefHabitat';
 import { createReefContactShade, createReefHabitat, reefCoralGeometry, reefSeafloorGeometry } from '../src/components/world/ReefHabitatScene';
 import { createForestKelpGeometry } from '../src/components/world/Seaweed';
+import { waterOpacity, waterOpticalDepth } from '../src/components/world/waterOptics';
+import { world } from '../src/content/world';
 import { reefFishPositionClear } from '../src/components/world/reefFishState';
 import { landDistance, terrainBaseHeight, terrainMeshHeight, islandAt } from '../src/components/world/terrain';
 
@@ -84,7 +86,7 @@ test('eight coral forms and retained structural coverage fit a finite shared geo
       draws++;for(const value of object.geometry.getAttribute('position').array)assert.ok(Number.isFinite(value));
       triangles+=(object.geometry.index?.count??object.geometry.getAttribute('position').count)/3*(object instanceof InstancedMesh?object.count:1);
     });
-    assert.equal(draws,19);assert.ok(triangles<1500000,`${triangles} triangles`);
+    assert.equal(draws,21);assert.ok(triangles<2300000,`${triangles} triangles`);
     const batches=habitat.root.children.filter(child=>child instanceof InstancedMesh&&child.name!=='reef-soft-contact-shading') as InstancedMesh[];
     const high=batches.map(batch=>batch.count);
     for(const tier of ['low','medium','high'] as const){
@@ -127,7 +129,7 @@ test('lighthouse triangle has grounded rock belts, coral and seaweed across both
     }
   }
   const geometry=reefSeafloorGeometry(),position=geometry.getAttribute('position');
-  for(let i=0;i<position.count;i++)assert.ok(Math.abs(position.getY(i)-reefFloorVertexHeight(position.getX(i),position.getZ(i)))<.00001);
+  for(let i=0;i<geometry.userData.seafloor.coreVertexCount;i++)assert.ok(Math.abs(position.getY(i)-reefFloorVertexHeight(position.getX(i),position.getZ(i)))<.00001);
   geometry.dispose();
   assert.ok(reefFloorHeight(-53,-39)>-8,'western shelf remains visible rather than dropping into deep offshore water');
   assert.ok(reefFloorHeight(-110,-120)<-20,'open ocean still deepens outside the archipelago');
@@ -166,11 +168,13 @@ test('shoal mineral talus has low slate, chips and boulders with mixed gray albe
 
 test('kelp forest roots in the deeper pocket, stays submerged through sway and pauses at all tiers',()=>{
   const plan=getReefHabitat(),habitat=createReefHabitat();
-  const geometries=[0,1].map(createForestKelpGeometry);
+  const geometries=[0,1,2,3].map(createForestKelpGeometry);
   try {
-    assert.ok(plan.kelp.length>=140);
+    assert.ok(plan.kelp.length>=450);
+    assert.equal(new Set(plan.kelp.map(plant=>plant.color)).size,7);
+    assert.ok(Math.max(...plan.kelp.map(plant=>plant.width))-Math.min(...plan.kelp.map(plant=>plant.width))>1);
     for(const plant of plan.kelp){
-      assert.ok(Math.hypot((plant.x-KELP_POCKET.x)/KELP_POCKET.rx,(plant.z-KELP_POCKET.z)/KELP_POCKET.rz)<=1);
+      assert.ok(KELP_POCKETS.some(pocket=>Math.hypot((plant.x-pocket.x)/pocket.rx,(plant.z-pocket.z)/pocket.rz)<=1));
       assert.ok(Math.abs(plant.y-reefFloorHeight(plant.x,plant.z)+.025)<1e-9);
       assert.ok(plant.height>2.7&&plant.y+plant.height<=KELP_TOP+1e-8);
       const geometry=geometries[plant.form],position=geometry.attributes.position;
@@ -192,10 +196,10 @@ test('kelp forest roots in the deeper pocket, stays submerged through sway and p
     habitat.update(12);assert.equal(shader.uniforms.kelpTime.value,12);habitat.update(80,true);assert.equal(shader.uniforms.kelpTime.value,12);
     for(const tier of ['high','medium','low'] as const){
       habitat.setQuality(tier);
-      for(let form=0;form<2;form++){
+      for(let form=0;form<4;form++){
         const batch=habitat.root.getObjectByName(`reef-kelp-forest-${form}`) as InstancedMesh;
         const visible=plan.kelp.filter(plant=>plant.form===form).slice(0,batch.count);
-        assert.equal(new Set(visible.map(plant=>plant.patch)).size,7,'all kelp groves remain populated at every quality');
+        assert.equal(new Set(visible.map(plant=>plant.patch)).size,KELP_POCKETS.length,'all kelp groves remain populated at every quality');
       }
     }
   }finally{geometries.forEach(geometry=>geometry.dispose());habitat.dispose();}
@@ -229,4 +233,40 @@ test('outer island aprons meet the reef without intersecting or retaining a tall
   assert.ok(minGap>.025,`separate depth surfaces: ${minGap}`);
   assert.ok(maxLip<.19,`outer transition lip: ${maxLip}`);
   assert.ok(maxSlope<1.25,`bounded continuous bank slope: ${maxSlope}`);
+});
+
+
+test('coral ridges wrap around the whole lighthouse and the city far shores',()=>{
+  const plan=getReefHabitat();
+  for(const [x,z,radius] of [[-89,-38,11],[-80,-51,9],[-79,-23,9],[-12,-103,18],[40,-79,15],[-51,-78,15]]){
+    assert.ok(plan.rocks.filter(rock=>Math.hypot(rock.x-x,rock.z-z)<radius&&rock.radius>2.7).length>=3,`geological continuity at ${x},${z}`);
+    assert.ok(plan.colonies.filter(coral=>Math.hypot(coral.x-x,coral.z-z)<radius).length>45,`colonized ledges at ${x},${z}`);
+  }
+});
+
+
+test('the finite reef shelf joins an abyss whose edge is hidden from oblique overview rays',()=>{
+  const geometry=reefSeafloorGeometry(),p=geometry.attributes.position,triangles=geometry.index!;
+  const {coreVertexCount,perimeter,terminalStart}=geometry.userData.seafloor;
+  try{
+    assert.equal(p.count-coreVertexCount,perimeter*4);
+    assert.ok(triangles.count/3-(236-1)*(246-1)*2<10000,'a bounded coarse skirt extends the high-detail shelf');
+    const edges=new Map<string,number>();
+    for(let i=0;i<triangles.count;i+=3){
+      const a=triangles.getX(i),b=triangles.getX(i+1),c=triangles.getX(i+2);
+      for(const [u,v] of [[a,b],[b,c],[c,a]]){const key=u<v?`${u},${v}`:`${v},${u}`;edges.set(key,(edges.get(key)??0)+1);}
+    }
+    for(const [key,count] of edges)if(count===1){
+      const [a,b]=key.split(',').map(Number);assert.ok(a>=terminalStart&&b>=terminalStart,'the original shelf perimeter has no remaining open edges');
+    }
+    for(const camera of [world.overview.position,world.mobileOverview.position,[42,18,76]])for(let i=terminalStart;i<p.count;i++){
+      const t=camera[1]/(camera[1]-p.getY(i));
+      const x=camera[0]+(p.getX(i)-camera[0])*t,z=camera[2]+(p.getZ(i)-camera[2])*t;
+      const cosine=(camera[1]-p.getY(i))/Math.hypot(camera[0]-p.getX(i),camera[1]-p.getY(i),camera[2]-p.getZ(i));
+      const opacity=waterOpacity(waterOpticalDepth(x,z,-landDistance(x,z)),cosine);
+      assert.ok(opacity>.995,`projected abyss edge remains concealed: ${opacity} at ${x},${z}`);
+    }
+    assert.equal(waterOpacity(3,1),1-Math.exp(-3*.085),'top-down reef visibility is preserved');
+    assert.ok(waterOpacity(3,.1)>.96,'grazing paths gain absorption and reflection');
+  }finally{geometry.dispose();}
 });

@@ -297,8 +297,9 @@ test('the garden gallery preserves the existing sculpture volume', async () => {
   } finally { await renderer.unmount(); }
 });
 
-test('the lighthouse beam remains westward, freezes when paused, and darkens when disabled', async () => {
+test('the night lighthouse beam remains westward, freezes when paused, and darkens when disabled', async () => {
   const runtime = { current: createSceneRuntime() };
+  runtime.current.weather.night=1;
   const enabled = world.lighting.lampEnabled;
   world.lighting.lampEnabled = true;
   const render = (paused = false) => <LandmarkModel id="building" runtime={runtime} active paused={paused} quality="high" />;

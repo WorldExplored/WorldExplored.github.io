@@ -19,7 +19,7 @@ export const LANDMARK_HIT_BOUNDS: Record<LandmarkId, { radius: number; floor: nu
   history: { radius: FOOTPRINT_RADII.history, floor: .8, top: 8.8 },
   about: { radius: FOOTPRINT_RADII.about, floor: .8, top: 5 },
   contact: { radius: FOOTPRINT_RADII.contact, floor: .8, top: 6.5 },
-  arcade: { radius: FOOTPRINT_RADII.arcade, floor: .8, top: 4.6 },
+  arcade: { radius: FOOTPRINT_RADII.arcade, floor: .8, top: 5.6 },
   building: { radius: FOOTPRINT_RADII.building, floor: .8, top: 7.8 },
 };
 
@@ -40,7 +40,7 @@ export function Landmark({ config, runtime, paused, onNavigate, children }: { co
   const clearHover = () => {
     if (runtime.current.hovered === config.id) { runtime.current.hovered = null; invalidate(); }
   };
-  const delegates = (event: { intersections?: { object: Object3D }[] }) => (config.id === 'about' && intersectsSculpture(event)) || (config.id === 'building' && (event.intersections?.some(hit => hit.object.name === 'lighthouse-lantern-hit') ?? false));
+  const delegates = (event: { intersections?: { object: Object3D }[] }) => (config.id === 'about' && intersectsSculpture(event));
   const enter = (event: ThreeEvent<PointerEvent>) => {
     if (!delegates(event)) event.stopPropagation();
     cancelExit();
@@ -73,6 +73,9 @@ export function Landmark({ config, runtime, paused, onNavigate, children }: { co
         event.stopPropagation();
         if (event.delta < 6 && !runtime.current.dragging && dragCount.current === runtime.current.dragCount) { emitTechnologySound('activate', config.position); onNavigate(config.id); }
       }}>
+    {config.id === 'building' && <mesh name="lighthouse-navigation-hit" position={[0,4.1,0]}>
+      <cylinderGeometry args={[1.4,1.4,7,20]} /><meshBasicMaterial transparent opacity={0} depthWrite={false} colorWrite={false}/>
+    </mesh>}
     <group name={`landmark-model-${config.id}`} rotation={[0, config.rotationY ?? 0, 0]}>{children}</group>
     <mesh ref={ring} raycast={() => {}} position={[0, bounds.floor + .04, 0]} rotation={[-Math.PI / 2, 0, 0]}>
       <ringGeometry args={[bounds.radius - .05, bounds.radius, world.quality.high.segments]} />

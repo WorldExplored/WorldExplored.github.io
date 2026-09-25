@@ -6,7 +6,7 @@ import { useThree } from '@react-three/fiber';
 import { Matrix4, Ray, SRGBColorSpace, Vector3 } from 'three';
 import { AmbientSystem } from '../src/components/world/AmbientSystem.tsx';
 import { architectureFootprints, canPlacePlant, createLandscapePlan, distanceToSegment, generatePlantPositions, archipelagoGeometry, ISLANDS, islandContour, islandDistance, landDistance, pathGeometry, pathHeight, terrainBaseHeight, terrainHeight } from '../src/components/world/terrain.ts';
-import { cloudOrigin, cloudPuffTransform, createCloudClusters, rayCloudDistance, updateCloudResponses } from '../src/components/world/clouds.ts';
+import { cloudOrigin, cloudVisibility, cloudPuffTransform, createCloudClusters, rayCloudDistance, updateCloudResponses } from '../src/components/world/clouds.ts';
 import { makeResearchBuilding } from '../src/components/world/ResearchInstitute.tsx';
 import { makeGardenGallery } from '../src/components/world/GardenGallery.tsx';
 import { makeReceptionTerminal } from '../src/components/world/ReceptionTerminal.tsx';
@@ -261,8 +261,8 @@ test('cloud drift remains continuous across long sessions and former wrap bounda
   const position = new Vector3(); const next = new Vector3();
   for (const cloud of createCloudClusters()) for (let time = 0; time <= 10000; time += 17) {
     cloudOrigin(cloud, time, position); cloudOrigin(cloud, time + .1, next);
-    assert.ok(Math.abs(position.x - cloud.center[0]) <= 80.00001);
-    assert.ok(Math.abs(position.z - cloud.center[2]) <= 58.00001);
-    assert.ok(next.distanceTo(position) <= cloud.speed * .124);
+    if (next.distanceTo(position) > .1) assert.ok(cloudVisibility(cloud, time) < .001 && cloudVisibility(cloud, time + .1) < .001);
+    else assert.ok(next.x > position.x);
+    assert.ok(Math.abs(position.x) <= 520);
   }
 });

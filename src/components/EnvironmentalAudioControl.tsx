@@ -22,6 +22,7 @@ export function subscribeToTechnologySounds(target: EventTarget, currentEngine: 
 export interface EnvironmentalAudioHandle { start: () => Promise<void> }
 export function EnvironmentalAudioControl({ ref, visible = true, children }: { ref?: Ref<EnvironmentalAudioHandle>; visible?: boolean; children?: ReactNode }) {
   const engine = useRef<CoastalAudio | null>(null);
+  const [open, setOpen] = useState(false);
   const [active, setActive] = useState(false), [started, setStarted] = useState(false), [loading, setLoading] = useState(false);
   const [error, setError] = useState(''), [bellCount, setBellCount] = useState(0);
   const [preferences, setPreferences] = useState(readPreferences);
@@ -50,13 +51,13 @@ export function EnvironmentalAudioControl({ ref, visible = true, children }: { r
     finally { setLoading(false); }
   };
   useImperativeHandle(ref, () => ({ start }));
-  return <details hidden={!visible} className="ambience-control ambience-settings" role="group" aria-label={profile.soundSettings.group} data-audio-state={active ? 'playing' : started ? 'ready' : 'unstarted'} data-bell-strikes={bellCount}>
-    <summary className="audio-control__button">◖ {profile.soundSettings.label}</summary>
-    <div className="ambience-settings__panel">
+  return <div className="ambience-control ambience-settings" data-settings-open={open && visible} role="group" aria-label={profile.soundSettings.group} data-audio-state={active ? 'playing' : started ? 'ready' : 'unstarted'} data-bell-strikes={bellCount}>
+    <button type="button" hidden={!visible} className="audio-control__button" aria-expanded={open} aria-controls="world-settings" onClick={() => setOpen(value => !value)}>⚙ {profile.soundSettings.label}</button>
+    <div id="world-settings" className={`ambience-settings__panel${open && visible ? '' : ' is-collapsed'}`} inert={!open || !visible} aria-hidden={!open || !visible}>
     <label className="sound-setting"><span>{profile.soundSettings.ambience}</span><input type="checkbox" aria-label={profile.soundSettings.ambience} checked={active && !preferences.muted} disabled={loading} onChange={event => { const enabled = event.target.checked; persist({ ...preferences, muted: !enabled }); if (enabled) void start(); }} /></label>
     {started && <><label className="ambience-control__volume"><span>{profile.soundSettings.volume}</span><input aria-label={profile.soundSettings.volume} type="range" min="0" max="1" step="0.01" value={preferences.volume} onChange={event => persist({ ...preferences, volume: Number(event.target.value) })} /></label><a className="sound-credit" href="/audio/coast/credits.html" target="_blank" rel="noreferrer">{profile.soundSettings.credits}</a></>}
     {children}
     {error && <span role="status">{error}</span>}
     </div>
-  </details>;
+  </div>;
 }

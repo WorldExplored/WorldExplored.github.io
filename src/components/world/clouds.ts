@@ -1,6 +1,7 @@
 import { Ray, Vector3 } from 'three';
 import { world, type Vec3 } from '../../content/world';
 import { seededRandom } from './terrain';
+import { windDisplacement } from './weatherState';
 
 export type CloudArchetype = 'layered' | 'cauliflower' | 'cotton' | 'bank' | 'atmospheric';
 export interface CloudPuff { offset: Vec3; scale: Vec3 }
@@ -17,8 +18,8 @@ const PUFF_GRAPHS: Record<CloudArchetype, [number, number, number, number, numbe
   ],
   cauliflower: [
     [-1.6, .05, .1, 1.05, .8, 1], [.1, -.05, .3, 1.3, .75, 1.15], [1.5, .2, .15, 1, .9, .9],
-    [-1.05, 1.2, -.15, 1.15, 1.15, 1], [.55, 1.3, .3, 1.15, 1.3, 1.05], [1.1, 2.45, -.1, .9, 1.05, .9],
-    [-.25, 2.7, -.2, 1.1, 1.2, 1.05], [-.5, 3.75, -.3, .85, .9, .85],
+    [-1.4, 1.1, -.15, 1.2, 1.0, 1], [.45, 1.35, .3, 1.2, 1.12, 1.05], [1.7, 1.75, -.1, 1.1, .86, .9],
+    [-.75, 2.15, -.2, 1.15, .87, 1.05], [-2.15, .45, .3, 1.05, .65, .95],
   ],
   cotton: [
     [-.85, .1, -.05, 1.1, 1, 1], [.8, .2, -.1, 1.2, 1.1, 1.05], [.05, 1.1, -.25, 1.1, 1.2, 1], [.1, .2, .8, 1.2, .85, 1.1],
@@ -45,18 +46,20 @@ export function createCloudClusters(count = world.quality.high.clouds): CloudClu
     const azimuth = (index % 2 ? -1 : 1) * (.15 + random() * .85);
     const density = 1.04 + random() * .12;
     const size = (archetype === 'atmospheric' ? 1.7 : archetype === 'cauliflower' ? 1.18 : 1.4) + random() * .35;
-    const stretch: Vec3 = [size * (.92 + random() * .23), size * (.94 + random() * .16), size * (1.02 + random() * .3)];
+    const distantScale = index >= 8 && (archetype === 'bank' || archetype === 'atmospheric') ? 3.8 + random() * 2.4 : 1;
+    const stretch: Vec3 = [size * distantScale * (.92 + random() * .23), size * Math.sqrt(distantScale) * (.94 + random() * .16), size * Math.sqrt(distantScale) * (1.02 + random() * .3)];
     const angle = index * 2.399;
     const distance = 85 + random() * 55;
     const center: Vec3 = index < PROMINENT_CENTERS.length ? [...PROMINENT_CENTERS[index]] : [Math.cos(angle) * distance - 15, 27 + random() * 9, Math.sin(angle) * distance - 35];
     if (archetype === 'atmospheric') center[1] += 3;
+    if (distantScale > 1) { center[1] += 24; center[2] -= 110; }
     const cosine = Math.cos(azimuth);
     const sine = Math.sin(azimuth);
     const layer = archetype === 'atmospheric' ? 2 : index % 3;
     return { archetype, center, azimuth, density, layer, speed: world.environment.cloudSpeed * [2.1, 1.55, 1.1][layer], response: 0, targeted: false, interaction: [0, 0, 0],
       puffs: PUFF_GRAPHS[archetype].map(([x, y, z, sx, sy, sz]) => {
-        const spreadX = x * stretch[0] / density;
-        const spreadZ = z * stretch[2] / density;
+        const spreadX = (x + (random()-.5)*.3) * stretch[0] / density;
+        const spreadZ = (z + (random()-.5)*.3) * stretch[2] / density;
         return { offset: [spreadX * cosine - spreadZ * sine, y * stretch[1], spreadX * sine + spreadZ * cosine], scale: [sx * stretch[0], sy * stretch[1], sz * stretch[2]] };
       }) };
   });
@@ -73,20 +76,32 @@ export function cloudInstanceCount(clusters: readonly CloudCluster[], activeCoun
   return count;
 }
 
-/** Each altitude layer shares one broad, diagonal wind path with no wrapping. */
+const travel = new Vector3();
+/** Recycle only beyond the distant sky fade; every visible cloud travels with the wind. */
 export function cloudOrigin(cluster: CloudCluster, elapsed: number, output: Vector3) {
-  const phase = cluster.layer * .48;
-  const time = elapsed * cluster.speed / 40;
-  return output.set(
-    cluster.center[0] + 40 * (Math.sin(time + phase) - Math.sin(phase)),
-    cluster.center[1],
-    cluster.center[2] + 29 * (Math.sin(time + phase + .65) - Math.sin(phase + .65)),
-  );
+  windDisplacement(elapsed, travel);
+  const speed = cluster.speed / (world.environment.cloudSpeed * 2.1);
+  const unwrapped = cluster.center[0] + travel.x * speed;
+  const x = ((unwrapped + 520) % 1040 + 1040) % 1040 - 520;
+  const z = cluster.center[2] + travel.z * speed - (unwrapped - x) * (.23 / .48);
+  return output.set(x, cluster.center[1], z);
 }
 
-export function cloudOriginX(cluster: CloudCluster, elapsed: number) {
-  const phase = cluster.layer * .48;
-  return cluster.center[0] + 40 * (Math.sin(elapsed * cluster.speed / 40 + phase) - Math.sin(phase));
+export function cloudVisibility(cluster: CloudCluster, elapsed: number) {
+  cloudOrigin(cluster, elapsed, travel);
+  const edge = Math.max(0, Math.min(1, (Math.abs(travel.x) - 400) / 120));
+  return 1 - edge * edge * (3 - 2 * edge);
+}
+
+export function cloudOriginX(cluster: CloudCluster, elapsed: number) { return cloudOrigin(cluster, elapsed, travel).x; }
+
+export function advanceCloudPress(clusters: CloudCluster[], selected: number, delta: number, reduced: boolean) {
+  const blend = reduced ? 1 : 1 - Math.exp(-7 * Math.min(.05, Math.max(0, delta)));
+  for (let index = 0; index < clusters.length; index++) {
+    const cluster = clusters[index];
+    cluster.targeted = index === selected;
+    cluster.response += ((cluster.targeted ? 1 : 0) - cluster.response) * blend;
+  }
 }
 
 export function cloudPuffTransform(cluster: CloudCluster, puff: CloudPuff, elapsed: number, _response: number, output: PuffTransform) {

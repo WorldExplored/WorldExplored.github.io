@@ -12,7 +12,7 @@ export interface GullState {
   index: number; position: Vector3; velocity: Vector3; perch: GullPerch; flight: GullFlight;
   fold: number; flap: number; legs: number; mode: GullMode; age: number; time: number; phase: number;
   heading: number; pitch: number; bank: number; progress: number; travelSpeed: number; cycle: number; rest: number;
-  start: Vector3; duration: number; nextDeparture: number; hunt: boolean; caught: boolean; preyVisible: boolean; preyPosition: Vector3; preyStart: Vector3; preyEscape: number;
+  start: Vector3; duration: number; nextDeparture: number; hunt: boolean; caught: boolean; preyVisible: boolean; preyPosition: Vector3; preyStart: Vector3; preyEscape: number; holding:number; holdSpeed:number; holdSide:number; holdOrigin:Vector3; holdTangent:Vector3;
 }
 interface Flock { birds: GullState[]; obstacles: CameraObstacle[]; random: () => number }
 const flocks = new WeakMap<GullState, Flock>();
@@ -115,7 +115,7 @@ export function createGullStates(perches = createGullPerches()): GullState[] {
   const birds=flights.map((flight,index)=>{
     const onPerch=index<shoreCount;
     const paired=!flight.airborne&&!onPerch;
-    const state:GullState={index,perch:flight.perch,flight,position:new Vector3(),velocity:new Vector3(),fold:onPerch?1:0,flap:0,legs:onPerch?1:0,mode:onPerch?'perched':'gliding',age:0,time:0,phase:random()*TAU,heading:flight.perch.heading,pitch:0,bank:0,progress:onPerch?0:paired?.32:.22+random()*.5,travelSpeed:onPerch?0:1,cycle:0,rest:12,start:new Vector3(),duration:flight.duration,nextDeparture:12+(paired?(flight.duration+18)/2:0),hunt:false,caught:false,preyVisible:false,preyPosition:new Vector3(),preyStart:new Vector3(),preyEscape:0};
+    const state:GullState={index,perch:flight.perch,flight,position:new Vector3(),velocity:new Vector3(),fold:onPerch?1:0,flap:0,legs:onPerch?1:0,mode:onPerch?'perched':'gliding',age:0,time:0,phase:random()*TAU,heading:flight.perch.heading,pitch:0,bank:0,progress:onPerch?0:paired?.32:.22+random()*.5,travelSpeed:onPerch?0:1,cycle:0,rest:12,start:new Vector3(),duration:flight.duration,nextDeparture:12+(paired?(flight.duration+18)/2:0),hunt:false,caught:false,preyVisible:false,preyPosition:new Vector3(),preyStart:new Vector3(),preyEscape:0,holding:0,holdSpeed:0,holdSide:1,holdOrigin:new Vector3(),holdTangent:new Vector3()};
     routePoint(flight,state.progress,state.position);routePoint(flight,state.progress+.001,ahead).sub(state.position);if(!onPerch){state.heading=Math.atan2(-ahead.x,-ahead.z);state.velocity.copy(ahead).multiplyScalar(1000/state.duration);}
     if(onPerch)flight.perch.owner=index;
     return state;
@@ -170,18 +170,40 @@ export function stepGull(state:GullState,delta:number,camera:Vector3,pointer:rea
     return;
   }
   const previous=state.position.clone(),oldProgress=state.progress;
+  if(state.holding>0){
+    // Complete a shallow holding turn offshore before asking for the occupied nest again.
+    const radius=4.5,speed=state.holdSpeed,angle=(state.holding+dt)*speed/radius;
+    if(angle>=TAU){
+      state.holding=0;state.position.copy(state.holdOrigin);
+      if(state.perch.owner===null)state.perch.owner=state.index;
+    }else{
+      state.holding+=dt;
+      const tangent=state.holdTangent;
+      state.position.copy(state.holdOrigin);
+      state.position.x+=radius*(Math.sin(angle)*tangent.x+state.holdSide*(1-Math.cos(angle))*tangent.z);
+      state.position.z+=radius*(Math.sin(angle)*tangent.z-state.holdSide*(1-Math.cos(angle))*tangent.x);
+      state.mode='circling';state.velocity.copy(state.position).sub(previous).divideScalar(dt);pose(state,dt);return;
+    }
+  }
   const desired=state.flight.airborne?1:Math.min(1,Math.sqrt(Math.max(0,1-state.progress)*state.duration/2));
   state.travelSpeed+=Math.max(-.45*dt,Math.min(.45*dt,desired-state.travelSpeed));
   state.progress+=dt*state.travelSpeed/state.duration;
   if(!state.flight.airborne&&state.progress>.86){
     if(state.perch.owner===null)state.perch.owner=state.index;
+    if(state.perch.owner!==state.index){
+      state.progress=oldProgress;
+      state.holding=.000001;state.holdSpeed=Math.max(.3,Math.hypot(state.velocity.x,state.velocity.z));state.holdOrigin.copy(previous);
+      routePoint(state.flight,oldProgress+.001,state.holdTangent,state.hunt).sub(previous);state.holdTangent.y=0;state.holdTangent.normalize();
+      state.holdSide=(previous.x-state.perch.position.x)*state.holdTangent.z-(previous.z-state.perch.position.z)*state.holdTangent.x>=0?1:-1;
+      state.mode='circling';return;
+    }
     state.mode='approach';
   }else if(state.hunt&&state.progress>.32&&state.progress<.68)state.mode='hunting';
   else if(!state.flight.airborne&&state.progress<.075)state.mode='takeoff';
   else state.mode=(['gliding','flapping','circling'] as const)[Math.floor((state.time+state.phase)/7)%3];
   if(state.flight.airborne&&state.progress>=1)state.progress-=1;
   routePoint(state.flight,state.progress,state.position,state.hunt);
-  if(state.progress>=1&&!state.flight.airborne){
+  if(state.progress>=1&&!state.flight.airborne&&state.perch.owner===state.index){
     state.position.copy(state.perch.position);state.progress=0;state.travelSpeed=0;state.age=0;state.rest=Math.max(7,state.nextDeparture-state.time);state.mode='perched';state.velocity.set(0,0,0);state.hunt=false;state.preyVisible=false;pose(state,dt);return;
   }
   state.velocity.copy(state.position).sub(previous).divideScalar(dt);pose(state,dt);

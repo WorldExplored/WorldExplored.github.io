@@ -2,7 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { create } from '@react-three/test-renderer';
 import { MeshPhysicalMaterial, Vector3, type InstancedMesh, type WebGLProgramParametersWithUniforms, type WebGLRenderer } from 'three';
-import { Flora, createFloraSites } from '../src/components/world/Flora';
+import { Flora, createFloraSites, floraGeometry, FLOWER_KINDS } from '../src/components/world/Flora';
+import { lighthouseEscarpmentSites } from '../src/components/world/LighthouseEscarpment';
+import { coastalRockGeometry } from '../src/components/world/coastalRocks';
+import { terrainMeshHeight } from '../src/components/world/terrain';
 import { createHistoryFlowerBorder } from '../src/components/world/CivicLandmarks';
 import { createLandscapePlan, distanceToSegment, landDistance, terrainHeight } from '../src/components/world/terrain';
 import { createSceneRuntime, world, type QualityTier } from '../src/content/world';
@@ -11,10 +14,10 @@ import { cameraObstacles, constrainCameraPose, focusPose } from '../src/componen
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
 test('clustered flora stays grounded and clears structures and circulation',()=>{
-  const sites=createFloraSites();assert.deepEqual(sites,createFloraSites());assert.ok(sites.length>180);
-  assert.equal(new Set(sites.map(s=>s.kind)).size,8);
+  const sites=createFloraSites();assert.deepEqual(sites,createFloraSites());assert.ok(sites.length>1200);
+  assert.equal(new Set(sites.map(s=>s.kind)).size,12);
   const city=sites.filter(site=>site.z<-58&&site.x<18);
-  assert.ok(city.length>=220,'courtyards and parks form a visible planted city layer');
+  assert.ok(city.length>=450,'courtyards and parks form a visible planted city layer');
   assert.ok(new Set(city.map(site=>site.kind)).size>=5);
   const plan=createLandscapePlan();
   for(const site of sites){
@@ -72,4 +75,34 @@ test('offshore beacon is distant and still reachable by free and destination cam
     assert.ok(t.distanceTo(new Vector3(...beacon.position))<25);assert.ok(p.distanceTo(new Vector3(...beacon.position))<75);
     assert.ok(p.y>terrainHeight(p.x,p.z)+1);
   }
+});
+
+
+test('five flower silhouettes and lush groundcover retain a bounded instanced mesh budget',()=>{
+  const sites=createFloraSites(),kinds=[...new Set(sites.map(site=>site.kind))];
+  const shapes=kinds.map(kind=>({kind,geometry:floraGeometry(kind)}));
+  try{
+    assert.equal(FLOWER_KINDS.length,5);
+    assert.equal(new Set(shapes.filter(shape=>FLOWER_KINDS.includes(shape.kind)).map(shape=>shape.geometry.index!.count)).size,5);
+    for(const kind of FLOWER_KINDS)assert.ok(sites.filter(site=>site.kind===kind).length>75);
+    const triangles=shapes.reduce((total,shape)=>total+shape.geometry.index!.count/3*sites.filter(site=>site.kind===shape.kind).length,0);
+    assert.ok(triangles<1500000,`Twelve instanced plant meshes: ${triangles}`);
+  }finally{shapes.forEach(shape=>shape.geometry.dispose());}
+});
+
+
+test('jagged beacon ledges embed their full bases without obstructing the landing path',()=>{
+  const sites=lighthouseEscarpmentSites(),paths=createLandscapePlan().paths;
+  assert.ok(sites.length>=12);
+  sites.forEach((rock,index)=>{
+    const geometry=coastalRockGeometry(index%6),p=geometry.getAttribute('position');
+    try{
+      for(let i=0;i<p.count;i++)if(p.getY(i)<.0001){
+        const lx=p.getX(i)*rock.scale[0],lz=p.getZ(i)*rock.scale[2];
+        const x=rock.x+lx*Math.cos(rock.rotation)+lz*Math.sin(rock.rotation),z=rock.z-lx*Math.sin(rock.rotation)+lz*Math.cos(rock.rotation);
+        assert.ok(rock.y-.16<terrainMeshHeight(x,z),'ledge base rests below the beach');
+      }
+      for(const path of paths)for(let i=1;i<path.points.length;i++)assert.ok(distanceToSegment(rock.x,rock.z,path.points[i-1],path.points[i])>path.width/2+rock.radius+.27);
+    }finally{geometry.dispose();}
+  });
 });

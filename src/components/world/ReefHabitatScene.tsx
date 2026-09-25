@@ -53,15 +53,39 @@ export function createReefContactShade(entries:ReefObstacle[]) {
 
 export function reefSeafloorGeometry() {
   const positions: number[] = [], colors: number[] = [], uvs: number[] = [], indices: number[] = [], coasts:number[]=[];
-  const width = 206, depth = 216;
+  const width = 236, depth = 246;
   for (let row = 0; row < depth; row++) for (let col = 0; col < width; col++) {
-    const x = col - 115, z = row - 140, distance = landDistance(x,z);
+    const x = col - 145, z = row - 170, distance = landDistance(x,z);
     const y = reefFloorVertexHeight(x,z);
     positions.push(x,y,z); uvs.push(x*.3,z*.3);
     colors.push(1,1,1);coasts.push(distance);
     if (row && col) { const i=row*width+col; indices.push(i,i-width,i-1,i-1,i-width,i-width-1); }
   }
+  // Oblique views see a deep edge through water much nearer the camera.
+  // Join the high-detail shelf to a coarse abyss instead of ending it abruptly.
+  const coreVertexCount=positions.length/3,perimeter:number[]=[];
+  for(let col=0;col<width;col++)perimeter.push(col);
+  for(let row=1;row<depth;row++)perimeter.push(row*width+width-1);
+  for(let col=width-2;col>=0;col--)perimeter.push((depth-1)*width+col);
+  for(let row=depth-2;row>0;row--)perimeter.push(row*width);
+  let previous=perimeter;
+  const outerExtent=1200;
+  for(const blend of [.08,.23,.5,1]){
+    const ring=perimeter.map(index=>{
+      const bx=positions[index*3],by=positions[index*3+1],bz=positions[index*3+2];
+      const farX=-outerExtent+(bx+145)/(width-1)*outerExtent*2;
+      const farZ=-outerExtent+(bz+170)/(depth-1)*outerExtent*2;
+      const x=bx+(farX-bx)*blend,z=bz+(farZ-bz)*blend,y=by+(-100-by)*blend;
+      const vertex=positions.length/3;positions.push(x,y,z);colors.push(1,1,1);uvs.push(x*.3,z*.3);coasts.push(landDistance(x,z));return vertex;
+    });
+    for(let side=0;side<ring.length;side++){
+      const next=(side+1)%ring.length,a=previous[side],b=previous[next],c=ring[side],d=ring[next];
+      indices.push(a,b,c,b,d,c);
+    }
+    previous=ring;
+  }
   const geometry = new BufferGeometry();
+  geometry.userData.seafloor={coreVertexCount,perimeter:perimeter.length,terminalStart:positions.length/3-perimeter.length,outerExtent};
   geometry.setAttribute('position',new Float32BufferAttribute(positions,3));
   geometry.setAttribute('color',new Float32BufferAttribute(colors,3));
   geometry.setAttribute('aCoast',new Float32BufferAttribute(coasts,1));
@@ -257,7 +281,7 @@ export function createReefHabitat() {
     `);
   };
   kelpMaterial.customProgramCacheKey=()=> 'submerged-forest-kelp-v1';
-  for(let form=0;form<2;form++)instances(`reef-kelp-forest-${form}`,createForestKelpGeometry(form),kelpMaterial,plan.kelp.filter(entry=>entry.form===form),entry=>[(entry as typeof plan.kelp[number]).width,entry.height,(entry as typeof plan.kelp[number]).width],entry=>['#bec69c','#a0b881','#c2b18a','#91ac88','#b8c099'][entry.color]);
+  for(let form=0;form<4;form++)instances(`reef-kelp-forest-${form}`,createForestKelpGeometry(form),kelpMaterial,plan.kelp.filter(entry=>entry.form===form),entry=>[(entry as typeof plan.kelp[number]).width,entry.height,(entry as typeof plan.kelp[number]).width],entry=>['#bec69c','#a0b881','#c2b18a','#91ac88','#b8c099','#95a86c','#c8b48f'][entry.color]);
   let timer:ReturnType<typeof setTimeout>|undefined;
   function dispose(){sandNormal.dispose();geometries.forEach(geometry=>geometry.dispose());materials.forEach(material=>material.dispose());batches.forEach(batch=>batch.mesh.dispose());contact.mesh.dispose();}
   function setQuality(quality:EnvironmentProps['quality']){

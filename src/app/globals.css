@@ -183,11 +183,11 @@ h1 { font-weight: 470; font-size: clamp(54px,5.8vw,88px); letter-spacing: -.035e
 html.world-active,html.world-active body { height: 100%; overflow: hidden; overscroll-behavior: none; }
 :is(.scene-ready,html[data-world-boot] .portfolio).portfolio { position: fixed; inset: 0; height: 100dvh; min-height: 0; overflow: hidden; }
 :is(.scene-ready,html[data-world-boot] .portfolio) main { position: absolute; inset: 0; min-height: 0; }
-.identity { position: absolute; top: max(6vh,env(safe-area-inset-top)); left: 5vw; width: max-content; max-width: 88vw; padding: 19px 26px 21px; border-left: 2px solid #eaffff; border-radius: 4px 27px 27px 4px; background: linear-gradient(110deg,#e9faffcc,#e6faff48 65%,#e6faff00); pointer-events: none; transform: perspective(900px) rotateY(-4deg); transform-origin: left; }
+.identity { position: absolute; top: max(6vh,env(safe-area-inset-top)); left: 5vw; width: max-content; max-width: 88vw; padding: 19px 26px 21px; border-left: 2px solid #eaffff; border-radius: 4px 27px 27px 4px; background: linear-gradient(110deg,#e9faffcc,#e6faff48 65%,#e6faff00); pointer-events: none; transform: none; }
 .identity h1 { font-size: clamp(36px,4.25vw,65px); margin: 0 0 6px; color: #07366b; font-weight: 520; text-shadow: 0 1px 1px #fff; }
 .identity .hero-evidence { color: #0b3f70; font-size: 21px; font-weight: 480; }
 .identity .research-credential { min-height: 0; display: block; margin-top: 5px; font-size: 15px; color: #174e7d; text-decoration: none; }
-.has-destination .identity { opacity: 0; visibility: hidden; }
+
 :is(.scene-ready,html[data-world-boot] .portfolio) .content-stage { position: absolute; inset: 5vh 3vw 120px auto; width: min(47vw,660px); padding: 0; pointer-events: none; }
 :is(.scene-ready,html[data-world-boot] .portfolio) .scene-section { height: 100%; max-height: 100%; margin: 0; max-width: none; }
 :is(.scene-ready,html[data-world-boot] .portfolio) .surface { display: flex; flex-direction: column; max-height: 100%; overflow: hidden; }
@@ -200,7 +200,7 @@ html.world-active,html.world-active body { height: 100%; overflow: hidden; overs
 .surface-close svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; }
 .surface-foot { flex: 0 0 6px; }
 .scene-fallback .identity { position: relative; top: auto; left: auto; margin: 4vh 5vw 20px; }
-.scene-fallback.has-destination .identity { display: none; }
+
 .scene-fallback main { padding-top: 1px; }
 .scene-fallback.is-enhanced .content-stage { padding: 35px 20px 145px; }
 .scene-fallback .surface-close { display: flex; }
@@ -290,7 +290,7 @@ html[data-world-boot] .portfolio .identity { position: absolute; top: max(6vh,en
 html[data-world-boot] .portfolio main { padding-top: 0; }
 html[data-world-boot] .portfolio .scene-section { display: none; margin: 0; }
 html[data-world-boot] .portfolio .scene-section:target,html[data-world-boot] .portfolio .scene-section[data-active="true"] { display: block; }
-html[data-world-boot] .portfolio:has(.scene-section:target) .identity { visibility: hidden; }
+
 html[data-world-boot] .portfolio .canvas-host { background: transparent !important; }
 @media (max-width: 767px) { html[data-world-boot] .portfolio .identity { top: max(25px,env(safe-area-inset-top)); } }
 
@@ -316,8 +316,6 @@ html[data-world-boot] .portfolio .canvas-host { background: transparent !importa
 .world-entry__hint { font-size: 12px; color: #487381; margin: 0; }
 .world-entry :focus-visible { outline: 3px solid #175cca; outline-offset: 4px; }
 .ambience-settings { display: block; bottom: 112px; z-index: 33; }
-.ambience-settings summary { list-style: none; cursor: pointer; }
-.ambience-settings summary::-webkit-details-marker { display: none; }
 .ambience-settings__panel { position: absolute; bottom: 52px; left: 0; width: 278px; max-height: min(440px,calc(100dvh - 220px)); overflow: auto; display: flex; flex-wrap: wrap; gap: 12px; padding: 16px; border-radius: 16px; border: 1px solid #b5eafa; background: #eafffff5; box-shadow: 0 4px 20px #12547933; }
 .sound-setting { display: flex; align-items: center; justify-content: space-between; gap: 14px; min-height: 44px; width: 100%; font-size: 15px; font-weight: 600; cursor: pointer; }
 .sound-setting input { width: 22px; height: 22px; accent-color: #147bac; cursor: pointer; }
@@ -332,7 +330,9 @@ html[data-world-boot] .portfolio .canvas-host { background: transparent !importa
 @media (max-height: 580px) { .world-entry__orb { display: none; } .world-entry__body { padding: 14px 24px; } .world-entry__eyebrow { margin-top: 0; } .ambience-settings { left: auto; right: 16px; bottom: 100px; } .ambience-settings__panel { right: 0; left: auto; } }
 @media (forced-colors: active) { .world-entry,.world-entry__body,.world-entry__go { background: Canvas; color: CanvasText; border: 1px solid CanvasText; } }
 
-.ambience-settings[hidden] { display: none; }
+/* Keep the player rendered when controls collapse; native details can suspend its frame. */
+.ambience-settings__panel.is-collapsed { opacity: 0; pointer-events: none; clip-path: inset(50%); }
+.ambience-settings > button[hidden] { display: none; }
 .sound-music__player { width: 100%; min-height: 200px; overflow: hidden; border-radius: 8px; background: #072c40; }
 .sound-music__player iframe { width: 100%; height: 200px; border: 0; }
 .sound-track select { display: block; width: 100%; min-height: 40px; margin-top: 6px; border: 1px solid #7fc6d3; border-radius: 6px; background: #efffff; color: #125775; font: inherit; }
@@ -353,3 +353,20 @@ html[data-world-boot] .portfolio .canvas-host { background: transparent !importa
   :is(.scene-ready,html[data-world-boot] .portfolio):has(.section-arcade[data-active="true"]) .content-stage { top: 12px; }
   .section-arcade .surface-paper { padding: 15px 12px 20px; }
 }
+
+/* A brief desktop-style startup window; the title card stays anchored while exploring. */
+.world-entry { padding: 0 4px 4px; border-radius: 10px 10px 4px 4px; border: 1px solid #174da4; background: #72b8e3; box-shadow: inset 0 0 0 2px #bbebff,0 14px 60px #062a6570; animation: entry-window-in .35s ease-out both; }
+.world-entry__bar { padding: 8px 8px 9px; color: #fff; text-shadow: 0 1px 2px #123e82; background: linear-gradient(#77baff 0,#3676dc 14%,#1a5bc5 55%,#327edb 90%,#1955b0); border-radius: 9px 9px 0 0; }
+.world-entry__bar > .world-entry__window-controls { display: flex; gap: 3px; font-size: 18px; }
+.world-entry__window-controls i { display: grid; place-items: center; width: 22px; height: 22px; border: 1px solid #d2eaff; border-radius: 3px; background: linear-gradient(#9fd8ff,#337adc); box-shadow: inset 1px 1px 2px #effaff; font-style: normal; }
+.world-entry__window-controls i:last-child { background: linear-gradient(#f3b894,#d4573e); }
+.world-entry__body { margin-top: 0; border-radius: 0 0 3px 3px; border: 1px solid #4582bd; background: linear-gradient(135deg,#eaf8fd,#f7fbf2 70%); }
+.world-entry__go { border-radius: 6px; min-height: 48px; font-size: 18px; }
+.world-entry__go:disabled { opacity: .65; cursor: wait; }
+.world-entry__boot { height: 39px; color: #30527a; font-size: 12px; }
+.world-entry__progress { display: flex; gap: 3px; width: 105px; height: 11px; overflow: hidden; margin: 5px auto 0; border: 1px solid #7292b6; border-radius: 2px; background: #e4eef6; }
+.world-entry__progress i { flex: 0 0 14px; background: linear-gradient(#89daf3,#2383d6,#70c8ed); animation: entry-progress .4s linear both; }
+.world-entry:not([data-booting="true"]) .world-entry__progress { visibility: hidden; }
+@keyframes entry-progress { from { transform: translateX(-45px); } to { transform: translateX(105px); } }
+@keyframes entry-window-in { from { opacity: 0; transform: translateY(5px) scale(.97); } to { opacity: 1; transform: none; } }
+@media(prefers-reduced-motion: reduce) { .world-entry,.world-entry__progress i { animation: none; } }

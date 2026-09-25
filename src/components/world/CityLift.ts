@@ -18,7 +18,8 @@ export function createCityLift(plan: CityLiftPlan) {
   const glass = new MeshPhysicalMaterial({ color: '#19aebf', transparent: true, opacity: .17, depthWrite: false, roughness: .15 });
   const bars = [];
   for (const x of [-.33, .33]) for (const z of [-.34, .34]) bars.push(new BoxGeometry(.035, 1.24, .035).translate(x, .62, z));
-  for (const y of [-.035, 1.24]) bars.push(new BoxGeometry(.72, .07, .76).translate(0, y, 0));
+  bars.push(new BoxGeometry(.72, .05, .76).translate(0, -.085, 0));
+  bars.push(new BoxGeometry(.72, .07, .76).translate(0, 1.24, 0));
   for (const side of [-1, 1]) bars.push(new BoxGeometry(.04, .04, .65).translate(side * .3, .69, 0));
   const structure = mergeGeometries(bars)!; bars.forEach(part => part.dispose());
   const frame = new Mesh(structure, metal); frame.castShadow = true; cabin.add(frame);

@@ -431,7 +431,7 @@ export function buildCityArchitecture(building: Readonly<CityBuilding>, shellAdd
       }
       box(coreX, top / 2, coreZ - .44, .85, top, .018, 'glass');
       for(const floor of floors) {
-        const polygons=[floorRectangle(0,coreZ+.34,.78,.34)];
+        const polygons=[floorRectangle(0,coreZ+.4435,.78,.193)];
         for(const room of access.filter(room=>Math.abs(room.floor-floor)<.00001)) {
           const front=coreZ+.46,length=room.back-front;
           if(length>0)polygons.push(floorRectangle(room.x,front+length/2,.78,length));

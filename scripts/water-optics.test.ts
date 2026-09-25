@@ -25,7 +25,7 @@ test('both reef arms retain useful visibility and finite water color depth',()=>
 
 // The exported seabed must disappear beneath deep water before its mesh boundary.
 test('deep water obscures all four outer seabed edges', () => {
-  for (const [x, z] of [[-115, -37], [-115, -55], [0, -140], [90, -50], [0, 75]]) {
+  for (const [x, z] of [[-145, -37], [-145, -55], [0, -170], [90, -50], [0, 75]]) {
     assert.ok(waterOpacity(waterOpticalDepth(x, z, -landDistance(x, z))) > .975);
   }
 });

@@ -91,9 +91,9 @@ test('all visible building vertices obey the exported collision footprints and h
       if (Array.isArray(mesh.material)) drawCalls += mesh.geometry.groups.filter(group => mesh.material instanceof Array && mesh.material[group.materialIndex ?? 0]?.visible).length;
       else if (mesh.material.visible) drawCalls++;
     });
-    // Local hover boundaries and attached lift cabins add bounded per-building draws.
+    // Lift cabins and hover boundaries remain bounded; four ferry photovoltaic fittings add four draws.
     // Invisible picking proxies and hidden focus outlines submit no GPU draws.
-    assert.ok(drawCalls <= 220, `Town architecture, water and six working controls use ${drawCalls} rendered draws (budget 220).`);
+    assert.ok(drawCalls <= 224, `Town architecture, water and six working controls use ${drawCalls} rendered draws (budget 224).`);
   } finally { await item.renderer.unmount(); }
 });
 

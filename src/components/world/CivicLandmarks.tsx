@@ -115,17 +115,17 @@ export function createHistoryFlowerBorder(material: MeshPhysicalMaterial) {
     ...[-2.8, -1.9, -1, -.1, .8, 1.7, 2.5].flatMap(z => [[-6.08, z], [6.08, z]] as Array<[number, number]>),
   ];
   const entries: Record<FloraKind, Array<{ x: number; y: number; z: number; scale: number; rotation: number }>> = {
-    reeds: [], beach: [], shrub: [], flower: [], broadleaf: [], sedge: [], clover: [], fern: [],
+    reeds: [], beach: [], shrub: [], flower: [], broadleaf: [], sedge: [], clover: [], fern: [], foxglove: [], bluebell: [], poppy: [], allium: [],
   };
   for (const [localX, localZ] of borderSites) {
     const x = landmark.position[0] + localX * Math.cos(heading) + localZ * Math.sin(heading);
     const z = landmark.position[2] - localX * Math.sin(heading) + localZ * Math.cos(heading);
     if (paths.some(path => path.points.slice(1).some((point, i) => distanceToSegment(x, z, path.points[i], point) < path.width / 2 + .45))) continue;
-    const kind: FloraKind = random() < .7 ? 'flower' : random() < .5 ? 'fern' : 'clover';
+    const kind: FloraKind = random() < .76 ? (['flower','foxglove','bluebell','poppy','allium'] as const)[Math.floor(random()*5)] : random() < .5 ? 'fern' : 'clover';
     entries[kind].push({ x: localX, y: terrainHeight(x, z) - .02, z: localZ,
       scale: .48 + random() * .22, rotation: random() * Math.PI * 2 });
   }
-  const batches = (['flower', 'fern', 'clover'] as const).map(kind => {
+  const batches = (['flower', 'foxglove', 'bluebell', 'poppy', 'allium', 'fern', 'clover'] as const).map(kind => {
     const geometry = floraGeometry(kind), mesh = new InstancedMesh(geometry, material, entries[kind].length);
     mesh.name = `history-border-${kind}`; mesh.castShadow = true; mesh.raycast = () => {};
     entries[kind].forEach((site, index) => {

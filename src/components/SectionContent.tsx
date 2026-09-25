@@ -12,7 +12,7 @@ export function SectionContent({ id }: { id: SectionId }) {
     </a>)}</div>
   </>;
   if (id === 'experience') return <div className="timeline">{profile.experience.map(item => <article className="timeline-entry" key={item.company}>
-    <div className="timeline-marker" aria-hidden="true" /><div><p className="venue">{[item.dates, item.location].filter(Boolean).join(' · ')}</p><h3>{item.company}</h3>{item.role && <p className="byline">{item.role}</p>}<ul>{item.details.map(detail => <li key={detail}>{detail}</li>)}</ul></div>
+    <div className="timeline-marker" aria-hidden="true" /><div><p className="venue">{[item.dates, item.location].filter(Boolean).join(' · ')}</p><h3><a href={item.url} target="_blank" rel="noopener noreferrer">{item.company}</a></h3>{item.role && <p className="byline">{item.role}</p>}<ul>{item.details.map(detail => <li key={detail}>{detail}</li>)}</ul></div>
   </article>)}</div>;
   if (id === 'research') return <div className="research-collection">{profile.research.map(item => <article className="research-paper" key={item.title}>
     <p className="venue">{item.venue}</p>

@@ -1,5 +1,6 @@
 import type { SectionId } from './profile';
 import { Vector3 } from 'three';
+import { initialWeather, type WeatherState } from '../components/world/weatherState';
 
 export type Vec3 = [number, number, number];
 export type QualityTier = 'high' | 'medium' | 'low';
@@ -10,6 +11,8 @@ export interface LandmarkConfig {
   id: LandmarkId; position: Vec3; label: Vec3; color: string }
 export interface SceneRuntime {
   elapsed: number;
+  activeElapsed: number;
+  weather: WeatherState;
   pointer: [number, number];
   pointerActive: boolean;
   pointerWorld: Vec3;
@@ -50,7 +53,7 @@ export const world = {
     { id: 'history', rotationY: -.28, position: [21, 0, -72], label: [21, 9.2, -72], color: '#8ff0bc' },
     { id: 'about', position: [-10, 0, 23], label: [-10, 5.6, 23], color: '#a6e65c' },
     { id: 'contact', position: [12, 0, 23], label: [12, 7, 23], color: '#72deff' },
-    { id: 'arcade', position: [-26, 0, -85], label: [-26, 5.3, -85], color: '#b5f66d' },
+    { id: 'arcade', position: [-26, 0, -85], label: [-26, 6, -85], color: '#b5f66d' },
     { id: 'building', position: [-76, 1.8, -36], label: [-76, 9.8, -36], color: '#bcffff' },
   ] as LandmarkConfig[],
   quality: {
@@ -64,7 +67,7 @@ export const world = {
 
 export function createSceneRuntime(): SceneRuntime {
   const sun=new Vector3(...world.lighting.sunPosition).normalize();
-  return { elapsed: 0, pointer: [0, 0], pointerActive: false, pointerWorld: [0, 0, 0], cloudInteraction: 0, plantInteraction: 0, moving: false, hovered: null, ripple: { x: 0, z: 0, time: -100, serial: 0 }, sunDirection: sun.toArray(), nature: { x: 0, y: 0, z: 0, kind: 'tree', time: -100, serial: 0 }, dragCount: 0, dragging: false, frames: 0 };
+  return { elapsed: 0, activeElapsed: 0, weather: initialWeather(), pointer: [0, 0], pointerActive: false, pointerWorld: [0, 0, 0], cloudInteraction: 0, plantInteraction: 0, moving: false, hovered: null, ripple: { x: 0, z: 0, time: -100, serial: 0 }, sunDirection: sun.toArray(), nature: { x: 0, y: 0, z: 0, kind: 'tree', time: -100, serial: 0 }, dragCount: 0, dragging: false, frames: 0 };
 }
 
 export function motionPolicy(reduced: boolean, saveData: boolean, forcedColors: boolean) {

@@ -25,7 +25,7 @@ export function coastalBiome(x: number, z: number, distance: number, height: num
     1 - biomeSmooth(2.8, 6.5, Math.hypot(x - 18, z + 81)),
   );
   const stonyGrass = .56 + .25 * biomeSmooth(.16, .57, patch);
-  const grass = inland * ((0.58 + .42*biomeSmooth(.12, .5, patch)) * (1-town) + town*(.22+.78*cultivated))
+  const grass = inland * ((0.58 + .42*biomeSmooth(.12, .5, patch)) * (1-town) + town*(.37+.63*cultivated))
     * (1 - biomeSmooth(.48, .86, slope)) * (1 - beacon * (1 - stonyGrass));
   const wet = 1 - biomeSmooth(.09, .40, height);
   const soil = inland * (1 - grass) * (1 - town * .8);

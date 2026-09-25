@@ -160,3 +160,42 @@ test('nests are grounded on distinct rock perches, flight legs tuck behind the b
   bird.preyVisible=false;writeGullPose(life,bird,2);life.gullPrey.getMatrixAt(2,matrix);assert.ok(matrix.determinant()<1e-9,'prey disappears without a new mesh');
   life.meshes.forEach(mesh=>{mesh.geometry.dispose();mesh.dispose();});life.materials.forEach(material=>material.dispose());
 });
+
+test('delayed nest occupants retain exclusive sites while arriving gulls circle with whole-wing clearance',()=>{
+  const birds=createGullStates(),occupants=birds.filter(bird=>bird.mode==='perched');
+  let circles=0,minDistance=Infinity;
+  for(let frame=0;frame<60*180;frame++){
+    for(const visitor of birds){
+      if(occupants.includes(visitor))continue;
+      const previous=visitor.position.clone();stepGull(visitor,1/60,distantCamera,null);
+      if(visitor.holding>0)circles++;
+      if(!visitor.flight.airborne){
+        assert.equal(visitor.perch.owner,occupants.find(bird=>bird.perch===visitor.perch)!.index);
+        assert.ok(!['perched','preening','approach'].includes(visitor.mode));
+      }
+      assert.ok(visitor.position.distanceTo(previous)<.07,'holding routes have no positional teleport');
+      assert.ok(visitor.position.y>terrainHeight(visitor.position.x,visitor.position.z)+.28);
+    }
+    for(let a=0;a<birds.length;a++)for(let b=a+1;b<birds.length;b++)minDistance=Math.min(minDistance,birds[a].position.distanceTo(birds[b].position));
+  }
+  assert.ok(circles>200);assert.ok(minDistance>GULL_SEPARATION,`occupied-site body clearance ${minDistance}`);
+});
+
+test('solid bill and shoulder coverts keep anatomy connected through folded, gliding and flapping poses',()=>{
+  const life=createWildlife(),bird=life.gulls[4],matrix=new Matrix4(),bodyMatrix=new Matrix4(),point=new Vector3();
+  try{
+    const bill=life.gullBill.geometry;bill.computeBoundingBox();const dimensions=bill.boundingBox!.getSize(new Vector3());
+    assert.ok(dimensions.y>.05&&dimensions.x>.07&&dimensions.z>.20,'the beak is a solid tapered volume');
+    const normals=bill.getAttribute('normal');assert.ok(Array.from({length:normals.count},(_,i)=>normals.getY(i)).some(n=>n<-.2),'lower beak has a physical underside');
+    for(let fold=0;fold<=1;fold+=.1)for(const flap of [0,.5,1]){
+      bird.fold=fold;bird.flap=flap;bird.time=fold*3;writeGullPose(life,bird,4);life.gullBody.getMatrixAt(4,bodyMatrix);const inverse=bodyMatrix.clone().invert();
+      for(const wing of [life.wing,life.leftWing]){
+        wing.getMatrixAt(4,matrix);point.set(0,0,0).applyMatrix4(matrix).applyMatrix4(inverse);
+        assert.ok(Math.abs(point.x)<.16&&Math.abs(point.y)<.12&&Math.abs(point.z)<.18,'shoulder hinge remains inside the body');
+        // The new coverts include a continuous overlap on both sides of the hinge.
+        wing.geometry.computeBoundingBox();const box=wing.geometry.boundingBox!;assert.ok(box.min.x<0&&box.max.x>0);
+      }
+    }
+    for(const name of ['gull-grass-and-feather-lining','gull-egg-brown-speckles'])assert.equal((life.group.getObjectByName(name) as InstancedMesh).count,3);
+  }finally{life.meshes.forEach(mesh=>{mesh.geometry.dispose();mesh.dispose();});life.materials.forEach(material=>material.dispose());}
+});

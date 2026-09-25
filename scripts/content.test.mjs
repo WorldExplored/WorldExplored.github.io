@@ -127,22 +127,23 @@ test('the unannounced-project teaser appears once in rendered HTML', () => {
 });
 
 test('experience and history preserve stated chronology without invented organizations or outcomes', () => {
-  assert.deepEqual(profile.experience.map(item => item.company), ['Air Labs']);
-  assert.deepEqual(profile.history.map(item => item.organization), ['Computer Science Club', 'High School Artificial Intelligence Club', 'Game Development Club']);
+  assert.deepEqual(profile.experience.map(item => item.company), ['AirLab · Purdue University']);
+  assert.deepEqual(profile.history.map(item => item.organization), ['Computer Science Club', 'High School Artificial Intelligence Club', 'Robotics Club']);
   assert.doesNotMatch(plainText(bodyHtml), /Zero-True|Equiwiz|second.year|sophomore|2029/i);
   assert.equal(profile.research.length, 2);
-  containsText(bodyHtml, '2 published research papers');
+  assert.doesNotMatch(plainText(bodyHtml), /2 published research papers/);
   assert.equal((sectionBody('research').match(/class="research-highlights"/g) ?? []).length, 2);
   assert.equal(profile.history.length, 3);
-  assert.equal(profile.history[2].dates, '');
-  assert.equal(profile.history[2].description, '');
-  for (const milestone of ['Open-source ML systems work', 'Purdue University', 'Ukrainian Resilience', 'AI Reinforcement Learning Traffic System Implementations and Limitations', 'Air Labs']) {
+  assert.equal(profile.history[2].dates, 'September 2023 – May 2025');
+  assert.match(profile.history[2].description, /sensors/);
+  for (const milestone of ['Open-source ML systems work', 'Purdue University', 'Ukrainian Resilience', 'AI Reinforcement Learning Traffic System Implementations and Limitations', 'AirLab · Purdue University']) {
     assert.ok(profile.historyMilestones.some(item => item.title === milestone), milestone);
   }
   for (const item of profile.historyMilestones) for (const value of [item.date, item.title, item.description]) containsText(sectionBody('history'), value);
   assert.match(plainText(sectionBody('history')), /Python maze navigation/);
   assert.match(plainText(sectionBody('history')), /hackathons/);
-  assert.match(profile.research[1].description, /Ninety-nine simulation runs/);
+  assert.match(profile.research[1].description, /LibSignal simulations/);
+  assert.equal(profile.experience[0].url, 'https://airlab.cs.purdue.edu/team');
   assert.match(profile.research[1].limitations, /real traffic data/);
   assert.doesNotMatch(plainText(sectionBody('experience')), /increased|improved|reduced|percent|%/i);
   assert.doesNotMatch(plainText(sectionBody('history')), /oversaw|spearheaded|led a team|increased|improved|percent|%/i);

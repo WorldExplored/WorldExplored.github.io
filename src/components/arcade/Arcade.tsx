@@ -4,9 +4,11 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode 
 import { profile } from '@/content/profile';
 import { BREAKOUT, brickRect, flagMine, hideMemoryMismatch, newBreakout, newMemory, newMines, newSnake, revealMemory, revealMine, stepBreakout, stepSnake, turnSnake, type Direction, type GameStatus } from './gameLogic';
 
+import { PONG, BLOCKS, BLOCK_COLORS, blockCells, blocksGhost, dropBlocks, moveBlocks, newBlocks, newPong, rotateBlocks, stepBlocks, stepPong } from './retroLogic';
+
 const copy = profile.arcade;
 type GameId = keyof typeof copy.games;
-const gameIds: GameId[] = ['snake', 'mines', 'breakout', 'memory'];
+const gameIds: GameId[] = ['snake', 'mines', 'breakout', 'memory', 'pong', 'blocks'];
 const directionKeys: Record<string, Direction> = { ArrowUp: 'up', ArrowRight: 'right', ArrowDown: 'down', ArrowLeft: 'left', w: 'up', d: 'right', s: 'down', a: 'left' };
 function gridKeys(event: KeyboardEvent<HTMLDivElement>, columns: number) {
   if (event.altKey || event.ctrlKey || event.metaKey) return;
@@ -171,8 +173,86 @@ function Memory() {
     })}</div>
   </GameShell>;
 }
+function Pong() {
+  const [game, setGame] = useState(newPong);
+  const { paused, setPaused } = usePause(game.status);
+  const held = useRef(new Set<string>()), target = useRef<number | undefined>(undefined), pointer = useRef<number | null>(null);
+  useEffect(() => {
+    if (paused || game.status !== 'playing') return;
+    let frame = 0, previous = 0;
+    const keys = held.current;
+    const tick = (now: number) => {
+      if (previous) setGame(current => stepPong(current, (now - previous) / 1000, Number(keys.has('down')) - Number(keys.has('up')), target.current));
+      previous = now; frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => { cancelAnimationFrame(frame); keys.clear(); target.current = undefined; pointer.current = null; };
+  }, [paused, game.status]);
+  const stop = () => { held.current.clear(); target.current = undefined; pointer.current = null; setPaused(true); };
+  const key = (event: KeyboardEvent<HTMLDivElement>, down: boolean) => {
+    const direction = ({ ArrowUp: 'up', w: 'up', ArrowDown: 'down', s: 'down' } as Record<string, string>)[event.key];
+    if (!direction || event.altKey || event.ctrlKey || event.metaKey) return;
+    event.preventDefault(); event.stopPropagation(); target.current = undefined;
+    if (down) held.current.add(direction); else held.current.delete(direction);
+  };
+  const move = (element: SVGSVGElement, y: number) => { const rect = element.getBoundingClientRect(); target.current = (y - rect.top) / rect.height * PONG.height; };
+  return <GameShell id="pong" status={game.status} paused={paused} onPause={stop} onPlay={() => { setGame(current => ({ ...current, status: 'playing' })); setPaused(false); }} onRestart={() => { setGame(newPong()); setPaused(false); }} onKeyDown={event => key(event, true)} onKeyUp={event => key(event, false)}
+    stats={<><Stat label={copy.you} value={game.score}/><Stat label={copy.opponent} value={game.opponentScore}/></>}
+    controls={<div className="arcade-paddle-controls">{(['up', 'down'] as const).map(direction => <button type="button" key={direction} aria-label={copy[direction]} disabled={paused || game.status !== 'playing'}
+      onPointerDown={event => { event.currentTarget.setPointerCapture(event.pointerId); target.current = undefined; held.current.add(direction); }} onPointerUp={() => held.current.clear()} onPointerCancel={() => held.current.clear()} onLostPointerCapture={() => held.current.clear()}
+      onClick={event => { if (event.detail === 0) setGame(current => ({ ...current, paddle: Math.max(38, Math.min(282, current.paddle + (direction === 'up' ? -28 : 28))) })); }}>{direction === 'up' ? '↑' : '↓'}</button>)}</div>}>
+    <svg className="arcade-pong-board" viewBox="0 0 400 320" aria-hidden="true"
+      onPointerDown={event => { event.currentTarget.setPointerCapture(event.pointerId); pointer.current = event.pointerId; move(event.currentTarget, event.clientY); }} onPointerMove={event => { if (pointer.current === event.pointerId) move(event.currentTarget, event.clientY); }} onPointerUp={() => { pointer.current = null; }} onLostPointerCapture={() => { pointer.current = null; }} onPointerCancel={() => { pointer.current = null; target.current = undefined; }}>
+      <rect width="400" height="320" fill="#d8f0e9"/><path d="M0 76 Q100 38 200 80 T400 71 V320 H0Z" fill="#a6e0d9"/><path d="M0 263 Q95 236 205 275 T400 252 V320 H0Z" fill="#66c3ce"/>
+      <rect x="8" y="8" width="384" height="304" rx="24" fill="none" stroke="#f8ffed" strokeWidth="3"/><path d="M200 10V310" stroke="#effff0" strokeWidth="3" strokeDasharray="9 10"/><circle cx="200" cy="160" r="48" fill="none" stroke="#edfff0" strokeWidth="2"/>
+      <rect x="12" y={game.paddle - 34} width="9" height="68" rx="4.5" fill="#075c9c" stroke="#fff" strokeWidth="2"/><rect x="379" y={game.opponent - 34} width="9" height="68" rx="4.5" fill="#52933f" stroke="#fff" strokeWidth="2"/>
+      <circle cx={game.x} cy={game.y} r="8" fill="#ffffff"/><circle cx={game.x} cy={game.y} r="6" fill="#d2a21d"/><circle cx={game.x - 1.5} cy={game.y - 2} r="2.6" fill="#fff2b6"/>
+      {game.serve > 0 && <circle cx="200" cy="160" r="15" fill="none" stroke="#4b93a4" strokeDasharray="3 4"/>}
+    </svg>
+  </GameShell>;
+}
+function Blocks() {
+  const [game, setGame] = useState(newBlocks);
+  const { paused, setPaused } = usePause(game.status);
+  useEffect(() => {
+    if (paused || game.status !== 'playing') return;
+    const timer = window.setInterval(() => setGame(current => stepBlocks(current, .05)), 50);
+    return () => window.clearInterval(timer);
+  }, [paused, game.status]);
+  const command = (action: 'left' | 'right' | 'down' | 'rotate' | 'drop') => {
+    if (paused || game.status !== 'playing') return;
+    setGame(current => action === 'left' ? moveBlocks(current, -1) : action === 'right' ? moveBlocks(current, 1) : action === 'rotate' ? rotateBlocks(current) : dropBlocks(current, action === 'drop'));
+  };
+  const ghost = blocksGhost(game);
+  const block = (x: number, y: number, color: number, key: string, outline = false) => <g key={key}><rect x={x * 20 + 12} y={y * 20 + 13} width="18" height="18" rx="3" fill={outline ? 'none' : BLOCK_COLORS[color]} stroke={outline ? '#57959f' : '#efffff'} strokeWidth={outline ? 1 : 1.3} opacity={outline ? .65 : 1}/>{!outline && <path d={`M${x * 20 + 15} ${y * 20 + 17}h11`} stroke="#ffffff" opacity=".55"/>}</g>;
+  return <GameShell id="blocks" status={game.status} paused={paused} onPause={() => setPaused(true)} onPlay={() => { setGame(current => ({ ...current, status: 'playing' })); setPaused(false); }} onRestart={() => { setGame(newBlocks()); setPaused(false); }}
+    stats={<><Stat label={copy.score} value={game.score}/><Stat label={copy.lines} value={game.lines}/></>}
+    onKeyDown={event => {
+      if (paused || game.status !== 'playing' || (event.target as HTMLElement).closest('button')) return;
+      const action = ({ ArrowLeft: 'left', a: 'left', ArrowRight: 'right', d: 'right', ArrowDown: 'down', s: 'down', ArrowUp: 'rotate', w: 'rotate', ' ': 'drop' } as Record<string, 'left' | 'right' | 'down' | 'rotate' | 'drop'>)[event.key];
+      if (!action || event.altKey || event.ctrlKey || event.metaKey) return;
+      event.preventDefault(); event.stopPropagation(); if (!event.repeat || action !== 'drop') command(action);
+    }}
+    controls={<div className="arcade-block-controls">{(['left', 'rotate', 'right', 'down', 'drop'] as const).map(action => <button type="button" key={action} disabled={paused || game.status !== 'playing'} aria-label={copy[action]} onClick={() => command(action)}>{({ left: '←', right: '→', down: '↓', rotate: '↻', drop: copy.drop })[action]}</button>)}</div>}>
+    <svg className="arcade-blocks-board" viewBox="0 0 330 386" aria-hidden="true">
+      <rect width="330" height="386" fill="#d4f1ef"/><path d="M215 0H330V386H215Z" fill="#b6e1dd"/><rect x="9" y="10" width="204" height="364" rx="6" fill="#eaf8e8" stroke="#81b8b5"/>
+      {Array.from({ length: BLOCKS.rows - 1 }, (_, y) => <path key={y} d={`M11 ${32 + y * 20}H211`} stroke="#bbdbce" strokeWidth=".6"/>)}
+      {Array.from({ length: 9 }, (_, x) => <path key={x} d={`M${31 + x * 20} 12V372`} stroke="#bbdbce" strokeWidth=".6"/>)}
+      {game.board.map((value, index) => value ? block(index % 10, Math.floor(index / 10), value - 1, `board-${index}`) : null)}
+      {blockCells(ghost).map(({ x, y }, i) => block(x, y, game.piece.kind, `ghost-${i}`, true))}
+      {blockCells(game.piece).map(({ x, y }, i) => block(x, y, game.piece.kind, `piece-${i}`))}
+      <text x="272" y="39" textAnchor="middle" fill="#16546a" fontSize="15" fontFamily="inherit">{copy.next}</text>
+      <rect x="225" y="53" width="94" height="80" rx="12" fill="#ecfbf4" stroke="#80b7b9"/>
+      {blockCells({ kind: game.queue[0], rotation: 0, x: 0, y: 0 }).map(({ x, y }, i) => <rect key={i} x={239 + x * 16} y={76 + y * 16} width="15" height="15" rx="3" fill={BLOCK_COLORS[game.queue[0]]} stroke="#fff"/>)}
+      <text x="272" y="170" textAnchor="middle" fill="#16546a" fontSize="14" fontFamily="inherit">{copy.level}</text><text x="272" y="200" textAnchor="middle" fill="#075c9c" fontSize="26" fontFamily="inherit">{Math.floor(game.lines / 8) + 1}</text>
+      <path d="M242 356Q244 320 273 289Q299 318 300 356Z" fill="#61a875" opacity=".6"/><path d="M272 354V303M272 331L254 319M272 337L288 323" stroke="#247552" strokeWidth="3" fill="none"/>
+      <circle cx="273" cy="259" r="18" fill="#effaf0" stroke="#83c7bf"/><circle cx="268" cy="252" r="5" fill="#fff"/>
+    </svg>
+  </GameShell>;
+}
+
 function Preview({ id }: { id: GameId }) {
-  return <div className={`arcade-preview arcade-preview-${id}`} aria-hidden="true">{id === 'snake' ? <><i /><i /><i /><i /><i /><b>●</b></> : id === 'mines' ? <>{['', '1', '', '⚑', '', '2', '', '', ''].map((value, i) => <i key={i}>{value}</i>)}</> : id === 'breakout' ? <>{Array.from({ length: 9 }, (_, i) => <i key={i} />)}<b /><em /></> : <>{['☀', '✦', '✦', '☀'].map((value, i) => <i key={i}>{value}</i>)}</>}</div>;
+  return <div className={`arcade-preview arcade-preview-${id}`} aria-hidden="true">{id === 'snake' ? <><i /><i /><i /><i /><i /><b>●</b></> : id === 'mines' ? <>{['', '1', '', '⚑', '', '2', '', '', ''].map((value, i) => <i key={i}>{value}</i>)}</> : id === 'breakout' ? <>{Array.from({ length: 9 }, (_, i) => <i key={i} />)}<b /><em /></> : id === 'pong' ? <><i/><i/><b/></> : id === 'blocks' ? <>{Array.from({ length: 12 }, (_, i) => <i key={i}/>)}</> : <>{['☀', '✦', '✦', '☀'].map((value, i) => <i key={i}>{value}</i>)}</>}</div>;
 }
 export function Arcade() {
   const [selected, setSelected] = useState<GameId | null>(null);
@@ -184,6 +264,6 @@ export function Arcade() {
   }, [selected]);
   return <section className="arcade" aria-label={copy.title}>
     <div className="arcade-masthead">{!selected && <span>{copy.eyebrow}</span>}{selected && <button type="button" className="arcade-back" onClick={back}>← {copy.back}</button>}</div>
-    {selected === null ? <><p className="arcade-intro">{copy.intro}</p><div className="arcade-library" ref={libraryRef}>{gameIds.map(id => <button type="button" className="arcade-cabinet" data-game={id} key={id} onClick={() => setSelected(id)}><Preview id={id} /><span className="arcade-cabinet-copy"><span className="arcade-genre">{copy.games[id].genre}</span><strong>{copy.games[id].name}</strong><span>{copy.games[id].description}</span><span className="arcade-play-label">{copy.play} <span aria-hidden="true">↗</span></span></span></button>)}</div></> : selected === 'snake' ? <Snake /> : selected === 'mines' ? <Mines /> : selected === 'breakout' ? <Breakout /> : <Memory />}
+    {selected === null ? <><p className="arcade-intro">{copy.intro}</p><div className="arcade-library" ref={libraryRef}>{gameIds.map(id => <button type="button" className="arcade-cabinet" data-game={id} key={id} onClick={() => setSelected(id)}><Preview id={id} /><span className="arcade-cabinet-copy"><span className="arcade-genre">{copy.games[id].genre}</span><strong>{copy.games[id].name}</strong><span>{copy.games[id].description}</span><span className="arcade-play-label">{copy.play} <span aria-hidden="true">↗</span></span></span></button>)}</div></> : selected === 'snake' ? <Snake /> : selected === 'mines' ? <Mines /> : selected === 'breakout' ? <Breakout /> : selected === 'memory' ? <Memory /> : selected === 'pong' ? <Pong /> : <Blocks />}
   </section>;
 }

@@ -1,6 +1,6 @@
 import { BufferGeometry, Color, Float32BufferAttribute, Mesh, ShaderMaterial, Vector2, Vector3, Vector4 } from 'three';
-import { world } from '../../content/world';
-import { cloudBounds, cloudDensity, cloudOrigin, createCloudClusters, type CloudCluster } from './clouds';
+import { world, type SceneRuntime } from '../../content/world';
+import { cloudBounds, cloudDensity, cloudOrigin, cloudVisibility, rayCloudDistance, createCloudClusters, type CloudCluster } from './clouds';
 
 const TETRAHEDRA = [[0, 1, 3, 7], [0, 3, 2, 7], [0, 2, 6, 7], [0, 6, 4, 7], [0, 4, 5, 7], [0, 5, 1, 7]];
 const EDGES = [[0, 1], [0, 2], [0, 3], [1, 2], [1, 3], [2, 3]];
@@ -14,7 +14,7 @@ export function cloudSurfaceGeometry(clusters: readonly CloudCluster[]) {
   clusters.forEach((cloud, cloudIndex) => {
     const bounds = cloudBounds(cloud);
     const size = bounds.max.clone().sub(bounds.min);
-    const step = cloud.archetype === 'atmospheric' ? .55 : .48;
+    const step = Math.max(cloud.archetype === 'atmospheric' ? .55 : .48, size.x / 72, size.y / 38, size.z / 38);
     const nx = Math.ceil(size.x / step) + 1; const ny = Math.ceil(size.y / step) + 1; const nz = Math.ceil(size.z / step) + 1;
     const sx = size.x / (nx - 1); const sy = size.y / (ny - 1); const sz = size.z / (nz - 1);
     const stride = nx * ny; const total = stride * nz;
@@ -91,6 +91,7 @@ export function cloudSurfaceGeometry(clusters: readonly CloudCluster[]) {
 const cloudVertex = /* glsl */ `
   uniform vec4 uOrigins[24];
   uniform vec3 uTouches[24];
+  uniform float uVisibility[24];
   attribute float aCloud;
   attribute vec2 aShading;
   varying vec3 vNormal;
@@ -98,11 +99,15 @@ const cloudVertex = /* glsl */ `
   varying vec3 vLocal;
   varying vec2 vShading;
   varying float vDistance;
+  varying float vOpacity;
   void main() {
     int cloud = int(aCloud + .5);
     vec3 difference = position - uTouches[cloud];
     float dimple = uOrigins[cloud].w * exp(-dot(difference, difference) / 5.2);
-    vec3 p = position - normal * dimple * .55;
+    vec3 p = position - normal * dimple * .78;
+    p.y *= 1. - uOrigins[cloud].w * .12;
+    p.xz *= 1. + uOrigins[cloud].w * .055;
+    vOpacity = uVisibility[cloud];
     vec4 point = modelMatrix * vec4(p + uOrigins[cloud].xyz, 1.);
     vNormal = normalize(mat3(modelMatrix) * normal);
     vView = cameraPosition - point.xyz;
@@ -114,6 +119,7 @@ const cloudVertex = /* glsl */ `
 `;
 const cloudFragment = /* glsl */ `
   uniform vec3 uWhite;
+  uniform vec3 uSunDirection;
   uniform vec3 uShade;
   uniform vec3 uFog;
   uniform vec2 uFogRange;
@@ -122,10 +128,11 @@ const cloudFragment = /* glsl */ `
   varying vec3 vLocal;
   varying vec2 vShading;
   varying float vDistance;
+  varying float vOpacity;
   void main() {
     vec3 n = normalize(vNormal);
     float topLight = smoothstep(-.65, .75, n.y);
-    float sun = smoothstep(-.5, .9, dot(n, normalize(vec3(-.4, .8, -.35))));
+    float sun = smoothstep(-.5, .9, dot(n, uSunDirection));
     float light = clamp(.10 + topLight * .57 + sun * .20 + vShading.x * .19 - vShading.y * .16, 0., 1.);
     vec3 color = mix(uShade, uWhite, light);
     float relief = sin(vLocal.x * 5.1 + vLocal.y * 1.3) * sin(vLocal.z * 4.7 - vLocal.y * 3.8);
@@ -133,33 +140,58 @@ const cloudFragment = /* glsl */ `
     float rim = pow(1. - max(dot(n, normalize(vView)), 0.), 3.);
     color = mix(color, uWhite, rim * .09);
     color = mix(color, uFog, smoothstep(uFogRange.x, uFogRange.y, vDistance));
-    gl_FragColor = vec4(color, 1.);
+    if(vOpacity < .003) discard;
+    gl_FragColor = vec4(color, vOpacity);
     #include <colorspace_fragment>
   }
 `;
 
-export function makeClouds(diagnostics: boolean) {
-  const clusters = createCloudClusters();
+export function makeClouds(diagnostics: boolean, clusters = createCloudClusters()) {
   const geometry = cloudSurfaceGeometry(clusters);
-  const origins = clusters.map(() => new Vector4()); const touches = clusters.map(() => new Vector3());
-  const material = new ShaderMaterial({ vertexShader: cloudVertex, fragmentShader: cloudFragment, uniforms: {
+  const origins = Array.from({length:24}, () => new Vector4()); const touches = Array.from({length:24}, () => new Vector3());
+  const visibility: number[] = Array.from({length:24}, (_, index) => index < clusters.length ? 1 : 0);
+  const material = new ShaderMaterial({ transparent: true, depthWrite: true, vertexShader: cloudVertex, fragmentShader: cloudFragment, uniforms: {
+    uVisibility: { value: visibility }, uSunDirection: { value: new Vector3(-.4, .8, -.35).normalize() },
     uOrigins: { value: origins }, uTouches: { value: touches }, uWhite: { value: new Color(world.lighting.cloudColor) }, uShade: { value: new Color('#8aabc9') },
     uFog: { value: new Color(world.lighting.fogColor) }, uFogRange: { value: new Vector2(world.lighting.fogNear, world.lighting.fogFar) },
   } });
   const mesh = new Mesh(geometry, material); mesh.name = 'environment-clouds'; mesh.frustumCulled = false;
   mesh.userData.clusters = clusters;
+  mesh.userData.cameraInteraction = true;
+  let pickElapsed = 0;
+  mesh.raycast = (raycaster, intersections) => {
+    for (let index = 0; index < clusters.length; index++) {
+      if (visibility[index] < .15) continue;
+      const distance = rayCloudDistance(raycaster.ray, clusters[index], pickElapsed);
+      if (distance === null) continue;
+      intersections.push({ distance, point: raycaster.ray.at(distance, new Vector3()), object: mesh, faceIndex: index });
+    }
+  };
   const debug = diagnostics ? new Mesh(geometry, material.clone()) : null;
-  if (debug) { debug.material.wireframe = true; debug.material.transparent = true; debug.material.depthWrite = false; debug.material.fragmentShader = cloudFragment.replace('gl_FragColor = vec4(color, 1.);', 'gl_FragColor = vec4(.02, .2, .8, .3);'); debug.name = 'cloud-hit-volumes'; debug.frustumCulled = false; }
-  return { clusters, activeCount: clusters.length, mesh, geometry, material, origins, touches, debug, origin: new Vector3(),
+  if (debug) { debug.material.wireframe = true; debug.material.transparent = true; debug.material.depthWrite = false; debug.material.fragmentShader = cloudFragment.replace('gl_FragColor = vec4(color, vOpacity);', 'gl_FragColor = vec4(.02, .2, .8, .3 * vOpacity);'); debug.name = 'cloud-hit-volumes'; debug.frustumCulled = false; }
+  return { clusters, visibility, setPickTime: (elapsed: number) => { pickElapsed = elapsed; }, activeCount: clusters.length, mesh, geometry, material, origins, touches, debug, origin: new Vector3(),
     dispose() { geometry.dispose(); material.dispose(); debug?.material.dispose(); },
   };
 }
 
-export function writeCloudMatrices(clouds: ReturnType<typeof makeClouds>, elapsed: number) {
+const dayCloud = new Color('#ffffff'), duskCloud = new Color('#ffbda8'), stormCloud = new Color('#acb8c2');
+const dayShade = new Color('#8aabc9'), duskShade = new Color('#786180'), stormShade = new Color('#4d657d'), dayFog = new Color(world.lighting.fogColor);
+
+export function writeCloudMatrices(clouds: ReturnType<typeof makeClouds>, elapsed: number, state?: SceneRuntime) {
+  clouds.setPickTime(elapsed);
   for (let index = 0; index < clouds.clusters.length; index++) {
-    const cluster = clouds.clusters[index]; cloudOrigin(cluster, elapsed, clouds.origin);
+    const cluster = clouds.clusters[index];
+    clouds.visibility[index] = index < clouds.activeCount ? cloudVisibility(cluster, elapsed) : 0;
+    cloudOrigin(cluster, elapsed, clouds.origin);
     clouds.origins[index].set(clouds.origin.x, clouds.origin.y, clouds.origin.z, cluster.response);
     clouds.touches[index].fromArray(cluster.interaction);
+  }
+  if (state?.weather) {
+    const weather = state.weather;
+    clouds.material.uniforms.uSunDirection.value.fromArray(state.sunDirection);
+    clouds.material.uniforms.uWhite.value.set('#5d759e').lerp(dayCloud, weather.daylight).lerp(duskCloud, weather.dusk * .5).lerp(stormCloud, weather.storm * .65 * weather.daylight);
+    clouds.material.uniforms.uShade.value.set('#1d2b48').lerp(dayShade, weather.daylight).lerp(duskShade, weather.dusk * .5).lerp(stormShade, weather.storm * .7 * weather.daylight);
+    clouds.material.uniforms.uFog.value.set('#293a5a').lerp(dayFog, weather.daylight).lerp(duskCloud, weather.dusk * .35);
   }
   if (clouds.debug) {
     clouds.debug.material.uniforms.uOrigins.value = clouds.origins;

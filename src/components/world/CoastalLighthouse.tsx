@@ -1,12 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Html } from '@react-three/drei';
-import { useFrame, useThree } from '@react-three/fiber';
+import { useEffect, useRef, useState } from 'react';
+import { useFrame } from '@react-three/fiber';
 import { AdditiveBlending, BoxGeometry, BufferGeometry, CatmullRomCurve3, CylinderGeometry, DoubleSide, Float32BufferAttribute, FrontSide, LatheGeometry, Mesh, MeshPhysicalMaterial, MeshStandardMaterial, SphereGeometry, TorusGeometry, TubeGeometry, Vector2, Vector3 } from 'three';
 import { world } from '../../content/world';
 import { combine, roundedBox, stroke, strut, TAU, usePalette, useResources, type ModelProps } from './BuildingKit';
-import { createLighthouseActivation, lighthouseSignal, LIGHTHOUSE_INTERACTION, stepLighthouseSignal } from './lighthouseSignal';
 
 export const LIGHTHOUSE_OPENINGS = [
   { name: 'door', bottom: 1.02, top: 2.02, halfAngle: .30, recess: .075 },
@@ -104,15 +102,7 @@ function createLighthouseResources(){
   };
 }
 
-export function LighthouseFocusButton({activate}:{activate:()=>void}){
-  return <button type="button" className="lighthouse-focus-control" aria-label={LIGHTHOUSE_INTERACTION.label} onPointerDown={event=>event.stopPropagation()} onClick={event=>{event.stopPropagation();activate();}} style={{width:44,height:44,padding:0,border:'2px solid transparent',borderRadius:'50%',outline:'none',background:'transparent',cursor:'pointer',pointerEvents:'auto'}}/>;
-}
 export function CoastalLighthouse(props:ModelProps){
-  const invalidate=useThree(state=>state.invalidate);
-  const canvas=useThree(state=>state.gl.domElement);
-  const portal=useMemo(()=>canvas.parentElement?{current:canvas.parentElement}:null,[canvas]);
-  const [activation]=useState(()=>createLighthouseActivation(props.runtime.current,invalidate));
-  useEffect(()=>()=>activation.dispose(),[activation]);
   const palette=usePalette(props,'building'),geometry=useResources(createLighthouseResources),beam=useRef<Mesh<BufferGeometry,MeshPhysicalMaterial>>(null);
   const [materials]=useState(()=>{
     const beam=new MeshPhysicalMaterial({name:'soft-additive-lighthouse-beam',color:'#ddffff',emissive:'#c9ffff',emissiveIntensity:world.lighting.lampIntensity,transparent:true,opacity:.008,roughness:1,metalness:0,depthWrite:false,side:FrontSide,blending:AdditiveBlending,toneMapped:false});
@@ -126,14 +116,13 @@ export function CoastalLighthouse(props:ModelProps){
     beam.customProgramCacheKey=()=> 'soft-open-beam-v1';
     return{hitbox:new MeshStandardMaterial({name:'lighthouse-interaction-proxy',visible:false,colorWrite:false,depthWrite:false}),masonry:new MeshStandardMaterial({name:'weathered-painted-masonry',color:'#e9e8da',roughness:.83,metalness:0,side:DoubleSide}),mortar:new MeshStandardMaterial({color:'#b0b8ac',roughness:1}),beam};
   });
-  const timer=useRef<ReturnType<typeof setTimeout>|undefined>(undefined),rotation=useRef(0),dragCount=useRef(0);
+  const timer=useRef<ReturnType<typeof setTimeout>|undefined>(undefined),rotation=useRef(0);
   useEffect(()=>{clearTimeout(timer.current);return()=>{timer.current=setTimeout(()=>Object.values(materials).forEach(m=>m.dispose()),0);};},[materials]);
-  useFrame((_,delta)=>{
-    const signal=lighthouseSignal(props.runtime.current);stepLighthouseSignal(signal,delta,props.paused);
+  useFrame(()=>{
+    const night=world.lighting.lampEnabled ? props.runtime.current.weather.night : 0;
     if(!props.paused)rotation.current=Math.sin(props.runtime.current.elapsed*.12)*Math.PI*35/180;
-    if(beam.current){beam.current.rotation.y=rotation.current;beam.current.material.opacity=world.lighting.lampEnabled ? (props.active ? .035 : props.runtime.current.hovered==='building' ? .025 : .008)+signal.intensity*.045 : 0;beam.current.material.emissiveIntensity=world.lighting.lampEnabled?world.lighting.lampIntensity+signal.intensity*1.4:0;}
+    if(beam.current){beam.current.rotation.y=rotation.current;beam.current.visible=night>.01;beam.current.material.opacity=.055*night;beam.current.material.emissiveIntensity=world.lighting.lampIntensity*night;}
   },-1);
-  const activate=activation.activate;
   return <group dispose={null} name="detailed-coastal-lighthouse">
     <mesh name="lighthouse-circular-foundation" geometry={geometry.stoneBatch} material={palette.paving} receiveShadow castShadow/>
     <mesh name="lighthouse-taper" geometry={geometry.shaft} material={materials.masonry} castShadow receiveShadow/>
@@ -145,7 +134,6 @@ export function CoastalLighthouse(props:ModelProps){
     <mesh geometry={geometry.doorHardware} material={palette.gold}/>
     <mesh name="lighthouse-recessed-windows" geometry={geometry.windowGlass} material={palette.windowBacking}/>
     <mesh name="signal-light-sweep" ref={beam} geometry={geometry.beam} material={materials.beam} position-y={6} raycast={()=>{}}/>
-    <mesh name="lighthouse-lantern-hit" geometry={geometry.hitbox} material={materials.hitbox} position={[0,6,0]} userData={{cameraInteraction:true}} onPointerDown={event=>{event.stopPropagation();dragCount.current=props.runtime.current.dragCount;}} onClick={event=>{event.stopPropagation();if(event.delta<6&&!props.runtime.current.dragging&&dragCount.current===props.runtime.current.dragCount)activate();}}/>
-    {typeof document!=='undefined'&&portal&&<Html portal={portal} center position={[0,6,.76]} zIndexRange={[15,0]} style={{pointerEvents:'none'}}><LighthouseFocusButton activate={activate}/></Html>}
+
   </group>;
 }

@@ -5,7 +5,6 @@ import { useFrame } from '@react-three/fiber';
 import { BoxGeometry, BufferGeometry, CapsuleGeometry, CatmullRomCurve3, CylinderGeometry, DoubleSide, ExtrudeGeometry, Group, MathUtils, Mesh, MeshPhysicalMaterial, Quaternion, Shape, SphereGeometry, TorusGeometry, TubeGeometry, Vector3 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { world, type LandmarkId, type SceneRuntime } from '@/content/world';
-import { lighthouseSignal } from './lighthouseSignal';
 
 const TAU = Math.PI * 2;
 type Motion = (time: number, response: number) => void;
@@ -139,7 +138,7 @@ export function createLandmarkMechanism(id: LandmarkId) {
     root.userData.response = response;
   };
   update(0, 0, 0);
-  return { root, update, setSignal(intensity: number) { if (id === 'building') materials.aqua.emissiveIntensity = world.lighting.lampEnabled ? .18 + Math.max(0, Math.min(1,intensity)) * 1.4 : 0; }, dispose() { geometries.forEach(geometry => geometry.dispose()); Object.values(materials).forEach(material => material.dispose()); } };
+  return { root, update, setSignal(intensity: number) { if (id === 'building') materials.aqua.emissiveIntensity = world.lighting.lampEnabled ? Math.max(0, Math.min(1,intensity)) * 1.6 : 0; }, dispose() { geometries.forEach(geometry => geometry.dispose()); Object.values(materials).forEach(material => material.dispose()); } };
 }
 
 export function LandmarkMechanisms({ id, active, paused, runtime }: { id: LandmarkId; active: boolean; paused: boolean; runtime: MutableRefObject<SceneRuntime> }) {
@@ -149,7 +148,7 @@ export function LandmarkMechanisms({ id, active, paused, runtime }: { id: Landma
   useFrame((_, delta) => {
     if (!mounted.current) return;
     if (!paused) assembly.update(runtime.current.elapsed, active ? 1 : runtime.current.hovered === id ? .5 : 0, delta);
-    if (id === 'building') assembly.setSignal(lighthouseSignal(runtime.current).intensity);
+    if (id === 'building') assembly.setSignal((runtime.current as typeof runtime.current & {weather?:{night:number}}).weather?.night ?? 0);
   });
   return <primitive object={assembly.root} dispose={null} />;
 }

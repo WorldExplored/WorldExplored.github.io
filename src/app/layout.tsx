@@ -3,6 +3,7 @@ import localFont from 'next/font/local';
 import { profile } from '@/content/profile';
 import '../components/AudioControl.css';
 import '../components/arcade/arcade.css';
+import '../components/world/timeOfDay.css';
 import './globals.css';
 
 const humanist = localFont({ src: './fonts/SourceSans3-Upright.woff2', variable: '--font-humanist', weight: '200 900', display: 'swap' });

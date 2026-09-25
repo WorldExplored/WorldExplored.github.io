@@ -85,12 +85,24 @@ export function createWildlife() {
   ]), 0, 18);
   const gullHead = instances('gull-heads-and-necks', merge([ellipsoid(0, .15, -.34, .135, .14, .16), ellipsoid(0, .09, -.21, .125, .14, .20)]).translate(0,-.09,.25), 0, 18);
   const gullEyes = instances('gull-eyes', merge([-1, 1].map(side => ellipsoid(side * .119, .185, -.395, .019, .023, .024))).translate(0,-.09,.25), 2, 18);
-  const bill = merge([feather(.23,.046,.021).rotateY(Math.PI/2).translate(0,.04,-.20),feather(.21,.039,-.011).rotateY(Math.PI/2).translate(0,.032,-.20)]);
+  const bill = merge([
+    // A tapered solid maxilla and lower mandible meet along a narrow seam.
+    new CylinderGeometry(.006,.043,.235,9).rotateX(-Math.PI/2).scale(1,.65,1).translate(0,.043,-.304),
+    new CylinderGeometry(.003,.032,.208,9).rotateX(-Math.PI/2).scale(1,.38,1).translate(0,.019,-.294),
+    ellipsoid(0,.039,-.408,.012,.022,.026),
+  ]);
   const gullBill = instances('gull-bills', bill, 3, 18);
   const wing = instances('gull-inner-wings', merge([
+    // Continuous coverts overlap the shoulder and wrist throughout the folded pose.
+    ellipsoid(.10,0,.025,.18,.062,.16),
+    ellipsoid(.40,.008,.067,.35,.045,.145),
+    ellipsoid(.68,.005,.062,.115,.039,.095),
     ...Array.from({length:8},(_,index)=>feather(.42-index*.019,.075,.045).rotateY(-1.0+index*.08).translate(.08+index*.081,.01,.015)),
   ]), 1, 18);
-  const primaries = instances('gull-articulated-primaries', merge(Array.from({length:6},(_,index)=>feather(.49-index*.043,.044,.028).rotateY(-.11-index*.16).translate(.015+index*.035,0,.012+index*.038))), 2, 18);
+  const primaries = instances('gull-articulated-primaries', merge([
+    ellipsoid(.04,0,.025,.10,.029,.074),
+    ...Array.from({length:6},(_,index)=>feather(.49-index*.043,.044,.028).rotateY(-.11-index*.16).translate(.015+index*.035,0,.012+index*.038)),
+  ]), 2, 18);
   const leftWing = instances('gull-left-inner-wings', mirrored(wing.geometry), 1, 18);
   const leftPrimaries = instances('gull-left-primaries', mirrored(primaries.geometry), 2, 18);
   const gullLegs = instances('gull-perching-feet', merge([-1, 1].flatMap(side => [
@@ -106,10 +118,21 @@ export function createWildlife() {
   }));
   const nestTwigs=instances('gull-woven-twig-nests',nestGeometry,6,nests.length);
   const nestEggs=instances('gull-speckled-nest-eggs',merge([ellipsoid(-.072,.018,.008,.038,.052,.033),ellipsoid(.038,.018,.058,.036,.05,.032),ellipsoid(.058,.018,-.058,.037,.052,.032)]),8,nests.length);
+  const nestLining=instances('gull-grass-and-feather-lining',merge([
+    ...Array.from({length:38},(_,i)=>{
+      const a=i*2.399,r=.07+(i%9)*.020;
+      return bone(new Vector3(Math.cos(a)*r,-.025,Math.sin(a)*r),new Vector3(Math.cos(a+.55)*(r+.07),-.01,Math.sin(a+.55)*(r+.07)),.0035);
+    }),
+    ...Array.from({length:7},(_,i)=>feather(.12,.016,.008).rotateY(i*1.83).translate(Math.cos(i*2)*.15,-.008,Math.sin(i*2)*.15)),
+  ]),8,nests.length);
+  const eggSpeckles=instances('gull-egg-brown-speckles',merge([[-.072,.018,.008],[.038,.018,.058],[.058,.018,-.058]].flatMap(([x,y,z])=>Array.from({length:11},(_,i)=>{
+    const a=i*2.399,b=.15+(i%4)*.24;
+    return ellipsoid(x+Math.cos(a)*.036*Math.sin(b),y+.052*Math.cos(b),z+Math.sin(a)*.032*Math.sin(b),.003,.002,.004);
+  }))),6,nests.length);
   const nestTransform=new Object3D();
   nests.forEach((bird,index)=>{
     nestTransform.position.copy(bird.perch.position);nestTransform.position.y-=.255;nestTransform.rotation.y=index*1.37;nestTransform.updateMatrix();
-    nestTwigs.setMatrixAt(index,nestTransform.matrix);nestEggs.setMatrixAt(index,nestTransform.matrix);
+    for(const mesh of [nestTwigs,nestEggs,nestLining,eggSpeckles])mesh.setMatrixAt(index,nestTransform.matrix);
   });
   const gullPrey=instances('gull-hunt-silver-fish',merge([ellipsoid(0,0,0,.045,.058,.17),feather(.13,.052,.002).rotateY(-Math.PI/2).translate(0,0,.12)]),7,18);
   const preyEyes=instances('gull-hunt-fish-eyes',merge([-1,1].map(side=>ellipsoid(side*.034,.017,-.11,.009,.011,.012))),2,18);
@@ -145,7 +168,7 @@ export function writeGullPose(life: ReturnType<typeof createWildlife>, bird: Gul
   life.gullPrey.setMatrixAt(index,local.matrix);life.preyEyes.setMatrixAt(index,local.matrix);
   for (let sideIndex = 0; sideIndex < 2; sideIndex++) {
     const side = sideIndex === 0 ? -1 : 1;
-    hinge.position.set(side * .12, .06, .01); hinge.rotation.set(0, -side * 1.35 * bird.fold, side * wingAngle); hinge.scale.set(1-.6*bird.fold, 1, 1-.15*bird.fold); hinge.updateMatrix(); hinge.matrix.premultiply(root.matrix);
+    hinge.position.set(side * .105, .035, .01); hinge.rotation.set(0, -side * 1.35 * bird.fold, side * wingAngle); hinge.scale.set(1-.6*bird.fold, 1, 1-.15*bird.fold); hinge.updateMatrix(); hinge.matrix.premultiply(root.matrix);
     (side < 0 ? life.leftWing : life.wing).setMatrixAt(index, hinge.matrix);
     tip.position.set(side * .73, 0, .06); tip.rotation.set(0, side * (-.12 + 1.5 * bird.fold), side * (.05 * (1 - bird.flap) - .14 * pulse * bird.flap)); tip.scale.set(1-.7*bird.fold, 1, 1); tip.updateMatrix(); tip.matrix.premultiply(hinge.matrix);
     (side < 0 ? life.leftPrimaries : life.primaries).setMatrixAt(index, tip.matrix);
