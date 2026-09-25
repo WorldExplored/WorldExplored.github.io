@@ -30,7 +30,7 @@ test('twenty-minute dolphin journeys visit reef and both coasts without land, pi
       previous.copy(state.position);heading=state.heading;pitch=state.pitch;
     }
     assert.ok(state.lap>=1 && reef>50 && main>50 && city>50 && underFerry>1);
-    assert.ok(state.contacts>35&&state.contacts<95,'independently varied occasional water contacts');
+    assert.ok(state.contacts>90&&state.contacts<150,'independently varied frequent water contacts');
     const snapshot={time:state.time,distance:state.distance,position:state.position.toArray(),contacts:state.contacts};
     stepDolphin(state,5,true);
     assert.deepEqual({time:state.time,distance:state.distance,position:state.position.toArray(),contacts:state.contacts},snapshot);
@@ -55,8 +55,8 @@ test('dolphin anatomy is smaller than the two-unit ferry and uses outward normal
   const life=createDolphinLife();let draws=0,triangles=0;
   try {
     life.root.traverse(object=>{if(object instanceof Mesh){draws++;triangles+=(object.geometry.index?.count??object.geometry.getAttribute('position').count)/3*(object instanceof InstancedMesh?object.count:1);}});
-    assert.ok(draws<=35,`${draws} draws`);assert.ok(triangles<30000,`${triangles} triangles`);
-    const dolphins=life.root.children.filter(o=>o.name==='bottlenose-dolphin');assert.equal(dolphins.length,3);
+    assert.ok(draws<=36,`${draws} draws`);assert.ok(triangles<30000,`${triangles} triangles`);
+    const dolphins=life.root.children.filter(o=>o.name==='bottlenose-dolphin');assert.equal(dolphins.length,4);
     for(const animal of dolphins){
       const size=new Box3().setFromObject(animal).getSize(new Vector3());assert.ok(Math.max(size.x,size.z)<1.23);
       for(const name of ['horizontal-tail-flukes','eyes-mouth-and-blowhole','separated-lower-jaw'])assert.ok(animal.getObjectByName(name));
@@ -74,11 +74,23 @@ test('offshore sharks remain seaward with smaller bodies and pause with the worl
       assert.ok(state.position.distanceTo(previous)*60<.7);
       if(frame%60===0)assert.ok(dolphinCoastClearance(state.position.x,state.position.z)>4);
       const surface=harborWaterHeight(state.position.x,state.position.z,state.time);
-      assert.ok(surface-state.position.y>=.269&&surface-state.position.y<=.411);
-      assert.ok(state.position.y+.52*.28<surface-.1,'whole back remains submerged');
-      assert.ok(state.position.y+.52*.98>surface+.08,'dorsal tip is visible above the waves');
+      assert.ok(surface-state.position.y>=.299&&surface-state.position.y<=.441);
+      assert.ok(state.position.y+.68*.28<surface-.1,'whole back remains submerged');
+      assert.ok(state.position.y+.68*.98>surface+.22,'dorsal tip is visible above the waves');
       previous.copy(state.position);
     }
     const position=state.position.clone(),time=state.time;stepDolphin(state,2,true);assert.equal(state.time,time);assert.deepEqual(state.position,position);
   }
+});
+
+test('a lagoon resident keeps returning through the reef while island pods travel',()=>{
+  const state=createDolphinState(3);let visible=0,breaches=0;
+  for(let frame=0;frame<36000;frame++){
+    stepDolphin(state,1/60);
+    assert.ok(state.position.z>-55&&state.position.z<-31);
+    if(state.position.y>0)visible++;
+    if(state.breach&&state.time-state.jumpStart<1/50)breaches++;
+    if(frame%60===0)assert.ok(dolphinCoastClearance(state.position.x,state.position.z)>2.3);
+  }
+  assert.ok(state.lap>4&&visible>600&&breaches>15);
 });

@@ -41,7 +41,7 @@ export function createReefLife() {
   const skin = new MeshStandardMaterial({ color: '#ffffff', roughness: .43, metalness: .07, side: DoubleSide });
   const ink = new MeshStandardMaterial({ color: '#143b41', roughness: .55 });
   const pearl = new MeshStandardMaterial({ color: '#fff2b9', roughness: .48, side: DoubleSide });
-  const proxyGeometry = new SphereGeometry(.38, 6, 4), proxyMaterial = new MeshBasicMaterial({ colorWrite: false, depthWrite: false });
+  const proxyGeometry = new SphereGeometry(.34, 6, 4), proxyMaterial = new MeshBasicMaterial({ colorWrite: false, depthWrite: false });
   const bodies = new InstancedMesh(bodyGeometry, skin, states.length), tails = new InstancedMesh(tailGeometry, skin, states.length);
   const details = new InstancedMesh(detailGeometry, ink, states.length), bellies = new InstancedMesh(bellyGeometry, pearl, states.length);
   const proxies = new InstancedMesh(proxyGeometry, proxyMaterial, states.length);
@@ -54,15 +54,17 @@ export function createReefLife() {
   // Only the touch targets are raycast; their IDs map directly to the moving fish.
   [bodies, tails, details, bellies].forEach(mesh => { mesh.raycast = () => {}; });
   const color = new Color(), transform = new Object3D(), tail = new Object3D();
+  const forms = [[1.2,1.25,1.15],[1.5,.95,.9],[1.24,1.9,1.08],[1.35,.86,1.9]];
   for (let i = 0; i < states.length; i++) {
-    color.set(['#ffd04f', '#68dbe6', '#ff9872', '#b699f3', '#f2f5cd'][i % 5]);
+    color.set(['#ffd04f', '#68dbe6', '#ff9872', '#b699f3', '#f2f5cd', '#4dcc91', '#ff6eab', '#8ecfe5'][i % 8]);
     bodies.setColorAt(i, color); tails.setColorAt(i, color);
   }
   function writeMatrices() {
     for (let i = 0; i < bodies.count; i++) {
-      const fish = states[i], size = .83 + (i % 5) * .047;
+      const fish = states[i], variant=i%4, variation=.9+(i*7%9)*.035;
       transform.position.copy(fish.position); transform.rotation.set(0, fish.heading, 0); transform.rotateZ(fish.pitch);
-      transform.scale.setScalar(size); transform.updateMatrix();
+      // Rounded butterflyfish, long wrasse, tall angelfish and broad bottom grazers.
+      const form=forms[variant];transform.scale.set(form[0]*variation,form[1]*variation,form[2]*variation);transform.updateMatrix();
       bodies.setMatrixAt(i, transform.matrix); details.setMatrixAt(i, transform.matrix); bellies.setMatrixAt(i, transform.matrix); proxies.setMatrixAt(i, transform.matrix);
       tail.position.set(-.058, 0, 0); tail.rotation.set(0, fish.tail, 0); tail.scale.setScalar(1); tail.updateMatrix();
       tail.matrix.premultiply(transform.matrix); tails.setMatrixAt(i, tail.matrix);

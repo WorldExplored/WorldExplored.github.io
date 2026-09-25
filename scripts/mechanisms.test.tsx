@@ -16,6 +16,7 @@ const moving: Record<LandmarkId, string[]> = {
   history: [],
   about: [],
   contact: ['contact-tracking-dish'],
+  arcade: [],
   building: ['lighthouse-rotating-fresnel-lens', 'lighthouse-weather-vane'],
 };
 const pose = (object: Object3D) => [...object.position.toArray(), ...object.quaternion.toArray(), ...object.scale.toArray()];

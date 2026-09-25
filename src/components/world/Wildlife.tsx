@@ -73,7 +73,7 @@ export function crabCarapaceGeometry() {
 
 export function createWildlife() {
   const group = new Group(); group.name = 'coastal-wildlife';
-  const materials = [new MeshStandardMaterial({ side: 2, color: '#f8fbfa', roughness: .65 }), new MeshStandardMaterial({ side: 2, color: '#b8c6cc', roughness: .7 }), new MeshStandardMaterial({ side: 2, color: '#263640', roughness: .75 }), new MeshStandardMaterial({ side: 2, color: '#eaba42', roughness: .58 }), new MeshStandardMaterial({ side: 2, color: '#b84f2e', roughness: .67, vertexColors: true }), new MeshStandardMaterial({ side: 2, color: '#ed8a50', roughness: .65 })];
+  const materials = [new MeshStandardMaterial({ side: 2, color: '#f8fbfa', roughness: .65 }), new MeshStandardMaterial({ side: 2, color: '#b8c6cc', roughness: .7 }), new MeshStandardMaterial({ side: 2, color: '#263640', roughness: .75 }), new MeshStandardMaterial({ side: 2, color: '#eaba42', roughness: .58 }), new MeshStandardMaterial({ side: 2, color: '#b84f2e', roughness: .67, vertexColors: true }), new MeshStandardMaterial({ side: 2, color: '#ed8a50', roughness: .65 }), new MeshStandardMaterial({ color: '#7b6747', roughness: .94 }), new MeshStandardMaterial({ color: '#acd9d2', roughness: .36, metalness: .15 }), new MeshStandardMaterial({ color: '#e5dec5', roughness: .9 })];
   const meshes: InstancedMesh[] = [];
   const instances = (name: string, geometry: BufferGeometry, material: number, count: number) => {
     const mesh = new InstancedMesh(geometry, materials[material], count); mesh.name = name; mesh.frustumCulled = false; mesh.castShadow = false; mesh.raycast = () => {};
@@ -97,6 +97,22 @@ export function createWildlife() {
     bone(new Vector3(side * .075, -.07, .07), new Vector3(side * .075, -.24, .10), .018),
     ...[-1, 0, 1].map(toe => bone(new Vector3(side * .075, -.24, .10), new Vector3(side * .075 + toe * .038, -.25, -.015), .012)),
   ])), 3, 18);
+  const gulls=createGullStates();
+  const nests=gulls.filter(bird=>bird.perch.nest).filter((bird,index,all)=>all.findIndex(other=>other.perch.id===bird.perch.id)===index);
+  const nestGeometry=merge(Array.from({length:62},(_,index)=>{
+    const angle=index*2.3999632,r=.22+(index%7)*.018;
+    const x=Math.cos(angle)*r,z=Math.sin(angle)*r;
+    return bone(new Vector3(x-.12*Math.sin(angle),-.035+(index%4)*.015,z+.12*Math.cos(angle)),new Vector3(x+.13*Math.sin(angle),-.017+(index%4)*.015,z-.13*Math.cos(angle)),.009+(index%3)*.002);
+  }));
+  const nestTwigs=instances('gull-woven-twig-nests',nestGeometry,6,nests.length);
+  const nestEggs=instances('gull-speckled-nest-eggs',merge([ellipsoid(-.072,.018,.008,.038,.052,.033),ellipsoid(.038,.018,.058,.036,.05,.032),ellipsoid(.058,.018,-.058,.037,.052,.032)]),8,nests.length);
+  const nestTransform=new Object3D();
+  nests.forEach((bird,index)=>{
+    nestTransform.position.copy(bird.perch.position);nestTransform.position.y-=.255;nestTransform.rotation.y=index*1.37;nestTransform.updateMatrix();
+    nestTwigs.setMatrixAt(index,nestTransform.matrix);nestEggs.setMatrixAt(index,nestTransform.matrix);
+  });
+  const gullPrey=instances('gull-hunt-silver-fish',merge([ellipsoid(0,0,0,.045,.058,.17),feather(.13,.052,.002).rotateY(-Math.PI/2).translate(0,0,.12)]),7,18);
+  const preyEyes=instances('gull-hunt-fish-eyes',merge([-1,1].map(side=>ellipsoid(side*.034,.017,-.11,.009,.011,.012))),2,18);
   const crabBody = instances('crab-shells', crabCarapaceGeometry(), 4, 10);
   const crabEyes = instances('crab-eyes', merge([-1, 1].flatMap(side => [bone(new Vector3(side * .07, .045, -.07), new Vector3(side * .085, .14, -.11), .012), ellipsoid(side * .085, .14, -.11, .026, .027, .023)])), 2, 10);
   const crabLegs = instances('crab-jointed-legs', merge([bone(new Vector3(), new Vector3(.13, .055, .02), .017), bone(new Vector3(.13, .055, .02), new Vector3(.24, -.08, .06), .012)]), 5, 40);
@@ -106,22 +122,27 @@ export function createWildlife() {
   ]), 4, 10);
   const leftCrabLegs = instances('crab-left-legs', mirrored(crabLegs.geometry), 5, 40);
   const leftCrabClaws = instances('crab-left-claws', mirrored(crabClaws.geometry), 4, 10);
-  return { leftWing, leftPrimaries, leftCrabLegs, leftCrabClaws, group, meshes, materials, gullBody, gullHead, gullEyes, gullBill, wing, primaries, gullLegs, crabBody, crabEyes, crabLegs, crabClaws, gulls: createGullStates(), crabs: createCrabStates(), root: new Object3D(), hinge: new Object3D(), tip: new Object3D(), local: new Object3D(), timer: undefined as ReturnType<typeof setTimeout> | undefined };
+  return { leftWing, leftPrimaries, leftCrabLegs, leftCrabClaws, group, meshes, materials, gullBody, gullHead, gullEyes, gullBill, wing, primaries, gullLegs, crabBody, crabEyes, crabLegs, crabClaws, gulls, gullPrey, preyEyes, crabs: createCrabStates(), root: new Object3D(), hinge: new Object3D(), tip: new Object3D(), local: new Object3D(), timer: undefined as ReturnType<typeof setTimeout> | undefined };
 }
 
 export function writeGullPose(life: ReturnType<typeof createWildlife>, bird: GullState, index: number) {
   const { root, hinge, tip, local } = life;
-  const perched = bird.mode === 'perched';
+  const perched = bird.mode === 'perched' || bird.mode === 'preening';
   const pulse = Math.sin(bird.time * (6.8 + index % 3 * .4) + bird.phase);
   const glideAngle = .09 + Math.sin(bird.time * 1.1 + bird.phase) * .055;
   const wingAngle = (glideAngle * (1 - bird.flap) + pulse * .52 * bird.flap) * (1 - bird.fold) - .10 * bird.fold;
   const bank = bird.bank;
-  root.position.copy(bird.position); root.rotation.set(perched ? -.04+Math.sin(bird.time*.7+bird.phase)*.015 : -Math.atan2(bird.velocity.y, Math.max(.5, Math.hypot(bird.velocity.x, bird.velocity.z))) * .45, bird.heading, bank);
+  root.position.copy(bird.position); root.rotation.set(bird.pitch+(perched?Math.sin(bird.time*.7+bird.phase)*.012:0), bird.heading, bank);
   root.scale.setScalar(.91 + index % 4 * .075); root.updateMatrix();
   life.gullBody.setMatrixAt(index, root.matrix);
-  local.position.set(0,.09,-.25); local.rotation.set(perched ? Math.sin(bird.time*.58+bird.phase)*.06 : 0, perched ? Math.sin(bird.time*.37+bird.phase)*.22 : 0, 0); local.scale.set(1,1,1); local.updateMatrix(); local.matrix.premultiply(root.matrix);
+  local.position.set(0,.09,-.25); local.rotation.set(bird.mode==='preening'?.28+Math.sin(bird.time*2.1)*.09:perched?Math.sin(bird.time*.58+bird.phase)*.06:0, bird.mode==='preening'?.82*Math.sin(bird.time*.6+bird.phase):perched?Math.sin(bird.time*.37+bird.phase)*.22:0, 0); local.scale.set(1,1,1); local.updateMatrix(); local.matrix.premultiply(root.matrix);
   for (const mesh of [life.gullHead, life.gullEyes, life.gullBill]) mesh.setMatrixAt(index, local.matrix);
-  local.position.set(0, 0, 0); local.rotation.set(0, 0, 0); local.scale.set(1, perched || bird.mode === 'approach' ? 1 : .26, 1); local.updateMatrix(); local.matrix.premultiply(root.matrix); life.gullLegs.setMatrixAt(index, local.matrix);
+  local.position.set(0, -.01*(1-bird.legs), .03*(1-bird.legs)); local.rotation.set(-(1-bird.legs)*1.30, 0, 0); local.scale.set(1, 1, 1); local.updateMatrix(); local.matrix.premultiply(root.matrix); life.gullLegs.setMatrixAt(index, local.matrix);
+  local.position.copy(bird.preyPosition);local.rotation.set(0,bird.time*.32,0);local.scale.setScalar(bird.preyVisible?1:.0001);
+  if(bird.caught&&bird.preyVisible){
+    local.position.set(0,.13,-.51);local.rotation.set(.3,Math.PI/2,0);local.updateMatrix();local.matrix.premultiply(root.matrix);
+  }else local.updateMatrix();
+  life.gullPrey.setMatrixAt(index,local.matrix);life.preyEyes.setMatrixAt(index,local.matrix);
   for (let sideIndex = 0; sideIndex < 2; sideIndex++) {
     const side = sideIndex === 0 ? -1 : 1;
     hinge.position.set(side * .12, .06, .01); hinge.rotation.set(0, -side * 1.35 * bird.fold, side * wingAngle); hinge.scale.set(1-.6*bird.fold, 1, 1-.15*bird.fold); hinge.updateMatrix(); hinge.matrix.premultiply(root.matrix);
@@ -137,7 +158,7 @@ export function Wildlife({ runtime, paused, quality }: EnvironmentProps) {
   useFrame(({ camera }, delta) => {
     const counts = WILDLIFE_COUNTS[quality]; const pointer = runtime.current.pointerActive ? runtime.current.pointerWorld : null;
     const { root, local } = life;
-    for (const mesh of [life.gullBody, life.gullHead, life.gullEyes, life.gullBill, life.gullLegs]) mesh.count = counts.gulls;
+    for (const mesh of [life.gullBody, life.gullHead, life.gullEyes, life.gullBill, life.gullLegs, life.gullPrey, life.preyEyes]) mesh.count = counts.gulls;
     life.wing.count = life.primaries.count = life.leftWing.count = life.leftPrimaries.count = counts.gulls;
     life.crabBody.count = life.crabEyes.count = counts.crabs; life.crabLegs.count = life.leftCrabLegs.count = counts.crabs * 4; life.crabClaws.count = life.leftCrabClaws.count = counts.crabs;
     life.gulls.forEach((bird, index) => {

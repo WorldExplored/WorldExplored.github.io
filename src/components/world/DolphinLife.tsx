@@ -51,7 +51,7 @@ export function createDolphinLife() {
   const material = (color: string, vertexColors = false) => { const result = new MeshStandardMaterial({ color, vertexColors, roughness: .38, metalness: .03, side: DoubleSide }); materials.add(result); return result; };
   const skins = [material('#638f9b'), material('#526d79')], bodyMaterial = material('#ffffff',true), dark = material('#173638'), pale = material('#cbdedb');
   const add = (group: Group, name: string, geometry: BufferGeometry, mat: MeshStandardMaterial) => { geometries.add(geometry); const mesh = new Mesh(geometry,mat); mesh.name = name; mesh.raycast = () => {}; group.add(mesh); return mesh; };
-  const states = [createDolphinState(0),createDolphinState(1),createDolphinState(2),createDolphinState(0,true),createDolphinState(1,true)];
+  const states = [createDolphinState(0),createDolphinState(1),createDolphinState(2),createDolphinState(3),createDolphinState(0,true),createDolphinState(1,true)];
   const shared = [false,true].map(shark => {
     const details: BufferGeometry[] = [fin(shark ? [[-.54,.20],[-.45,.46],[-.16,.98],[-.10,.97],[-.12,.62],[.13,.25]] : [[-.46,.21],[-.39,.55],[-.28,.72],[-.16,.58],[-.13,.39],[.12,.27]])];
     const features: BufferGeometry[] = [];
@@ -72,7 +72,7 @@ export function createDolphinLife() {
   });
   shared.forEach(parts => Object.values(parts).forEach(geometry => geometries.add(geometry)));
   const creatures = states.map(state => {
-    const animal = new Group(); animal.name = state.shark ? 'offshore-shark' : 'bottlenose-dolphin'; animal.scale.setScalar(state.shark ? .52 : .34); root.add(animal);
+    const animal = new Group(); animal.name = state.shark ? 'offshore-shark' : 'bottlenose-dolphin'; animal.scale.setScalar(state.shark ? .68 : [ .34, .31, .36, .32 ][state.index % 4]); root.add(animal);
     const geometry = shared[Number(state.shark)], skin = skins[Number(state.shark)];
     add(animal,'countershaded-fusiform-body',geometry.body,bodyMaterial);
     add(animal,'rostrum-dorsal-and-paired-flippers',geometry.details,skin);
@@ -84,7 +84,7 @@ export function createDolphinLife() {
   // Small contact spray expands from the body crossing, never a body-sized permanent circle.
   const ringGeometry = new TorusGeometry(1,.035,5,32).rotateX(Math.PI/2), dropGeometry = new SphereGeometry(1,6,4);
   geometries.add(ringGeometry); geometries.add(dropGeometry);
-  const splashes = states.slice(0,3).map(() => {
+  const splashes = states.filter(state => !state.shark).map(() => {
     const mat = material('#e3ffff'); mat.transparent = true; mat.depthWrite = false;
     const ring = new Mesh(ringGeometry,mat); ring.renderOrder = 4; root.add(ring);
     const drops = new InstancedMesh(dropGeometry,mat,10); drops.renderOrder = 4; drops.frustumCulled = false; drops.raycast = () => {}; root.add(drops); return {ring,drops};
@@ -97,7 +97,7 @@ export function createDolphinLife() {
       const {animal,tail} = creatures[i]; animal.position.copy(state.position); animal.rotation.set(0,state.heading,0); animal.rotateZ(state.pitch);
       if (state.shark) tail.rotation.y = state.tail; else tail.rotation.z = state.tail;
       if (state.shark) animal.visible = quality !== 'low' || state.index === 0;
-      if (i > 2) return;
+      if (state.shark) return;
       const {ring,drops} = splashes[i], age = state.splashAge; ring.visible = drops.visible = age < 1.1;
       if (age >= 1.1) return;
       ring.position.set(state.splash.x,harborWaterHeight(state.splash.x,state.splash.z,waterTime ?? state.time)+.015,state.splash.z);
@@ -110,7 +110,7 @@ export function createDolphinLife() {
       drops.instanceMatrix.needsUpdate = true;
     });
   }
-  function setQuality(tier: EnvironmentProps['quality']) { quality=tier; creatures.forEach((creature,i) => { creature.animal.visible = i < 4 || tier !== 'low'; }); }
+  function setQuality(tier: EnvironmentProps['quality']) { quality=tier; creatures.forEach((creature,i) => { creature.animal.visible = !states[i].shark || states[i].index === 0 || tier !== 'low'; }); }
   update(0);
   // Shared geometry is retained across Strict Mode's effect replay.
   let timer: ReturnType<typeof setTimeout>;

@@ -16,12 +16,17 @@ export function dolphinCoastClearance(x: number, z: number) {
   return Math.min(-landDistance(x, z), ...cityDocks.map(dock => Math.hypot(x - dock.x, z - dock.z) - 4.5));
 }
 export function createDolphinCourse(index: number, lap = 0) {
+  // A fourth dolphin stays in the lagoon, so the long island tours do not empty it.
+  const loop = index === 3 ? Array.from({ length: 16 }, (_, n) => {
+    const a = n / 16 * TAU;
+    return [5 + Math.cos(a) * 20, -43 + Math.sin(a) * 9];
+  }) : anchors;
   const random = seededRandom(13091 + index * 937 + lap * 7127);
   for (let attempt = 0; attempt < 40; attempt++) {
-    const waypoints = index % 2 ? [anchors[0], ...anchors.slice(1).reverse()] : anchors;
+    const waypoints = index % 2 ? [loop[0], ...loop.slice(1).reverse()] : loop;
     const points = waypoints.map(([x,z], i) => {
       // Preserve the join and both neighbours for a continuous tangent when replanning.
-      const spread = i < 3 || i >= anchors.length - 2 ? 0 : 4;
+      const spread = i < 3 || i >= loop.length - 2 ? 0 : index === 3 ? 1.4 : 4;
       return new Vector3(x + (random() - .5) * spread, 0, z + (random() - .5) * spread);
     });
     const curve = new CatmullRomCurve3(points, true, 'centripetal');
@@ -38,7 +43,7 @@ export interface DolphinState {
 }
 export function createDolphinState(index: number, shark = false): DolphinState {
   const course = createDolphinCourse(index), random = seededRandom(441 + index * 819);
-  const state: DolphinState = { index, shark, time: 0, lap: 0, distance: shark ? 0 : [0, .41, .72][index % 3] * course.length, course, position: new Vector3(), heading: 0, pitch: 0, tail: 0, jumpStart: -100, jumpDuration: 2.6, jumpHeight: 1.55, nextJump: 10 + index * 8, breach: false, random, splash: new Vector3(), splashAge: 100, contacts: 0 };
+  const state: DolphinState = { index, shark, time: 0, lap: 0, distance: shark ? 0 : [0, .41, .72, .24][index % 4] * course.length, course, position: new Vector3(), heading: 0, pitch: 0, tail: 0, jumpStart: -100, jumpDuration: 2.6, jumpHeight: 1.55, nextJump: 4 + index * 4.5, breach: false, random, splash: new Vector3(), splashAge: 100, contacts: 0 };
   writePose(state); return state;
 }
 const tangent = new Vector3();
@@ -52,7 +57,7 @@ function writePose(state: DolphinState, waterTime = state.time) {
     const dx = -Math.sin(a) * radius * rate + Math.cos(a) * Math.cos(t * .007) * .007;
     const dz = Math.cos(a) * 23 * rate;
     // The body stays submerged as the dorsal fin rises and dips with the actual waves.
-    const depth = .27 + .14 * (.5 + .5 * Math.sin(t * .037 + state.index * 2));
+    const depth = .30 + .14 * (.5 + .5 * Math.sin(t * .037 + state.index * 2));
     state.position.set(x, harborWaterHeight(x, z, waterTime) - depth, z);
     state.heading = Math.atan2(-dz, dx); state.pitch = 0; state.tail = Math.sin(t * 2.4 + state.index) * .18; return;
   }
@@ -82,7 +87,7 @@ export function stepDolphin(state: DolphinState, delta: number, paused = false, 
       const ahead = state.course.curve.getPointAt(((state.distance + dolphinSpeed(state) * duration) % state.course.length) / state.course.length);
       if (dolphinFerryClearance(px, pz) > 5 && dolphinFerryClearance(ahead.x, ahead.z) > 5) {
         state.jumpStart = state.time; state.jumpDuration = duration; state.jumpHeight = 1.3 + state.random() * .5;
-        state.nextJump = state.time + 19 + state.random() * 29;
+        state.nextJump = state.time + 12 + state.random() * 15 + state.index * 1.8;
       } else state.nextJump = state.time + 3;
     }
   }

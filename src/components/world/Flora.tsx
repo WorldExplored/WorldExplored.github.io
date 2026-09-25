@@ -9,25 +9,49 @@ import { useEffect, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { BufferGeometry, Color, DoubleSide, Float32BufferAttribute, InstancedMesh, MeshPhysicalMaterial, Object3D, Vector3 } from 'three';
 import { createLandscapePlan, distanceToSegment, islandAt, landDistance, seededRandom, terrainHeight, terrainSlope, vegetationSuitability } from './terrain';
+import { coastalBiome, TOWN_BEDS } from './coastalBiome';
 import type { EnvironmentProps } from './Water';
 
 export type FloraKind = 'reeds' | 'beach' | 'shrub' | 'flower' | 'broadleaf' | 'sedge' | 'clover' | 'fern';
-export interface FloraSite { x: number; y: number; z: number; scale: number; rotation: number; kind: FloraKind }
+export interface FloraSite { x: number; y: number; z: number; scale: number; rotation: number; kind: FloraKind; reach: number }
 const KINDS: FloraKind[] = ['reeds', 'beach', 'shrub', 'flower', 'broadleaf', 'sedge', 'clover', 'fern'];
 
 export function createFloraSites() {
   const random = seededRandom(4621); const plan = createLandscapePlan(); const sites: FloraSite[] = [];
+  const beaconClear=(x:number,z:number,reach:number)=>{
+    const distance=landDistance(x,z);
+    if(distance<reach+.45||terrainSlope(x,z)>.62||coastalBiome(x,z,distance,terrainHeight(x,z)).grass<.12)return false;
+    if([...plan.structures,...plan.rocks,...plan.trees].some(item=>Math.hypot(x-item.x,z-item.z)<item.radius+reach))return false;
+    return !plan.paths.some(path=>path.points.slice(1).some((point,i)=>distanceToSegment(x,z,path.points[i],point)<path.width/2+reach));
+  };
   const anchors: Array<[number,number,number,FloraKind]> = [
     [-16,20,4,'flower'],[-7,24,3,'flower'],[3,22,3,'flower'],[16,25,3,'flower'],[3,23,1.4,'broadleaf'],[-1,-11,1.6,'broadleaf'],[-4,-11,2,'flower'],
     [-8,-12,2,'fern'],[2,-14,2,'fern'],[2,-14,2,'clover'],[6,23,3,'clover'],[-4,21,3,'clover'],[-13,-4,3,'clover'],[-4,-85,3,'clover'],[6,-81,3,'clover'],[-14,-84,2,'clover'],[-18,-80,3,'flower'],[5,-80,3,'flower'],[-24,-67,3,'shrub'],[13,-66,3,'clover'],[-15,1,3,'shrub'],[-4,4,3,'shrub'],[8,-3,2,'shrub'],[3,-13,3,'shrub'],[-23,-69,2,'shrub'],[2,-64,2,'shrub'],
+    [19,-62,2.3,'flower'],[27,-63,2,'fern'],[31,-71,2,'shrub'],[29,-79,2,'flower'],[20,-82,2.2,'clover'],[11,-75,2.2,'flower'],[12,-66,2,'sedge'],
+    [-80,-36,1.3,'sedge'],[-76,-40,1.3,'beach'],[-72,-35,1.3,'sedge'],[-77,-32,1.1,'flower'],
   ];
   for (let round = 0; round < 100; round++) for (const [ax,az,radius,kind] of anchors) {
     const angle = random()*Math.PI*2; const r=Math.sqrt(random())*radius; const x=ax+Math.cos(angle)*r; const z=az+Math.sin(angle)*r;
     const reach=kind==='broadleaf'?1.55:kind==='shrub'?1.3:1.0;
-    if(vegetationSuitability(x,z,reach,plan)<.13)continue;
+    const beacon=islandAt(x,z).island.id==='beacon';
+    if(beacon?!beaconClear(x,z,reach):vegetationSuitability(x,z,reach,plan)<.13)continue;
     const spacing=kind==='broadleaf'?.85:kind==='shrub'?.65:kind==='flower'?.5:.35;
     if(sites.some(site=>Math.hypot(x-site.x,z-site.z)<spacing))continue;
-    sites.push({x,y:terrainHeight(x,z),z,kind,scale:.7+random()*.65,rotation:random()*Math.PI*2});
+    sites.push({x,y:terrainHeight(x,z),z,kind,reach,scale:.7+random()*.65,rotation:random()*Math.PI*2});
+  }
+  // Compact courtyard species fit real gaps beside walls without covering streets.
+  for(let round=0;round<160;round++)for(const [ax,az,,outer] of TOWN_BEDS){
+    const angle=random()*Math.PI*2,r=Math.sqrt(random())*outer*1.12,x=ax+Math.cos(angle)*r,z=az+Math.sin(angle)*r;
+    const choice=random(),kind:FloraKind=choice<.25?'flower':choice<.48?'fern':choice<.70?'clover':choice<.88?'shrub':'broadleaf';
+    const reach=kind==='broadleaf'?.72:kind==='shrub'?.67:.62,suitability=vegetationSuitability(x,z,reach,plan);
+    if(suitability<.13||sites.some(site=>Math.hypot(x-site.x,z-site.z)<.48))continue;
+    sites.push({x,y:terrainHeight(x,z),z,kind,reach,scale:.40+random()*.19,rotation:random()*Math.PI*2});
+  }
+  // The narrow stony ring around the beacon needs its own small-scale tufts.
+  for(let attempt=0;attempt<1600;attempt++){
+    const x=-81+random()*10,z=-41+random()*10,kind:FloraKind=attempt%4===0?'flower':attempt%3===0?'beach':'sedge';
+    if(!beaconClear(x,z,1)||sites.some(site=>Math.hypot(x-site.x,z-site.z)<.38))continue;
+    sites.push({x,y:terrainHeight(x,z),z,kind,reach:1,scale:.48+random()*.42,rotation:random()*Math.PI*2});
   }
   for(let index=0;index<3200;index++) {
     const x=-34+random()*71;const z=-26+random()*65; const distance=landDistance(x,z);
@@ -38,7 +62,7 @@ export function createFloraSites() {
     const kind:FloraKind=distance<2.2&&island.id==='garden'&&Math.sin(x*.31+z*.17)>.2?'reeds':distance>2.5?'sedge':'beach';
     // Small continuous ecological patches, separated by open sand.
     if(Math.sin(x*.55+z*.32)+Math.cos(z*.65-x*.19)<.6)continue;
-    sites.push({x,y:terrainHeight(x,z),z,kind,scale:.65+random()*.55,rotation:random()*Math.PI*2});
+    sites.push({x,y:terrainHeight(x,z),z,kind,reach:.9,scale:.65+random()*.55,rotation:random()*Math.PI*2});
   }
   return sites;
 }
@@ -106,7 +130,8 @@ export function Flora({runtime,paused,quality}:EnvironmentProps) {
     const sites=measureConstruction('flora-sites', () => createFloraSites());const transform=new Object3D();
     const uniforms={time:{value:0},pointer:{value:new Vector3(10000,0,10000)},strength:{value:0}};
     const batches=KINDS.map((kind,index)=>{
-      const entries=sites.filter(site=>site.kind===kind);const geometry=floraGeometry(kind);
+      const rank=(site:FloraSite)=>{const value=Math.sin(site.x*127.1+site.z*311.7)*43758.5453;return value-Math.floor(value);};
+      const entries=sites.filter(site=>site.kind===kind).sort((a,b)=>rank(a)-rank(b));const geometry=floraGeometry(kind);
       const material=new MeshPhysicalMaterial({vertexColors:true,side:DoubleSide,roughness:kind==='broadleaf'?.46:.78,clearcoat:kind==='broadleaf'?.18:.02,envMapIntensity:.2});
       material.onBeforeCompile=shader=>{
         shader.uniforms.floraTime=uniforms.time;shader.uniforms.floraPointer=uniforms.pointer;shader.uniforms.floraStrength=uniforms.strength;

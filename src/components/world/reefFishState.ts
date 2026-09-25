@@ -3,7 +3,8 @@ import { seededRandom } from './terrain';
 import { getReefHabitat, reefFloorHeight, reefHabitatContains, reefFerryClearance } from './reefHabitat';
 
 export const REEF_FISH_COUNTS = { high: 210, medium: 135, low: 75 } as const;
-export const REEF_FISH_RADIUS = .14;
+// Includes the long caudal tip of the largest individually scaled reef fish.
+export const REEF_FISH_RADIUS = .22;
 const CELL = 3;
 type Obstacle = { x: number; y: number; z: number; radius: number; height: number };
 const ferryClearCells = new Map<string, boolean>();

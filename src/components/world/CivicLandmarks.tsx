@@ -1,9 +1,13 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { DoubleSide, ExtrudeGeometry, MeshPhysicalMaterial, Shape, TorusGeometry, Vector3, type BufferGeometry } from 'three';
+import { DoubleSide, ExtrudeGeometry, Group, InstancedMesh, MeshPhysicalMaterial, Object3D, Shape, TorusGeometry, Vector3, type BufferGeometry } from 'three';
 import { combine, roundedBox, stroke, usePalette, useResources, type ModelProps } from './BuildingKit';
 import { createFacadeGarden } from './FacadeGarden';
+import { floraGeometry, type FloraKind } from './Flora';
+import { circulationPaths } from './circulation';
+import { distanceToSegment, seededRandom, terrainHeight } from './terrain';
+import { world } from '../../content/world';
 import { FurnishedInterior, InteriorBuilder, floorRectangle, floorSlab } from './InteriorKit';
 import { architecturalSurface as surface, architecturalBox as box, doorway, guardRail, stairFlight, windowBay, type ShellParts } from './LandmarkShellKit';
 
@@ -100,6 +104,53 @@ function createHistoryInterior() {
   return b.finish();
 }
 
+export function createHistoryFlowerBorder(material: MeshPhysicalMaterial) {
+  const root = new Group(); root.name = 'history-grounded-flower-border';
+  const random = seededRandom(1977), transform = new Object3D();
+  const landmark = world.landmarks.find(item => item.id === 'history')!;
+  const heading = landmark.rotationY ?? 0;
+  const paths = circulationPaths().filter(path => path.id?.startsWith('history-'));
+  const borderSites: Array<[number, number]> = [
+    ...[-4.4, -3.7, -3, -2.3, -1.6, -.9, -.2, .5, 1.2, 1.9, 2.6, 3.3, 4].map(x => [x, -4.36] as [number, number]),
+    ...[-2.8, -1.9, -1, -.1, .8, 1.7, 2.5].flatMap(z => [[-6.08, z], [6.08, z]] as Array<[number, number]>),
+  ];
+  const entries: Record<FloraKind, Array<{ x: number; y: number; z: number; scale: number; rotation: number }>> = {
+    reeds: [], beach: [], shrub: [], flower: [], broadleaf: [], sedge: [], clover: [], fern: [],
+  };
+  for (const [localX, localZ] of borderSites) {
+    const x = landmark.position[0] + localX * Math.cos(heading) + localZ * Math.sin(heading);
+    const z = landmark.position[2] - localX * Math.sin(heading) + localZ * Math.cos(heading);
+    if (paths.some(path => path.points.slice(1).some((point, i) => distanceToSegment(x, z, path.points[i], point) < path.width / 2 + .45))) continue;
+    const kind: FloraKind = random() < .7 ? 'flower' : random() < .5 ? 'fern' : 'clover';
+    entries[kind].push({ x: localX, y: terrainHeight(x, z) - .02, z: localZ,
+      scale: .48 + random() * .22, rotation: random() * Math.PI * 2 });
+  }
+  const batches = (['flower', 'fern', 'clover'] as const).map(kind => {
+    const geometry = floraGeometry(kind), mesh = new InstancedMesh(geometry, material, entries[kind].length);
+    mesh.name = `history-border-${kind}`; mesh.castShadow = true; mesh.raycast = () => {};
+    entries[kind].forEach((site, index) => {
+      transform.position.set(site.x, site.y, site.z); transform.rotation.set(0, site.rotation, 0);
+      transform.scale.setScalar(site.scale); transform.updateMatrix(); mesh.setMatrixAt(index, transform.matrix);
+    });
+    mesh.computeBoundingSphere(); root.add(mesh); return mesh;
+  });
+  return { root, entries, dispose() { batches.forEach(mesh => { mesh.geometry.dispose(); mesh.dispose(); }); } };
+}
+
+export function HistoryFlowerBorder() {
+  const [material] = useState(() => new MeshPhysicalMaterial({ color: '#ffffff', vertexColors: true, side: DoubleSide, roughness: .93, metalness: 0, envMapIntensity: .12 }));
+  const [border] = useState(() => createHistoryFlowerBorder(material));
+  const disposal = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const landmark = world.landmarks.find(item => item.id === 'history')!;
+  useEffect(() => {
+    clearTimeout(disposal.current);
+    return () => { disposal.current = setTimeout(() => { border.dispose(); material.dispose(); }, 0); };
+  }, [border, material]);
+  return <group position={[landmark.position[0], 0, landmark.position[2]]} rotation-y={landmark.rotationY ?? 0} dispose={null}>
+    <primitive object={border.root} />
+  </group>;
+}
+
 export function makeHistoryMuseum() {
   const parts: ShellParts = { walls: [], glass: [], frames: [] };
   const floor = 1.075, ceiling = 5.8, upper = 4.3;
@@ -176,7 +227,7 @@ export function HistoryMuseum(props: ModelProps) {
   const gardenDisposal = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => {
     clearTimeout(gardenDisposal.current);
-    return () => { gardenDisposal.current = setTimeout(() => gardenMaterial.dispose(), 0); };
+    return () => { gardenDisposal.current = setTimeout(() => { gardenMaterial.dispose(); }, 0); };
   }, [gardenMaterial]);
   return <group dispose={null}>
     <mesh name="history-museum-foundation" geometry={geometry.base} material={material.paving} receiveShadow />

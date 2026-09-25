@@ -22,6 +22,10 @@ export function createRoverRoute(plan = createLandscapePlan()): RoverRoute {
   const path = plan.paths.find(candidate => candidate.id === 'garden-spine');
   if (!path) throw new Error('The garden service path is missing.');
   const points = path.points.filter(point => point.x >= -3 && point.x <= 7).map(point => ({ ...point }));
+  // Promenade alignments may move the service limits closer to an entrance.
+  // Stop at the last full turning circle that clears the actual landscape.
+  while(points.length && !roverClearance(points[0].x,points[0].z,plan))points.shift();
+  while(points.length && !roverClearance(points.at(-1)!.x,points.at(-1)!.z,plan))points.pop();
   if (points.length < 2) throw new Error('The garden service path is too short.');
   const distances = [0];
   for (let i = 1; i < points.length; i++) distances.push(distances[i - 1] + Math.hypot(points[i].x - points[i - 1].x, points[i].z - points[i - 1].z));

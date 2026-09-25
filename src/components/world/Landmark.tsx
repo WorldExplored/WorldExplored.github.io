@@ -19,6 +19,7 @@ export const LANDMARK_HIT_BOUNDS: Record<LandmarkId, { radius: number; floor: nu
   history: { radius: FOOTPRINT_RADII.history, floor: .8, top: 8.8 },
   about: { radius: FOOTPRINT_RADII.about, floor: .8, top: 5 },
   contact: { radius: FOOTPRINT_RADII.contact, floor: .8, top: 6.5 },
+  arcade: { radius: FOOTPRINT_RADII.arcade, floor: .8, top: 4.6 },
   building: { radius: FOOTPRINT_RADII.building, floor: .8, top: 7.8 },
 };
 

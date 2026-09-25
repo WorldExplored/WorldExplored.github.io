@@ -2,6 +2,7 @@
 
 import type { LandmarkId } from '@/content/world';
 import type { ModelProps } from './BuildingKit';
+import { ArcadeHall } from './ArcadeHall';
 import { CoastalLighthouse } from './CoastalLighthouse';
 import { ComputeBuilding } from './ComputeBuilding';
 import { ResearchInstitute } from './ResearchInstitute';
@@ -19,6 +20,7 @@ export function LandmarkModel({ id, ...props }: ModelProps & { id: LandmarkId })
     : id === 'history' ? HistoryMuseum
     : id === 'about' ? GardenGallery
     : id === 'contact' ? ReceptionTerminal
+    : id === 'arcade' ? ArcadeHall
     : CoastalLighthouse;
   const mechanism = id === 'work' || id === 'research' || id === 'contact' || id === 'building';
   return <group dispose={null}><Architecture {...props} />{mechanism && <LandmarkMechanisms id={id} {...props} />}</group>;

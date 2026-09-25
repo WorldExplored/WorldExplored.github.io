@@ -59,8 +59,8 @@ test('authored source snapshot is complete, distinct and accurately attributed',
 });
 
 test('all content states have stable identifiers and availability is one flag', () => {
-  assert.deepEqual(profile.sections.map(item => item.id), ['work', 'experience', 'research', 'purdue', 'history', 'about', 'contact', 'building']);
-  assert.deepEqual(profile.sections.filter(item => item.dock).map(item => item.id), ['work', 'experience', 'research', 'purdue', 'history', 'about', 'contact']);
+  assert.deepEqual(profile.sections.map(item => item.id), ['work', 'experience', 'research', 'purdue', 'history', 'about', 'contact', 'arcade', 'building']);
+  assert.deepEqual(profile.sections.filter(item => item.dock).map(item => item.id), ['work', 'experience', 'research', 'purdue', 'history', 'about', 'contact', 'arcade']);
   assert.equal(typeof profile.showAvailability, 'boolean');
   assert.equal(profile.building, 'Building something impactful...');
 });
@@ -111,8 +111,8 @@ test('one whole-card collection contains only open or merged work, with no repea
 
 test('every spatial landmark has one matching semantic link and destination section', () => {
   const controls = anchors(bodyHtml).filter(link => link['data-landmark']);
-  assert.equal(world.landmarks.length, 8);
-  assert.equal(controls.length, 8);
+  assert.equal(world.landmarks.length, 9);
+  assert.equal(controls.length, 9);
   assert.deepEqual(new Set(controls.map(link => link['data-landmark'])), new Set(world.landmarks.map(item => item.id)));
   for (const landmark of world.landmarks) {
     const control = controls.find(link => link['data-landmark'] === landmark.id);

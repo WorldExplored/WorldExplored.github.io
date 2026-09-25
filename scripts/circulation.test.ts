@@ -15,7 +15,7 @@ import { buildCityArchitecture } from '../src/components/world/CityArchitecture'
 import { createCirculationGraph, circulationPaths, STATION_ACCESS } from '../src/components/world/circulation';
 import { DoubleSide, Mesh, MeshBasicMaterial, Raycaster, Vector3 } from 'three';
 import { archipelagoGeometry, groundRouteAt, terrainHeight, createLandscapePlan, distanceToSegment, pathGeometry, terrainMeshHeight } from '../src/components/world/terrain';
-import { cityBuildings, cityEntranceWorld, citySecondaryEntrances, cityLocalToWorld } from '../src/components/world/city';
+import { cityBuildings, cityEntranceWorld, citySecondaryEntrances, cityLocalToWorld, createCityTransitRoute } from '../src/components/world/city';
 import { stationAccessPlan } from '../src/components/world/StationAccess';
 
 function reachable(start: string, boat: boolean) {
@@ -290,4 +290,50 @@ test('main island walking surfaces limit longitudinal grades and crossfall acros
     }
   }
   assert.ok(samples>4000);console.log({maximumGrade,maximumCrossfall,mainPathSamples:samples});
+});
+
+
+test('primary promenades preserve long straight alignments between compact corners',()=>{
+  const paths=circulationPaths();
+  for(const id of ['experience-entrance','main-lab-walk','main-harbor-walk','conservatory-entrance','garden-spine']) {
+    const path=paths.find(path=>path.id===id)!;let total=0,straight=0;
+    for(let i=1;i<path.points.length;i++) {
+      const a=path.points[i-1],b=path.points[i],dx=b.x-a.x,dz=b.z-a.z,length=Math.hypot(dx,dz);
+      total+=length;if(Math.abs(dx)<.00001||Math.abs(dz)<.00001)straight+=length;
+    }
+    assert.ok(straight/total>.75,`${id}: long straight runs should dominate the walk`);
+  }
+  const graph=createCirculationGraph();
+  for(const id of ['main-garden-approach','garden-bridge-walk','town-dock-walk'])assert.equal(graph.edges.find(edge=>edge.id===id)!.points.length,2,`${id}: unnecessary intermediate bend`);
+});
+
+test('garden paths meet the bridge and all entrances with bounded rendered grades',()=>{
+  const paths=circulationPaths().filter(path=>!path.bridge&&path.points[0].z>=18&&path.points[0].z<28);
+  assert.equal(paths.length,4);
+  for(const path of paths)for(let i=1;i<path.points.length;i++) {
+    const a=path.points[i-1],b=path.points[i],dx=b.x-a.x,dz=b.z-a.z,length=Math.hypot(dx,dz);
+    if(length<.00001)continue;
+    for(const t of [0,.5])for(const side of [-.5,-.25,0,.25,.5]) {
+      const x=a.x+dx*t+dz/length*path.width*side,z=a.z+dz*t-dx/length*path.width*side;
+      const before=terrainMeshHeight(x-dx/length*.05,z-dz/length*.05),after=terrainMeshHeight(x+dx/length*.05,z+dz/length*.05);
+      assert.ok(Math.abs(after-before)/.1<.084,`${path.id}: steep garden walking surface at ${x},${z}`);
+    }
+  }
+});
+
+test('Arcade has a connected front approach outside its room and the train corridor',()=>{
+  const graph=createCirculationGraph(),entry=graph.nodes.find(node=>node.id==='arcade')!;
+  assert.deepEqual([entry.x,entry.y,entry.z],[-26,1.08,-82.58]);
+  assert.ok(reachable('work',true).has('arcade'));
+  const paths=circulationPaths(),route=createCityTransitRoute(),track=route.curve.getSpacedPoints(800);
+  for(const path of paths) {
+    const geometry=pathGeometry([path]);
+    try {
+      const p=geometry.attributes.position;
+      for(let i=0;i<p.count;i++)assert.ok(Math.abs(p.getX(i)+26)>=2.7||Math.abs(p.getZ(i)+85)>=2.2,`${path.id}: walk enters Arcade room`);
+    }finally{geometry.dispose();}
+    if(!path.id?.startsWith('arcade-'))continue;
+    for(const point of path.points)assert.ok(track.every(trackPoint=>Math.hypot(point.x-trackPoint.x,point.z-trackPoint.z)>path.width/2+1),`${path.id}: enters train clearance`);
+  }
+  for(let x=-28.6;x<=-23.4;x+=.3)for(let z=-87.1;z<=-82.9;z+=.3)assert.ok(groundRouteAt(x,z).distance>.02,'Arcade room must exclude paving');
 });

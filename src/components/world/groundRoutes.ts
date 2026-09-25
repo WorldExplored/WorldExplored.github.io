@@ -12,7 +12,7 @@ const smoothWeight=(distance:number,extent:number)=>{const t=Math.max(0,Math.min
  * extend over the neighboring terrain vertices needed for a level mesh crossing. */
 export function createGroundRoutes(paths: readonly LandscapePath[], baseHeight:(x:number,z:number)=>number) {
   const cells=new Map<string,RouteCell>();
-  const isMain=(path:LandscapePath)=>!path.bridge&&!path.elevated&&path.points[0].x>-45&&path.points[0].x<18&&path.points[0].z>-25&&path.points[0].z<12;
+  const isMain=(path:LandscapePath)=>!path.bridge&&!path.elevated&&path.points[0].x>-45&&path.points[0].x<18&&path.points[0].z>-25&&path.points[0].z<28;
   const mainPortals=paths.filter(isMain).flatMap(path=>[false,true].flatMap(end=>{
     const point=path.points[end?path.points.length-1:0],next=path.points[end?path.points.length-2:1],height=end?path.endY:path.startY;
     const length=Math.hypot(next.x-point.x,next.z-point.z);
@@ -20,16 +20,23 @@ export function createGroundRoutes(paths: readonly LandscapePath[], baseHeight:(
   }));
   // Bounded-slope grade cones share each measured landing plane. Their maximum
   // remains continuous at every junction, with no inheritance of decorative hills.
-  const mainGrade=(x:number,z:number)=>mainPortals.reduce((height,p)=>{
+  // Garden promenades share a level court. The bridge descent stays in its
+  // own approach corridor, clear of the neighboring gallery floor.
+  const gardenGrade=(x:number,z:number)=>{
+    const distance=Math.max(0,z-18-.68),eased=distance-.20*(1-Math.exp(-distance/.20));
+    return 1.058+Math.max(0,.34-.075*eased)*smoothWeight(-x-6.9,.45);
+  };
+  const mainGrade=(x:number,z:number)=>z>=15?gardenGrade(x,z):mainPortals.reduce((height,p)=>{
     const dx=x-p.x,dz=z-p.z,along=Math.abs(dx*p.dx+dz*p.dz-.05)-.68,across=Math.abs(-dx*p.dz+dz*p.dx)-p.half-.58;
     const distance=Math.hypot(Math.max(0,along),Math.max(0,across));
     const eased=distance-.20*(1-Math.exp(-distance/.20));
     return Math.max(height,p.height-.075*eased);
   },.84);
   const bearings=[...architectureFootprints(),...cityBuildings];
-  const museum=world.landmarks.find(item=>item.id==='history')!;
+  const museum=world.landmarks.find(item=>item.id==='history')!,arcade=world.landmarks.find(item=>item.id==='arcade')!;
   const pavingExclusions=[...cityBuildings.map(b=>({x:b.x,z:b.z,rotation:b.rotation,halfX:b.width/2+.24,halfZ:b.depth/2+.24})),
-    {x:museum.position[0],z:museum.position[2],rotation:museum.rotationY??0,halfX:5.6,halfZ:3.85}];
+    {x:museum.position[0],z:museum.position[2],rotation:museum.rotationY??0,halfX:5.6,halfZ:3.85},
+    {x:arcade.position[0],z:arcade.position[2],rotation:0,halfX:2.7,halfZ:2.2}];
   const bridgeApproaches=BRIDGES.flatMap(bridge=>[false,true].map(end=>{
     const p=bridge.samples[end?bridge.samples.length-1:0].point,q=bridge.samples[end?bridge.samples.length-2:1].point;
     const length=Math.hypot(q.x-p.x,q.z-p.z);return{x:p.x,z:p.z,dx:(q.x-p.x)/length,dz:(q.z-p.z)/length,half:bridge.width/2};

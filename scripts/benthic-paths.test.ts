@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createBenthicLife, BENTHIC_KINDS } from '../src/components/world/BenthicLife';
-import { createCityPathEdges, createMainPathEdges, cityEdgeClear } from '../src/components/world/CityPathEdges';
+import { createCityPathEdges, createMainPathEdges, createGardenPathEdges, cityEdgeClear } from '../src/components/world/CityPathEdges';
 import { getReefHabitat, reefFloorHeight, reefRockSurfaceHeight } from '../src/components/world/reefHabitat';
 import { createReefFishState, REEF_FISH_COUNTS, reefFishPositionClear } from '../src/components/world/reefFishState';
 import { groundRouteAt, terrainMeshHeight } from '../src/components/world/terrain';
@@ -43,6 +43,11 @@ test('pebble edging lies outside walkways with grounded stones and open junction
       const distance = groundRouteAt(site.x, site.z).distance;
       assert.ok(distance >= .055 && distance <= .20, 'only the outer boundary of the complete path union gets pebbles');
       assert.ok(Math.abs(site.y - terrainMeshHeight(site.x, site.z)) < 1e-6 && site.y > .42);
+      for(let i=0;i<16;i++) {
+        const angle=i/16*Math.PI*2,lx=Math.cos(angle)*site.size*.72,lz=Math.sin(angle)*site.size;
+        const x=site.x+lx*Math.cos(site.yaw)+lz*Math.sin(site.yaw),z=site.z-lx*Math.sin(site.yaw)+lz*Math.cos(site.yaw);
+        assert.ok(groundRouteAt(x,z).distance>.012,'City pebble footprint enters paving');
+      }
     }
     assert.equal(edges.root.children.length, 1, 'one instanced draw for all city path edges');
     assert.deepEqual(routeCityWalk({ x: -9, z: -74 }, { x: -6, z: -74 }), [{ x: -9, z: -74 }, { x: -6, z: -74 }], 'clear approaches remain straight');
@@ -76,4 +81,23 @@ test('main-island stone borders are grounded and leave the complete walking unio
       }
     }
   } finally {edges.dispose();}
+});
+
+
+test('garden edging follows About and Contact promenades without occupying walking width',()=>{
+  const edges=createGardenPathEdges();
+  try {
+    assert.ok(edges.sites.length>100&&edges.sites.length<300);
+    assert.ok(edges.sites.some(site=>site.x<-9),'Conservatory route has edging');
+    assert.ok(edges.sites.some(site=>site.x>8),'Contact route has edging');
+    assert.equal(edges.root.children.length,1);
+    for(const site of edges.sites) {
+      assert.ok(Math.abs(site.y-terrainMeshHeight(site.x,site.z))<1e-6);
+      for(let i=0;i<16;i++) {
+        const angle=i/16*Math.PI*2,lx=Math.cos(angle)*site.size*.72,lz=Math.sin(angle)*site.size;
+        const x=site.x+lx*Math.cos(site.yaw)+lz*Math.sin(site.yaw),z=site.z-lx*Math.sin(site.yaw)+lz*Math.cos(site.yaw);
+        assert.ok(groundRouteAt(x,z).distance>.012,'Garden stone enters paving');
+      }
+    }
+  }finally{edges.dispose();}
 });

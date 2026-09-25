@@ -52,6 +52,8 @@ export function createCityLife(stationRoute: CityTransitRoute) {
     glass: new MeshPhysicalMaterial({ color: '#a4f3f4', roughness: .08, metalness: 0, clearcoat: .7, transparent: true, opacity: .28, depthWrite: false, thickness: .06, ior: 1.45 }),
     solar: new MeshPhysicalMaterial({ color: '#17485e', roughness: .5, metalness: .15, clearcoat: .18, envMapIntensity: .15 }),
     station: new MeshPhysicalMaterial({ color: '#d0fff8', emissive: '#68eeed', emissiveIntensity: 0, roughness: .25, metalness: .02, clearcoat: .9 }),
+    turbineSteel: new MeshPhysicalMaterial({ color: '#718d91', roughness: .32, metalness: .72, clearcoat: .28 }),
+    turbineDark: new MeshPhysicalMaterial({ color: '#263b43', roughness: .42, metalness: .58 }),
   };
   materials.solar.onBeforeCompile=shader=>{
     shader.vertexShader=`varying vec2 solarCell;\n${shader.vertexShader}`.replace('#include <begin_vertex>','#include <begin_vertex>\nsolarCell=position.xz*vec2(9.,10.);');
@@ -76,20 +78,67 @@ export function createCityLife(stationRoute: CityTransitRoute) {
   };
   const blade = () => {
     const shape = new Shape(); shape.moveTo(0, .05);
-    shape.bezierCurveTo(.38, .32, .38, 1.16, .1, 2.27);
-    shape.bezierCurveTo(.01, 2.42, -.08, 2.31, -.04, 2.1);
-    shape.bezierCurveTo(.04, 1.18, -.23, .45, 0, .05);
-    return new ExtrudeGeometry(shape, { depth: .065, bevelEnabled: true, bevelSize: .025, bevelThickness: .025, bevelSegments: 2, curveSegments: 18 }).translate(0, 0, -.035);
+    shape.bezierCurveTo(.31, .32, .32, 1.12, .09, 2.15);
+    shape.bezierCurveTo(.02, 2.34, -.055, 2.32, -.04, 2.12);
+    shape.bezierCurveTo(.02, 1.14, -.19, .42, 0, .05);
+    return new ExtrudeGeometry(shape, { depth: .07, bevelEnabled: true, bevelSize: .022, bevelThickness: .022, bevelSegments: 2, curveSegments: 18 }).translate(0, 0, -.035);
   };
   const fixed: BufferGeometry[] = []; const water: BufferGeometry[] = [];
   const rotors: Group[] = [];
+  const turbineYaws: Group[] = [];
+  const turbineHubs: Vector3[] = [];
+  const turbineHardware: BufferGeometry[] = [];
+  const steelParts: BufferGeometry[] = [
+    new CylinderGeometry(.29, .29, .08, 24).translate(0, -.03, 0),
+    new CylinderGeometry(.085, .085, .66, 16).rotateX(Math.PI / 2).translate(0, .34, .75),
+  ];
+  const darkParts: BufferGeometry[] = [
+    new BoxGeometry(.025, .26, .34).translate(.371, .34, -.04),
+    new CylinderGeometry(.17, .17, .11, 20).rotateX(Math.PI / 2).translate(0, .34, .58),
+  ];
+  const serviceFasteners: BufferGeometry[] = [];
+  for (const z of [-.17, .09]) for (const y of [.25, .43]) serviceFasteners.push(new CylinderGeometry(.018, .018, .025, 8).rotateZ(Math.PI / 2).translate(.39, y, z));
+  steelParts.push(merged(serviceFasteners));
+  for (const side of [-1, 1]) steelParts.push(new BoxGeometry(.035, .18, .035).translate(.386, .34, -.04 + side * .13));
+  const turbineGearbox = new BoxGeometry(.72, .48, 1.15).translate(0, .34, -.05);
+  const turbineRearCover = new SphereGeometry(.33, 18, 12).scale(1, .78, .74).translate(0, .34, -.62);
+  const rotorGeometry = merged([
+    new SphereGeometry(.2, 20, 14).scale(1, 1, .82),
+    new CylinderGeometry(.11, .14, .42, 18).rotateX(Math.PI / 2).translate(0, 0, -.23),
+    new CylinderGeometry(.13, .1, .15, 18).rotateX(Math.PI / 2).translate(0, 0, .13),
+    ...Array.from({ length: 3 }, (_, bladeIndex) => blade().rotateZ(bladeIndex * Math.PI * 2 / 3)),
+  ]);
   for (const [index, turbine] of cityTurbines.entries()) {
     const floor = terrainHeight(turbine.x, turbine.z);
     fixed.push(new CylinderGeometry(.13, .27, turbine.height, 20).translate(turbine.x, floor + turbine.height / 2, turbine.z));
-    fixed.push(new CylinderGeometry(.52, .61, .2, 24).translate(turbine.x, floor + .1, turbine.z));
-    const rotor = new Group(); rotor.name = `city-wind-turbine-${index}`; rotor.position.set(turbine.x, floor + turbine.height, turbine.z + .23); root.add(rotor); rotors.push(rotor);
-    add(`city-sculpted-turbine-blades-${index}`, merged([new SphereGeometry(.24, 20, 12).scale(1, 1, 1.5), ...Array.from({ length: 3 }, (_, bladeIndex) => blade().rotateZ(bladeIndex * Math.PI * 2 / 3))]), materials.white, rotor);
+    fixed.push(new CylinderGeometry(.58, .61, .16, 28).translate(turbine.x, floor + .08, turbine.z));
+    fixed.push(new CylinderGeometry(.35, .35, .12, 24).translate(turbine.x, floor + .22, turbine.z));
+    const foundationBolts: BufferGeometry[] = [];
+    for (let bolt = 0; bolt < 12; bolt++) {
+      const angle = bolt * Math.PI / 6;
+      foundationBolts.push(new CylinderGeometry(.035, .035, .08, 8).translate(turbine.x + Math.cos(angle) * .48, floor + .2, turbine.z + Math.sin(angle) * .48));
+    }
+    turbineHardware.push(merged(foundationBolts));
+
+    // The yaw bearing sits on the tower cap; the housing and rotor pivot around its vertical axis.
+    turbineHardware.push(new CylinderGeometry(.36, .36, .13, 24).translate(turbine.x, floor + turbine.height + .065, turbine.z));
+    turbineHardware.push(new CylinderGeometry(.27, .27, .045, 24).translate(turbine.x, floor + turbine.height + .15, turbine.z));
+    const yaw = new Group(); yaw.name = `city-wind-turbine-nacelle-yaw-${index}`;
+    yaw.position.set(turbine.x, floor + turbine.height + .17, turbine.z); root.add(yaw); turbineYaws.push(yaw);
+    const rotor = new Group(); rotor.name = `city-wind-turbine-${index}`; root.add(rotor); rotors.push(rotor);
+    turbineHubs.push(new Vector3(0, .34, 1.06));
   }
+  const steelHardware = merged(steelParts);
+  steelHardware.userData.parts = ['yaw-carrier', 'rotor-shaft', 'service-fasteners', 'service-hinge-left', 'service-hinge-right'];
+  const darkHardware = merged(darkParts);
+  darkHardware.userData.parts = ['service-door', 'bearing-cap'];
+  const steelBatch = instance('city-wind-turbine-steel-hardware', cityTurbines.length, steelHardware, materials.turbineSteel);
+  const darkBatch = instance('city-wind-turbine-dark-hardware', cityTurbines.length, darkHardware, materials.turbineDark);
+  const gearboxBatch = instance('city-wind-turbine-gearboxes', cityTurbines.length, turbineGearbox, materials.white);
+  const rearBatch = instance('city-wind-turbine-rear-covers', cityTurbines.length, turbineRearCover, materials.aqua);
+  const rotorBatch = instance('city-sculpted-turbine-blades', cityTurbines.length, rotorGeometry, materials.white);
+  rotorGeometry.userData.parts = ['three-blade rotor', 'hub', 'rotor shaft coupling'];
+  add('city-wind-turbine-static-hardware', merged(turbineHardware), materials.turbineSteel);
   const boardings=dockBoardingPlan();
   const gangways:Array<{mesh:Mesh;index:number}>=[];
   const dockBeam=(a:Vector3,b:Vector3,radius=.025)=>{
@@ -178,9 +227,23 @@ export function createCityLife(stationRoute: CityTransitRoute) {
     if(!paused)for(const gangway of gangways){const extension=dockBoardingExtension(time,gangway.index,coastalFerry.route.duration,coastalFerry.route.firstDuration);gangway.mesh.morphTargetInfluences![0]=1-extension;gangway.mesh.visible=extension>.005;}
     mechanisms.update(time, controls, paused, detail);
     for (let index = 0; index < rotors.length; index++) {
+      const yaw = index === 0 ? controls.states.wind.amount * .32 : 0;
+      turbineYaws[index].rotation.y = yaw;
+      turbineYaws[index].updateMatrixWorld(true);
+      rotors[index].position.copy(turbineHubs[index]);
+      turbineYaws[index].localToWorld(rotors[index].position);
       rotors[index].rotation.z = time * cityTurbines[index].rate + cityTurbines[index].phase;
-      rotors[index].rotation.y = index === 0 ? controls.states.wind.amount * .32 : 0;
+      // Keep the public rotor yaw value while its pivot remains a sibling of the housing.
+      rotors[index].rotation.y = yaw;
+      rotors[index].updateMatrix();
+      steelBatch.setMatrixAt(index, turbineYaws[index].matrix);
+      darkBatch.setMatrixAt(index, turbineYaws[index].matrix);
+      gearboxBatch.setMatrixAt(index, turbineYaws[index].matrix);
+      rearBatch.setMatrixAt(index, turbineYaws[index].matrix);
+      rotorBatch.setMatrixAt(index, rotors[index].matrix);
     }
+    steelBatch.instanceMatrix.needsUpdate = true; darkBatch.instanceMatrix.needsUpdate = true;
+    gearboxBatch.instanceMatrix.needsUpdate = true; rearBatch.instanceMatrix.needsUpdate = true; rotorBatch.instanceMatrix.needsUpdate = true;
     for (let index = 0; index < panels.length; index++) {
       const panel = panels[index];
       const response = controls.states.solar.amount;

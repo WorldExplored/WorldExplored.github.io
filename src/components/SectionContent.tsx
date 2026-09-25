@@ -1,7 +1,9 @@
 import { publicContributions, profile, type SectionId } from '@/content/profile';
+import { Arcade } from './arcade/Arcade';
 import { ContactLinks } from './ContactLinks';
 
 export function SectionContent({ id }: { id: SectionId }) {
+  if (id === 'arcade') return <Arcade />;
   if (id === 'work') return <>
     <div className="contribution-collection">{publicContributions.map(item => <a className="contribution-card" key={item.number} href={item.url} target="_blank" rel="noopener noreferrer" aria-labelledby={`pr-${item.number}`}>
       <div className="contribution-meta"><span className={`status status-${item.status.toLowerCase()}`}>{item.status}</span><span className="pr-id">vLLM #{item.number}</span><span className="attribution">{item.attribution || 'authored'}</span></div>

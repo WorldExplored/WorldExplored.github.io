@@ -77,6 +77,20 @@ test('tier changes retain every resource while pausing freezes all operating inf
   await renderer.advanceFrames(1, 1 / 60);
   assert.notDeepEqual(snapshot(), initial, 'Multiple operating systems are visible within the first 15 seconds.');
   const turbine0 = root.getObjectByName('city-wind-turbine-0')!; const turbine1 = root.getObjectByName('city-wind-turbine-1')!;
+  for (const index of [0, 1]) {
+    const yaw = root.getObjectByName(`city-wind-turbine-nacelle-yaw-${index}`)!;
+    assert.equal(yaw.children.length, 0, 'Finish meshes are batched across the yaw pivots.');
+  }
+  const steel = root.getObjectByName('city-wind-turbine-steel-hardware') as InstancedMesh;
+  const dark = root.getObjectByName('city-wind-turbine-dark-hardware') as InstancedMesh;
+  const gearboxes = root.getObjectByName('city-wind-turbine-gearboxes') as InstancedMesh;
+  const rearCovers = root.getObjectByName('city-wind-turbine-rear-covers') as InstancedMesh;
+  const blades = root.getObjectByName('city-sculpted-turbine-blades') as InstancedMesh;
+  assert.deepEqual(steel.geometry.userData.parts, ['yaw-carrier', 'rotor-shaft', 'service-fasteners', 'service-hinge-left', 'service-hinge-right']);
+  assert.deepEqual(dark.geometry.userData.parts, ['service-door', 'bearing-cap']);
+  assert.equal(steel.count, 2); assert.equal(dark.count, 2); assert.equal(gearboxes.count, 2); assert.equal(rearCovers.count, 2);
+  blades.geometry.computeBoundingBox();
+  assert.ok(blades.geometry.boundingBox!.max.y < 2.4, 'Rotor radius stays below the 2.4m clearance limit.');
   assert.notEqual(turbine0.rotation.z, turbine1.rotation.z);
   const pausedState = snapshot();
   for (const quality of ['low', 'medium', 'high', 'low', 'high'] as const) {

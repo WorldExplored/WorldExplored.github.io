@@ -28,7 +28,7 @@ export const ISLANDS: readonly Island[] = [
   { id: 'museum-meadow', x: 21, z: -72, rx: 14, rz: 12.5, phase: 5.2, beach: 3.8, hill: 1.35 },
 ];
 export const PLANT_REACH = .95;
-export const FOOTPRINT_RADII: Record<LandmarkId, number> = { work: 5.5, experience: 5.4, research: 5.3, purdue: 5.1, history: 7, about: 4.9, contact: 5.0, building: 2.4 };
+export const FOOTPRINT_RADII: Record<LandmarkId, number> = { work: 5.5, experience: 5.4, research: 5.3, purdue: 5.1, history: 7, about: 4.9, contact: 5.0, building: 2.4, arcade: 3.8 };
 
 export function seededRandom(seed: number) {
   return () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };

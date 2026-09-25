@@ -1,4 +1,4 @@
-export type SectionId = 'work' | 'experience' | 'research' | 'purdue' | 'history' | 'about' | 'contact' | 'building';
+export type SectionId = 'work' | 'experience' | 'research' | 'purdue' | 'history' | 'about' | 'contact' | 'building' | 'arcade';
 export type ContributionStatus = 'Open' | 'Merged' | 'Closed without merge';
 export interface Contribution {
   number: number;
@@ -21,6 +21,27 @@ export interface FeaturedContribution extends Contribution {
 export interface BackgroundMusicTrack { title: string; artist: string; playbackUrl: string }
 
 export const profile = {
+  arcade: {
+    eyebrow: 'A little play, by the water.',
+    title: 'Aero Arcade',
+    intro: 'Four familiar games, a brighter little world. Choose a cabinet and settle in.',
+    back: 'All games', play: 'Play', pause: 'Pause', resume: 'Resume', restart: 'New game',
+    ready: 'Ready when you are.', paused: 'Taking a breather.', won: 'Beautifully played!', lost: 'One more try?',
+    pauseHint: 'Your game waits here while you explore.',
+    keyboardHint: 'Focus the game board to use the keyboard. Escape closes the arcade.',
+    score: 'Score', lives: 'Lives', attempts: 'Attempts', pairs: 'Pairs', flags: 'Flags left',
+    reveal: 'Reveal', flag: 'Flag', flagMode: 'Choose what a tap does',
+    hiddenCell: 'Unopened square', emptyCell: 'Clear water', mine: 'Mine', flagged: 'Flagged square',
+    hiddenCard: 'Hidden card', matchedCard: 'Matched', board: 'Game board',
+    up: 'Up', down: 'Down', left: 'Left', right: 'Right',
+    symbols: ['Sun', 'Wave', 'Leaf', 'Bubble', 'Shell', 'Flower', 'Fish', 'Star'],
+    games: {
+      snake: { name: 'Lagoon Snake', genre: 'Snake · collect & grow', description: 'Follow the current. Gather golden pearls and leave room to turn.', instructions: 'Use the arrow keys, WASD, or the direction buttons. Collect pearls; avoid the shore and your own tail.' },
+      mines: { name: 'Reef Minesweeper', genre: 'Minesweeper · think ahead', description: 'Chart a tiny lagoon, one safe square at a time.', instructions: 'Reveal all 30 safe squares. Numbers count neighboring mines. Your first reveal is safe. Right-click to flag, or choose Flag mode before tapping.' },
+      breakout: { name: 'Skyline Breakout', genre: 'Breakout · bounce & clear', description: 'Send a sunbeam through a wall of sea-glass tiles.', instructions: 'Use left/right arrows, A/D, the buttons, or drag across the board to move the paddle. Clear every tile before you lose three balls.' },
+      memory: { name: 'Coastal Pairs', genre: 'Memory · find a match', description: 'Find eight pairs of little coastal treasures.', instructions: 'Turn over two cards at a time. Match all eight pairs in as few attempts as you can. Use Tab and Enter or tap a card.' },
+    },
+  },
   entry: {
     eyebrow: 'A little closer to the future we imagined.',
     title: 'Travel back to the future.',
@@ -169,6 +190,7 @@ export const profile = {
     { id: 'history', label: 'History', title: 'History', dock: true },
     { id: 'about', label: 'About', title: 'About', dock: true },
     { id: 'contact', label: 'Contact', title: 'Contact', dock: true },
+    { id: 'arcade', label: 'Arcade', title: 'Aero Arcade', dock: true },
     { id: 'building', label: 'Building something impactful...', title: 'Building something impactful...', dock: false },
   ] as { id: SectionId; label: string; title: string; dock: boolean }[],
   researchLabels: { description: 'Overview', question: 'Question', setup: 'Data and setup', methods: 'Methods', role: 'My contribution', findings: 'Findings', limitations: 'Limitations' },

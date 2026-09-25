@@ -131,10 +131,10 @@ test('touch keeps scrolling uncaptured and keyboard commands remain bounded and 
   } finally { await f.cleanup(); }
 });
 
-test('all eight landmarks have finite geometry and localized lighting at every quality tier', async () => {
+test('all nine landmarks have finite geometry and localized lighting at every quality tier', async () => {
   for (const quality of ['high', 'medium', 'low'] as QualityTier[]) {
     const runtime = { current: createSceneRuntime() };
-    const ids: LandmarkId[] = ['work', 'experience', 'research', 'purdue', 'history', 'about', 'contact', 'building'];
+    const ids: LandmarkId[] = world.landmarks.map(landmark => landmark.id);
     const render = (paused = false) => <group>{ids.map(id => <group key={id} name={`model-${id}`}><LandmarkModel id={id} runtime={runtime} active={false} paused={paused} quality={quality} /></group>)}</group>;
     const renderer = await create(render());
     try {
@@ -147,7 +147,8 @@ test('all eight landmarks have finite geometry and localized lighting at every q
         const material = mesh.material as MeshPhysicalMaterial;
         calls += material.transparent && material.side === DoubleSide && !material.forceSinglePass ? 2 : 1;
       }
-      assert.ok(triangles < 150000 && calls < 250, `${triangles} triangles, ${calls} calls exceed the architecture budget`);
+      // The furnished arcade adds one small shell and at most 15k triangles / 30 draws.
+      assert.ok(triangles < 165000 && calls < 280, `${triangles} triangles, ${calls} calls exceed the architecture budget`);
       const contact = renderer.scene.findByProps({ name: 'model-contact' });
       const contactMaterials = contact.findAll(node => node.instance.type === 'Mesh').map(node => (node.instance as Mesh).material as MeshPhysicalMaterial);
       const unrelated = renderer.scene.findByProps({ name: 'model-work' }).findAll(node => node.instance.type === 'Mesh').map(node => (node.instance as Mesh).material as MeshPhysicalMaterial);

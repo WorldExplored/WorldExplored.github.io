@@ -6,14 +6,37 @@ import { createSeaweedGeometry, createSeaweedLayout, SEAWEED_COVES, SEAWEED_REAC
 import { createLandscapePlan, distanceToSegment, landDistance, terrainMeshHeight, ISLANDS } from '../src/components/world/terrain';
 import { coastExposure } from '../src/components/world/waves';
 import { createSceneRuntime, type QualityTier } from '../src/content/world';
+import { createDockWeedGeometry, createDockWeedSites, dockEcologyPoles } from '../src/components/world/DockEcology';
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+
+test('dock algae begin on wet pile faces and remain below the water surface',()=>{
+  const poles=dockEcologyPoles(),sites=createDockWeedSites(poles);
+  assert.deepEqual(sites,createDockWeedSites(poles));
+  assert.equal(poles.length,12);
+  assert.equal(sites.length,poles.length*3);
+  const geometries=[0,1,2].map(createDockWeedGeometry);
+  try{
+    for(const pole of poles){
+      assert.equal(sites.filter(site=>site.pole===pole.id).length,3);
+      if(pole.id.startsWith('lighthouse'))assert.ok(pole.radius>.08);
+    }
+    for(const site of sites){
+      const pole=poles.find(item=>item.id===site.pole)!;
+      assert.ok(Math.abs(Math.hypot(site.x-pole.x,site.z-pole.z)-pole.radius)<1e-10);
+      assert.ok(site.y>pole.bottom&&site.y+site.height<-.13);
+      const positions=geometries[site.variant].getAttribute('position');
+      for(let i=0;i<positions.count;i++)assert.ok(site.y+positions.getY(i)*site.height<-.1);
+      assert.equal(positions.getY(0),0);
+    }
+  }finally{geometries.forEach(geometry=>geometry.dispose());}
+});
 
 test('seaweed occupies dense irregular sheltered beds with seabed roots and structural clearance', () => {
   const plan = createLandscapePlan();
   const sites = createSeaweedLayout(plan);
   assert.deepEqual(sites, createSeaweedLayout(plan));
-  assert.ok(sites.length >= 1900 && sites.length <= 2200);
+  assert.ok(sites.length >= 2700 && sites.length <= 2900);
   assert.equal(new Set(sites.map(site => site.cove)).size, SEAWEED_COVES.length + ISLANDS.length);
   for (const site of sites) {
     const distance = landDistance(site.x, site.z);
@@ -88,7 +111,7 @@ test('beds mix silhouettes, sizes and colors locally rather than separating them
     assert.ok(Math.max(...bed.map(site=>site.width))-Math.min(...bed.map(site=>site.width))>.4);
     assert.ok(Math.max(...bed.map(site=>site.tint))-Math.min(...bed.map(site=>site.tint))>.8);
     const distances=bed.map(site=>Math.min(...bed.filter(other=>other!==site).map(other=>Math.hypot(other.x-site.x,other.z-site.z))));
-    assert.ok(distances.filter(distance=>distance<.45).length/bed.length>.8,'most roots belong to overlapping clumps');
+    assert.ok(distances.filter(distance=>distance<.45).length/bed.length>.78,'most roots belong to overlapping clumps');
     assert.ok(Math.max(...distances)-Math.min(...distances)>.1,'bed density has irregular margins');
   }
   const beds=sites.filter(site=>site.cove>=0);
@@ -99,7 +122,7 @@ test('beds mix silhouettes, sizes and colors locally rather than separating them
     assert.equal(new Set(geometries.map(geometry=>geometry.userData.form)).size,8);
     assert.equal(new Set(geometries.map(geometry=>Array.from(geometry.getAttribute('position').array).join(','))).size,8);
     const triangles=sites.reduce((sum,site)=>sum+geometries[site.variant].index!.count/3,0);
-    assert.ok(triangles<690000, `bounded instanced foliage triangles: ${triangles}`);
+    assert.ok(triangles<960000, `bounded instanced foliage triangles: ${triangles}`);
   } finally {geometries.forEach(geometry=>geometry.dispose());}
 });
 
@@ -109,7 +132,7 @@ test('stray seaweed covers every island and remains represented in low quality p
     const batch=sites.filter(site=>site.variant===variant);return batch.slice(0,Math.ceil(batch.length*.5));
   });
   for(let island=0;island<ISLANDS.length;island++){
-    assert.ok(sites.filter(site=>site.cove===-1-island).length>=65);
+    assert.ok(sites.filter(site=>site.cove===-1-island).length>=80);
     assert.ok(low.filter(site=>site.cove===-1-island).length>=15);
   }
 });

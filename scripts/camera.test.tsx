@@ -77,7 +77,7 @@ test('each destination fits left of desktop content and above the mobile sheet',
     camera.updateMatrixWorld();
     assertSafe(camera.position, target);
     const center = new Vector3(...landmark.position);
-    center.y += terrainHeight(center.x, center.z) + ({ work: 6, experience: 5, research: 4, purdue: 3, history: 6, about: 4, contact: 4, building: 6 }[landmark.id]) * .45;
+    center.y += terrainHeight(center.x, center.z) + ({ work: 6, experience: 5, research: 4, purdue: 3, history: 6, about: 4, contact: 4, arcade: 4.6, building: 6 }[landmark.id]) * .45;
     center.project(camera);
     if (mobile) assert.ok(center.y > .34 && center.y < .9, `${landmark.id} projects above the sheet (${center.y}).`);
     else assert.ok(center.x < -.25 && center.x > -.65, `${landmark.id} remains left of the panel (${center.x}).`);
@@ -280,7 +280,7 @@ test('overview keeps every primary structure inside the reviewed desktop and por
 
 
 test('portrait destination views retain the entrance and roof above the content panel', () => {
-  const heights = { work: 11.25, experience: 5.9, research: 4.2, purdue: 3.25, history: 7.2, about: 3, contact: 5.44, building: 7.8 };
+  const heights = { work: 11.25, experience: 5.9, research: 4.2, purdue: 3.25, history: 7.2, about: 3, contact: 5.44, arcade: 4.6, building: 7.8 };
   for (const landmark of world.landmarks) {
     const pose = focusPose(landmark.id, true, 390 / 844);
     const camera = new PerspectiveCamera(43, 390 / 844, .1, 500);

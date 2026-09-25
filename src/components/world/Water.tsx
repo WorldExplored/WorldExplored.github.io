@@ -9,7 +9,7 @@ import { useEffect, useMemo, type MutableRefObject } from 'react';
 import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
 import { Color, DataTexture, LinearFilter, PlaneGeometry, RGBAFormat, ShaderMaterial, Vector2, Vector3, Vector4 } from 'three';
 import { landDistance } from './terrain';
-import { REEF_BASINS } from './reefHabitat';
+import { waterOpticsGLSL } from './waterOptics';
 import { coastExposure, shorelineWaveGLSL } from './waves';
 import { world, type QualityTier, type SceneRuntime } from '../../content/world';
 
@@ -58,6 +58,7 @@ const fragmentShader = /* glsl */ `
   varying vec3 vWorld;
   varying vec3 vNormal;
   ${shorelineWaveGLSL}
+  ${waterOpticsGLSL}
   float seaHash(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
   float seaNoise(vec2 p){ vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(seaHash(i),seaHash(i+vec2(1.,0.)),f.x),mix(seaHash(i+vec2(0.,1.)),seaHash(i+1.),f.x),f.y); }
   float surfaceField(vec2 p){
@@ -105,15 +106,12 @@ const fragmentShader = /* glsl */ `
     vec4 coastSample = texture2D(uCoast, clamp(coastUV, 0., 1.));
     float coast = coastSample.r * 64. - 32.;
     if (any(lessThan(coastUV, vec2(0.))) || any(greaterThan(coastUV, vec2(1.)))) coast = -32. - length(p - clamp(p, uCoastBounds.xy, uCoastBounds.xy+uCoastBounds.zw));
-    float shoreShallows = 1. - smoothstep(1., 15., -coast);
-    // The reef shelf stays clear while open water blends gently into the blue horizon.
-    float channel = 0.;
-    ${REEF_BASINS.map(({ x, z, rx, rz }) => `channel = max(channel, 1. - smoothstep(1., 1.55, length((p-vec2(${x.toFixed(1)},${z.toFixed(1)}))/vec2(${rx.toFixed(1)},${rz.toFixed(1)}))));`).join('\n    ')}
-    float shallows = max(shoreShallows, channel);
     float outsideField = length(p - clamp(p, uCoastBounds.xy, uCoastBounds.xy+uCoastBounds.zw));
     float offshoreDistance = coastSample.b * 128. + outsideField;
-    float offshore = smoothstep(15., 80., offshoreDistance);
-    vec3 color = mix(mix(uDeep, uWater, .5 + broad), vec3(.025,.24,.36), offshore * .58);
+    float depth = opticalDepth(p, offshoreDistance);
+    float shallows = exp(-depth * .055);
+    float offshore = 1. - exp(-offshoreDistance / 95.);
+    vec3 color = mix(mix(uDeep, uWater, .5 + broad), vec3(.012,.065,.12), offshore * .86);
     color = mix(color, vec3(.035,.69,.66), shallows * .89);
     vec3 surf = shoreWave(coast, p, uTime, coastSample.g);
     vec2 texel = vec2(1./640.,1./640.);
@@ -136,7 +134,7 @@ const fragmentShader = /* glsl */ `
     color += uSunColor * sun * uSunIntensity * .14;
     float haze = smoothstep(uFogRange.x, uFogRange.y, length(cameraPosition - vWorld));
     color = mix(color, uFog, haze);
-    gl_FragColor = vec4(color, mix(.985, .16, shallows) + fresnel * .12 * shallows);
+    gl_FragColor = vec4(color, clamp(1. - exp(-depth * .085) + fresnel * .12 * shallows + foam * .24, .06, .995));
     #include <colorspace_fragment>
   }
 `;

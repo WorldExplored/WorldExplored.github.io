@@ -12,6 +12,8 @@ export { STATION_ACCESS } from './stationPlan';
 function cityGroundClear(x: number, z: number, margin: number) {
   if (landDistance(x,z) < 1.9) return false;
   if (Math.hypot(x - 21, z + 72) < 6.25 + margin) return false;
+  const arcade = world.landmarks.find(item => item.id === 'arcade')!;
+  if (Math.abs(x - arcade.position[0]) < 2.94 + margin && Math.abs(z - arcade.position[2]) < 2.44 + margin) return false;
   for (const b of cityBuildings) {
     const dx=x-b.x,dz=z-b.z,c=Math.cos(b.rotation),s=Math.sin(b.rotation);
     const lx=dx*c-dz*s,lz=dx*s+dz*c;
@@ -77,23 +79,23 @@ export function createCirculationGraph() {
   };
   const work=node('work',-8,2.51,'entrance',1.105), research=node('research',2.67,-5.15,'entrance',1.07);
   const experience=node('experience',-26.62,1.18,'entrance',1.07);
-  const west=node('main-west',-14.8,3.2),center=node('main-center',-5.5,5.4),lab=node('research-plaza',2.67,-3.75);
+  const west=node('main-west',-14.8,4.4),center=node('main-center',-6,4.4),lab=node('research-plaza',2.67,-3.75);
   const gardenNorth=node('garden-bridge-north',-6,7,'landing',.95), gardenSouth=node('garden-bridge-south',-6,18,'landing',1.4);
   const purdueWest=node('purdue-bridge-west',12,-7,'landing',.95),purdueEast=node('purdue-bridge-east',21.7,-7,'landing',.95);
   const purdue=node('purdue',24.28,-7,'entrance',1.03);
   const gallery=node('about',-8.805,21.86,'entrance',1.06),glasshouse=node('about-conservatory',-11.95,24.64,'entrance',1.06);
-  const garden=node('garden-court',-5.5,24.1,'park'),contact=node('contact',12,24.95,'entrance',1.06);
+  const garden=node('garden-court',-5.5,25.65,'park'),contact=node('contact',12,24.95,'entrance',1.06);
   const mainDock=node('main-dock-land',-8,-18.5,'dock',1.06),mainBoat=node('main-dock-boarding',-8,-24.45,'dock',1.06);
-  edge('work-entrance',work,center,[{x:-8,z:3.6}]);edge('main-west-walk',work,west,[{x:-9.6,z:4.3}]);
-  edge('experience-entrance',experience,west,[{x:-22.5,z:2.9},{x:-18,z:3.2}],1.8);
-  edge('main-lab-walk',center,lab,[{x:-1,z:3.2},{x:1,z:-2.6}],1.8);edge('research-entrance',lab,research);
-  edge('main-garden-approach',center,gardenNorth);edge('research-purdue-approach',lab,purdueWest,[{x:8.4,z:-3.8},{x:10.5,z:-5}]);
+  edge('work-entrance',work,center,[{x:-8,z:4.4}]);edge('main-west-walk',work,west,[{x:-8,z:4.4}]);
+  edge('experience-entrance',experience,west,[{x:-26.23,z:4.4}],1.8);
+  edge('main-lab-walk',center,lab,[{x:2.67,z:4.4}],1.8);edge('research-entrance',lab,research);
+  edge('main-garden-approach',center,gardenNorth);edge('research-purdue-approach',lab,purdueWest,[{x:10,z:-3.75}]);
   edge('purdue-entrance',purdueEast,purdue,[],1.25);
-  edge('garden-bridge-walk',gardenSouth,garden,[{x:-4,z:21.5}]);
-  edge('gallery-entrance',gallery,garden,[{x:-8.625,z:22.3},{x:-8.625,z:23.65},{x:-9.05,z:24.15},{x:-9.2,z:25.65},{x:-6.75,z:25.65}],.65);
-  edge('conservatory-entrance',glasshouse,garden,[{x:-11.95,z:26},{x:-7.8,z:26}]);
-  edge('garden-spine',garden,contact,[{x:2,z:25.8},{x:8,z:26},{x:12,z:25.6}],1.75);
-  edge('main-harbor-walk',west,mainDock,[{x:-15.2,z:-6},{x:-13.5,z:-13.5},{x:-8,z:-16.6}],1.25);
+  edge('garden-bridge-walk',gardenSouth,garden);
+  edge('gallery-entrance',gallery,garden,[{x:-8.625,z:22.3},{x:-8.625,z:23.65},{x:-9.05,z:24.15},{x:-9.2,z:25.65}],.65);
+  edge('conservatory-entrance',glasshouse,garden,[{x:-11.95,z:25.65}]);
+  edge('garden-spine',garden,contact,[{x:12,z:25.65}],1.75);
+  edge('main-harbor-walk',west,mainDock,[{x:-14.8,z:-16.6},{x:-8,z:-16.6}],1.25);
   edge('main-dock',mainDock,mainBoat,[],1.1,'dock');
   for(const bridge of BRIDGES){const ends=bridge.id==='garden'?[gardenNorth,gardenSouth]:[purdueWest,purdueEast];const e=edge(`bridge-${bridge.id}`,ends[0],ends[1],[],bridge.width,'bridge');e.bridge=true;e.bridgeId=bridge.id;e.points=bridge.samples.map(p=>({x:p.point.x,z:p.point.z}));}
   const cityWest=node('city-west-street',-19.5,-74.7),cityCenter=node('city-center-street',-5,-74.2),cityEast=node('city-east-street',13,-72);
@@ -107,7 +109,7 @@ export function createCirculationGraph() {
   edge('town-main-street-west',cityWest,cityCenter,[{x:-14.8,z:-73.85},{x:-9.5,z:-73.95}],1.12);
   edge('town-main-street-east',cityCenter,cityEast,[{x:0,z:-72.35},{x:6,z:-71.65}],1.22);
   edge('town-waterfront-route',cityWest,waterfront,[{x:-21.6,z:-79.6},{x:-27.6,z:-80.4},{x:-29,z:-75},{x:-25.5,z:-69.25},{x:-20.5,z:-66.2}],1.05);
-  edge('town-dock-walk',waterfront,cityDock,[{x:-14.2,z:-64.75}],1.08);
+  edge('town-dock-walk',waterfront,cityDock,[],1.08);
   edge('town-south-promenade',waterfront,cityEast,[{x:-12,z:-64.7},{x:-5,z:-64.5},{x:3,z:-64.3},{x:8,z:-64.7},{x:10.7,z:-65.25},{x:12,z:-66.5}],1.05);
   edge('history-threshold',history,historyCourt,[],1.35);
   edge('history-promenade',historyCourt,cityEast,[museumPoint(-4.8,5.7),museumPoint(-6.7,4.9),museumPoint(-7.2,2.2)],1.35);
@@ -139,6 +141,11 @@ export function createCirculationGraph() {
     const from=nodes.find(n=>n.id===best.street.from)!;
     edge(`${id}-street-link`,from,junction,best.street.points.slice(1,best.segment),best.street.width);
   };
+  const arcadeLandmark=world.landmarks.find(item=>item.id==='arcade')!;
+  const arcade=node('arcade',arcadeLandmark.position[0],arcadeLandmark.position[2]+2.42,'entrance',1.08);
+  const arcadeCourt=node('arcade-court',arcade.x,arcade.z+1.1,'landing');
+  edge('arcade-threshold',arcade,arcadeCourt,[],1.05);
+  joinStreet('arcade',arcadeCourt);
   for(const building of cityBuildings){
     const entrance=cityEntranceWorld(building),n=node(building.id,entrance.x,entrance.z,'entrance',entrance.y);
     if(building.archetype==='transit-hall'){
@@ -164,7 +171,7 @@ function roundedRoute(points: PathPoint[], city: boolean, tight: boolean) {
   for(let i=1;i<points.length-1;i++){
     const a=points[i-1],b=points[i],c=points[i+1];
     const ab=Math.hypot(b.x-a.x,b.z-a.z),bc=Math.hypot(c.x-b.x,c.z-b.z);
-    let cut=Math.min(city?.7:1.5,ab*.24,bc*.24);
+    let cut=Math.min(city?.35:.4,ab*.24,bc*.24);
     let arc:PathPoint[]=[];
     for(let attempt=0;attempt<4;attempt++){
       const p={x:b.x+(a.x-b.x)*cut/Math.max(.001,ab),z:b.z+(a.z-b.z)*cut/Math.max(.001,ab)};

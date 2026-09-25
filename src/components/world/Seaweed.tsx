@@ -30,6 +30,12 @@ export const SEAWEED_COVES = [
   { x: 30, z: 22, radius: 5.5 },
   { x: 26, z: -88, radius: 5.6 },
   { x: -20, z: -20, radius: 5.5 },
+  { x: -84, z: -42, radius: 5.1 },
+  { x: -72, z: -30, radius: 5.2 },
+  { x: 30, z: -18, radius: 5.4 },
+  { x: 36, z: -72, radius: 5.6 },
+  { x: 12, z: -96, radius: 5.3 },
+  { x: -12, z: -96, radius: 5.1 },
 ] as const;
 export const SEAWEED_REACH = 0.62;
 export const SEAWEED_FORMS = ['strap-leaved eelgrass', 'ruffled broad kelp', 'paired branching algae', 'twisting ribbon kelp', 'pleated sea fan', 'low seagrass turf', 'forked bladderwrack', 'serrated red algae'] as const;
@@ -53,6 +59,19 @@ export function seaweedSiteClear(x: number, z: number, plan: LandscapePlan, shel
 export function createSeaweedLayout(plan = createLandscapePlan()): SeaweedSite[] {
   const random = seededRandom(80317);
   const sites: SeaweedSite[] = [];
+  const occupied = new Map<string, SeaweedSite[]>(), cellSize = .5;
+  const remember = (site: SeaweedSite) => {
+    const key = `${Math.floor(site.x / cellSize)},${Math.floor(site.z / cellSize)}`;
+    const cell = occupied.get(key) ?? [];
+    cell.push(site); occupied.set(key, cell);
+  };
+  const nearRoot = (x: number, z: number, spacing: number, include: (site: SeaweedSite) => boolean = () => true) => {
+    for (let ix = Math.floor((x - spacing) / cellSize); ix <= Math.floor((x + spacing) / cellSize); ix++)
+      for (let iz = Math.floor((z - spacing) / cellSize); iz <= Math.floor((z + spacing) / cellSize); iz++)
+        for (const site of occupied.get(`${ix},${iz}`) ?? [])
+          if (include(site) && Math.hypot(x - site.x, z - site.z) < spacing) return true;
+    return false;
+  };
   const clumps = SEAWEED_COVES.map(cove => Array.from({ length: 8 }, () => {
     const angle = random() * Math.PI * 2, radius = Math.sqrt(random()) * cove.radius * .8;
     return { x: cove.x + Math.cos(angle) * radius, z: cove.z + Math.sin(angle) * radius, radius: .65 + random() * 1.65 };
@@ -65,25 +84,27 @@ export function createSeaweedLayout(plan = createLandscapePlan()): SeaweedSite[]
         const angle = random() * Math.PI * 2, radius = Math.pow(random(), .7) * clump.radius;
         const x = clump.x + Math.cos(angle) * radius, z = clump.z + Math.sin(angle) * radius;
         if (Math.hypot(x - cove.x, z - cove.z) > cove.radius || !seaweedSiteClear(x, z, plan)
-          || sites.some(site => Math.hypot(x - site.x, z - site.z) < .19)) continue;
+          || nearRoot(x, z, .19)) continue;
         const y = terrainMeshHeight(x, z) - .025;
         const variant = Math.floor(random() * SEAWEED_FORMS.length);
         const height = Math.min((variant === 5 ? .26 : .55) + random() * (variant === 5 ? .35 : .85), -.32 - y);
-        sites.push({ x, y, z, height, width: .68 + random() * .5, spread: .7 + random() * .45,
-          rotation: random() * Math.PI * 2, variant, cove: coveIndex, tint: random() });
+        const site = { x, y, z, height, width: .68 + random() * .5, spread: .7 + random() * .45,
+          rotation: random() * Math.PI * 2, variant, cove: coveIndex, tint: random() };
+        sites.push(site); remember(site);
         break;
       }
     });
   }
   const strays:SeaweedSite[]=[];
-  for(let round=0;round<72;round++)for(let islandIndex=0;islandIndex<ISLANDS.length;islandIndex++){
+  for(let round=0;round<86;round++)for(let islandIndex=0;islandIndex<ISLANDS.length;islandIndex++){
     const island=ISLANDS[islandIndex];
     for(let attempt=0;attempt<60;attempt++){
       const angle=random()*Math.PI*2,contour=islandContour(island,angle),offshore=1.8+random()*3.4;
       const x=island.x+Math.cos(angle)*(island.rx*contour+offshore),z=island.z+Math.sin(angle)*(island.rz*contour+offshore);
-      if(!seaweedSiteClear(x,z,plan,false)||sites.some(site=>Math.hypot(x-site.x,z-site.z)<.28)||strays.some(site=>Math.hypot(x-site.x,z-site.z)<.42))continue;
+      if(!seaweedSiteClear(x,z,plan,false)||nearRoot(x,z,.28,site=>site.cove>=0)||nearRoot(x,z,.42,site=>site.cove<0))continue;
       const y=terrainMeshHeight(x,z)-.025,variant=[0,1,3,5][Math.floor(random()*4)];
-      strays.push({x,y,z,height:Math.min(.25+random()*.62,-.32-y),width:.48+random()*.43,spread:.7+random()*.4,rotation:random()*Math.PI*2,variant,cove:-1-islandIndex,tint:random()});break;
+      const site={x,y,z,height:Math.min(.25+random()*.62,-.32-y),width:.48+random()*.43,spread:.7+random()*.4,rotation:random()*Math.PI*2,variant,cove:-1-islandIndex,tint:random()};
+      strays.push(site);remember(site);break;
     }
   }
   // Distributed strays remain visible at every quality tier instead of being a trailing batch.

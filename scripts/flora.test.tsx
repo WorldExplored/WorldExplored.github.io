@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { create } from '@react-three/test-renderer';
-import { Vector3, type InstancedMesh, type MeshPhysicalMaterial, type WebGLProgramParametersWithUniforms, type WebGLRenderer } from 'three';
+import { MeshPhysicalMaterial, Vector3, type InstancedMesh, type WebGLProgramParametersWithUniforms, type WebGLRenderer } from 'three';
 import { Flora, createFloraSites } from '../src/components/world/Flora';
+import { createHistoryFlowerBorder } from '../src/components/world/CivicLandmarks';
 import { createLandscapePlan, distanceToSegment, landDistance, terrainHeight } from '../src/components/world/terrain';
 import { createSceneRuntime, world, type QualityTier } from '../src/content/world';
 import { cameraObstacles, constrainCameraPose, focusPose } from '../src/components/world/cameraControls';
@@ -12,14 +13,36 @@ Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 test('clustered flora stays grounded and clears structures and circulation',()=>{
   const sites=createFloraSites();assert.deepEqual(sites,createFloraSites());assert.ok(sites.length>180);
   assert.equal(new Set(sites.map(s=>s.kind)).size,8);
+  const city=sites.filter(site=>site.z<-58&&site.x<18);
+  assert.ok(city.length>=220,'courtyards and parks form a visible planted city layer');
+  assert.ok(new Set(city.map(site=>site.kind)).size>=5);
   const plan=createLandscapePlan();
   for(const site of sites){
     assert.ok(Math.abs(site.y-terrainHeight(site.x,site.z))<1e-9);
-    const reach=site.kind==='broadleaf'?1.55:site.kind==='shrub'?1.3:site.kind==='flower'?1:.9;
+    const reach=site.reach;
     for(const circle of [...plan.structures,...plan.rocks,...plan.trees.map(tree=>({...tree,radius:tree.height*.15}))])assert.ok(Math.hypot(site.x-circle.x,site.z-circle.z)>circle.radius+reach-.001);
     for(const path of plan.paths)for(let i=1;i<path.points.length;i++)assert.ok(distanceToSegment(site.x,site.z,path.points[i-1],path.points[i])>path.width/2+reach-.001);
     if(site.kind==='reeds'||site.kind==='beach')assert.ok(landDistance(site.x,site.z)<3.81);
   }
+});
+
+test('the beacon has rooted tufts and History keeps its flower border outside walls and paths',()=>{
+  const sites=createFloraSites();
+  assert.ok(sites.filter(site=>Math.hypot(site.x+76,site.z+36)<7).length>=18);
+  const material=new MeshPhysicalMaterial({vertexColors:true}),border=createHistoryFlowerBorder(material);
+  try{
+    const entries=Object.values(border.entries).flat();
+    assert.ok(entries.length>=20);
+    const landmark=world.landmarks.find(item=>item.id==='history')!,heading=landmark.rotationY??0;
+    const paths=createLandscapePlan().paths.filter(path=>path.id?.startsWith('history-'));
+    for(const site of entries){
+      assert.ok(Math.abs(site.x)>5.8||site.z<-4.1);
+      const x=landmark.position[0]+site.x*Math.cos(heading)+site.z*Math.sin(heading);
+      const z=landmark.position[2]-site.x*Math.sin(heading)+site.z*Math.cos(heading);
+      assert.ok(Math.abs(site.y-terrainHeight(x,z)+.02)<1e-9);
+      for(const path of paths)for(let i=1;i<path.points.length;i++)assert.ok(distanceToSegment(x,z,path.points[i-1],path.points[i])>=path.width/2+.45-1e-9);
+    }
+  }finally{border.dispose();material.dispose();}
 });
 
 test('flora retains resources across tiers and freezes wind and pointer response',async()=>{

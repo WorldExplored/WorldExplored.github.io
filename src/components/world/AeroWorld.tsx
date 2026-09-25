@@ -17,15 +17,18 @@ import { AmbientSystem } from './AmbientSystem';
 import { CityVentilation } from './CityVentilation';
 import { EcoCity } from './EcoCity';
 import { ReefLife } from './ReefLife';
+import { MarineVisitors } from './MarineVisitors';
 import { DolphinLife } from './DolphinLife';
 import { ReefHabitat } from './ReefHabitatScene';
 import { CoastalLife } from './CoastalLife';
 import { Flora } from './Flora';
+import { HistoryFlowerBorder } from './CivicLandmarks';
 import { Wildlife } from './Wildlife';
 import { ShoreImpacts } from './ShoreImpacts';
 import { LighthouseAccess } from './LighthouseAccess';
 import { Bridges } from './Bridges';
 import { GardenRover } from './GardenRover';
+import { DockEcology } from './DockEcology';
 import { Seaweed } from './Seaweed';
 import { BenthicLife } from './BenthicLife';
 import { CityPathEdges } from './CityPathEdges';
@@ -152,12 +155,15 @@ export function AeroWorld(props: WorldProps & { runtime: MutableRefObject<SceneR
     {stage >= 1 && <EcoCity runtime={runtime} paused={stopped} quality={tier} />}
     {stage >= 3 && <CoastalLife runtime={runtime} paused={stopped} quality={tier} />}
     {stage >= 3 && <ReefHabitat runtime={runtime} paused={stopped} quality={tier} />}
+    {stage >= 4 && <MarineVisitors runtime={runtime} paused={stopped} quality={tier} />}
     {stage >= 3 && <DolphinLife runtime={runtime} paused={stopped} quality={tier} />}
     {stage >= 3 && <ReefLife runtime={runtime} paused={stopped} quality={tier} />}
     {stage >= 3 && <CityVentilation runtime={runtime} paused={stopped} quality={tier} />}
+    {stage >= 3 && <DockEcology />}
     {stage >= 3 && <Seaweed runtime={runtime} paused={stopped} quality={tier} />}
     {stage >= 3 && <BenthicLife quality={tier} />}
     {stage >= 3 && <CityPathEdges />}
+    {stage >= 4 && <HistoryFlowerBorder />}
     {stage >= 4 && <Flora runtime={runtime} paused={stopped} quality={tier} />}
     {stage >= 4 && <Wildlife runtime={runtime} paused={stopped} quality={tier} />}
     {stage >= 5 && <GardenRover runtime={runtime} paused={stopped} quality={tier} active={false} />}

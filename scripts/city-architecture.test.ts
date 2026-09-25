@@ -3,6 +3,7 @@ import test from 'node:test';
 import { DoubleSide, Mesh, MeshBasicMaterial, Object3D, Raycaster, Triangle, Vector3 } from 'three';
 import { buildCityArchitecture, type CityFinish } from '../src/components/world/CityArchitecture';
 import { CITY_BASE_Y, cityBuildings, cityEntranceLocal, cityEntranceWorld, cityRoofMounts, type CityBuilding } from '../src/components/world/city';
+import { createFacadeGarden, VINE_HABITS, vineHabit } from '../src/components/world/FacadeGarden';
 
 function fixture(building: Readonly<CityBuilding>) {
   const meshes: Mesh[] = []; const finishes: CityFinish[] = [];
@@ -14,6 +15,17 @@ function fixture(building: Readonly<CityBuilding>) {
   });
   return { meshes, finishes, rooms, dispose() { meshes.forEach(mesh => mesh.geometry.dispose()); material.dispose(); } };
 }
+
+test('climbers use three distinct rooted branch and leaf habits',()=>{
+  const gardens=[0,1,2].map(seed=>createFacadeGarden({width:.7,height:3.2,seed}));
+  try{
+    assert.equal(VINE_HABITS.length,3);
+    assert.deepEqual([0,1,2].map(vineHabit),[0,1,2]);
+    assert.equal(new Set(gardens.map(garden=>garden.planter.userData.facadeGarden.habit)).size,3);
+    assert.equal(new Set(gardens.map(garden=>garden.foliage.attributes.position.count)).size,3);
+    for(const garden of gardens){garden.planter.computeBoundingBox();assert.ok(Math.abs(garden.planter.boundingBox!.min.y)<1e-7);}
+  }finally{gardens.forEach(garden=>Object.values(garden).forEach(geometry=>geometry.dispose()));}
+});
 
 test('thirteen distinct city families remain inside the original footprints and include room-scale detail', () => {
   assert.equal(cityBuildings.length, 13);

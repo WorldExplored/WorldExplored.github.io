@@ -17,7 +17,7 @@ export function normalizedWheelZoom(delta: number, mode: number, viewportHeight:
 }
 
 export interface CameraObstacle { x: number; z: number; radius: number; top: number }
-const HEIGHTS: Record<LandmarkId, number> = { work: 11.6, experience: 7.8, research: 8.5, purdue: 4.8, history: 8.8, about: 5, contact: 6.5, building: 7.8 };
+const HEIGHTS: Record<LandmarkId, number> = { work: 11.6, experience: 7.8, research: 8.5, purdue: 4.8, history: 8.8, about: 5, contact: 6.5, building: 7.8, arcade: 4.6 };
 const CLEARANCE = 1.15;
 
 let obstacleCache: CameraObstacle[] | undefined;

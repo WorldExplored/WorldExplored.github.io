@@ -229,7 +229,7 @@ html.world-active,html.world-active body { height: 100%; overflow: hidden; overs
 }
 
 /* Molded aqua navigation instrument: a continuous shell with independent jewel controls. */
-.dock { position: fixed; z-index: 30; bottom: max(18px,env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); width: 730px; max-width: calc(100vw - 20px); display: grid; grid-template-columns: repeat(7,minmax(0,1fr)); gap: 7px; padding: 15px 22px 12px; border: 0; background: none; isolation: isolate; }
+.dock { position: fixed; z-index: 30; bottom: max(18px,env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); width: 815px; max-width: calc(100vw - 20px); display: grid; grid-template-columns: repeat(8,minmax(0,1fr)); gap: 7px; padding: 15px 22px 12px; border: 0; background: none; isolation: isolate; }
 .dock-shell { position: absolute; inset: 0; z-index: -1; width: 100%; height: 100%; filter: drop-shadow(0 5px 4px #0741664d); pointer-events: none; }
 .dock a { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; min-width: 0; min-height: 75px; padding: 0 2px; border: 0; border-radius: 25px 25px 16px 16px; background: transparent; color: #073954; font-size: 13px; font-weight: 650; line-height: 1.15; text-align: center; text-shadow: 0 1px #d5fbff; box-shadow: none; }
 .habitat-icon { position: relative; display: grid; place-items: center; width: 50px; height: 50px; border: 1px solid #edfefe; border-radius: 50%; color: #146c8e; background: radial-gradient(ellipse at 33% 13%,#ffffff 0,#f6ffffcf 18%,#6ed8e8b3 46%,#187daabd 72%,#b4eff4 100%); box-shadow: inset 0 0 0 2px #17578159,inset 0 3px 2px #ffffffc9,inset 0 -3px 3px #18476973,0 2px 1px #e1fbff,0 3px 4px #103f6c5c; transition: box-shadow 180ms,transform 180ms,background 180ms; }
@@ -336,3 +336,20 @@ html[data-world-boot] .portfolio .canvas-host { background: transparent !importa
 .sound-music__player { width: 100%; min-height: 200px; overflow: hidden; border-radius: 8px; background: #072c40; }
 .sound-music__player iframe { width: 100%; height: 200px; border: 0; }
 .sound-track select { display: block; width: 100%; min-height: 40px; margin-top: 6px; border: 1px solid #7fc6d3; border-radius: 6px; background: #efffff; color: #125775; font: inherit; }
+
+/* Eight destinations retain comfortable touch targets on narrow phones. */
+@media (max-width: 480px) {
+  .dock { grid-template-columns: repeat(4,minmax(0,1fr)); row-gap: 5px; padding: 10px 12px; }
+  .dock a,.dock a:first-child { min-height: 52px; }
+  .dock .habitat-icon { width: 30px; height: 30px; }
+  .dock .habitat-icon svg { width: 28px; height: 28px; }
+  .dock a[aria-current]::after { bottom: -3px; }
+  .ambience-settings { bottom: 151px; }
+  :is(.scene-ready,html[data-world-boot] .portfolio) .content-stage { bottom: calc(158px + env(safe-area-inset-bottom)); }
+}
+
+.section-arcade .surface-paper > h2 { margin-bottom: 12px; }
+@media (max-width: 767px) {
+  :is(.scene-ready,html[data-world-boot] .portfolio):has(.section-arcade[data-active="true"]) .content-stage { top: 12px; }
+  .section-arcade .surface-paper { padding: 15px 12px 20px; }
+}

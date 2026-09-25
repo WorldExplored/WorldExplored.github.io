@@ -100,3 +100,14 @@ test('rendered body corners stay above terrain; wheels, dock, pause and retained
     for (const mesh of meshes) { const hits: unknown[] = []; mesh.raycast({} as never, hits as never); assert.equal(hits.length, 0); }
   } finally { await renderer.unmount(); }
 });
+
+
+test('service endpoints retreat from obstacles without accepting an obstructed route interior',()=>{
+  const plan=createLandscapePlan(),route=createRoverRoute(plan),last=route.points.at(-1)!;
+  const obstacle={...plan.rocks[0],x:last.x,z:last.z,radius:.3};
+  const trimmed=createRoverRoute({...plan,rocks:[...plan.rocks,obstacle]});
+  assert.ok(trimmed.length<route.length-.5&&trimmed.length>5,'Keep a usable service run while reserving the endpoint turning circle');
+  assert.deepEqual(trimmed.points[0],route.points[0],'The clear charging end remains fixed');
+  const middle=sampleRoverRoute(route,route.length/2);
+  assert.throws(()=>createRoverRoute({...plan,rocks:[...plan.rocks,{...obstacle,x:middle.x,z:middle.z}]}),/service path is obstructed/,'Interior collisions must still fail validation');
+});

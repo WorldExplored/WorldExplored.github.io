@@ -108,6 +108,11 @@ export const QA_VIEWS = Object.freeze({
   'city-civic-interior': { position: [-0.709, 3.5, -62.824], target: [0.056, 1.83, -68.302] },
   'city-transit-platform': { position: [-6, 4.8, -61], target: [-5, 3.75, -68] },
   'city-transit-lobby': { position: [-6, 3.5, -61], target: [-4.5, 1.73, -67.18] },
+  'arcade-front': { position: [-30.4, 3.5, -81], target: [-26, 2.2, -85] },
+  'turtle-nursery': { position: [-26.5, 2.5, 8.5], target: [-29.57, .72, 5.70] },
+  'octopus-crossing': { position: [12.4, 1.1, -20.7], target: [10, -3.2, -25] },
+  'stonefish-rest': { position: [-19, 1.1, -43.4], target: [-21.85, -6.97, -47.21] },
+  'water-gradient': { position: [-73, 70, 31], target: [-50, 0, -42] },
   overview: { position: [42, 29, 76], target: [-4, 2, -17] },
 } satisfies Record<string, CameraPose>);
 

@@ -12,6 +12,7 @@ import { makeGardenGallery } from '../src/components/world/GardenGallery.tsx';
 import { makeReceptionTerminal } from '../src/components/world/ReceptionTerminal.tsx';
 import { makeComputeBuilding } from '../src/components/world/ComputeBuilding.tsx';
 import { makeExperienceStudio, makeHistoryMuseum } from '../src/components/world/CivicLandmarks.tsx';
+import { createArcadeHall } from '../src/components/world/ArcadeHall.tsx';
 import { makeCampusHall } from '../src/components/world/CampusHall.tsx';
 import { createSceneRuntime, motionPolicy, world } from '../src/content/world.ts';
 
@@ -21,7 +22,7 @@ test('ungraded terrain bears actual architecture foundations and bridges cross r
   const plan = createLandscapePlan();
   // Final graded foundation contact and finished-floor clearance are sampled
   // against actual building faces in circulation.test.ts.
-  const builders={work:makeComputeBuilding,experience:makeExperienceStudio,research:makeResearchBuilding,purdue:makeCampusHall,history:makeHistoryMuseum,about:makeGardenGallery,contact:makeReceptionTerminal};
+  const builders={work:makeComputeBuilding,experience:makeExperienceStudio,research:makeResearchBuilding,purdue:makeCampusHall,history:makeHistoryMuseum,about:makeGardenGallery,contact:makeReceptionTerminal,arcade:createArcadeHall};
   for (const footprint of architectureFootprints()) {
     if (footprint.id === 'building') {
       for(let i=0;i<12;i++)assert.ok(Math.abs(terrainBaseHeight(footprint.x+Math.cos(i*Math.PI/6)*footprint.radius,footprint.z+Math.sin(i*Math.PI/6)*footprint.radius)-2.6)<1e-6,'Lighthouse bearing');
