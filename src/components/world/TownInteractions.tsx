@@ -12,7 +12,7 @@ import { FOUNTAIN_SITE } from './GardenFountain';
 import type { TownAction, TownInteractionState } from './townInteractionState';
 
 export interface TownInteractionSite { id: TownAction; label: string; position: CityPoint; size: CityPoint; yaw?: number }
-export const TOWN_BUOY_SITE = { x: -10, z: -57.4 } as const;
+export const TOWN_BUOY_SITE = { x: -5, z: -48 } as const;
 export const GREENHOUSE_VENT_LOCAL: CityPoint = [-1.4, 1.93, 1.96];
 export function townInteractionSites(): readonly TownInteractionSite[] {
   const greenhouse = cityBuildings.find(building => building.id === 'winter-garden')!;

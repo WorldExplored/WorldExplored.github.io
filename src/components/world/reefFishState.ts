@@ -57,20 +57,23 @@ function selectTarget(state: ReefFishState, spread = 5, escapeHeading?: number) 
     for (let t = .12; t <= 1; t += .12) {
       if (!reefFishPositionClear(state.position.x + (x - state.position.x) * t, state.position.y + (y - state.position.y) * t, state.position.z + (z - state.position.z) * t)) { clear = false; break; }
     }
-    if (clear) { state.target.set(x, y, z); state.targetAge = 0; return; }
+    if (clear) { state.target.set(x, y, z); state.targetAge = 0; return true; }
   }
-  state.target.copy(state.position); state.targetAge = 5;
+  state.target.copy(state.position); state.targetAge = 5; return false;
 }
 export function createReefFishState(index: number): ReefFishState {
   const random = seededRandom(89171 + index * 997), position = new Vector3();
+  const state: ReefFishState = { index, position, target: new Vector3(), heading: 0, pitch: 0, speed: 0, tail: 0, time: 0, targetAge: 0, reaction: 0, random };
   for (let attempt = 0; attempt < 10000; attempt++) {
     // Interleave western and eastern residents so every quality tier keeps both reef arms alive.
     const x = index % 3 === 0 ? -76 + random() * 46 : -30 + random() * 57, z = -66 + random() * 45;
     const y = Math.min(-1.05, reefFloorHeight(x, z) + .55 + random() * 1.5);
-    if (reefFishPositionClear(x, y, z, .2)) { position.set(x, y, z); break; }
+    if (!reefFishPositionClear(x, y, z, .2)) continue;
+    position.set(x,y,z);
+    // A clear body-sized pocket is not enough: each home must have an open swimming exit.
+    if(selectTarget(state)){state.heading=Math.atan2(position.z-state.target.z,state.target.x-position.x);return state;}
   }
-  const state: ReefFishState = { index, position, target: position.clone(), heading: random() * Math.PI * 2, pitch: 0, speed: 0, tail: 0, time: 0, targetAge: 0, reaction: 0, random };
-  selectTarget(state); return state;
+  throw new Error(`No navigable reef fish home ${index}`);
 }
 const wrap = (angle: number) => Math.atan2(Math.sin(angle), Math.cos(angle));
 /** A tap prompts nearby fish to dart away, then resume their individual foraging routes. */

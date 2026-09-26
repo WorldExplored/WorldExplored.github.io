@@ -9,14 +9,23 @@ export const cityTurbines = Object.freeze([
 
 // Decks bridge the coast from dry land to navigable water, rather than floating inland.
 export const cityDocks = Object.freeze([
-  Object.freeze({ id: 'city', x: -12, z: -61.5, length: 7, width: 1.3, y: 1.06 }),
+  Object.freeze({ id: 'city', x: -12, z: -53, length: 10, width: 1.3, y: 1.06 }),
   Object.freeze({ id: 'garden', x: -8, z: -21.5, length: 6, width: 1.3, y: 1.06 }),
 ]);
+
+/** Shared deck breaks keep shoreline growth attached to the actual wet rail posts. */
+export function dockLandingLayout(dock:typeof cityDocks[number]) {
+  const direction=dock.id==='city'?1:-1;
+  const wetEnd=dock.z+direction*dock.length/2;
+  return {direction,dryEnd:dock.z-direction*dock.length/2,wetEnd,
+    stairStart:wetEnd-direction*(dock.id==='city'?2.1:2.7),stairEnd:wetEnd-direction*(dock.id==='city'?.7:1.3),
+    landingEnd:wetEnd+(dock.id==='city'?.30:0)};
+}
 
 export const cityInfrastructureFootprints = Object.freeze([
   ...cityTurbines.map(turbine => Object.freeze({ id: `turbine-${turbine.x}`, x: turbine.x, z: turbine.z, radius: 2.45, height: turbine.height + 2.5 })),
   Object.freeze({ id: 'garden-fountain', x: -16.2, z: -70, radius: 1.3, height: 1.6 }),
-  ...cityDocks.map(dock => Object.freeze({ id: `${dock.id}-dock`, x: dock.x, z: dock.z, radius: 4.3, height: 1.65 })),
+  ...cityDocks.map(dock => Object.freeze({ id: `${dock.id}-dock`, x: dock.x, z: dock.z, radius: Math.hypot(dock.width/2,dock.length/2)+.7, height: 1.65 })),
 ]);
 
 // Compute terrain bases lazily so landscape planning can import the footprint data safely.
@@ -28,10 +37,12 @@ export interface CityFerryRoute { curve: CatmullRomCurve3; length: number; stati
 export const FERRY_DWELL = 4;
 export const FERRY_RAMP = 3;
 
+let ferryRouteCache:CityFerryRoute|undefined;
 export function createCityFerryRoute(): CityFerryRoute {
-  const points = [[-14, -60], [-16, -54], [-16, -39], [-11, -27], [-8, -25.5], [-5.5, -28], [-9, -42], [-14, -55]];
+  if(ferryRouteCache)return ferryRouteCache;
+  const points = [[-14, -47], [-14, -45], [-16, -43], [-16, -39], [-11, -27], [-8, -25.5], [-5.5, -28], [-9, -42], [-11, -48], [-14, -49]];
   const curve = new CatmullRomCurve3(points.map(([x, z]) => new Vector3(x, .17, z)), true, 'centripetal');
-  curve.arcLengthDivisions = 600; curve.updateArcLengths();
+  curve.arcLengthDivisions = 2400; curve.updateArcLengths();
   const point = new Vector3(); let station = 0; let nearest = Infinity;
   for (let index = 0; index < 1000; index++) {
     curve.getPointAt(index / 1000, point);
@@ -39,7 +50,7 @@ export function createCityFerryRoute(): CityFerryRoute {
     if (distance < nearest) { station = index / 1000; nearest = distance; }
   }
   const length = curve.getLength(); const speed = 1.8; const firstLength = length * station;
-  return { curve, length, station, firstLength, speed, firstDuration: firstLength / speed + FERRY_DWELL + FERRY_RAMP, duration: length / speed + 2 * (FERRY_DWELL + FERRY_RAMP) };
+  return ferryRouteCache={ curve, length, station, firstLength, speed, firstDuration: firstLength / speed + FERRY_DWELL + FERRY_RAMP, duration: length / speed + 2 * (FERRY_DWELL + FERRY_RAMP) };
 }
 
 export function cityFerryDistance(route: CityFerryRoute, elapsed: number) {

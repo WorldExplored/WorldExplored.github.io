@@ -11,6 +11,7 @@ import { createTownMechanisms, harborWaterHeight } from '../src/components/world
 import { createGardenFountain, fountainStreamPoint, FOUNTAIN_SITE } from '../src/components/world/GardenFountain';
 import { cityBuildings, cityRoofMounts, createCityTransitRoute } from '../src/components/world/city';
 import { createCityFerryRoute } from '../src/components/world/cityInfrastructure';
+import { createVesselState, vesselPointClearance, writeVesselPose } from '../src/components/world/marineTraffic';
 import { landDistance } from '../src/components/world/terrain';
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
@@ -105,7 +106,14 @@ test('full solar response retains roof clearance and buoy stays offshore outside
     }
     assert.ok(landDistance(TOWN_BUOY_SITE.x, TOWN_BUOY_SITE.z) < -1);
     const ferry = createCityFerryRoute();
-    for (let index = 0; index < 1000; index++) { ferry.curve.getPointAt(index / 1000, point); assert.ok(Math.hypot(point.x - TOWN_BUOY_SITE.x, point.z - TOWN_BUOY_SITE.z) > 2); }
+    for (let index = 0; index < 1000; index++) { ferry.curve.getPointAt(index / 1000, point); assert.ok(Math.hypot(point.x - TOWN_BUOY_SITE.x, point.z - TOWN_BUOY_SITE.z) > 3); }
+    for(let vessel=0;vessel<3;vessel++){
+      const boat=createVesselState(vessel);
+      for(let sample=0;sample<=2000;sample++){
+        boat.distance=boat.route.length*sample/2000;writeVesselPose(boat);
+        assert.ok(vesselPointClearance(boat,TOWN_BUOY_SITE.x,TOWN_BUOY_SITE.z,.75)>1,'all moving hulls clear the buoy and bell');
+      }
+    }
     const mechanisms = createTownMechanisms(route);
     for (let second = 0; second < 60; second += .2) { mechanisms.update(second, controls, false); assert.equal(mechanisms.buoy.position.y, harborWaterHeight(TOWN_BUOY_SITE.x, TOWN_BUOY_SITE.z, second)); }
     mechanisms.dispose();

@@ -357,9 +357,11 @@ export function buildCityArchitecture(building: Readonly<CityBuilding>, shellAdd
       const ground=sideFaces.filter(face=>face.y<.21).sort((a,b)=>side*(b.x+side*b.width/2-a.x-side*a.width/2))[0];
       const wallTop=Math.max(...sideFaces.filter(face=>Math.abs(face.x-ground.x)<ground.width*.4).map(face=>face.y+face.height));
       const seed=[...building.id].reduce((value,letter)=>(value*31+letter.charCodeAt(0))%65521,17)+(side>0?7:2),height=Math.min(wallTop-.3,(.64+(seed%4)*.065)*h);
-      const width=Math.min(.8,ground.depth*(.19+(seed%3)*.035));
-      const garden=createFacadeGarden({width,height,seed});
-      const z=ground.z-ground.depth*.22;
+      // Broad rooted canopies occupy solid sidewalls. Curtain-wall homes retain
+      // slender climbers so their windows and room views remain open.
+      const spread=!glazed, width=spread?ground.depth*.82:Math.min(.8,ground.depth*(.19+(seed%3)*.035));
+      const garden=createFacadeGarden({width,height,seed,spread});
+      const z=ground.z-(spread?0:ground.depth*.22);
       const outer=(face:typeof ground,pz:number,cap=false)=>{
         const margin=cap?0:family==='rounded-housing'?-.1:glazed?-.08:.03;
         const radius=face.width/2+margin;
@@ -399,7 +401,7 @@ export function buildCityArchitecture(building: Readonly<CityBuilding>, shellAdd
           p.setY(i,start[1]+(end[1]-start[1])*t);
         }
         geometry.computeVertexNormals();
-        geometry.userData.facadeGarden={building:building.id,role:part,floor:0,root:[baseX,0,z],seed,width,height};
+        geometry.userData.facadeGarden={building:building.id,role:part,floor:0,root:[baseX,0,z],seed,width,height,spread,wallDepth:ground.depth};
         const finish:CityFinish=part==='planter'?'stone':part==='wood'?'wood':part==='trellis'?'metal':'garden';
         add(geometry,finish,baseX,0,z);
       }

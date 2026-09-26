@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { Mesh, Raycaster, Vector3 } from 'three';
 import { createCityLife, dockBoardingPlan, dockBoardingExtension, DOCK_BOARDING_HEIGHT, DOCK_STAIR_COUNT } from '../src/components/world/CityLife';
 import { createCityTransitRoute } from '../src/components/world/city';
+import { landDistance } from '../src/components/world/terrain';
 import { createCityFerryRoute, FERRY_DWELL } from '../src/components/world/cityInfrastructure';
 
 test('both piers descend through four supported steps to the actual ferry threshold',()=>{
@@ -21,6 +22,20 @@ test('both piers descend through four supported steps to the actual ferry thresh
       const wetEnd=plan.dock.z+Math.sign(plan.stairEnd-plan.stairStart)*plan.dock.length/2;
       ray.ray.origin.set(plan.dock.x,4,(plan.stairEnd+wetEnd)/2);
       assert.ok(Math.abs(ray.intersectObject(pier)[0].point.y-DOCK_BOARDING_HEIGHT)<1e-5);
+    }
+  }finally{city.retain()();}
+});
+
+test('the relocated city dock joins dry land and its low landing supports both gangway corners',()=>{
+  const city=createCityLife(createCityTransitRoute()),plan=dockBoardingPlan()[0],pier=city.root.getObjectByName('city-public-infrastructure') as Mesh;
+  city.root.updateMatrixWorld(true);
+  try{
+    assert.ok(landDistance(plan.dock.x,plan.dock.z-plan.dock.length/2)>1.5);
+    assert.ok(landDistance(plan.dock.x,plan.dock.z+plan.dock.length/2)<-2);
+    for(const side of [-1,1]){
+      const point=plan.start.clone().addScaledVector(plan.across,side*plan.width/2);point.x+=.03;
+      const ray=new Raycaster(new Vector3(point.x,3,point.z),new Vector3(0,-1,0)),hits=ray.intersectObject(pier);
+      assert.ok(hits.length&&Math.abs(hits[0].point.y-DOCK_BOARDING_HEIGHT)<1e-5,'the boarding edge meets a solid low dock landing');
     }
   }finally{city.retain()();}
 });

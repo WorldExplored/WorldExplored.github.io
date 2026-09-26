@@ -2,11 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { create, act } from '@react-three/test-renderer';
-import { InstancedMesh, Matrix4, Vector3 } from 'three';
-import { Wildlife, createWildlife, writeGullPose } from '../src/components/world/Wildlife';
+import { InstancedMesh, Matrix4, Object3D, Vector3 } from 'three';
+import { Wildlife, createWildlife, writeGullPose, writeCrabPose } from '../src/components/world/Wildlife';
 import { createCrabRoutes, createCrabStates, createGullPerches, createGullStates, startGullTakeoff, stepCrab, stepGull, validCrabPosition, WILDLIFE_COUNTS, writeCrabPosition, gullFlightFloor, GULL_TURN_RATE, GULL_MAX_PITCH, GULL_SEPARATION, type GullMode } from '../src/components/world/wildlifeState';
 import { cameraObstacles } from '../src/components/world/cameraControls';
-import { createLandscapePlan, terrainHeight } from '../src/components/world/terrain';
+import { createLandscapePlan, terrainHeight, terrainMeshHeight } from '../src/components/world/terrain';
 import { createSceneRuntime, type QualityTier } from '../src/content/world';
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
@@ -42,10 +42,10 @@ test('takeoff starts at the present perch and paused gulls freeze all state', ()
 test('all crab routes remain on gently sloping exposed coast with structure and path clearance', () => {
   const plan = createLandscapePlan(); const routes = createCrabRoutes(plan); const point = new Vector3(); assert.equal(routes.length, 10);
   for (const route of routes) for (let index = 0; index <= 100; index++) {
-    writeCrabPosition(route, index / 50 - 1, point); assert.ok(validCrabPosition(point, plan)); assert.ok(Math.abs(point.y - terrainHeight(point.x, point.z) - .11) < 1e-8);
+    writeCrabPosition(route, index / 50 - 1, point); assert.ok(validCrabPosition(point, plan)); assert.ok(Math.abs(point.y - terrainMeshHeight(point.x, point.z) - .11) < 1e-8);
   }
-  const crab = createCrabStates()[0]; const start = crab.position.clone();
-  for (let frame = 0; frame < 300; frame++) stepCrab(crab, 1 / 60, distantCamera, [start.x + .2, 0, start.z]);
+  const crab = createCrabStates().find(state=>state.route.island.id!=='beacon')!; const start = crab.position.clone();
+  for (let frame = 0; frame < 300; frame++) stepCrab(crab, 1 / 60, distantCamera, [start.x + .2, start.y, start.z]);
   assert.ok(['Fleeing','Hiding'].includes(crab.mode)); assert.ok(validCrabPosition(crab.position, plan)); assert.ok(crab.position.distanceTo(start) > .05);
   const snapshot = JSON.stringify(crab); for (let frame = 0; frame < 100; frame++) stepCrab(crab, 1 / 60, distantCamera, null, true); assert.equal(JSON.stringify(crab), snapshot);
 });
@@ -198,4 +198,35 @@ test('solid bill and shoulder coverts keep anatomy connected through folded, gli
     }
     for(const name of ['gull-grass-and-feather-lining','gull-egg-brown-speckles'])assert.equal((life.group.getObjectByName(name) as InstancedMesh).count,3);
   }finally{life.meshes.forEach(mesh=>{mesh.geometry.dispose();mesh.dispose();});life.materials.forEach(material=>material.dispose());}
+});
+
+
+test('crabs reserve turtle lanes and burrow below the rendered beach before returning', async()=>{
+  const {createMarineVisitor,sampleTurtleCycle,turtleHatchlingPose,turtleBeachClearance}=await import('../src/components/world/marineVisitorState');
+  const routes=createCrabRoutes(),point=new Vector3(),baby=new Vector3(),root=new Object3D();
+  assert.equal(routes.filter(route=>route.island.id==='beacon').length,1,'a single lighthouse territory fits on its small beach');
+  const territory=routes.flatMap(route=>Array.from({length:81},(_,n)=>writeCrabPosition(route,n/40-1,new Vector3())));
+  for(const p of territory)assert.ok(turtleBeachClearance(p.x,p.z,.53)>.05);
+  const turtles=Array.from({length:3},(_,i)=>createMarineVisitor('turtle',i));
+  for(let seconds=0;seconds<3600;seconds+=3)for(const turtle of turtles){
+    sampleTurtleCycle(turtle,seconds);
+    for(const p of territory)assert.ok(Math.hypot(turtle.position.x-p.x,turtle.position.z-p.z)>.53+.58,'the complete adult shell clears every crab route');
+    for(let i=0;i<6;i++)if(turtleHatchlingPose(turtle,i,baby).visible)
+      for(const p of territory)assert.ok(Math.hypot(baby.x-p.x,baby.z-p.z)>.53+.14,'hatchlings keep a separate passage to water');
+  }
+  const crabs=createCrabStates(),hidden=new Set<number>(),returned=new Set<number>();
+  for(let frame=0;frame<4400;frame++)crabs.forEach((crab,index)=>{
+    stepCrab(crab,.05,distantCamera,null);writeCrabPose(root,crab,index);
+    if(crab.burrow>.995){
+      hidden.add(index);assert.ok(root.matrix.determinant()<1e-12,'the actual rendered body disappears');
+      writeCrabPosition(crab.route,crab.retreat,point);
+      assert.ok(Math.hypot(point.x-crab.position.x,point.z-crab.position.z)<.01,'hiding is centered on the modeled burrow mouth');
+      assert.ok(root.position.y<terrainMeshHeight(root.position.x,root.position.z)-.12,'the body lowers beneath the actual beach');
+    }
+    if(hidden.has(index)&&crab.mode==='Returning'&&crab.burrow<.01){returned.add(index);assert.ok(root.matrix.determinant()>.01);}
+  });
+  assert.equal(hidden.size,10);assert.equal(returned.size,10);
+  const life=createWildlife();
+  try{assert.equal(life.crabBurrows.count,20);assert.ok(life.crabBurrows.geometry.attributes.position.count<20,'all entrances use one small shared mesh');}
+  finally{life.meshes.forEach(mesh=>{mesh.geometry.dispose();mesh.dispose();});life.materials.forEach(material=>material.dispose());}
 });

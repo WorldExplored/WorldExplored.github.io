@@ -4,6 +4,7 @@ import { create } from '@react-three/test-renderer';
 import { MeshPhysicalMaterial, PerspectiveCamera, Vector3, InstancedMesh, type WebGLProgramParametersWithUniforms, type WebGLRenderer } from 'three';
 import { Flora, createFloraSites, floraGeometry, FLOWER_KINDS } from '../src/components/world/Flora';
 import { lighthouseEscarpmentSites } from '../src/components/world/LighthouseEscarpment';
+import { structurePlantingClearance } from '../src/components/world/plantingFootprints';
 import { BEACH_PALMS } from '../src/components/world/coastalBiome';
 import { coastalRockGeometry } from '../src/components/world/coastalRocks';
 import { terrainMeshHeight } from '../src/components/world/terrain';
@@ -24,7 +25,7 @@ test('clustered flora stays grounded and clears structures and circulation',()=>
   for(const site of sites){
     assert.ok(Math.abs(site.y-terrainHeight(site.x,site.z))<1e-9);
     const reach=site.reach;
-    for(const circle of [...plan.structures,...plan.rocks,...plan.trees.map(tree=>({...tree,radius:tree.height*.15}))])assert.ok(Math.hypot(site.x-circle.x,site.z-circle.z)>circle.radius+reach-.001);
+    for(const circle of [...plan.structures,...plan.rocks,...plan.trees.map(tree=>({...tree,radius:tree.height*.15}))])assert.ok(structurePlantingClearance(site.x,site.z,circle)>reach-.001,`${site.kind} at ${site.x},${site.z} overlaps ${circle.id}`);
     for(const path of plan.paths)for(let i=1;i<path.points.length;i++)assert.ok(distanceToSegment(site.x,site.z,path.points[i-1],path.points[i])>path.width/2+reach-.001);
     if(site.kind==='reeds'||site.kind==='beach')assert.ok(landDistance(site.x,site.z)<3.81);
   }
@@ -115,6 +116,10 @@ test('beach palms have curved trunks and attached feather crowns with camera cle
     assert.equal(sites.length,3);const p=geometry.attributes.position;
     assert.ok(Math.max(...Array.from({length:p.count},(_,i)=>p.getY(i)))>3,'palms include a full trunk and arching crown');
     assert.ok(geometry.index!.count/3<1600,'three palms share one compact leaf-and-trunk mesh');
+    const colors=geometry.attributes.color;
+    for(let i=0;i<13*7;i++)assert.ok(colors.getX(i)>colors.getY(i)*1.3,'fibrous trunks are brown rather than green');
+    const coconuts=Array.from({length:p.count-13*7},(_,i)=>i+13*7).filter(i=>p.getY(i)>2.4&&p.getY(i)<2.79&&colors.getX(i)>colors.getY(i)*1.3);
+    assert.ok(coconuts.length>=140,'five brown coconut shells attach under the crown');
     for(const site of sites){
       assert.ok(BEACH_PALMS.some(palm=>palm.x===site.x&&palm.z===site.z));
       assert.ok(landDistance(site.x,site.z)>1.5&&landDistance(site.x,site.z)<3.3,'palms root on the beach rather than a lawn or water');

@@ -5,7 +5,7 @@ import { BoxGeometry, BufferGeometry, CylinderGeometry, ExtrudeGeometry, Shape, 
 import { combine, strut, useResources } from './BuildingKit';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { applySurface } from './surfaceMaterials';
-import { applyBakedRoomLighting } from './RoomLighting';
+import { applyBakedRoomLighting, applyNightSource } from './RoomLighting';
 
 export type InteriorFinish = 'wood' | 'fabric' | 'metal' | 'paper' | 'screen' | 'light' | 'leaf' | 'soil' | 'coolant' | 'pipe';
 export type InteriorGeometry = Record<InteriorFinish, BufferGeometry>;
@@ -157,6 +157,7 @@ export function FurnishedInterior({ build, name }: { build: () => InteriorGeomet
     coolant: new MeshStandardMaterial({ color: '#06abc1', roughness: .23, metalness: .05 }),
     pipe: new MeshPhysicalMaterial({ color: '#d4f9f4', roughness: .08, transparent: true, opacity: .2, depthWrite: false }),
   };
+    applyNightSource(result.screen, .8); applyNightSource(result.light, .9);
     Object.entries(result).forEach(([finish,material])=>{if(finish!=='pipe')applyBakedRoomLighting(material);});return result;
   });
   useEffect(() => { clearTimeout(timers.get(materials)); return () => { timers.set(materials, setTimeout(() => Object.values(materials).forEach(material => material.dispose()), 0)); }; }, [materials]);

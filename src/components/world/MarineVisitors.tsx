@@ -8,7 +8,7 @@ import type { EnvironmentProps } from './Water';
 import { createMarineVisitor, sampleTurtleCycle, stepMarineVisitor, turtleHatchlingPose, type MarineVisitorState } from './marineVisitorState';
 import { terrainMeshHeight } from './terrain';
 import { createMarineResidents } from './MarineResidents';
-import { turtleCarapaceGeometry, turtlePlastronGeometry, turtleHeadGeometry, turtleFlipperGeometry, turtleScuteGeometry, turtleNestSandGeometry } from './turtleAnatomy';
+import { turtleCarapaceGeometry, turtlePlastronGeometry, turtleHeadGeometry, turtleFlipperGeometry, turtleScuteGeometry, turtleNestSandGeometry, TURTLE_VARIATIONS } from './turtleAnatomy';
 
 function oval(x:number,y:number,z:number,sx:number,sy:number,sz:number){return new SphereGeometry(1,12,8).scale(sx,sy,sz).translate(x,y,z);}
 
@@ -21,7 +21,7 @@ export function createMarineVisitors(){
   const paint=(color:string,roughness=.78)=>{const material=new MeshStandardMaterial({color,roughness,side:DoubleSide});materials.add(material);return material;};
   const stoneMottles=[paint('#a2a98a'),paint('#525e50')],stoneEye=paint('#191e20');
   const octopusSkin=[paint('#c56e64',.58),paint('#8265a5',.57)],octopusUnderside=paint('#e8ad9e'),octopusEye=paint('#162a31');
-  const turtleShell=paint('#314d38'),turtlePlates=paint('#6b8656'),turtleSkin=paint('#668a64'),turtleBelly=paint('#d2c99a'),egg=paint('#f3ead8'),nestSand=paint('#b5a17e'),nestWrack=paint('#72745a'),nestWood=paint('#988b6d');
+  const turtlePlates=paint('#6b8656'),turtleSkin=paint('#668a64'),egg=paint('#f3ead8'),nestSand=paint('#b5a17e'),nestWrack=paint('#72745a'),nestWood=paint('#988b6d');
   const shadowMaterial=new MeshStandardMaterial({color:'#263e30',transparent:true,opacity:.24,depthWrite:false,roughness:1,side:DoubleSide});materials.add(shadowMaterial);
   const bodyStone=shape(oval(0,.105,0,.43,.11,.30)),stoneFin=shape(new SphereGeometry(1,7,5).scale(.042,.084,.018));
   const stonePectoral=shape(oval(0,0,0,.22,.027,.13));
@@ -83,12 +83,13 @@ export function createMarineVisitors(){
         add(pivot,'sucker-row',suckerCluster,octopusUnderside);
       }
     }else{
-      add(animal,'arched-sea-turtle-shell',shell,turtleShell);add(animal,'pale-plastron',belly,turtleBelly);add(animal,'sea-turtle-head',turtleHead,turtleSkin);
-      add(animal,'shell-scutes',shellScutes,turtlePlates);add(animal,'sea-turtle-tail',turtleTail,turtleSkin);add(animal,'head-scale-markings',turtleMarkings,turtleShell);
+      const variation=TURTLE_VARIATIONS[index],shellPaint=paint(variation.shell),platesPaint=paint(variation.plates),skinPaint=paint(variation.skin),bellyPaint=paint(variation.belly);
+      add(animal,'arched-sea-turtle-shell',shell,shellPaint).scale.z=variation.width;add(animal,'pale-plastron',belly,bellyPaint).scale.z=variation.width;add(animal,'sea-turtle-head',turtleHead,skinPaint);
+      add(animal,'shell-scutes',shellScutes,platesPaint).scale.z=variation.width;add(animal,'sea-turtle-tail',turtleTail,skinPaint);add(animal,'head-scale-markings',turtleMarkings,shellPaint);
       for(const side of [-1,1])add(animal,'turtle-eye',eye,octopusEye,.692,.244,side*.1045).scale.set(.62,.58,.28);
       actor.flippers=[];
       for(const side of [-1,1])for(const forward of [-1,1]){
-        const limb=add(animal,'four-swimming-flippers',flipper,turtleSkin,forward>0?.32:-.51,.135,side*.28);limb.rotation.y=side*(forward>0?.22:-.24);limb.scale.set(forward>0?1:.72,1,side*(forward>0?1:.62));actor.flippers.push(limb);
+        const limb=add(animal,'four-swimming-flippers',flipper,skinPaint,forward>0?.32:-.51,.135,side*.28*variation.width);limb.rotation.y=side*(forward>0?.22:-.24);limb.scale.set(forward>0?1:.72,1,side*(forward>0?variation.flipper:.62*variation.flipper));actor.flippers.push(limb);
       }
       animal.traverse(object=>{if(object instanceof Mesh)object.castShadow=true;});
       const shadow=add(root,'turtle-contact-shadow',contactShadow,shadowMaterial);shadow.renderOrder=2;actor.shadow=shadow;

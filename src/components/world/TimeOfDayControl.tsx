@@ -25,9 +25,9 @@ export function TimeOfDayControl() {
   return <><fieldset className="world-clock">
     <legend>Time of day</legend>
     <label htmlFor="world-time">{clockLabel(hour)} <span>{manual ? 'Preview' : 'Eastern time'}</span></label>
-    <input id="world-time" type="range" min="0" max="23.99" step=".05" value={hour} aria-valuetext={`${clockLabel(hour)}${manual ? ', preview' : ', Eastern time'}`} onChange={event => setTimeOverride(Number(event.currentTarget.value))}/>
+    <input id="world-time" type="range" min="0" max="23.99" step=".05" value={hour} aria-valuetext={`${clockLabel(hour)}${manual ? ', preview' : ', Eastern time'}`} onChange={event => { const next = Number(event.currentTarget.value); setHour(next); setManual(true); setTimeOverride(next); }}/>
     <div className="world-clock-ticks" aria-hidden="true"><span>Midnight</span><span>Noon</span><span>Midnight</span></div>
-    {manual && <button type="button" onClick={() => setTimeOverride(null)}>Use Eastern time</button>}
+    <button type="button" disabled={!manual} onClick={() => setTimeOverride(null)}>Use Eastern time</button>
   </fieldset>
     <fieldset className="world-clock"><legend>{lighthouseSettings.title}</legend>
       <label htmlFor="lighthouse-mode">{lighthouseSettings.label}</label>

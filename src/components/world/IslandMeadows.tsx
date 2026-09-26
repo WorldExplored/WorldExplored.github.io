@@ -10,11 +10,15 @@ import { meadowGeometry } from './MeadowGeometry';
 import type { EnvironmentProps } from './Water';
 
 export interface MeadowSite {x:number;y:number;z:number;height:number;width:number;rotation:number;region:string;form:number;tint:number}
+let meadowSiteCache:MeadowSite[]|undefined;
 export function createIslandMeadowSites():MeadowSite[]{
+  if(meadowSiteCache)return meadowSiteCache;
   const random=seededRandom(740322),plan=createLandscapePlan(),sites:MeadowSite[]=[],occupied=new Map<string,MeadowSite[]>();
-  const patches=ISLANDS.flatMap(island=>Array.from({length:island.id==='city'||island.id==='main'?95:island.id==='beacon'?18:70},()=>{
+  const patches=ISLANDS.flatMap(island=>Array.from({length:island.id==='city'||island.id==='main'?95:island.id==='beacon'?18:70},(_,patchIndex)=>{
     let x=island.x,z=island.z;
-    for(let attempt=0;attempt<90;attempt++){const angle=random()*Math.PI*2,r=Math.sqrt(random())*islandContour(island,angle);x=island.x+Math.cos(angle)*island.rx*r;z=island.z+Math.sin(angle)*island.rz*r;if(vegetationSuitability(x,z,.34,plan)>.09)break;}
+    for(let attempt=0;attempt<90;attempt++){const angle=random()*Math.PI*2,r=Math.sqrt(random())*islandContour(island,angle);x=island.x+Math.cos(angle)*island.rx*r;z=island.z+Math.sin(angle)*island.rz*r;
+      if(island.id==='city'&&patchIndex<54){x=-25+random()*39;z=-73+random()*13;if(patchIndex<18){x=-20+random()*8;z=-73+random()*8;}}
+      if(vegetationSuitability(x,z,.34,plan)>.09)break;}
     return {island,x,z,radius:.65+random()*2.7,aspect:.4+random()*.65,form:Math.floor(random()*3)};
   }));
   for(let attempt=0;attempt<65000&&sites.length<4700;attempt++){
@@ -28,10 +32,11 @@ export function createIslandMeadowSites():MeadowSite[]{
     for(let x=ix-1;x<=ix+1&&!near;x++)for(let z=iz-1;z<=iz+1&&!near;z++)near=(occupied.get(`${x},${z}`)??[]).some(site=>Math.hypot(px-site.x,pz-site.z)<spacing);
     if(near)continue;
     const form=random()<.65?patch.form:Math.floor(random()*3),height=(form===1?.28:.20)+random()*(form===1?.60:.46);
-    const site={x:px,y:terrainMeshHeight(px,pz)-.015,z:pz,height,width:.51+random()*.28,rotation:random()*Math.PI*2,region:island.id,form,tint:random()};
+    const layeredHeight=island.id==='city'&&pz>-74&&form===1?height*(.85+random()*.55):height;
+    const site={x:px,y:terrainMeshHeight(px,pz)-.015,z:pz,height:layeredHeight,width:.51+random()*.28,rotation:random()*Math.PI*2,region:island.id,form,tint:random()};
     sites.push(site);const key=`${ix},${iz}`,cell=occupied.get(key)??[];cell.push(site);occupied.set(key,cell);
   }
-  return sites;
+  meadowSiteCache=sites;return sites;
 }
 
 export function IslandMeadows({runtime,paused,quality}:EnvironmentProps){

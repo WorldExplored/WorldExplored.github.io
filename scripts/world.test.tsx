@@ -192,7 +192,7 @@ function SampleClock({ clockRef }: { clockRef: MutableRefObject<number> }) {
   return null;
 }
 
-test('healthy performance never forces low quality and declines respect the eight-second gate', async t => {
+test('healthy performance never forces low quality and declines respect the five-second gate', async t => {
   const previousRAF = Object.getOwnPropertyDescriptor(globalThis, 'requestAnimationFrame');
   const previousCancelRAF = Object.getOwnPropertyDescriptor(globalThis, 'cancelAnimationFrame');
   Object.defineProperty(globalThis, 'requestAnimationFrame', { configurable: true, value: () => 1 });
@@ -218,17 +218,17 @@ test('healthy performance never forces low quality and declines respect the eigh
     assert.deepEqual(changes, [], 'Repeated healthy sample windows must not invoke a low-quality fallback.');
 
     // Hold scene time at each boundary while consecutive frame windows are measured.
-    runtime.current.elapsed = 7.9;
+    runtime.current.elapsed = 4.9;
     await advance(renderer, 180, 1 / 20);
     assert.deepEqual(changes, []);
-    runtime.current.elapsed = 8;
+    runtime.current.elapsed = 5;
     await advance(renderer, 180, 1 / 20);
     assert.deepEqual(changes, ['medium']);
     await renderer.update(render('medium'));
-    runtime.current.elapsed = 15.9;
+    runtime.current.elapsed = 9.9;
     await advance(renderer, 180, 1 / 20);
     assert.deepEqual(changes, ['medium']);
-    runtime.current.elapsed = 16;
+    runtime.current.elapsed = 10;
     await advance(renderer, 180, 1 / 20);
     assert.deepEqual(changes, ['medium', 'low']);
     await renderer.update(render('low', true));

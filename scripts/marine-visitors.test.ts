@@ -44,17 +44,24 @@ test('stonefish and octopuses retain clear habitats and complete both reef cross
 });
 
 test('the entire octopus course clears coral, kelp and floor at the larger arm radius',()=>{
-  let reefDistance=0,openDistance=0;
+  let reefDistance=0,openDistance=0,innerDistance=0,outerDistance=0;
   for(let segment=1;segment<OCTOPUS_ROUTE.length;segment++){
     const [ax,az]=OCTOPUS_ROUTE[segment-1],[bx,bz]=OCTOPUS_ROUTE[segment];
     const length=Math.hypot(bx-ax,bz-az),steps=Math.ceil(length/.05);
     for(let step=0;step<=steps;step++){
       const t=step/steps,x=ax+(bx-ax)*t,z=az+(bz-az)*t;
       assert.ok(visitorClear('octopus',x,z,.74*.85));
-      if(step<steps){if(reefHabitatContains(x,z))reefDistance+=length/steps;else openDistance+=length/steps;}
+      if(step<steps){
+        if(reefHabitatContains(x,z)){
+          reefDistance+=length/steps;
+          if(x<11&&z>-32)innerDistance+=length/steps;
+          if(x>16&&z<-45)outerDistance+=length/steps;
+        }else openDistance+=length/steps;
+      }
     }
   }
-  assert.ok(reefDistance>20&&openDistance>30);
+  assert.ok(reefDistance>12&&openDistance>30);
+  assert.ok(innerDistance>3&&outerDistance>5,'the route still visits both reef shelves around the expanded city');
 });
 
 test('detailed animals and natural nests use shared geometry and release every resource',()=>{
@@ -205,7 +212,7 @@ test('turtle shells are outward-facing, sealed to the plastron, with attached pa
 test('new marine residents forage with clear swept bodies, rests and distinct squid bursts',async()=>{
   const {createMarineResidentsState,stepMarineResidents,residentPositionClear}=await import('../src/components/world/marineResidentState');
   const states=createMarineResidentsState(),rested=new Set<string>(),moved=new Set<string>();let squidFast=0,squidSlow=Infinity;
-  assert.deepEqual(['crawling-octopus','sea-snake','squid'].map(kind=>states.filter(s=>s.kind===kind).length),[4,3,5]);
+  assert.deepEqual(['crawling-octopus','sea-snake','squid'].map(kind=>states.filter(s=>s.kind===kind).length),[4,2,5]);
   for(let frame=0;frame<3600;frame++){
     const before=states.map(s=>s.position.clone());stepMarineResidents(states,.05);
     states.forEach((state,index)=>{
@@ -215,7 +222,7 @@ test('new marine residents forage with clear swept bodies, rests and distinct sq
       if(frame%20===0){assert.ok(residentPositionClear(state.position.x,state.position.z,state.radius));assert.ok(state.position.y< -1.2,'residents stay below boat draft');}
     });
   }
-  assert.equal(moved.size,12);assert.equal(rested.size,12);assert.ok(squidFast>squidSlow*4);
+  assert.equal(moved.size,11);assert.equal(rested.size,11);assert.ok(squidFast>squidSlow*4);
   const snapshot=states.map(s=>[...s.position.toArray(),s.time]);stepMarineResidents(states,10,true);assert.deepEqual(states.map(s=>[...s.position.toArray(),s.time]),snapshot);
 });
 
@@ -241,7 +248,7 @@ test('rare whale stays beyond islands and vessel routes, breaches and breathes t
     for(const tier of ['low','medium','high']as const)life.setQuality(tier);
     assert.equal(life.spray.geometry,geometry);assert.equal(life.spray.instanceMatrix,matrix);
     const meshes:Mesh[]=[];life.root.traverse(object=>{if(object instanceof Mesh)meshes.push(object);});
-    assert.equal(meshes.length,10,'twelve residents and whale use ten shared draws');
+    assert.equal(meshes.length,10,'eleven residents and whale use ten shared draws');
   }finally{life.dispose();}
   assert.equal(surfaceAnimals.length,count);
 });
@@ -254,4 +261,50 @@ test('crabs have independent shell proportions, six colors and asymmetric claw f
   assert.ok(Math.max(...traits.map(t=>t.width))-Math.min(...traits.map(t=>t.width))>.2);
   assert.ok(traits.some(t=>t.leftClaw/t.rightClaw>1.8));
   assert.deepEqual(crabVariation(4),crabVariation(4),'variation stays stable while animals move');
+});
+
+
+test('turtles vary local shell and paddle proportions while keeping their shared anatomy sealed',()=>{
+  const life=createMarineVisitors();
+  try{
+    const shells:Mesh[]=[],widths:number[]=[],paddles:number[]=[];
+    for(let i=0;i<3;i++){
+      const animal=life.root.getObjectByName(`turtle-${i}`)!;
+      const shell=animal.getObjectByName('arched-sea-turtle-shell') as Mesh,belly=animal.getObjectByName('pale-plastron') as Mesh;
+      const scutes=animal.getObjectByName('shell-scutes') as Mesh;
+      shells.push(shell);widths.push(shell.scale.z);
+      assert.equal(shell.scale.z,belly.scale.z);assert.equal(shell.scale.z,scutes.scale.z);
+      const limbs=animal.children.filter(limb=>limb.name==='four-swimming-flippers');
+      for(const limb of limbs){
+        const q=((limb.position.x+.08)/.65)**2+(limb.position.z/(.46*shell.scale.z))**2;
+        assert.ok(q<.9,'all varied flippers keep their roots beneath the shell');
+      }
+      paddles.push(Math.abs(limbs[0].scale.z));
+    }
+    assert.equal(new Set(shells.map(shell=>(shell.material as MeshStandardMaterial).color.getHex())).size,3);
+    assert.equal(new Set(widths).size,3);assert.equal(new Set(paddles).size,3);
+    assert.equal(new Set(shells.map(shell=>shell.geometry)).size,1,'variation reuses the complete sealed shell');
+  }finally{life.dispose();}
+});
+
+test('two sea snakes swim above the floor in bursts, coast, then pause with restrained axial motion',async()=>{
+  const {createMarineResidents}=await import('../src/components/world/MarineResidents');
+  const life=createMarineResidents(),snakes=life.states.filter(state=>state.kind==='sea-snake');
+  const records=snakes.map(()=>({burst:0,coast:0,rest:0,fast:0,slow:Infinity}));
+  try{
+    assert.equal(snakes.length,2);
+    for(let frame=0;frame<6000;frame++){
+      const before=snakes.map(s=>s.position.clone());life.update(.05);
+      snakes.forEach((state,i)=>{
+        const r=records[i],speed=Math.hypot(state.position.x-before[i].x,state.position.z-before[i].z)/.05;
+        assert.ok(state.position.y>marineFloorHeight(state.position.x,state.position.z)+.45,'the whole snake swims clear of the floor');
+        assert.ok(state.position.y<-1.4,'it remains below boat hulls');
+        if(!state.moving)r.rest++;else if(state.jet>.6){r.burst++;r.fast=Math.max(r.fast,speed);}else if(state.jet<.03&&speed>.015){r.coast++;r.slow=Math.min(r.slow,speed);}
+      });
+    }
+    for(const r of records){assert.ok(r.burst>40&&r.coast>40&&r.rest>100);assert.ok(r.fast>r.slow*3);}
+    const bodies=life.root.getObjectByName('banded-sea-snakes') as InstancedMesh;
+    assert.equal(bodies.geometry.getAttribute('aStroke').count,2);assert.equal(bodies.geometry.getAttribute('aPropulsion').count,2);
+    const geometry=bodies.geometry;for(const tier of ['low','medium','high']as const)life.setQuality(tier);assert.equal(bodies.geometry,geometry);
+  }finally{life.dispose();}
 });

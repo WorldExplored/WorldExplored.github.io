@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo } from 'react';
 import { BufferGeometry, Color, DoubleSide, Float32BufferAttribute, InstancedMesh, MeshStandardMaterial, Object3D } from 'three';
-import { cityDocks } from './cityInfrastructure';
+import { cityDocks, dockLandingLayout } from './cityInfrastructure';
 import { LIGHTHOUSE_LANDING } from './LighthouseAccess';
 import { seededRandom, terrainHeight, terrainMeshHeight } from './terrain';
 
@@ -13,9 +13,8 @@ export interface DockWeedSite { pole: string; x: number; y: number; z: number; h
 export function dockEcologyPoles(): DockPole[] {
   const poles: DockPole[] = [];
   for (const dock of cityDocks) {
-    const stairEnd = dock.id === 'city' ? -60.7 : -23.2;
-    const wetEnd = dock.id === 'city' ? dock.z + dock.length / 2 : dock.z - dock.length / 2;
-    for (const side of [-1, 1]) for (const [index, z] of [stairEnd, wetEnd].entries()) {
+    const {stairEnd,landingEnd}=dockLandingLayout(dock);
+    for (const side of [-1, 1]) for (const [index, z] of [stairEnd, landingEnd].entries()) {
       const x = dock.x + side * .59;
       // CityLife's post is tapered from .055 at the bottom to .035 above water.
       const bottom = Math.min(terrainHeight(x, z), .1);

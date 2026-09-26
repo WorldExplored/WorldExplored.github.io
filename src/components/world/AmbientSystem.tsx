@@ -5,6 +5,7 @@
 
 import { coastalSandGLSL, createSandMicroNormal } from './coastMaterial';
 import { surfaceTexture } from './surfaceMaterials';
+import { preparedGround, preparedPlants } from './worldLayout';
 import { measureConstruction } from './renderDiagnostics';
 import { rockImpactPosition } from './ShoreImpacts';
 import { coastalSoundScene } from './coastalAudio';
@@ -197,7 +198,7 @@ function mineralTexture() {
 }
 
 function makeLandscape(plan: LandscapePlan) {
-  const ground = archipelagoGeometry();
+  const ground = preparedGround() ?? archipelagoGeometry();
   const diagnostics = process.env.NODE_ENV !== 'production' && typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('vegetation');
   if (diagnostics) {
     const positions = ground.getAttribute('position'); const colors = ground.getAttribute('color'); const tint = new Color();
@@ -533,8 +534,9 @@ function MoteSystem({ runtime, paused, quality }: EnvironmentProps) {
   return <group dispose={null}><primitive object={motes.mesh}/><primitive object={motes.points}/></group>;
 }
 function ProgressivePlants(props: EnvironmentProps & { onReady?: () => void }) {
-  const [positions, setPositions] = useState<PlantPosition[] | null>(null);
+  const [positions, setPositions] = useState<PlantPosition[] | null>(() => preparedPlants() ?? null);
   useEffect(() => {
+    if (preparedPlants()) return;
     const controller = new AbortController();
     void generatePlantPositionsAsync(world.quality.high.grass, createLandscapePlan(), controller.signal).then(result => { if (result) setPositions(result); });
     return () => controller.abort();

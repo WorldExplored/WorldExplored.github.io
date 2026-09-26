@@ -1,12 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { act, create } from '@react-three/test-renderer';
-import { InstancedMesh, MeshStandardMaterial, type WebGLProgramParametersWithUniforms } from 'three';
+import { InstancedMesh, Mesh, Raycaster, Vector3, MeshStandardMaterial, type WebGLProgramParametersWithUniforms } from 'three';
 import { createSeaweedGeometry, createSeaweedLayout, SEAWEED_COVES, SEAWEED_REACH, SEAWEED_FORMS, Seaweed } from '../src/components/world/Seaweed';
 import { createLandscapePlan, distanceToSegment, landDistance, terrainMeshHeight, ISLANDS } from '../src/components/world/terrain';
 import { coastExposure } from '../src/components/world/waves';
 import { createSceneRuntime, type QualityTier } from '../src/content/world';
 import { createDockWeedGeometry, createDockWeedSites, dockEcologyPoles } from '../src/components/world/DockEcology';
+import { createCityLife } from '../src/components/world/CityLife';
+import { createCityTransitRoute } from '../src/components/world/city';
 import { coastalCaveClearance } from '../src/components/world/coastalCaveLayout';
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
@@ -15,13 +17,19 @@ test('dock algae begin on wet pile faces and remain below the water surface',()=
   const poles=dockEcologyPoles(),sites=createDockWeedSites(poles);
   assert.deepEqual(sites,createDockWeedSites(poles));
   assert.equal(poles.length,12);
-  assert.ok(sites.length>150&&sites.length<220);
+  assert.ok(sites.length>150&&sites.length<=12*3*Math.ceil(2.52/.18),'wet-length coverage has a fixed per-pile frond budget');
+  const city=createCityLife(createCityTransitRoute());city.root.updateMatrixWorld(true);
+  const structure=city.root.getObjectByName('city-public-infrastructure') as Mesh;
   const geometries=[0,1,2].map(createDockWeedGeometry);
   try{
     for(const pole of poles){
       const attached=sites.filter(site=>site.pole===pole.id);assert.ok(attached.length>=9);
       assert.ok(Math.max(...attached.map(site=>site.y))-Math.min(...attached.map(site=>site.y))>Math.min(.16,(-.38-pole.bottom)*.45));
       if(pole.id.startsWith('lighthouse'))assert.ok(pole.radius>.08);
+      else {
+        const ray=new Raycaster(new Vector3(pole.x+.18,-.32,pole.z),new Vector3(-1,0,0),0,.3),hits=ray.intersectObject(structure);
+        assert.ok(hits.length&&Math.abs(hits[0].point.x-pole.x-pole.radius)<.012,'the algae holdfast touches a real submerged pier post');
+      }
     }
     for(const site of sites){
       const pole=poles.find(item=>item.id===site.pole)!;
@@ -31,7 +39,7 @@ test('dock algae begin on wet pile faces and remain below the water surface',()=
       for(let i=0;i<positions.count;i++)assert.ok(site.y+positions.getY(i)*site.height<-.1);
       assert.equal(positions.getY(0),0);
     }
-  }finally{geometries.forEach(geometry=>geometry.dispose());}
+  }finally{geometries.forEach(geometry=>geometry.dispose());city.retain()();}
 });
 
 test('seaweed occupies dense irregular sheltered beds with seabed roots and structural clearance', () => {
@@ -86,12 +94,12 @@ test('quality and reduced motion retain seaweed resources without pointer interc
   const shader = { uniforms: {}, vertexShader: '#include <begin_vertex>', fragmentShader: '' } as WebGLProgramParametersWithUniforms;
   (meshes[0].material as MeshStandardMaterial).onBeforeCompile(shader, {} as never);
   try {
-    assert.equal(meshes.length, SEAWEED_FORMS.length);
+    assert.equal(meshes.length, SEAWEED_FORMS.length*2);
     for (const [quality, population] of [['high', 1], ['medium', .75], ['low', .5]] as const) {
       await renderer.update(render(quality));
       const sites = createSeaweedLayout();
       assert.equal(meshes.reduce((sum, mesh) => sum + mesh.count, 0), SEAWEED_FORMS.reduce((sum, _, variant) => sum + Math.ceil(sites.filter(site => site.variant === variant).length * population), 0));
-      meshes.forEach((mesh,i)=>{assert.ok(mesh.geometry.index!.count<=geometry[i].index!.count);if(quality==='high')assert.equal(mesh.geometry,geometry[i]);});
+      meshes.forEach((mesh,i)=>assert.equal(mesh.geometry,geometry[i],'quality reuses both cached detail meshes'));
       assert.deepEqual(meshes.map(mesh => mesh.material), materials);
       for (const mesh of meshes) { const hits: unknown[] = []; mesh.raycast({} as never, hits as never); assert.equal(hits.length, 0); }
     }

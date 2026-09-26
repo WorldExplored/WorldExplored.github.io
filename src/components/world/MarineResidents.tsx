@@ -20,11 +20,13 @@ export function createMarineResidents(){
   const octopusBodies=batch('resident-octopus-bodies',crawlingOctopusBodyGeometry(),octopus.length),octopusArms=batch('resident-octopus-articulated-arms',crawlingOctopusArmGeometry(),octopus.length*8);
   octopus.forEach((_,i)=>{const color=new Color(['#d99178','#9c7fab','#c99665','#95a681'][i]);octopusBodies.setColorAt(i,color);for(let arm=0;arm<8;arm++)octopusArms.setColorAt(i*8+arm,color);});
   const snakeMaterial=material.clone();materials.push(snakeMaterial);
-  snakeMaterial.onBeforeCompile=shader=>{shader.uniforms.residentTime=time;shader.vertexShader=`uniform float residentTime;\n${shader.vertexShader}`.replace('#include <begin_vertex>',`#include <begin_vertex>
-    float tail=clamp((.80-position.x)/1.80,0.,1.);
-    transformed.z+=sin(position.x*9.5-residentTime*2.4+instanceMatrix[3].x)*tail*.13;
-  `);};snakeMaterial.customProgramCacheKey=()=> 'resident-banded-snake-v1';
+  snakeMaterial.onBeforeCompile=shader=>{shader.vertexShader=`attribute float aStroke; attribute float aPropulsion;\n${shader.vertexShader}`.replace('#include <begin_vertex>',`#include <begin_vertex>
+    float tail=clamp((.80-position.x)/1.85,0.,1.);
+    transformed.z+=sin(tail*5.5-aStroke)*tail*(.006+aPropulsion*.13);
+  `);};snakeMaterial.customProgramCacheKey=()=> 'resident-banded-snake-swimming-v2';
   const snakeBodies=batch('banded-sea-snakes',seaSnakeGeometry(),snakes.length,snakeMaterial);
+  const strokes=new InstancedBufferAttribute(new Float32Array(snakes.length),1),propulsion=new InstancedBufferAttribute(new Float32Array(snakes.length),1);
+  snakeBodies.geometry.setAttribute('aStroke',strokes);snakeBodies.geometry.setAttribute('aPropulsion',propulsion);
   const squidMaterial=material.clone();materials.push(squidMaterial);
   squidMaterial.onBeforeCompile=shader=>{shader.vertexShader=`attribute float aJet;\n${shader.vertexShader}`.replace('#include <begin_vertex>',`#include <begin_vertex>
     float mantle=smoothstep(-.34,-.10,position.x);
@@ -47,8 +49,8 @@ export function createMarineResidents(){
   let elapsed=0,quality:EnvironmentProps['quality']='high';
   function poseResident(mesh:InstancedMesh,index:number,state:typeof states[number],shown:boolean){
     const {x,z}=state.position,h=state.heading;
-    const gx=state.kind==='squid'?0:(marineFloorHeight(x+.25,z)-marineFloorHeight(x-.25,z))/.5,gz=state.kind==='squid'?0:(marineFloorHeight(x,z+.25)-marineFloorHeight(x,z-.25))/.5;
-    dummy.position.copy(state.position);dummy.rotation.set(-Math.atan(gx*Math.sin(h)+gz*Math.cos(h)),h,state.kind==='squid'?state.pitch:Math.atan(gx*Math.cos(h)-gz*Math.sin(h)),'YXZ');dummy.scale.setScalar(shown?state.size:.00001);dummy.updateMatrix();mesh.setMatrixAt(index,dummy.matrix);
+    const gx=state.kind!=='crawling-octopus'?0:(marineFloorHeight(x+.25,z)-marineFloorHeight(x-.25,z))/.5,gz=state.kind!=='crawling-octopus'?0:(marineFloorHeight(x,z+.25)-marineFloorHeight(x,z-.25))/.5;
+    dummy.position.copy(state.position);dummy.rotation.set(-Math.atan(gx*Math.sin(h)+gz*Math.cos(h)),h,state.kind!=='crawling-octopus'?state.pitch:Math.atan(gx*Math.cos(h)-gz*Math.sin(h)),'YXZ');dummy.scale.setScalar(shown?state.size:.00001);dummy.updateMatrix();mesh.setMatrixAt(index,dummy.matrix);
   }
   function write(){
     time.value=elapsed;
@@ -60,7 +62,7 @@ export function createMarineResidents(){
         limb.scale.setScalar(.88+(arm%3)*.085);limb.updateMatrix();limb.matrix.premultiply(dummy.matrix);octopusArms.setMatrixAt(i*8+arm,limb.matrix);
       }
     });
-    snakes.forEach((state,i)=>poseResident(snakeBodies,i,state,quality==='high'||i<(quality==='medium'?2:1)));
+    snakes.forEach((state,i)=>{poseResident(snakeBodies,i,state,quality==='high'||i===0);strokes.setX(i,state.strokePhase);propulsion.setX(i,state.moving?.18+state.jet*.82:0);});strokes.needsUpdate=true;propulsion.needsUpdate=true;
     squid.forEach((state,i)=>{poseResident(squidBodies,i,state,quality==='high'||i<(quality==='medium'?3:2));jets.setX(i,state.jet);});jets.needsUpdate=true;
     const pose=sampleOffshoreWhale(elapsed),safe=offshoreWhaleClear(pose.position.x,pose.position.z)&&vesselClearance(pose.position.x,pose.position.z,7)>12;
     whale.position.copy(pose.position);whale.rotation.set(0,pose.heading,pose.pitch,'YXZ');whale.visible=pose.visible&&safe;whale.updateMatrix();

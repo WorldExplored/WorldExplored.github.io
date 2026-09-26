@@ -48,13 +48,16 @@ export function coastalBankCaveGeometry(site:ReefCaveSite){
     const grain=(inner?.78-.44*Math.min(1,Math.max(0,-z)/2.45):.98)+.045*Math.sin(x*29+z*47+y*71);
     positions.push(x,y,z);colors.push(tint.r*grain,tint.g*grain,tint.b*grain);uvs.push(x*.8,z*.8+y*.24);return positions.length/3-1;
   };
-  const floor=(x:number,z:number)=>caveGroundLocal(site,x,z),width=2.75,depth=5.4,sides=40;
+  const floor=(x:number,z:number)=>caveGroundLocal(site,x,z),width=3.20,depth=5.4,sides=32;
+  const form=site.form%5,mouthWidth=[1.58,1.80,1.30,1.39,1.64][form],mouthHeight=[.76,.71,.80,.90,.73][form];
   const submerged=(x:number,z:number)=>((-.57-.09*Math.sin(x*1.6+z*.8+site.form)) - site.y)/site.scale;
   const mouth=(a:number,t=0)=>{
-    const radius=(1.22-.16*t)*(1+.10*Math.sin(a*3+site.form*1.6)+.065*Math.cos(a*7+.5));
-    const x=Math.cos(a)*radius,z=-2.45*t;
+    const radius=(mouthWidth-.13*t)*(1+.09*Math.sin(a*3+site.form*1.6)+.045*Math.cos(a*7+.5));
+    const cosine=Math.cos(a),sine=Math.sin(a);
+    const x=Math.sign(cosine)*Math.abs(cosine)**(form===3?1.1:.73)*radius,z=-2.65*t;
     const tooth=.07*Math.sin(a*5+site.form)*Math.sin(a);
-    const y=floor(x,z)+.92+Math.sin(a)*(.76-.045*t)+tooth;
+    const top=Math.sign(sine)*Math.abs(sine)**(form===1?.43:form===4?.60:.82);
+    const y=floor(x,z)+.92+top*(mouthHeight-.045*t)+tooth;
     return {x,y:Math.min(y,submerged(x,z)-.22),z};
   };
   const smooth=(t:number)=>{const v=Math.max(0,Math.min(1,t));return v*v*(3-2*v);};
@@ -67,7 +70,7 @@ export function coastalBankCaveGeometry(site:ReefCaveSite){
     // Fractures are part of one surface, avoiding intersecting coplanar rock caps.
     return Math.min(floor(x,z)+.012+(1.98+breaks+.12*Math.sin(z*3.3+x*.4)+relief)*edge*fall,submerged(x,z));
   };
-  const nx=40,nz=24,roofStart=positions.length/3;
+  const nx=32,nz=20,roofStart=positions.length/3;
   for(let row=0;row<=nz;row++)for(let col=0;col<=nx;col++){
     const u=col/nx*2-1,v=row/nz;
     const taper=(1-.67*smooth((v-.32)/.68))*(1+.035*Math.sin(v*7+site.form)*Math.sin(Math.PI*v));
@@ -88,17 +91,17 @@ export function coastalBankCaveGeometry(site:ReefCaveSite){
     vertex(x,inside.y+(yOuter-inside.y)*t+fractures,z,true);
     if(ring&&side){const i=frontStart+ring*(sides+1)+side;indices.push(i,i-sides-1,i-1,i-1,i-sides-1,i-sides-2);}
   }
-  const tunnelStart=positions.length/3,tunnelRings=18;
+  const tunnelStart=positions.length/3,tunnelRings=16;
   for(let ring=0;ring<=tunnelRings;ring++)for(let side=0;side<=sides;side++){
     const p=mouth(side/sides*Math.PI*2,ring/tunnelRings);
     vertex(p.x,p.y,p.z,true);
     if(ring&&side){const i=tunnelStart+ring*(sides+1)+side;indices.push(i,i-1,i-sides-1,i-1,i-sides-2,i-sides-1);}
   }
-  const backCenter=vertex(0,Math.min(floor(0,-2.70)+.72,submerged(0,-2.70)-.22),-2.70,true),backStart=tunnelStart+tunnelRings*(sides+1);
+  const backCenter=vertex(0,Math.min(floor(0,-2.90)+.72,submerged(0,-2.90)-.22),-2.90,true),backStart=tunnelStart+tunnelRings*(sides+1);
   for(let side=0;side<sides;side++)indices.push(backCenter,backStart+side,backStart+side+1);
   const geometry=new BufferGeometry();
   geometry.setAttribute('position',new Float32BufferAttribute(positions,3));geometry.setAttribute('color',new Float32BufferAttribute(colors,3));geometry.setAttribute('uv',new Float32BufferAttribute(uvs,2));geometry.setIndex(indices);geometry.computeVertexNormals();geometry.computeBoundingBox();geometry.computeBoundingSphere();
-  geometry.userData.coastalBurrow=true;geometry.userData.recessDepth=2.45*site.scale;geometry.userData.mouthWidth=2.44*site.scale;geometry.userData.shelfGrid={nx,nz};
+  geometry.userData.coastalBurrow=true;geometry.userData.recessDepth=2.65*site.scale;geometry.userData.mouthWidth=mouthWidth*2*site.scale;geometry.userData.shelfGrid={nx,nz};
   return geometry;
 }
 
@@ -159,7 +162,7 @@ export function createReefCaves() {
     moving.forEach(mesh=>{mesh.instanceMatrix.needsUpdate=true;});
   }
   update(0);
-  function setQuality(quality:EnvironmentProps['quality']){fishBody.count=fishTail.count=quality==='low'?6:9;}
+  function setQuality(quality:EnvironmentProps['quality']){fishBody.count=fishTail.count=sites.length*(quality==='low'?1:quality==='medium'?2:3);}
   let timer:ReturnType<typeof setTimeout>|undefined;
   function dispose(){geometries.forEach(geometry=>geometry.dispose());materials.forEach(material=>material.dispose());moving.forEach(mesh=>mesh.dispose());}
   return {root,sites,update,setQuality,dispose,retain(){clearTimeout(timer);return()=>{timer=setTimeout(dispose,0);};}};

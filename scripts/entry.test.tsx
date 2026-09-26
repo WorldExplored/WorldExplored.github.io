@@ -61,3 +61,10 @@ test('YouTube loading coalesces requests, retries a failed script, and restores 
     if (documentDescriptor) Object.defineProperty(globalThis, 'document', documentDescriptor); else Reflect.deleteProperty(globalThis, 'document');
   }
 });
+
+ test('entry cannot accept before the complete scene is ready', () => {
+  const loading = renderToStaticMarkup(<WorldEntry ready={false} onEnter={() => {}} />);
+  const ready = renderToStaticMarkup(<WorldEntry ready onEnter={() => {}} />);
+  assert.match(loading, /disabled="" class="world-entry__go"/);
+  assert.doesNotMatch(ready, /disabled="" class="world-entry__go"/);
+});

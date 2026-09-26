@@ -93,7 +93,7 @@ test('all visible building vertices obey the exported collision footprints and h
     });
     // Lift cabins and hover boundaries remain bounded; four ferry photovoltaic fittings add four draws.
     // Invisible picking proxies and hidden focus outlines submit no GPU draws.
-    assert.ok(drawCalls <= 227, `Town architecture, water and six working controls use ${drawCalls} rendered draws (budget 227, including three shared room-light batches).`);
+    assert.ok(drawCalls <= 245, `Town architecture, water and six working controls use ${drawCalls} rendered draws (budget 245, including elevator diffusers and the fountain fittings).`);
   } finally { await item.renderer.unmount(); }
 });
 
@@ -168,7 +168,7 @@ test('decorative city buildings do not intercept navigation or change their ligh
 });
 
 
-test('city furniture constructs only near the camera, retains shells, and uses stable LOD hysteresis', async () => {
+test('city rooms prepare before entry and retain stable visibility without rebuilding', async () => {
   const camera=new PerspectiveCamera(43,1.6,.1,500);camera.position.set(42,29,76);
   const runtime={current:createSceneRuntime()};
   const render=(quality:QualityTier='high')=><EcoCity runtime={runtime} quality={quality} paused />;
@@ -178,15 +178,17 @@ test('city furniture constructs only near the camera, retains shells, and uses s
   const structure=meshesIn(shell);
   try {
     await renderer.advanceFrames(3,1/60);
-    assert.equal(interiors().length,0,'Overview does not allocate or render room furniture');
+    const prepared=interiors();
+    assert.equal(prepared.length,cityBuildings.length,'All rooms are prepared before entry');
+    assert.ok(prepared.every(room=>!room.visible),'Overview hides distant room detail');
     assert.ok(structure.length>0 && structure.every(mesh=>mesh.visible),'Shell and circulation stay present before furniture loads');
     camera.position.set(building.x,5,building.z+10);
     await renderer.advanceFrames(1,1/60);
-    assert.equal(interiors().length,1,'Only one nearest interior is built per frame');
+    assert.deepEqual(interiors(),prepared,'Approaching reuses all prepared rooms without allocating');
     await renderer.advanceFrames(20,1/60);
     const interior=root.getObjectByName(`city-interior-${building.id}`)!;
-    assert.ok(interior?.visible && meshesIn(interior).length>=4,'Approaching constructs occupied furniture batches');
-    assert.ok(structure.every(mesh=>meshesIn(shell).includes(mesh)),'Loading does not rebuild walls, doors, floors, landings or lift');
+    assert.ok(interior?.visible && meshesIn(interior).length>=4,'Approaching reveals occupied furniture batches');
+    assert.ok(structure.every(mesh=>meshesIn(shell).includes(mesh)),'Approaching does not rebuild walls, doors, floors, landings or lift');
     const batches=meshesIn(interior),disposals=new Map(batches.map(mesh=>[mesh.geometry,0]));
     for(const geometry of disposals.keys())geometry.addEventListener('dispose',()=>disposals.set(geometry,disposals.get(geometry)!+1));
     camera.position.set(building.x,5,building.z+62);await renderer.advanceFrames(1,1/60);
@@ -203,6 +205,6 @@ test('city furniture constructs only near the camera, retains shells, and uses s
     assert.equal(interior.visible,true,'Mobile close views retain complete rooms');
     assert.ok([...disposals.values()].every(count=>count===0));
     await renderer.unmount();await new Promise(resolve=>setTimeout(resolve,10));
-    assert.ok([...disposals.values()].every(count=>count===1),'Deferred furniture is disposed once with the city');
+    assert.ok([...disposals.values()].every(count=>count===1),'Prepared furniture is disposed once with the city');
   } catch(error) {await renderer.unmount();throw error;}
 });

@@ -6,7 +6,9 @@ import * as THREE from 'three';
 import { createSceneRuntime, world, type QualityTier, type WorldProps } from '@/content/world';
 import { AeroWorld } from './AeroWorld';
 import { QA_VIEWS } from './qaViews';
-import { auditing, renderAudit, sampleFrame } from './renderDiagnostics';
+import { auditing, renderAudit, sampleFrame, constructionTimes } from './renderDiagnostics';
+import { prepareWorldLayout } from './worldLayout';
+import { surfaceLoadsPending } from './surfaceMaterials';
 
 extend({ Mesh: THREE.Mesh, Group: THREE.Group, Object3D: THREE.Object3D, Sprite: THREE.Sprite,
   CylinderGeometry: THREE.CylinderGeometry, SphereGeometry: THREE.SphereGeometry, RingGeometry: THREE.RingGeometry, PlaneGeometry: THREE.PlaneGeometry,
@@ -29,11 +31,13 @@ export function WorldCanvas(props: WorldProps) {
   const latest = useRef(props);
   const [tier, setTier] = useState<QualityTier>(props.mobile ? 'medium' : 'high');
   const [configured, setConfigured] = useState(false);
-  const [coreVisible, setCoreVisible] = useState(false);
-  const [stage, setStage] = useState(0);
+  const [preparing, setPreparing] = useState(true);
+  const onPrepared = useCallback(() => { performance.mark('world:compiled'); setPreparing(false); }, []);
+
+  const stage = 5;
   const [plantsReady, setPlantsReady] = useState(false);
   const captureState = useRef({ stage, plantsReady });
-  useEffect(() => { captureState.current = { stage, plantsReady }; stateRef.current?.invalidate(); }, [stage, plantsReady]);
+  useEffect(() => { captureState.current = { stage, plantsReady }; if (stateRef.current) { stateRef.current.gl.shadowMap.needsUpdate = true; stateRef.current.invalidate(); } }, [stage, plantsReady]);
   const onPlantsReady = useCallback(() => { performance.mark('world:plants-ready'); setPlantsReady(true); }, []);
   useEffect(() => { latest.current = props; });
 
@@ -48,7 +52,7 @@ export function WorldCanvas(props: WorldProps) {
       const canvas = canvasRef.current;
       if (!canvas) return;
       let cancelled = false;
-      let ready = false;
+      let ready = false, coreReady = false, completedFrames = 0;
       let previousFrames = 0;
       let context: WebGL2RenderingContext | null = null;
       const search = new URLSearchParams(window.location.search);
@@ -74,9 +78,9 @@ export function WorldCanvas(props: WorldProps) {
         scene: { background: new THREE.Color(world.lighting.horizon) },
         camera: { position: overview.position, fov: 43, near: .1, far: 1500 },
         dpr: Math.min(window.devicePixelRatio, latest.current.mobile ? 1.25 : 1.75),
-        shadows: true, frameloop: 'always',
+        shadows: true, frameloop: 'never',
         onCreated: state => { stateRef.current = state; state.camera.lookAt(...overview.target); },
-      }).then(() => { if (!cancelled) setConfigured(true); }).catch(() => { if (!cancelled) latest.current.onFailure(); });
+      }).then(async () => { await prepareWorldLayout(); if (!cancelled) setConfigured(true); }).catch(() => { if (!cancelled) latest.current.onFailure(); });
       const observer = new ResizeObserver(() => {
         const state = stateRef.current?.get();
         if (!state || cancelled) return;
@@ -107,10 +111,16 @@ export function WorldCanvas(props: WorldProps) {
       const stopSampling = addAfterEffect(() => {
         if (cancelled || runtime.current.frames === previousFrames) return;
         previousFrames = runtime.current.frames;
-        if (!ready) { ready = true; performance.mark('world:core-frame'); setCoreVisible(true); latest.current.onReady(); }
+        if (!coreReady) { coreReady = true; performance.mark('world:core-frame'); }
+        if (!ready && captureState.current.stage === 5 && captureState.current.plantsReady && surfaceLoadsPending() === 0) {
+          // Present two complete frames, including uploaded textures, before entry.
+          if (++completedFrames >= 2) { ready = true; performance.mark('world:ready'); latest.current.onReady(); }
+          else requestAnimationFrame(() => stateRef.current?.invalidate());
+        }
+        if (auditing()) canvas.dataset.startup = JSON.stringify({ ready, frames: runtime.current.frames, pendingTextures: surfaceLoadsPending(), stage: captureState.current.stage, plants: captureState.current.plantsReady, construction: constructionTimes, readyMs: Math.round(performance.getEntriesByName('world:ready')[0]?.startTime ?? 0) });
         // Explicit captures may read pixels; performance diagnostics never stall the GPU.
         if (auditing() && search.has('pixelAudit')) sampleFrame(context!);
-        if (!captureSent && captureName && (search.has('qaStill') || runtime.current.frames > 150) && captureState.current.stage === 5 && captureState.current.plantsReady) {
+        if (ready && !captureSent && captureName && (search.has('qaStill') || runtime.current.frames > 150) && captureState.current.stage === 5 && captureState.current.plantsReady) {
           captureSent = true;
           saveCapture(captureName, true);
         }
@@ -135,22 +145,15 @@ export function WorldCanvas(props: WorldProps) {
   }, []);
 
   useEffect(() => {
-    if (!coreVisible || stage >= 5) return;
-    let timer: ReturnType<typeof setTimeout>;
-    const frame = requestAnimationFrame(() => { timer = setTimeout(() => setStage(value => value + 1), 32); });
-    return () => { cancelAnimationFrame(frame); clearTimeout(timer); };
-  }, [coreVisible, stage]);
-
-  useEffect(() => {
     if (!configured) return;
     const qaStill = ['localhost', '127.0.0.1'].includes(window.location.hostname) && new URLSearchParams(window.location.search).has('qaStill');
-    rootRef.current?.render(<SceneBoundary onFailure={props.onFailure}><AeroWorld {...props} paused={props.paused || qaStill} onPlantsReady={onPlantsReady} stage={stage} runtime={runtime} tier={tier} onTier={setTier} /></SceneBoundary>);
-  }, [configured, props, tier, stage, onPlantsReady]);
+    rootRef.current?.render(<SceneBoundary onFailure={props.onFailure}><AeroWorld {...props} preparing={preparing} onPrepared={onPrepared} paused={props.paused || qaStill} onPlantsReady={onPlantsReady} stage={stage} runtime={runtime} tier={tier} onTier={setTier} /></SceneBoundary>);
+  }, [configured, props, tier, stage, onPlantsReady, preparing, onPrepared]);
 
   useEffect(() => {
     function move(event: PointerEvent) {
       const canvas = canvasRef.current;
-      const blocking = (event.target as HTMLElement).closest('a,button,.surface,.audio-control');
+      const blocking = (event.target as HTMLElement).closest('a,button,input,select,fieldset,.surface,.audio-control,.ambience-control');
       runtime.current.pointerActive = !blocking && !latest.current.paused && event.pointerType !== 'touch';
       if (!runtime.current.pointerActive || !canvas) return;
       const bounds = canvas.getBoundingClientRect();
@@ -162,7 +165,7 @@ export function WorldCanvas(props: WorldProps) {
       const element = event.target instanceof Element ? event.target : null;
       const target = element?.closest<HTMLElement>('[data-destination]');
       if (target) runtime.current.hovered = world.landmarks.find(item => item.id === target.dataset.destination)?.id ?? null;
-      if (element?.closest('a,button,.surface,.audio-control')) runtime.current.pointerActive = false;
+      if (element?.closest('a,button,input,select,fieldset,.surface,.audio-control,.ambience-control')) runtime.current.pointerActive = false;
     }
     function leave() { runtime.current.pointerActive = false; runtime.current.hovered = null; }
     window.addEventListener('pointermove', move, { passive: true });
@@ -175,5 +178,5 @@ export function WorldCanvas(props: WorldProps) {
       document.removeEventListener('pointerleave', leave); document.removeEventListener('focusin', focus); document.removeEventListener('pointerover', focus);
     };
   }, []);
-  return <div className="canvas-host" data-quality={tier} data-environment={stage === 5 && plantsReady ? 'complete' : 'initializing'} data-motion={props.paused ? 'stopped' : 'active'} style={{ background: world.lighting.horizon }}><canvas aria-hidden="true" ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block', touchAction: 'none' }} /></div>;
+  return <div className="canvas-host" data-quality={tier} data-environment={!preparing && plantsReady ? 'complete' : 'initializing'} data-motion={props.paused ? 'stopped' : 'active'} style={{ background: world.lighting.horizon }}><canvas aria-hidden="true" ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block', touchAction: 'none' }} /></div>;
 }

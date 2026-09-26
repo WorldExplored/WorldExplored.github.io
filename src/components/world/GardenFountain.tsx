@@ -22,11 +22,13 @@ function combine(parts: BufferGeometry[]) { const geometry = mergeGeometries(par
 export function createGardenFountain() {
   const group = new Group(); group.name = 'garden-fountain'; group.position.set(FOUNTAIN_SITE.x, terrainHeight(FOUNTAIN_SITE.x, FOUNTAIN_SITE.z), FOUNTAIN_SITE.z);
   const time = { value: 0 };
-  const stone = new MeshStandardMaterial({ color: '#babba7', roughness: .94, metalness: 0 });
+  const stone = new MeshPhysicalMaterial({ color: '#e7f4eb', roughness: .3, metalness: .08, clearcoat: .6 });
   stone.onBeforeCompile = shader => {
     shader.vertexShader = 'varying vec3 vStonePoint;\n' + shader.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvStonePoint=position;');
-    shader.fragmentShader = 'varying vec3 vStonePoint;\n' + shader.fragmentShader.replace('#include <color_fragment>', '#include <color_fragment>\nfloat grain=fract(sin(dot(floor(vStonePoint*170.),vec3(12.9898,78.233,37.719)))*43758.5453); diffuseColor.rgb*=.92+grain*.13;');
+    shader.fragmentShader = 'varying vec3 vStonePoint;\n' + shader.fragmentShader.replace('#include <color_fragment>', '#include <color_fragment>\nfloat grain=fract(sin(dot(floor(vStonePoint*170.),vec3(12.9898,78.233,37.719)))*43758.5453); diffuseColor.rgb*=.985+grain*.025;');
   };
+  const aqua = new MeshPhysicalMaterial({ color: '#20b9c5', emissive: '#159eaf', emissiveIntensity: 0, roughness: .19, metalness: .18, clearcoat: .8 });
+  const lime = new MeshPhysicalMaterial({ color: '#97cb65', roughness: .3, clearcoat: .65 });
   const metal = new MeshStandardMaterial({ color: '#819091', roughness: .46, metalness: .74 });
   // Environment reflections and alpha preserve water depth without a second full-world render.
   const water = new MeshPhysicalMaterial({ color: '#c1dcd6', transparent: true, opacity: .62, transmission: 0, thickness: .12, ior: 1.333, roughness: .12, metalness: .08, clearcoat: .65, clearcoatRoughness: .13, depthWrite: false, side: DoubleSide });
@@ -58,6 +60,18 @@ export function createGardenFountain() {
   const bottom = new CylinderGeometry(.94,.94,.12,64).translate(0,.02,0);
   const basin = add(combine([wall,bottom]),stone,'fountain-open-stone-basin');
   basin.geometry.userData = { innerRadius: .92, rimHeight: .47, floorTop: .08, maximumRadius: 1.16 };
+  add(combine([
+    new TorusGeometry(1.095,.035,6,64).rotateX(Math.PI/2).translate(0,.462,0),
+    new TorusGeometry(1.132,.022,6,64).rotateX(Math.PI/2).translate(0,.30,0),
+    new SphereGeometry(.19,18,12).translate(0,.72,0),
+  ]),aqua,'fountain-aqua-enamel-rims-and-orb');
+  add(combine([
+    new CylinderGeometry(.055,.12,.43,12).translate(0,.41,0),
+    new TorusGeometry(.275,.019,6,40).rotateX(.48).rotateZ(.65).translate(0,.72,0),
+  ]),metal,'fountain-orb-pedestal-and-orbit');
+  add(combine(Array.from({length:12},(_,i)=>{
+    const angle=i*Math.PI/6;return new SphereGeometry(1,8,5).scale(.025,.007,.075).rotateY(-angle).translate(Math.sin(angle)*1.06,.485,Math.cos(angle)*1.06);
+  })),lime,'fountain-lime-petal-inlays');
   const pipes: BufferGeometry[] = [new CylinderGeometry(.095,.14,.26,16).translate(0,.20,0),new TorusGeometry(.22,.032,8,32).rotateX(Math.PI/2).translate(0,.345,0)];
   for(let jet=0;jet<JETS;jet++) {
     const angle=jet/JETS*Math.PI*2;
@@ -89,9 +103,10 @@ export function createGardenFountain() {
   const splashes=instances(new SphereGeometry(1,6,4),dropMaterial,24,'fountain-return-splashes');
   const transform=new Object3D(); const point=new Vector3(); const tint=new Color('#ecfff4');
   for(let i=0;i<72;i++)drops.setColorAt(i,tint);
-  const materials=[stone,metal,water,streamMaterial,dropMaterial,rippleMaterial];
+  const materials=[stone,metal,aqua,lime,water,streamMaterial,dropMaterial,rippleMaterial];
   let disposed=false;
-  function step(delta:number,quality:QualityTier,paused=false) {
+  function step(delta:number,quality:QualityTier,paused=false,night=0) {
+    aqua.emissiveIntensity=night*.7;
     if(!paused)time.value+=Math.min(.05,Math.max(0,delta));
     for (let i=0;i<3;i++) weights[i] += ((i===pattern?1:0)-weights[i])*(paused?1:1-Math.exp(-5*Math.min(.05,delta)));
     streams.morphTargetInfluences![0]=weights[1]; streams.morphTargetInfluences![1]=weights[2];
@@ -115,9 +130,9 @@ export function createGardenFountain() {
     dispose() { if(disposed)return;disposed=true;new Set([...meshes.map(mesh=>mesh.geometry), ...streamGeometries]).forEach(geometry=>geometry.dispose());meshes.forEach(mesh=>{if(mesh instanceof InstancedMesh)mesh.dispose();});materials.forEach(material=>material.dispose()); } };
 }
 
-export function GardenFountain({ paused, quality, controls }: EnvironmentProps & { controls?: TownInteractionState }) {
+export function GardenFountain({ runtime, paused, quality, controls }: EnvironmentProps & { controls?: TownInteractionState }) {
   const fountain=useMemo(()=>createGardenFountain(),[]);
   useEffect(()=>{clearTimeout(fountain.timer);return()=>{fountain.timer=setTimeout(()=>fountain.dispose(),0);};},[fountain]);
-  useFrame((_,delta)=>{ if (controls) fountain.setPattern(controls.pattern); fountain.step(delta,quality,paused); });
+  useFrame((_,delta)=>{ if (controls) fountain.setPattern(controls.pattern); fountain.step(delta,quality,paused,1-runtime.current.weather.daylight); });
   return <primitive object={fountain.group} dispose={null}/>;
 }

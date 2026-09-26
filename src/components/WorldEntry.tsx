@@ -4,16 +4,14 @@ import { useEffect, useRef, useState } from 'react';
 import { profile } from '@/content/profile';
 import { HabitatIcon } from './HabitatIcon';
 
-export function WorldEntry({ onEnter }: { onEnter: (sound: boolean) => void }) {
+export function WorldEntry({ onEnter, ready = false }: { onEnter: (sound: boolean) => void; ready?: boolean }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [sound, setSound] = useState(true);
-  const [booting, setBooting] = useState(true);
+  const booting = !ready;
   useEffect(() => {
     const element = dialog.current;
     element?.showModal();
-    const delay = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 400;
-    const boot = setTimeout(() => setBooting(false), delay);
-    return () => { clearTimeout(boot); element?.close(); };
+    return () => element?.close();
   }, []);
   useEffect(() => { if (!booting) dialog.current?.querySelector<HTMLButtonElement>('.world-entry__go')?.focus(); }, [booting]);
   return <dialog ref={dialog} className="world-entry" data-booting={booting} aria-labelledby="world-entry-title" aria-describedby="world-entry-description" onCancel={event => event.preventDefault()}>

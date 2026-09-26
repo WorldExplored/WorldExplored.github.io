@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { Box3, InstancedMesh, Mesh, Vector3 } from 'three';
 import { createDolphinCourse, createDolphinState, dolphinCoastClearance, dolphinFerryClearance, stepDolphin } from '../src/components/world/dolphinRoutes';
 import { createDolphinLife, dolphinBodyGeometry } from '../src/components/world/DolphinLife';
+import { TOWN_BUOY_SITE } from '../src/components/world/TownInteractions';
 import { harborWaterHeight } from '../src/components/world/waterSurface';
 
 const angularDistance = (a: number,b: number) => Math.abs(Math.atan2(Math.sin(a-b),Math.cos(a-b)));
@@ -93,4 +94,11 @@ test('a lagoon resident keeps returning through the reef while island pods trave
     if(frame%60===0)assert.ok(dolphinCoastClearance(state.position.x,state.position.z)>2.3);
   }
   assert.ok(state.lap>4&&visible>600&&breaches>15);
+});
+
+
+test('all roaming variants retain whole-body clearance around the relocated harbor buoy',()=>{
+  for(let index=0;index<4;index++)for(let lap=0;lap<12;lap++)
+    for(const point of createDolphinCourse(index,lap).curve.getPoints(1500))
+      assert.ok(Math.hypot(point.x-TOWN_BUOY_SITE.x,point.z-TOWN_BUOY_SITE.z)>1.1,'dolphin nose, tail and buoy float remain separated');
 });

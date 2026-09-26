@@ -7,7 +7,7 @@ import { vesselClearance } from './marineTraffic';
 
 const TAU = Math.PI * 2;
 // Both lobes return through the channel, then take different coasts of each island group.
-const anchors = [[12,-42],[27,-48],[44,-60],[45,-80],[31,-101],[5,-109],[-24,-108],[-46,-93],[-50,-71],[-38,-51],[-25,-43],[-8,-39],[10,-34],[25,-33],[39,-24],[42,-5],[39,18],[27,36],[0,43],[-25,39],[-32,24],[-47,9],[-46,-14],[-32,-25],[-20,-33],[-4,-43]];
+const anchors = [[12,-42],[30,-47],[46,-58],[51,-79],[34,-104],[5,-114],[-27,-111],[-50,-97],[-56,-74],[-46,-51],[-28,-42],[-8,-39],[10,-34],[25,-33],[39,-24],[42,-5],[39,18],[27,36],[0,43],[-25,39],[-32,24],[-47,9],[-46,-14],[-32,-25],[-20,-33],[-4,-43]];
 const ferrySamples = createCityFerryRoute().curve.getPoints(160);
 export function dolphinFerryClearance(x: number, z: number) {
   let distance = Infinity;
@@ -15,13 +15,16 @@ export function dolphinFerryClearance(x: number, z: number) {
   return distance;
 }
 export function dolphinCoastClearance(x: number, z: number) {
-  return Math.min(-landDistance(x, z), ...cityDocks.map(dock => Math.hypot(x - dock.x, z - dock.z) - 4.5));
+  return Math.min(-landDistance(x, z), ...cityDocks.map(dock => {
+    const dx=Math.abs(x-dock.x)-dock.width/2,dz=Math.abs(z-dock.z)-dock.length/2;
+    return Math.hypot(Math.max(dx,0),Math.max(dz,0))+Math.min(Math.max(dx,dz),0);
+  }));
 }
 export function createDolphinCourse(index: number, lap = 0) {
   // A fourth dolphin stays in the lagoon, so the long island tours do not empty it.
   const loop = index === 3 ? Array.from({ length: 16 }, (_, n) => {
     const a = n / 16 * TAU;
-    return [5 + Math.cos(a) * 20, -43 + Math.sin(a) * 9];
+    return [5 + Math.cos(a) * 20, -40 + Math.sin(a) * 7];
   }) : anchors;
   const random = seededRandom(13091 + index * 937 + lap * 7127);
   for (let attempt = 0; attempt < 40; attempt++) {
@@ -54,7 +57,7 @@ function writePose(state: DolphinState, waterTime = state.time) {
   if (state.shark) {
     // Separate offshore territories keep the visible fins away from beaches and ferries.
     const rate = state.index ? -.017 : .019, a = t * rate + state.index * 2.1;
-    const radius = 9 + Math.sin(t * .007), center = state.index ? -97 : 53;
+    const radius = 9 + Math.sin(t * .007), center = state.index ? -97 : 61;
     const x = center + Math.cos(a) * radius, z = -42 + Math.sin(a) * 23;
     const dx = -Math.sin(a) * radius * rate + Math.cos(a) * Math.cos(t * .007) * .007;
     const dz = Math.cos(a) * 23 * rate;

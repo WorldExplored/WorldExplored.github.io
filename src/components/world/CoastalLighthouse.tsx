@@ -142,7 +142,7 @@ export function CoastalLighthouse(props:ModelProps){
   useEffect(()=>{clearTimeout(timer.current);return()=>{timer.current=setTimeout(()=>Object.values(materials).forEach(m=>{if(m instanceof SpriteMaterial)m.map?.dispose();m.dispose();}),0);};},[materials]);
   useFrame(({camera})=>{
     const night=world.lighting.lampEnabled ? lighthouseBrightness(nightLightingLevel(props.runtime.current.weather)) : 0;
-    if(lamp.current)lamp.current.intensity=night*34;
+    if(lamp.current)lamp.current.intensity=night*58;
     if(halo.current){
       const glow=halo.current;glow.visible=night>.01;glow.material.opacity=night*.85;
       if(glow.visible&&glow.parent){
@@ -154,7 +154,7 @@ export function CoastalLighthouse(props:ModelProps){
       }
     }
     if(!props.paused)rotation.current=Math.sin(props.runtime.current.elapsed*.12)*Math.PI*35/180;
-    if(beam.current){beam.current.rotation.y=rotation.current;beam.current.visible=night>.01;beam.current.material.opacity=.055*night;beam.current.material.emissiveIntensity=world.lighting.lampIntensity*night;}
+    if(beam.current){beam.current.rotation.y=rotation.current;beam.current.visible=night>.01;beam.current.material.opacity=.095*night;beam.current.material.emissiveIntensity=world.lighting.lampIntensity*night;}
   },-1);
   return <group dispose={null} name="detailed-coastal-lighthouse">
     <mesh name="lighthouse-circular-foundation" geometry={geometry.stoneBatch} material={palette.paving} receiveShadow castShadow/>
@@ -169,6 +169,6 @@ export function CoastalLighthouse(props:ModelProps){
     <mesh name="signal-light-sweep" ref={beam} geometry={geometry.beam} material={materials.beam} position-y={LIGHTHOUSE_LANTERN_Y} raycast={()=>{}}/>
 
     <sprite ref={halo} name="lighthouse-lantern-halo" position={[0,LIGHTHOUSE_LANTERN_Y,0]} scale={[1.2,1.2,1]} material={materials.halo} raycast={()=>{}}/>
-    <pointLight ref={lamp} name="lighthouse-lantern-light" position={[0,LIGHTHOUSE_LANTERN_Y,0]} intensity={0} distance={20} color="#ffe2a1" />
+    <pointLight ref={lamp} name="lighthouse-lantern-light" position={[0,LIGHTHOUSE_LANTERN_Y,0]} intensity={0} distance={28} color="#ffe2a1" />
   </group>;
 }

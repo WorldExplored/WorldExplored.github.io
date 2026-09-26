@@ -5,11 +5,12 @@ import { measureConstruction } from './renderDiagnostics';
 /* eslint-disable react-hooks/immutability */
 import { useEffect, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { BufferGeometry, CatmullRomCurve3, Color, CylinderGeometry, Float32BufferAttribute, Group, InstancedMesh, MeshStandardMaterial, Object3D, SphereGeometry, Vector3 } from 'three';
+import { BufferGeometry, CatmullRomCurve3, CircleGeometry, Color, CylinderGeometry, Float32BufferAttribute, Group, InstancedMesh, MeshStandardMaterial, Object3D, SphereGeometry, Vector3 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { EnvironmentProps } from './Water';
 import { crabVariation } from './crabVariation';
-import { createCrabStates, createGullStates, stepCrab, stepGull, WILDLIFE_COUNTS, type GullState } from './wildlifeState';
+import { terrainMeshHeight } from './terrain';
+import { createCrabStates, writeCrabPosition, createGullStates, stepCrab, stepGull, WILDLIFE_COUNTS, type GullState, type CrabState } from './wildlifeState';
 
 function ellipsoid(x: number, y: number, z: number, sx: number, sy: number, sz: number, turn = 0) {
   return new SphereGeometry(1, 16, 10).scale(sx, sy, sz).rotateY(turn).translate(x, y, z);
@@ -151,7 +152,16 @@ export function createWildlife() {
     for(const mesh of [crabBody,crabClaws,leftCrabClaws])mesh.setColorAt(index,shell);
     for(let leg=0;leg<4;leg++)for(const mesh of [crabLegs,leftCrabLegs])mesh.setColorAt(index*4+leg,legs);
   }
-  return { leftWing, leftPrimaries, leftCrabLegs, leftCrabClaws, group, meshes, materials, gullBody, gullHead, gullEyes, gullBill, wing, primaries, gullLegs, crabBody, crabEyes, crabLegs, crabClaws, gulls, gullPrey, preyEyes, crabs: createCrabStates(), root: new Object3D(), hinge: new Object3D(), tip: new Object3D(), local: new Object3D(), timer: undefined as ReturnType<typeof setTimeout> | undefined };
+  const crabs=createCrabStates(),holeMaterial=materials.length;
+  materials.push(new MeshStandardMaterial({color:'#66573d',roughness:1}));
+  const crabBurrows=instances('crab-sand-burrow-mouths',new CircleGeometry(.105,13).rotateX(-Math.PI/2).scale(1,1,.83),holeMaterial,crabs.length*2);
+  const burrowTransform=new Object3D(),point=new Vector3(),up=new Vector3(0,1,0),normal=new Vector3();
+  crabs.forEach((crab,index)=>{for(const [side,progress]of[-.95,.95].entries()){
+    writeCrabPosition(crab.route,progress,point);const x=point.x,z=point.z;
+    normal.set(-(terrainMeshHeight(x+.1,z)-terrainMeshHeight(x-.1,z))/.2,1,-(terrainMeshHeight(x,z+.1)-terrainMeshHeight(x,z-.1))/.2).normalize();
+    burrowTransform.position.set(x,terrainMeshHeight(x,z)+.006,z);burrowTransform.quaternion.setFromUnitVectors(up,normal);burrowTransform.updateMatrix();crabBurrows.setMatrixAt(index*2+side,burrowTransform.matrix);
+  }});
+  return { leftWing, leftPrimaries, leftCrabLegs, leftCrabClaws, group, meshes, materials, gullBody, gullHead, gullEyes, gullBill, wing, primaries, gullLegs, crabBody, crabEyes, crabLegs, crabClaws, gulls, gullPrey, preyEyes, crabs, crabBurrows, root: new Object3D(), hinge: new Object3D(), tip: new Object3D(), local: new Object3D(), timer: undefined as ReturnType<typeof setTimeout> | undefined };
 }
 
 export function writeGullPose(life: ReturnType<typeof createWildlife>, bird: GullState, index: number) {
@@ -181,6 +191,15 @@ export function writeGullPose(life: ReturnType<typeof createWildlife>, bird: Gul
   }
 }
 
+export function writeCrabPose(root:Object3D,crab:CrabState,index:number){
+  const traits=crabVariation(index);
+  root.position.copy(crab.position);root.position.y+=(traits.size-1)*.08-crab.burrow*.32;
+  root.rotation.set(0,crab.heading,0);
+  root.scale.set(traits.size*traits.width,traits.size,traits.size*traits.depth).multiplyScalar(crab.burrow>.995?.00001:1);
+  root.updateMatrix();
+  return traits;
+}
+
 export function Wildlife({ runtime, paused, quality }: EnvironmentProps) {
   const life = useMemo(() => measureConstruction('wildlife', () => createWildlife()), []);
   useEffect(() => { clearTimeout(life.timer); return () => { life.timer = setTimeout(() => { life.meshes.forEach(mesh => { mesh.geometry.dispose(); mesh.dispose(); }); life.materials.forEach(material => material.dispose()); }, 0); }; }, [life]);
@@ -189,15 +208,14 @@ export function Wildlife({ runtime, paused, quality }: EnvironmentProps) {
     const { root, local } = life;
     for (const mesh of [life.gullBody, life.gullHead, life.gullEyes, life.gullBill, life.gullLegs, life.gullPrey, life.preyEyes]) mesh.count = counts.gulls;
     life.wing.count = life.primaries.count = life.leftWing.count = life.leftPrimaries.count = counts.gulls;
-    life.crabBody.count = life.crabEyes.count = counts.crabs; life.crabLegs.count = life.leftCrabLegs.count = counts.crabs * 4; life.crabClaws.count = life.leftCrabClaws.count = counts.crabs;
+    life.crabBurrows.count=counts.crabs*2; life.crabBody.count = life.crabEyes.count = counts.crabs; life.crabLegs.count = life.leftCrabLegs.count = counts.crabs * 4; life.crabClaws.count = life.leftCrabClaws.count = counts.crabs;
     life.gulls.forEach((bird, index) => {
       stepGull(bird, delta, camera.position, pointer, paused);
       writeGullPose(life, bird, index);
     });
     life.crabs.forEach((crab, index) => {
       stepCrab(crab, delta, camera.position, pointer, paused);
-      const traits=crabVariation(index);
-      root.position.copy(crab.position);root.position.y+=(traits.size-1)*.08; root.rotation.set(0, crab.heading, 0); root.scale.set(traits.size*traits.width,traits.size,traits.size*traits.depth); root.updateMatrix();
+      const traits=writeCrabPose(root,crab,index);
       life.crabBody.setMatrixAt(index, root.matrix); life.crabEyes.setMatrixAt(index, root.matrix);
       for (let sideIndex = 0; sideIndex < 2; sideIndex++) {
         const side = sideIndex === 0 ? -1 : 1;

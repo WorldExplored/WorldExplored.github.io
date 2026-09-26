@@ -26,10 +26,12 @@ export function sampleFrame(context: WebGL2RenderingContext) {
   if (fraction > .8) renderAudit.blackFrames++;
 }
 
+export const constructionTimes: Record<string, number> = {};
+
 /** Measure construction only when explicitly inspecting a local or published build. */
 export function measureConstruction<T>(name: string, create: () => T): T {
   if (!auditing()) return create();
   const start = performance.now();
   try { return create(); }
-  finally { performance.measure(`world:${name}`, { start, end: performance.now() }); }
+  finally { const end = performance.now(); constructionTimes[name] = Math.round((constructionTimes[name] ?? 0) + end - start); performance.measure(`world:${name}`, { start, end }); }
 }

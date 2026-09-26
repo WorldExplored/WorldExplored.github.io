@@ -7,7 +7,8 @@ import { measureConstruction } from './renderDiagnostics';
 
 import { useEffect, useMemo, type MutableRefObject } from 'react';
 import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
-import { Color, DataTexture, LinearFilter, PlaneGeometry, RGBAFormat, ShaderMaterial, Vector2, Vector3, Vector4 } from 'three';
+import { BufferGeometry, Float32BufferAttribute, Color, DataTexture, LinearFilter, RGBAFormat, ShaderMaterial, Vector2, Vector3, Vector4 } from 'three';
+import { setSkyHorizon } from './WeatherLighting';
 import { landDistance } from './terrain';
 import { waterOpticsGLSL } from './waterOptics';
 import { coastExposure, shorelineWaveGLSL } from './waves';
@@ -151,6 +152,7 @@ const fragmentShader = /* glsl */ `
     float haze = smoothstep(uFogRange.x, uFogRange.y, length(cameraPosition - vWorld));
     // Marine haze retains the deep-water color instead of bleaching the horizon.
     color = mix(color, uFog, haze * .28);
+    color = mix(color, uHorizon, smoothstep(450.,850.,length(cameraPosition-vWorld)));
     float viewCosine = clamp(dot(view,n),0.,1.);
     float absorption = 1. - exp(-depth * .085 / max(.08,viewCosine));
     float grazingReflection = pow(1. - viewCosine,5.);
@@ -160,8 +162,6 @@ const fragmentShader = /* glsl */ `
 `;
 
 const waterSunset = new Color('#ffc58a');
-const waterDayHorizon = new Color(world.lighting.horizon);
-const waterDuskHorizon = new Color('#ddb4a9');
 const waterDayFog = new Color('#245675');
 const waterStormFog = new Color('#365767');
 const waterDuskFog = new Color('#504f76');
@@ -178,7 +178,7 @@ function updateWater(material: ShaderMaterial, state: SceneRuntime, paused: bool
   material.uniforms.uStorm.value = weather?.storm ?? 0;
   material.uniforms.uSunIntensity.value = (weather?.daylight ?? 1) * world.lighting.sunIntensity * (1 - (weather?.storm ?? 0) * .9);
   material.uniforms.uSunColor.value.set('#fff8df').lerp(waterSunset, weather?.dusk ?? 0);
-  material.uniforms.uHorizon.value.set('#293a5a').lerp(waterDayHorizon, weather?.daylight ?? 1).lerp(waterDuskHorizon, (weather?.dusk ?? 0) * .75);
+  setSkyHorizon(material.uniforms.uHorizon.value, weather);
   material.uniforms.uFog.value.set('#101d35').lerp(waterDayFog, weather?.daylight ?? 1).lerp(waterDuskFog, (weather?.dusk ?? 0) * .8).lerp(waterStormFog, (weather?.storm ?? 0) * .75 * (weather?.daylight ?? 1));
 }
 
@@ -200,13 +200,24 @@ function coastTexture() {
   const texture = new DataTexture(data, width, height, RGBAFormat); texture.minFilter = LinearFilter; texture.magFilter = LinearFilter; texture.needsUpdate = true; return texture;
 }
 
+/** Dense inner rings and a distant circular horizon avoid a visible square edge. */
+export function oceanDiskGeometry() {
+  const points: number[] = [], indices: number[] = [], rings = 96, sides = 192;
+  for (let ring = 0; ring <= rings; ring++) {
+    const radius = 1800 * (ring / rings) ** 2.5;
+    for (let side = 0; side <= sides; side++) {
+      const angle = side / sides * Math.PI * 2;
+      points.push(Math.cos(angle) * radius, 0, Math.sin(angle) * radius);
+      if (ring < rings && side < sides) { const a=ring*(sides+1)+side,b=a+1,c=a+sides+1; indices.push(a,b,c,b,c+1,c); }
+    }
+  }
+  const geometry = new BufferGeometry(); geometry.setAttribute('position', new Float32BufferAttribute(points,3)); geometry.setIndex(indices); geometry.computeVertexNormals(); return geometry;
+}
+
 export function Water({ runtime, paused, quality }: EnvironmentProps) {
   const detail = world.quality[quality].waterDetail;
   const invalidate = useThree(state => state.invalidate);
-  const geometry = useMemo(() => {
-    const segments = 192;
-    return new PlaneGeometry(1600, 1600, segments, segments).rotateX(-Math.PI / 2);
-  }, []);
+  const geometry = useMemo(() => oceanDiskGeometry(), []);
   const material = useMemo(() => new ShaderMaterial({
     vertexShader,
     fragmentShader,

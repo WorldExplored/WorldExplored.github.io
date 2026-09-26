@@ -8,17 +8,17 @@ import { terrainHeight } from '../src/components/world/terrain';
 
 Object.assign(globalThis,{IS_REACT_ACT_ENVIRONMENT:true});
 
-test('fountain is an open stone basin containing transparent water and six source-to-basin streams',()=>{
+test('fountain is an open pearl basin containing transparent water and six source-to-basin streams',()=>{
   const fountain=createGardenFountain();
   try {
-    assert.equal(fountain.meshes.length,7);
+    assert.equal(fountain.meshes.length,10);
     assert.equal(fountain.group.position.y,terrainHeight(FOUNTAIN_SITE.x,FOUNTAIN_SITE.z));
     const basin=fountain.meshes.find(mesh=>mesh.name==='fountain-open-stone-basin')!;
     const rayMesh=new Mesh(basin.geometry,basin.material);rayMesh.updateMatrixWorld();
     const ray=new Raycaster(new Vector3(0,2,0),new Vector3(0,-1,0));
     const floor=ray.intersectObject(rayMesh,false)[0];assert.ok(floor);assert.ok(Math.abs(floor.point.y-.08)<1e-5,'center is a real hollow basin, not a capped cylinder');
     ray.set(new Vector3(1.03,2,0),new Vector3(0,-1,0));const rim=ray.intersectObject(rayMesh,false)[0];assert.ok(rim);assert.ok(Math.abs(rim.point.y-.47)<1e-5);
-    assert.equal(fountain.materials[0].roughness,.94);assert.equal(fountain.materials[0].metalness,0);
+    assert.equal(fountain.materials[0].roughness,.3);assert.equal(fountain.materials[0].metalness,.08);
     const water=fountain.meshes.find(mesh=>mesh.name==='fountain-transparent-water-surface')!.material as MeshPhysicalMaterial;
     assert.ok(water.transparent&&water.opacity<.75&&water.transmission===0&&water.clearcoat>.5&&water.ior===1.333);assert.ok(water.roughness<.2);
     const streams=fountain.meshes.find(mesh=>mesh.name==='fountain-six-returning-water-streams')!;

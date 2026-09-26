@@ -8,7 +8,7 @@ import { makeHistoryMuseum } from '../src/components/world/CivicLandmarks';
 import { createFacadeGarden } from '../src/components/world/FacadeGarden';
 import { tuftGeometry } from '../src/components/world/AmbientSystem';
 import { createShoreDetails } from '../src/components/world/ShoreDetails';
-import { createLandscapePlan, terrainMeshHeight, distanceToSegment, islandAt, ISLANDS } from '../src/components/world/terrain';
+import { createLandscapePlan, terrainMeshHeight, distanceToSegment, islandAt, landDistance } from '../src/components/world/terrain';
 import { createTownDrainage } from '../src/components/world/TownLandscape';
 import { groundRouteAt } from '../src/components/world/terrain';
 import { createSeaweedGeometry } from '../src/components/world/Seaweed';
@@ -116,20 +116,21 @@ test('fine grass tufts have mixed blade heights and retain their reserved footpr
   } finally {geometry.dispose();}
 });
 
-test('mineral, shell and wrack patches span every island, rooted to the beach and clear of circulation',()=>{
+test('mineral, shell and wrack patches cover every exposed coast, rooted to the beach and clear of circulation',()=>{
   const plan=createLandscapePlan(),shore=createShoreDetails(plan),matrix=new Matrix4(),position=new Vector3();let triangles=0;
   try {
     assert.equal(shore.root.children.length,6);
     for(const object of shore.root.children){
       const batch=object as InstancedMesh,regions=new Set<string>();
-      assert.ok(batch.count>=28);triangles+=batch.count*(batch.geometry.index?.count??batch.geometry.attributes.position.count)/3;
+      assert.equal(batch.count,[640,350,290,160,28,115][shore.root.children.indexOf(object)],'inland sampling must not starve a coastal batch');triangles+=batch.count*(batch.geometry.index?.count??batch.geometry.attributes.position.count)/3;
       for(let i=0;i<batch.count;i++){
         batch.getMatrixAt(i,matrix);position.setFromMatrixPosition(matrix);regions.add(islandAt(position.x,position.z).island.id);
+        assert.ok(landDistance(position.x,position.z)>.3499&&landDistance(position.x,position.z)<2.8001);
         const offset=batch.name==='beached-driftwood'?.04:.005;
         assert.ok(Math.abs(position.y-terrainMeshHeight(position.x,position.z)-offset)<.00002);
         for(const path of plan.paths)for(let segment=1;segment<path.points.length;segment++)assert.ok(distanceToSegment(position.x,position.z,path.points[segment-1],path.points[segment])>path.width/2+.6999);
       }
-      assert.equal(regions.size,ISLANDS.length);
+      for(const coast of ['main','experience-meadow','garden','purdue','beacon','city'])assert.ok(regions.has(coast),`${batch.name} covers ${coast}; the museum now shares the city coast`);
     }
     assert.ok(triangles<100000,`${triangles} strandline triangles`);
   } finally {shore.dispose();}

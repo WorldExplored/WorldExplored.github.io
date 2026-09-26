@@ -8,7 +8,7 @@ import { useFrame } from '@react-three/fiber';
 import { BoxGeometry, BufferGeometry, CylinderGeometry, ExtrudeGeometry, Float32BufferAttribute, Group, InstancedMesh, Mesh, MeshPhysicalMaterial, Object3D, Shape, SphereGeometry, Vector3 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { cityRoofMounts, cityStationActivity, type CityTransitRoute } from './city';
-import { cityDocks, cityTurbines, createCityFerryRoute, FERRY_DWELL, writeCityFerryPose } from './cityInfrastructure';
+import { cityDocks, cityTurbines, dockLandingLayout, createCityFerryRoute, FERRY_DWELL, writeCityFerryPose } from './cityInfrastructure';
 import { terrainHeight } from './terrain';
 import { GardenFountain } from './GardenFountain';
 import type { EnvironmentProps } from './Water';
@@ -30,14 +30,14 @@ export function dockBoardingPlan() {
     const end=position.clone().addScaledVector(tangent,-1.04);end.y=DOCK_BOARDING_HEIGHT;
     const start=dock.id==='city'?new Vector3(dock.x-dock.width/2,DOCK_BOARDING_HEIGHT,end.z):new Vector3(-8.40,DOCK_BOARDING_HEIGHT,dock.z-dock.length/2);
     const across=dock.id==='city'?new Vector3(0,0,1):new Vector3(1,0,0);
-    return {dock,index,start,end,right,across,stairStart:dock.id==='city'?-62.1:-21.8,stairEnd:dock.id==='city'?-60.7:-23.2,width:.50};
+    return {dock,index,start,end,right,across,...dockLandingLayout(dock),width:.50};
   });
 }
 
 export function dockBoardingExtension(elapsed:number,station:number,duration:number,firstDuration:number) {
   const phase=((elapsed%duration)+duration)%duration;
   const age=phase-(station===0?0:firstDuration);
-  if(age<0||age>FERRY_DWELL)return 0;
+  if(age<=1e-9||age>=FERRY_DWELL-.15-1e-9)return 0;
   const smooth=(value:number)=>{const t=Math.max(0,Math.min(1,value));return t*t*(3-2*t);};
   return smooth(age/.65)*smooth((FERRY_DWELL-.3-age)/.65);
 }
@@ -147,19 +147,18 @@ export function createCityLife(stationRoute: CityTransitRoute) {
   };
   for(const boarding of boardings){
     const {dock,stairStart,stairEnd}=boarding;
-    const direction=Math.sign(stairEnd-stairStart),rise=(dock.y-DOCK_BOARDING_HEIGHT)/DOCK_STAIR_COUNT;
-    const dryEnd=dock.z-direction*dock.length/2,wetEnd=dock.z+direction*dock.length/2;
+    const {direction,dryEnd,landingEnd}=boarding,rise=(dock.y-DOCK_BOARDING_HEIGHT)/DOCK_STAIR_COUNT;
     const segment=(a:number,b:number,top:number)=>fixed.push(new BoxGeometry(dock.width,.16,Math.abs(b-a)).translate(dock.x,top-.08,(a+b)/2));
     segment(dryEnd,stairStart,dock.y);
     for(let step=0;step<DOCK_STAIR_COUNT;step++)segment(stairStart+(stairEnd-stairStart)*step/DOCK_STAIR_COUNT,stairStart+(stairEnd-stairStart)*(step+1)/DOCK_STAIR_COUNT,dock.y-rise*(step+1));
-    segment(stairEnd,wetEnd,DOCK_BOARDING_HEIGHT);
+    segment(stairEnd,landingEnd,DOCK_BOARDING_HEIGHT);
     const heightAt=(z:number)=>{
       const t=(z-stairStart)/(stairEnd-stairStart);
       return t<=0?dock.y:t>=1?DOCK_BOARDING_HEIGHT:dock.y-(dock.y-DOCK_BOARDING_HEIGHT)*t;
     };
     for(const side of [-1,1]){
       const x=dock.x+side*.59;
-      const breakpoints=[dryEnd,stairStart,stairEnd,wetEnd];
+      const breakpoints=[dryEnd,stairStart,stairEnd,landingEnd];
       if(dock.id==='city'&&side===-1)breakpoints.push(boarding.start.z-.36,boarding.start.z+.36);
       breakpoints.sort((a,b)=>(a-b)*direction);
       for(let i=1;i<breakpoints.length;i++){

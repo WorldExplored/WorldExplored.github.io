@@ -80,3 +80,10 @@ export function turtleNestSandGeometry(){
   }
   return surface(positions,indices);
 }
+
+
+export const TURTLE_VARIATIONS = [
+  {shell:'#354e36',plates:'#789059',skin:'#789169',belly:'#d7cc9e',width:.96,flipper:1.03},
+  {shell:'#62543b',plates:'#9d8956',skin:'#9a9973',belly:'#e0d4ac',width:1.075,flipper:.90},
+  {shell:'#365d57',plates:'#72977c',skin:'#71968e',belly:'#c9d6b6',width:1.015,flipper:1.12},
+] as const;

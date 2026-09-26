@@ -1,7 +1,8 @@
 import { coastalApronHeight } from './coastalApron';
+import { structurePlantingClearance } from './plantingFootprints';
 import { circulationPaths } from './circulation';
 import { createGroundRoutes } from './groundRoutes';
-import { coastalBiome } from './coastalBiome';
+import { BEACH_PALMS, coastalBiome } from './coastalBiome';
 import { coastExposure } from './waves';
 import { BRIDGES, BRIDGE_LANDINGS, bridgeHeightAt } from './bridgePlan';
 import { cityInfrastructureFootprints } from './cityInfrastructure';
@@ -24,7 +25,7 @@ export const ISLANDS: readonly Island[] = [
   { id: 'garden', x: 1, z: 23, rx: 22, rz: 10, phase: 1.6, beach: 3.5, hill: 1.1 },
   { id: 'purdue', x: 26, z: -7, rx: 7.2, rz: 8.6, phase: 2.4, beach: 3.2, hill: .7 },
   { id: 'beacon', x: -76, z: -36, rx: 5.8, rz: 5.2, phase: 3.2, beach: 1.8, hill: 1.3 },
-  { id: 'city', x: -7, z: -78, rx: 29, rz: 18, phase: 4.1, beach: 4.4, hill: .55 },
+  { id: 'city', x: -3, z: -78, rx: 45, rz: 26, phase: 4.1, beach: 4.4, hill: .55 },
   { id: 'museum-meadow', x: 21, z: -72, rx: 14, rz: 12.5, phase: 5.2, beach: 3.8, hill: 1.35 },
 ];
 export const PLANT_REACH = .95;
@@ -40,6 +41,7 @@ export function smooth(edge0: number, edge1: number, value: number) {
 
 /** The same asymmetric contour defines mesh rings, signed distance, and sampling. */
 export function islandContour(island: Island, angle: number) {
+  if (island.id === 'city') return 1;
   return 1 + .115 * Math.sin(3 * angle + island.phase) + .075 * Math.cos(5 * angle - island.phase * 1.4)
     + .035 * Math.sin(8 * angle + island.phase) - .16 * Math.exp(-Math.pow(Math.atan2(Math.sin(angle - island.phase), Math.cos(angle - island.phase)) / .32, 2));
 }
@@ -142,16 +144,16 @@ function plantingIndex(plan: LandscapePlan) {
 export function vegetationSuitability(x: number, z: number, reach: number, plan: LandscapePlan) {
   const distance=landDistance(x,z)-reach;
   if(distance<1.5)return 0;
-  const coast=coastalBiome(x,z,distance,terrainBaseHeight(x,z)).grass;
-  if(coast<.025)return 0;
   let clearance=Infinity;
   if(reach<=2){
     const cell=plantingIndex(plan).get(`${Math.floor(x/8)},${Math.floor(z/8)}`);
-    if(cell){clearance=circleClearance(x,z,cell.circles);if(clearance<=reach)return 0;
+    if(cell){for(const obstacle of cell.circles){clearance=Math.min(clearance,structurePlantingClearance(x,z,obstacle));if(clearance<=reach)return 0;}
       for(const {a,b,halfWidth} of cell.segments){clearance=Math.min(clearance,distanceToSegment(x,z,a,b)-halfWidth);if(clearance<=reach)return 0;}}
-  }else clearance=Math.min(circleClearance(x,z,plan.structures),circleClearance(x,z,plan.rocks),circleClearance(x,z,plan.trees.map(tree=>({...tree,radius:tree.height*.15}))),pathClearance(x,z,plan.paths));
+  }else clearance=Math.min(...plan.structures.map(obstacle=>structurePlantingClearance(x,z,obstacle)),circleClearance(x,z,plan.rocks),circleClearance(x,z,plan.trees.map(tree=>({...tree,radius:tree.height*.15}))),pathClearance(x,z,plan.paths));
   const free=smooth(0,.75,clearance-reach);
   if(!free)return 0;
+  const coast=coastalBiome(x,z,distance,terrainBaseHeight(x,z)).grass;
+  if(coast<.025)return 0;
   const slope=Math.hypot(terrainBaseHeight(x+.25,z)-terrainBaseHeight(x-.25,z),terrainBaseHeight(x,z+.25)-terrainBaseHeight(x,z-.25))*2;
   return coast*free*(1-smooth(.35,.65,slope));
 }
@@ -175,7 +177,7 @@ export function createLandscapePlan(): LandscapePlan {
   }
   for(const [x,z] of [[-4,-85],[6,-81],[-14,-84],[-25,-83],[8,-86],[2,-76],[-18,-88],[-22,-67],[13,-76]]) {
     const height=2.5,radius=height*.63;
-    if(circleClearance(x,z,[...structures,...rocks,...trees])<radius+.15||pathClearance(x,z,paths)<radius+.8)continue;
+    if(BEACH_PALMS.some(palm=>Math.hypot(x-palm.x,z-palm.z)<radius+1.85+.15)||circleClearance(x,z,[...structures,...rocks,...trees])<radius+.15||pathClearance(x,z,paths)<radius+.8)continue;
     trees.push({id:`courtyard-tree-${trees.length}`,x,z,y:terrainHeight(x,z),radius,height,rotation:random()*Math.PI*2});
   }
   for (let attempt = 0; trees.length < 54 && attempt < 7200; attempt++) {
@@ -184,7 +186,7 @@ export function createLandscapePlan(): LandscapePlan {
     const a = random() * Math.PI * 2; const r = Math.sqrt(random()) * islandContour(island, a);
     const x = island.x + Math.cos(a) * island.rx * r; const z = island.z + Math.sin(a) * island.rz * r;
     const height = 2.2 + random() * 1.9; const radius = height * .63;
-    if (landDistance(x, z) < 1.8 + radius || terrainSlope(x, z) > .6 || circleClearance(x, z, [...structures, ...rocks, ...trees]) < radius + .25 || pathClearance(x, z, paths) < radius + .3) continue;
+    if (BEACH_PALMS.some(palm=>Math.hypot(x-palm.x,z-palm.z)<radius+1.85+.25) || landDistance(x, z) < 1.8 + radius || terrainSlope(x, z) > .6 || circleClearance(x, z, [...structures, ...rocks, ...trees]) < radius + .25 || pathClearance(x, z, paths) < radius + .3) continue;
     trees.push({ id: `grove-tree-${trees.length}`, x, z, y: terrainHeight(x, z), radius, height, rotation: random() * Math.PI * 2 });
   }
   return { structures, paths, rocks, trees };
@@ -286,7 +288,7 @@ export function archipelagoGeometry() {
     }
     remaining.forEach(emit);
   }
-  for (let iz = -280; iz < 110; iz++) for (let ix = -230; ix < 105; ix++) {
+  for (let iz = -280; iz < 110; iz++) for (let ix = -230; ix < 125; ix++) {
     if (landDistance((ix + .5) * step, (iz + .5) * step) < -6.5) continue;
     const a = vertex(ix, iz), b = vertex(ix + 1, iz), c = vertex(ix, iz + 1), d = vertex(ix + 1, iz + 1);
     face([a,c,b]);face([b,c,d]);

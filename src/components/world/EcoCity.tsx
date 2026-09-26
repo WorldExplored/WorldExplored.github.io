@@ -4,7 +4,7 @@ import { measureConstruction } from './renderDiagnostics';
 
 import { useEffect, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { BufferGeometry, CatmullRomCurve3, Color, DoubleSide, Float32BufferAttribute, Uint8BufferAttribute, Group, Matrix4, Mesh, MeshPhysicalMaterial, Object3D, TubeGeometry, Vector3 } from 'three';
+import { BoxGeometry, BufferGeometry, CatmullRomCurve3, Color, DoubleSide, Float32BufferAttribute, Uint8BufferAttribute, Group, Matrix4, Mesh, MeshPhysicalMaterial, Object3D, TubeGeometry, Vector3 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { cityBuildings, createCityTransitRoute, writeCityTransitPose, type CityTransitRoute, type CityBuilding } from './city';
 import { terrainHeight } from './terrain';
@@ -18,7 +18,7 @@ import { applySurface } from './surfaceMaterials';
 import { emitTechnologySound } from './coastalAudio';
 import { makeCityCarriage } from './CityMonorail';
 
-import { RoomLighting, applyBakedRoomLighting, type RoomLamp } from './RoomLighting';
+import { RoomLighting, applyBakedRoomLighting, applyNightSource, type RoomLamp } from './RoomLighting';
 
 type Finish = CityFinish;
 interface Part { geometry: BufferGeometry; building: string }
@@ -158,13 +158,10 @@ function makeStaticCity(route: CityTransitRoute, materials: ReturnType<typeof ma
     route.curve.getPointAt(support / 32, center); route.curve.getPointAt((support / 32 + .001) % 1, ahead); tangent.subVectors(ahead, center).normalize();
     if (Math.abs(center.x + 5) < 2.5 && Math.abs(center.z + 68) < 2.8) continue;
     const floor = terrainHeight(center.x, center.z) - .15;
-    // Rail piers are tapered structural supports, not decorative freestanding loops.
-    const pier=new BufferGeometry();
-    const base=floor,top=center.y-.02,wide=.32,narrow=.17;
-    const p:number[]=[],ix:number[]=[];
-    for(const [y,r] of [[base,wide],[top,narrow]])for(const [a,b] of [[-1,-1],[1,-1],[1,1],[-1,1]])p.push(center.x+a*r,y,center.z+b*r);
-    for(let side=0;side<4;side++){const j=(side+1)%4;ix.push(side,j,side+4,j,j+4,side+4);}
-    pier.setAttribute('position',new Float32BufferAttribute(p,3));pier.setIndex(ix);pier.computeVertexNormals();add(pier,'stone');
+    const top = center.y - .34;
+    add(new BoxGeometry(.44, top - floor, .44).translate(center.x, (top + floor) / 2, center.z), 'stone');
+    add(new BoxGeometry(.62, .16, .56).translate(center.x, top + .07, center.z), 'porcelain');
+
   }
   const groups = new Map<string, Group>();
   for (const finish of Object.keys(parts) as Finish[]) {
@@ -208,7 +205,9 @@ function constructCityInterior(entry: DeferredCityInterior, materials: ReturnTyp
     geometry.applyMatrix4(matrix.multiplyMatrices(placement.matrix,local.matrix));
     const plain=geometry.index?geometry.toNonIndexed():geometry;
     if(plain!==geometry)geometry.dispose();
-    for(const name of Object.keys(plain.attributes))if(!['position','normal','uv'].includes(name) && !(['garden', 'fabric', 'wood'].includes(finish) && name === 'color'))plain.deleteAttribute(name);
+    const screen = geometry.userData.furniture?.name === 'monitor-screen';
+    if (finish === 'aqua') plain.setAttribute('aNightSource', new Uint8BufferAttribute(new Uint8Array(plain.attributes.position.count).fill(screen ? 255 : 0), 1, true));
+    for(const name of Object.keys(plain.attributes))if(!['position','normal','uv','aNightSource'].includes(name) && !(['garden', 'fabric', 'wood'].includes(finish) && name === 'color'))plain.deleteAttribute(name);
     if(!plain.getAttribute('uv')) {
       const p=plain.getAttribute('position'),uv=new Float32Array(p.count*2);
       for(let i=0;i<p.count;i++){uv[i*2]=p.getX(i);uv[i*2+1]=p.getY(i)+p.getZ(i);}
@@ -229,7 +228,8 @@ function constructCityInterior(entry: DeferredCityInterior, materials: ReturnTyp
   for(const [finish,parts] of buckets) {
     const geometry=mergeGeometries(parts)!;parts.forEach(part=>part.dispose());geometry.computeBoundingSphere();
     geometry.setAttribute('aRoomFill',new Uint8BufferAttribute(new Uint8Array(geometry.attributes.position.count).fill(230),1,true));
-    const mesh=new Mesh(geometry,finishSurface(materials[finish],finish));
+    const material = finish === 'aqua' ? applyNightSource(finishSurface(materials[finish].clone(), finish), .9, true) : finishSurface(materials[finish],finish);
+    const mesh=new Mesh(geometry,material);
     mesh.name=`city-interior-${building.id}-${finish}`;mesh.receiveShadow=true;mesh.raycast=()=>{};root.add(mesh);
   }
   return root;
@@ -265,6 +265,13 @@ function makeCity() {
   const cars = [carriage, carriage.clone()];
   cars[0].name = 'city-monorail-front'; cars[1].name = 'city-monorail-rear';
   const resources = { route, materials, buildings, lifts, lights: architecture.lights, interiors: architecture.interiors, cars, position: new Vector3(), tangent: new Vector3(), disposeTimer: undefined as ReturnType<typeof setTimeout> | undefined };
+  // Prepare room geometry behind the entry window; camera movement only changes
+  // visibility, never constructs an apartment during a flight.
+  for (const entry of resources.interiors) {
+    entry.object = measureConstruction('city-interior', () => constructCityInterior(entry, materials));
+    entry.object.visible = false;
+    buildings.find(group => group.userData.building === entry.building.id)!.add(entry.object);
+  }
   updateCityTransit(resources, 0);
   return resources;
 }

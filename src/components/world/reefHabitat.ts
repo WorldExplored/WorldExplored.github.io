@@ -14,7 +14,7 @@ export interface ReefHabitatPlan {
 
 export { REEF_BASINS, reefFloorHeight, reefFloorVertexHeight } from './seafloor';
 export const KELP_POCKET = {x:-33,z:-30,rx:7.2,rz:5.8};
-export const KELP_POCKETS = [KELP_POCKET, {x:-44,z:-23,rx:8.7,rz:5.9}, {x:-59,z:-60,rx:11,rz:6.6}, {x:-91,z:-38,rx:6.7,rz:13}, {x:-13,z:-107,rx:17,rz:5.8}, {x:40,z:-83,rx:5.5,rz:11}] as const;
+export const KELP_POCKETS = [KELP_POCKET, {x:-44,z:-23,rx:8.7,rz:5.9}, {x:-59,z:-60,rx:11,rz:6.6}, {x:-91,z:-38,rx:6.7,rz:13}, {x:-13,z:-119,rx:22,rz:7}, {x:57,z:-83,rx:7,rz:15}] as const;
 export const KELP_TOP = -2.45;
 
 /** The island shelf is the visible upper surface until its existing mesh ends. */
@@ -118,6 +118,10 @@ export function getReefHabitat(): ReefHabitatPlan {
   const originalRandom=random,expansionRandom=seededRandom(482719);
   ridges.forEach((ridge, patch) => ridge.forEach(([cx, cz], segment) => {
     const random=patch<13?originalRandom:expansionRandom;
+    if(patch>=14) {
+      const dx=cx+3,dz=cz+78,ratio=Math.hypot(dx/45,dz/26),outward=Math.max(1,1.40/ratio);
+      cx=-3+dx*outward;cz=-78+dz*outward;
+    }
     const contains=(x:number,z:number,margin:number)=>reefBasinsContain(x,z,margin,patch<13?REEF_BASINS.slice(0,4):REEF_BASINS);
     const form = (segment + patch) % 4;
     const radius = ([3.2,2.7,3.4,2.7][form] + random() * [1.3,1.1,1.2,1][form]) * (patch < 6 ? 1 : 1.32);
@@ -158,12 +162,21 @@ export function getReefHabitat(): ReefHabitatPlan {
   // Sink every perimeter vertex into the sampled floor, extending the rock downward
   // instead of letting a flat base hover over the sloping canyon floor.
   for (const rock of rocks) {
+    const centerFloor=rock.patch>=200?marineFloorHeight(rock.x,rock.z):reefFloorHeight(rock.x,rock.z);
+    const originalBase=rock.y;
     const { positions } = reefRockMesh(rock.form), c = Math.cos(rock.rotation), s = Math.sin(rock.rotation);
     let base = rock.y;
     for (let i = 0; i < positions.length; i += 3) if (positions[i + 1] === 0) {
       const x = rock.x + rock.radius * (c * positions[i] + s * positions[i + 2]);
       const z = rock.z + rock.radius * (-s * positions[i] + c * positions[i + 2]);
       base = Math.min(base, (rock.patch>=200 ? marineFloorHeight(x,z) : reefFloorHeight(x, z)) - .08);
+    }
+    for(let attempt=0;centerFloor-base>=2.5&&attempt<3;attempt++) {
+      rock.radius*=.75; base=originalBase;
+      for(let i=0;i<positions.length;i+=3)if(positions[i+1]===0){
+        const x=rock.x+rock.radius*(c*positions[i]+s*positions[i+2]),z=rock.z+rock.radius*(-s*positions[i]+c*positions[i+2]);
+        base=Math.min(base,(rock.patch>=200?marineFloorHeight(x,z):reefFloorHeight(x,z))-.08);
+      }
     }
     rock.height += rock.y - base;
     rock.y = base;
@@ -182,7 +195,7 @@ export function getReefHabitat(): ReefHabitatPlan {
       const radius = encrusting ? .34 + random() * .58 : .19 + random() * .42;
       const height = encrusting ? .13 + random() * .25 : .28 + random() * .75;
       if (y + height > -1.82 || colonies.some(coral => Math.hypot(x - coral.x, z - coral.z) < (radius + coral.radius) * .68 && Math.abs(y - coral.y) < .5)) continue;
-      colonies.push({ x, z, y: y - .055, radius, height, rotation: random() * Math.PI * 2, form, color: Math.floor(random() * 10), patch: host.patch });
+      colonies.push({ x, z, y: y - .055, radius, height, rotation: random() * Math.PI * 2, form, color: (n + host.patch + Math.floor(random()*3)) % 10, patch: host.patch });
       break;
     }
   }

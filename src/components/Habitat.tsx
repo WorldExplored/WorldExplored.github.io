@@ -91,7 +91,7 @@ export function Habitat() {
       target.style.setProperty('--light-y', `${event.clientY - rect.top}px`);
     }} aria-label={profile.ui.mainNavigation}><DockShell />{dock.map(section => <a href={`#${section.id}`} data-destination={section.id} key={section.id} onClick={event => navigate(event, section.id)} aria-current={active === section.id ? 'location' : undefined}><HabitatIcon kind={section.id} /><span>{section.label}</span></a>)}</nav>
     <EnvironmentalAudioControl ref={ambience} visible={entered}><TimeOfDayControl /><WorldMusic ref={radio} /></EnvironmentalAudioControl>
-    {started && !entered && <WorldEntry onEnter={sound => {
+    {started && !entered && <WorldEntry ready={ready || !useWorld} onEnter={sound => {
       flushSync(() => setEntered(true));
       if (sound) { void ambience.current?.start(); radio.current?.play(); }
       requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(active ? '.surface-close' : '.identity button')?.focus({ preventScroll: true }));

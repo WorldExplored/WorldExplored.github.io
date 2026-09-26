@@ -1,4 +1,5 @@
 import { Vector3 } from 'three';
+import { beachClearance, type BeachReservation } from './beachOccupancy';
 import { coastalCaveClearance } from './coastalCaveLayout';
 import { getReefHabitat, marineFloorHeight, reefHabitatContains, reefFerryClearance } from './reefHabitat';
 import { createLandscapePlan, ISLANDS, islandContour, landDistance, seededRandom, terrainMeshHeight } from './terrain';
@@ -8,8 +9,8 @@ export type VisitorKind = 'stonefish' | 'octopus' | 'turtle';
 // Each segment clears the larger octopus's swept arm disc; opposite directions
 // keep the two animals from following one another in lockstep.
 export const OCTOPUS_ROUTE: readonly (readonly [number,number])[] = [
-  [10,-25],[7,-29],[10.5,-27.5],[17.5,-27.5],[23,-30],[27.5,-35],
-  [31,-41],[31,-48],[25,-51],[20,-51],[15,-53],[15,-56],
+  [7,-29],[6,-28],[9,-26],[10,-25],[22,-26.5],[29.5,-34],
+  [30,-36.5],[31,-48],[23,-47],[20,-48],[20,-49],[17,-49],
 ];
 type Blocker={x:number;y:number;z:number;radius:number;height:number};
 const CELL=4;
@@ -78,7 +79,7 @@ function pathClear(kind: VisitorKind, from: Vector3, x: number, z: number, radiu
 
 function initialWaterPosition(kind: VisitorKind, index: number, random: () => number, radius: number) {
   // Western and eastern sandy reef corridors, with a nearshore exit for octopuses.
-  const centers = index%2 ? [[-60,-36],[-50,-33],[-35,-35]] : [[-17,-44],[-7,-36],[10,-35]];
+  const centers = index%2 ? [[-85,-36],[-60,-36],[-50,-33]] : [[-17,-44],[-7,-36],[10,-35]];
   for (const [cx,cz] of centers) for (let attempt=0;attempt<350;attempt++) {
     const x=cx+(random()-.5)*12,z=cz+(random()-.5)*12;
     if (visitorClear(kind,x,z,radius)) return new Vector3(x,marineFloorHeight(x,z)+.075,z);
@@ -207,6 +208,21 @@ export function createMarineVisitor(kind: VisitorKind,index: number): MarineVisi
   return state;
 }
 
+let nurseryReservations:BeachReservation[]|undefined;
+export function turtleBeachReservations():readonly BeachReservation[]{
+  if(!nurseryReservations){
+    nurseryReservations=[];
+    for(let index=0;index<3;index++){
+      const state=createMarineVisitor('turtle',index),owner=`turtle-nursery-${index}`;
+      nurseryReservations.push({owner,from:state.nursery!.water,to:state.home,radius:.73},
+        {owner,from:state.home,to:state.nest,radius:.73},
+        {owner,from:state.nest,to:state.nursery!.water,radius:.52});
+    }
+  }
+  return nurseryReservations;
+}
+export function turtleBeachClearance(x:number,z:number,radius=0){return beachClearance(x,z,radius,turtleBeachReservations());}
+
 function chooseTarget(state:MarineVisitorState) {
   const {kind,position,random,size}=state,radius=kind==='octopus'?size*.85:kind==='stonefish'?Math.max(.33,size*.65):.58;
   if(kind==='octopus'){
@@ -219,7 +235,7 @@ function chooseTarget(state:MarineVisitorState) {
     const angle=random()*Math.PI*2,distance=(.35+random()*.65)*reach;
     const x=position.x+Math.cos(angle)*distance,z=position.z+Math.sin(angle)*distance;
     if(!visitorClear(kind,x,z,radius)||!pathClear(kind,position,x,z,radius))continue;
-    state.target.set(x,0,z);state.moving=true;state.moveUntil=state.time+distance/.11+2;return;
+    state.target.set(x,0,z);state.moving=true;state.moveUntil=state.time+distance/.11+6;return;
   }
   state.nextMove=state.time+4;
 }
@@ -235,9 +251,9 @@ export function stepMarineVisitor(state:MarineVisitorState,delta:number,paused=f
     const desired=Math.atan2(-dz,dx),turn=Math.atan2(Math.sin(desired-state.heading),Math.cos(desired-state.heading));
     state.heading+=Math.max(-dt*.75,Math.min(dt*.75,turn));
     const speed=state.kind==='octopus'?.12+Math.pow(Math.max(0,Math.sin(state.time*1.55+state.index*2)),4)*.9:state.kind==='stonefish'?.11:.055;
-    const move=Math.min(distance,speed*dt)*(state.kind==='octopus'&&Math.abs(turn)>.18?0:1);
-    const x=state.position.x+(state.kind==='octopus'?dx/Math.max(distance,.0001):Math.cos(state.heading))*move;
-    const z=state.position.z+(state.kind==='octopus'?dz/Math.max(distance,.0001):-Math.sin(state.heading))*move;
+    const move=Math.abs(turn)>.18?0:Math.min(distance,speed*dt);
+    const x=state.position.x+(dx/Math.max(distance,.0001))*move;
+    const z=state.position.z+(dz/Math.max(distance,.0001))*move;
     const radius=state.kind==='octopus'?state.size*.85:state.kind==='stonefish'?Math.max(.33,state.size*.65):.58;
     if(visitorClear(state.kind,x,z,radius))state.position.set(x,marineFloorHeight(x,z)+.075,z);
     else if(state.kind!=='octopus')state.moveUntil=state.time;

@@ -10,6 +10,7 @@ import { useFrame } from '@react-three/fiber';
 import { BufferGeometry, Color, DoubleSide, Float32BufferAttribute, InstancedMesh, MeshPhysicalMaterial, Object3D, Vector3 } from 'three';
 import { createLandscapePlan, distanceToSegment, islandAt, landDistance, seededRandom, terrainHeight, terrainSlope, vegetationSuitability, ISLANDS, islandContour } from './terrain';
 import { coastalBiome, TOWN_BEDS, BEACH_PALMS } from './coastalBiome';
+import { structurePlantingClearance } from './plantingFootprints';
 import { createLighthouseEscarpment, lighthouseEscarpmentSites } from './LighthouseEscarpment';
 import { IslandMeadows } from './IslandMeadows';
 import type { EnvironmentProps } from './Water';
@@ -19,79 +20,101 @@ export const FLOWER_KINDS: FloraKind[] = ['flower', 'foxglove', 'bluebell', 'pop
 export interface FloraSite { x: number; y: number; z: number; scale: number; rotation: number; kind: FloraKind; reach: number }
 const KINDS: FloraKind[] = ['reeds', 'beach', 'shrub', 'flower', 'broadleaf', 'sedge', 'clover', 'fern', 'foxglove', 'bluebell', 'poppy', 'allium', 'palm'];
 
+let floraSiteCache:FloraSite[]|undefined;
 export function createFloraSites() {
-  const random = seededRandom(4621); const plan = createLandscapePlan(); const sites: FloraSite[] = [];
+  if(floraSiteCache)return floraSiteCache;
+  const random = seededRandom(4621); const plan = createLandscapePlan(); const sites: FloraSite[] = [],cells=new Map<string,FloraSite[]>(),beaconRocks=lighthouseEscarpmentSites();
+  const crowded=(x:number,z:number,spacing:number)=>{
+    const ix=Math.floor(x),iz=Math.floor(z),reach=Math.ceil(spacing);
+    for(let dx=-reach;dx<=reach;dx++)for(let dz=-reach;dz<=reach;dz++)if(cells.get(`${ix+dx},${iz+dz}`)?.some(site=>Math.hypot(x-site.x,z-site.z)<spacing))return true;
+    return false;
+  };
+  const plant=(site:FloraSite)=>{sites.push(site);const key=`${Math.floor(site.x)},${Math.floor(site.z)}`,cell=cells.get(key)??[];cell.push(site);cells.set(key,cell);};
   const beaconClear=(x:number,z:number,reach:number)=>{
     const distance=landDistance(x,z);
-    if(lighthouseEscarpmentSites().some(rock=>Math.hypot(x-rock.x,z-rock.z)<rock.radius+reach))return false;
+    if(beaconRocks.some(rock=>Math.hypot(x-rock.x,z-rock.z)<rock.radius+reach))return false;
     if(distance<reach+.45||terrainSlope(x,z)>.62||coastalBiome(x,z,distance,terrainHeight(x,z)).grass<.12)return false;
-    if([...plan.structures,...plan.rocks,...plan.trees].some(item=>Math.hypot(x-item.x,z-item.z)<item.radius+reach))return false;
+    if([...plan.structures,...plan.rocks,...plan.trees].some(item=>structurePlantingClearance(x,z,item)<reach))return false;
     return !plan.paths.some(path=>path.points.slice(1).some((point,i)=>distanceToSegment(x,z,path.points[i],point)<path.width/2+reach));
   };
   const anchors: Array<[number,number,number,FloraKind]> = [
     [-16,20,4,'flower'],[-7,24,3,'flower'],[3,22,3,'flower'],[16,25,3,'flower'],[3,23,1.4,'broadleaf'],[-1,-11,1.6,'broadleaf'],[-4,-11,2,'flower'],
     [-8,-12,2,'fern'],[2,-14,2,'fern'],[2,-14,2,'clover'],[6,23,3,'clover'],[-4,21,3,'clover'],[-13,-4,3,'clover'],[-4,-85,3,'clover'],[6,-81,3,'clover'],[-14,-84,2,'clover'],[-18,-80,3,'flower'],[5,-80,3,'flower'],[-24,-67,3,'shrub'],[13,-66,3,'clover'],[-15,1,3,'shrub'],[-4,4,3,'shrub'],[8,-3,2,'shrub'],[3,-13,3,'shrub'],[-23,-69,2,'shrub'],[2,-64,2,'shrub'],
     [19,-62,2.3,'flower'],[27,-63,2,'fern'],[31,-71,2,'shrub'],[29,-79,2,'flower'],[20,-82,2.2,'clover'],[11,-75,2.2,'flower'],[12,-66,2,'sedge'],
+    [-16.9,-67,2.8,'fern'],[-14.5,-71.6,2.2,'broadleaf'],[-21,-65.5,3.7,'sedge'],[-8.5,-65,3.2,'flower'],[2.5,-63.1,3.8,'fern'],
     [-80,-36,1.3,'sedge'],[-76,-40,1.3,'beach'],[-72,-35,1.3,'sedge'],[-77,-32,1.1,'flower'],
   ];
   for (let round = 0; round < 100; round++) for (const [ax,az,radius,kind] of anchors) {
     const angle = random()*Math.PI*2; const r=Math.sqrt(random())*radius; const x=ax+Math.cos(angle)*r; const z=az+Math.sin(angle)*r;
     const reach=kind==='broadleaf'?1.55:kind==='shrub'?1.3:1.0;
+    const spacing=kind==='broadleaf'?.85:kind==='shrub'?.65:kind==='flower'?.5:.35;
+    if(crowded(x,z,spacing))continue;
     const beacon=islandAt(x,z).island.id==='beacon';
     if(beacon?!beaconClear(x,z,reach):vegetationSuitability(x,z,reach,plan)<.13)continue;
-    const spacing=kind==='broadleaf'?.85:kind==='shrub'?.65:kind==='flower'?.5:.35;
-    if(sites.some(site=>Math.hypot(x-site.x,z-site.z)<spacing))continue;
-    sites.push({x,y:terrainHeight(x,z),z,kind,reach,scale:.7+random()*.65,rotation:random()*Math.PI*2});
+    plant({x,y:terrainHeight(x,z),z,kind,reach,scale:.7+random()*.65,rotation:random()*Math.PI*2});
   }
   // Compact courtyard species fit real gaps beside walls without covering streets.
   for(let round=0;round<220;round++)for(const [ax,az,,outer] of TOWN_BEDS){
     const angle=random()*Math.PI*2,r=Math.sqrt(random())*outer*1.12,x=ax+Math.cos(angle)*r,z=az+Math.sin(angle)*r;
     const choice=random(),kind:FloraKind=choice<.39?FLOWER_KINDS[Math.floor(random()*FLOWER_KINDS.length)]:choice<.48?'fern':choice<.70?'clover':choice<.88?'shrub':'broadleaf';
+    if(crowded(x,z,.34))continue;
     const reach=kind==='broadleaf'?.72:kind==='shrub'?.67:.62,suitability=vegetationSuitability(x,z,reach,plan);
-    if(suitability<.13||sites.some(site=>Math.hypot(x-site.x,z-site.z)<.34))continue;
-    sites.push({x,y:terrainHeight(x,z),z,kind,reach,scale:.40+random()*.19,rotation:random()*Math.PI*2});
+    if(suitability<.13)continue;
+    plant({x,y:terrainHeight(x,z),z,kind,reach,scale:.40+random()*.19,rotation:random()*Math.PI*2});
   }
   // The narrow stony ring around the beacon needs its own small-scale tufts.
   for(let attempt=0;attempt<1600;attempt++){
     const x=-81+random()*10,z=-41+random()*10,kind:FloraKind=attempt%4===0?'flower':attempt%3===0?'beach':'sedge';
-    if(!beaconClear(x,z,.35)||sites.some(site=>Math.hypot(x-site.x,z-site.z)<.25))continue;
-    sites.push({x,y:terrainHeight(x,z),z,kind,reach:.35,scale:.30+random()*.25,rotation:random()*Math.PI*2});
+    if(crowded(x,z,.25)||!beaconClear(x,z,.35))continue;
+    plant({x,y:terrainHeight(x,z),z,kind,reach:.35,scale:.30+random()*.25,rotation:random()*Math.PI*2});
   }
   for(let index=0;index<3200;index++) {
     const x=-34+random()*71;const z=-26+random()*65; const distance=landDistance(x,z);
     if(distance<.55||distance>3.8||terrainSlope(x,z)>.55)continue;
     if(plan.paths.some(path=>path.points.slice(1).some((point,i)=>distanceToSegment(x,z,path.points[i],point)<path.width/2+.9)))continue;
-    if([...plan.structures,...plan.rocks,...plan.trees].some(item=>Math.hypot(x-item.x,z-item.z)<item.radius+.9))continue;
+    if([...plan.structures,...plan.rocks,...plan.trees].some(item=>structurePlantingClearance(x,z,item)<.9))continue;
     const island=islandAt(x,z).island;
     const kind:FloraKind=distance<2.2&&island.id==='garden'&&Math.sin(x*.31+z*.17)>.2?'reeds':distance>2.5?'sedge':'beach';
     // Small continuous ecological patches, separated by open sand.
     if(Math.sin(x*.55+z*.32)+Math.cos(z*.65-x*.19)<.6)continue;
-    sites.push({x,y:terrainHeight(x,z),z,kind,reach:.9,scale:.65+random()*.55,rotation:random()*Math.PI*2});
+    plant({x,y:terrainHeight(x,z),z,kind,reach:.9,scale:.65+random()*.55,rotation:random()*Math.PI*2});
+  }
+  // Mixed waterfront drifts fill the fountain's margins without outlining a circle.
+  let waterfront=0;
+  for(let attempt=0;attempt<5500&&waterfront<240;attempt++){
+    const x=-25+random()*39,z=-73+random()*13,choice=random();
+    const kind:FloraKind=choice<.22?'fern':choice<.42?'sedge':choice<.58?'shrub':choice<.68?'broadleaf':FLOWER_KINDS[Math.floor(random()*FLOWER_KINDS.length)];
+    const reach=kind==='broadleaf'?.65:kind==='fern'?.55:kind==='shrub'||kind==='sedge'?.58:.40;
+    if(crowded(x,z,.26))continue;
+    const suitability=vegetationSuitability(x,z,reach,plan);
+    if(suitability<.07||random()>Math.min(1,suitability*2))continue;
+    const scale=kind==='broadleaf'?.4+random()*.12:kind==='shrub'?.44+random()*.20:kind==='sedge'?.80+random()*.35:.52+random()*.25;
+    plant({x,y:terrainHeight(x,z),z,kind,reach,scale,rotation:random()*Math.PI*2});waterfront++;
   }
   // Mixed understory fills habitat gaps between larger ferns and shrubs.
   const understory:FloraKind[]=['sedge','clover','fern','shrub','broadleaf',...FLOWER_KINDS];
-  for(let attempt=0;attempt<21000;attempt++){
+  for(let attempt=0;attempt<21000&&sites.length<1960;attempt++){
     const island=ISLANDS[attempt%ISLANDS.length],angle=random()*Math.PI*2,r=Math.sqrt(random())*islandContour(island,angle);
     const x=island.x+Math.cos(angle)*island.rx*r,z=island.z+Math.sin(angle)*island.rz*r;
     if(Math.sin(x*.63+z*.34)+Math.cos(z*.49-x*.27)<-.52)continue;
     const kind=understory[Math.floor(random()*understory.length)],reach=kind==='fern'?.55:kind==='shrub'||kind==='broadleaf'?.58:kind==='clover'?.49:.39;
+    if(crowded(x,z,.34))continue;
     if(island.id==='beacon'?!beaconClear(x,z,reach):vegetationSuitability(x,z,reach,plan)<.09)continue;
-    if(sites.some(site=>Math.hypot(x-site.x,z-site.z)<.34))continue;
     const scale=kind==='fern'?.50+random()*.22:kind==='broadleaf'?.34+random()*.12:kind==='shrub'?.45+random()*.16:.50+random()*.24;
-    sites.push({x,y:terrainHeight(x,z),z,kind,reach,scale,rotation:random()*Math.PI*2});
+    plant({x,y:terrainHeight(x,z),z,kind,reach,scale,rotation:random()*Math.PI*2});
   }
   const parents=[...sites],recruits:FloraKind[]=['fern','shrub','clover','broadleaf','flower','bluebell','poppy','foxglove'];
   for(let attempt=0;attempt<18000&&sites.length<2100;attempt++){
     const parent=parents[Math.floor(random()*parents.length)],angle=random()*Math.PI*2,r=.22+Math.pow(random(),.8)*1.7;
     const x=parent.x+Math.cos(angle)*r,z=parent.z+Math.sin(angle)*r*.72,kind=recruits[Math.floor(random()*recruits.length)];
     const reach=kind==='shrub'?.67:kind==='broadleaf'?.64:kind==='fern'?.52:.36;
+    if(crowded(x,z,.22))continue;
     if(islandAt(x,z).island.id==='beacon'?!beaconClear(x,z,reach):vegetationSuitability(x,z,reach,plan)<.07)continue;
-    if(sites.some(site=>Math.hypot(x-site.x,z-site.z)<.22))continue;
     const scale=kind==='shrub'?.49+random()*.22:kind==='broadleaf'?.36+random()*.16:kind==='fern'?.49+random()*.21:.46+random()*.32;
-    sites.push({x,y:terrainHeight(x,z),z,kind,reach,scale,rotation:random()*Math.PI*2});
+    plant({x,y:terrainHeight(x,z),z,kind,reach,scale,rotation:random()*Math.PI*2});
   }
   for(const palm of BEACH_PALMS)sites.push({x:palm.x,y:terrainHeight(palm.x,palm.z),z:palm.z,kind:'palm',reach:1.85,scale:palm.scale,rotation:palm.yaw});
-  return sites;
+  floraSiteCache=sites;return sites;
 }
 
 export function floraGeometry(kind:FloraKind, detail:'near'|'far'='near') {
@@ -195,8 +218,17 @@ export function floraGeometry(kind:FloraKind, detail:'near'|'far'='near') {
     for(let ring=0;ring<=rings;ring++)for(let side=0;side<sides;side++){
       const t=ring/rings,a=side/sides*Math.PI*2,radius=(.12-t*.047)*(ring%2?.93:1);
       positions.push(.17*t*t+Math.cos(a)*radius,t*2.8,Math.sin(a)*radius);
-      tint.set(ring%2?'#9c9673':'#787c58');colors.push(tint.r,tint.g,tint.b);
+      tint.set(ring%2?'#987049':'#725036');colors.push(tint.r,tint.g,tint.b);
       if(ring){const i=start+ring*sides+side,next=start+ring*sides+(side+1)%sides;indices.push(i,next,i-sides,next,next-sides,i-sides);}
+    }
+    for(let nut=0;nut<5;nut++){
+      const a=nut*2.399,start=positions.length/3,sides=6,rings=4,cx=.17+Math.sin(a)*.12,cz=Math.cos(a)*.12,cy=2.65-(nut%2)*.10;
+      for(let ring=0;ring<=rings;ring++)for(let side=0;side<sides;side++){
+        const t=ring/rings,angle=side/sides*Math.PI*2,r=Math.sin(t*Math.PI)*.095;
+        positions.push(cx+Math.cos(angle)*r,cy+(t-.5)*.24,cz+Math.sin(angle)*r);
+        tint.set(side%2?'#82603d':'#68472f');colors.push(tint.r,tint.g,tint.b);
+        if(ring){const i=start+ring*sides+side,next=start+ring*sides+(side+1)%sides;if(ring<rings)indices.push(i,next,i-sides);if(ring>1)indices.push(next,next-sides,i-sides);}
+      }
     }
     // Arched rachises and alternating narrow leaflets form real palm fronds.
     for(let frond=0;frond<8;frond++){

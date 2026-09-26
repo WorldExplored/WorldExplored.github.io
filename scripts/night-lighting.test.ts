@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Vector3,PointLight,SpotLight,Mesh,MeshBasicMaterial,MeshStandardMaterial,Raycaster,DoubleSide,ShaderLib,type BufferGeometry,type WebGLProgramParametersWithUniforms } from 'three';
+import { Vector3,PointLight,SpotLight,Mesh,MeshBasicMaterial,MeshStandardMaterial,Raycaster,DoubleSide,ShaderLib,Color,ShaderMaterial,type BufferGeometry,type WebGLProgramParametersWithUniforms } from 'three';
 import {createElement} from 'react';
 import {create} from '@react-three/test-renderer';
 import {EcoCity} from '../src/components/world/EcoCity';
@@ -11,7 +11,10 @@ import {makeCampusHall,createCampusInterior} from '../src/components/world/Campu
 import {makeGardenGallery,makeGalleryInterior} from '../src/components/world/GardenGallery';
 import {makeReceptionTerminal,makeReceptionInterior} from '../src/components/world/ReceptionTerminal';
 import {createArcadeHall,createArcadeInterior} from '../src/components/world/ArcadeHall';
-import { createRoomLighting,mainRoomLamps,mainRooms,applyBakedRoomLighting,roomNightUniform } from '../src/components/world/RoomLighting';
+import { createRoomLighting,mainRoomLamps,mainRooms,applyBakedRoomLighting,applyNightSource,roomNightUniform } from '../src/components/world/RoomLighting';
+import { Sky, setSkyHorizon, nightEnvironmentLevels } from '../src/components/world/WeatherLighting';
+import { daylightAt, daylightWeights } from '../src/components/world/weatherState';
+import { createCityLift } from '../src/components/world/CityLift';
 import { world,createSceneRuntime } from '../src/content/world';
 
 test('all front buildings have contained fixtures and night light pools, with one local light',()=>{
@@ -89,5 +92,78 @@ test('city lights sit on actual floor and ceiling faces while outside walls and 
       assert.ok(up&&Math.abs(up.point.y-room.ceiling)<.004,'city fixture is below its actual ceiling slab');
       assert.ok(down&&Math.abs(down.point.y-room.floor)<.004,'city pool rests on the actual floor');
     }
+  }finally{await renderer.unmount();}
+});
+
+
+test('night source masks illuminate screen faces without changing the facade material',()=>{
+  const material=applyNightSource(applyBakedRoomLighting(new MeshStandardMaterial(),true),.9,true);
+  try {
+    const shader={uniforms:{},vertexShader:ShaderLib.standard.vertexShader,fragmentShader:ShaderLib.standard.fragmentShader} as WebGLProgramParametersWithUniforms;
+    material.onBeforeCompile(shader,{} as never);
+    assert.equal(shader.uniforms.sourceNight,roomNightUniform);
+    assert.ok(shader.fragmentShader.includes('* sourceMask;'));
+    assert.ok(shader.vertexShader.includes('sourceMask=aNightSource;'));
+    assert.equal(material.emissive.getHex(),0);
+  } finally {material.dispose();}
+});
+
+test('the elevator diffuser meets its moving cabin ceiling',()=>{
+  const lift=createCityLift({building:'night-lift',x:0,z:0,floors:[.33,2.43],top:4});
+  const material=new MeshBasicMaterial({side:DoubleSide});
+  try {
+    const diffuser=lift.cabin.getObjectByName('lift-ceiling-diffuser') as Mesh;
+    diffuser.geometry.computeBoundingBox();
+    const top=diffuser.geometry.boundingBox!.max.y;
+    const structure=lift.cabin.children[0] as Mesh;
+    const hit=new Raycaster(new Vector3(0,top-.001,0),new Vector3(0,1,0)).intersectObject(new Mesh(structure.geometry,material),false)[0];
+    assert.ok(hit&&hit.distance<.002,'diffuser attaches directly below the physical roof');
+    for(const time of [0,4,9,14]) {lift.update(time);assert.equal(diffuser.parent,lift.cabin);}
+    const shader={uniforms:{},vertexShader:ShaderLib.standard.vertexShader,fragmentShader:ShaderLib.standard.fragmentShader} as WebGLProgramParametersWithUniforms;
+    (diffuser.material as MeshStandardMaterial).onBeforeCompile(shader,{} as never);
+    assert.equal(shader.uniforms.sourceNight,roomNightUniform);
+  }finally{material.dispose();lift.dispose();}
+});
+
+test('night fill is readable while noon exposure stays unchanged',()=>{
+  const night=nightEnvironmentLevels(0,0),noon=nightEnvironmentLevels(1,0);
+  assert.ok(night.hemisphere>=.30&&night.environment>=.20);
+  assert.ok(Math.abs(noon.hemisphere-.57)<1e-12);assert.ok(Math.abs(noon.environment-.74)<1e-12);
+  assert.ok(night.hemisphere<noon.hemisphere&&night.environment<noon.environment);
+});
+
+test('sunset disk keeps its source intensity and uses the same sun direction and horizon as fog',async()=>{
+  Object.assign(globalThis,{IS_REACT_ACT_ENVIRONMENT:true});
+  const runtime={current:createSceneRuntime()},renderer=await create(createElement(Sky,{runtime}));
+  try{
+    const mesh=renderer.scene.instance.getObjectByName('world-sky') as Mesh<never,ShaderMaterial>;
+    for(const hour of [6,12,17.8,18,0]) {
+      Object.assign(runtime.current.weather,{...daylightWeights(hour),hour,storm:0});
+      daylightAt(hour).toArray(runtime.current.sunDirection);
+      await renderer.advanceFrames(1,1/60);
+      const uniforms=mesh.material.uniforms;
+      assert.equal(uniforms.sunStrength.value,1,'sun brightness is independent of daylight crossfade');
+      assert.deepEqual(uniforms.sun.value.toArray(),runtime.current.sunDirection);
+      assert.ok(uniforms.bottom.value.equals(setSkyHorizon(new Color(),runtime.current.weather)));
+    }
+    runtime.current.weather.storm=1;await renderer.advanceFrames(1,1/60);
+    assert.ok(mesh.material.uniforms.sunStrength.value<.05,'the storm front obscures the solar disk');
+  }finally{await renderer.unmount();}
+});
+
+
+test('city screen masks select monitor faces while the other aqua furniture remains unlit',async()=>{
+  Object.assign(globalThis,{IS_REACT_ACT_ENVIRONMENT:true});
+  const runtime={current:createSceneRuntime()},renderer=await create(createElement(EcoCity,{runtime,quality:'medium',paused:true}),{camera:{position:[-19,7,-77]}});
+  try{
+    await renderer.advanceFrames(14,1/60);
+    let screens=0,other=0;
+    renderer.scene.instance.traverse(object=>{
+      if(!(object instanceof Mesh)||!object.name.startsWith('city-interior-'))return;
+      const mask=object.geometry.attributes.aNightSource;
+      if(!object.name.endsWith('-aqua')){assert.equal(mask,undefined);return;}
+      for(let i=0;i<mask.count;i++)if(mask.getX(i)>.5)screens++;else other++;
+    });
+    assert.ok(screens>0&&other>screens,'only discrete screen polygons emit light');
   }finally{await renderer.unmount();}
 });

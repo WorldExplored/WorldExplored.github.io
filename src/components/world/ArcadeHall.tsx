@@ -8,7 +8,7 @@ import { combine, roundedBox, stroke, usePalette, useResources, type ModelProps 
 import { floorRectangle, floorSlab, FurnishedInterior, InteriorBuilder } from './InteriorKit';
 import { architecturalBox as box, doorway, windowBay, type ShellParts } from './LandmarkShellKit';
 
-export const ARCADE_BOUNDS = { halfWidth: 3.48, front: 3.0, back: -3.03, top: 5.40, entrance: [0, 1.08, 2.42] as const };
+export const ARCADE_BOUNDS = { halfWidth: 3.48, front: 3.0, back: -3.03, top: 4.85, entrance: [0, 1.08, 2.42] as const };
 export const ARCADE_PLAN = [[-3.47, -1.94], [-2.08, -3.02], [3.47, -3.02], [3.47, 2.52], [-3.47, 2.52]] as const;
 const FLOOR = 1.075;
 const CABINETS = [
@@ -26,13 +26,13 @@ const LETTERS: Record<string, string[]> = {
 function marqueeLetters() {
   const parts: BufferGeometry[] = [];
   for (const [letter, character] of [...'ARCADE'].entries()) LETTERS[character].forEach((row, y) => [...row].forEach((value, x) => {
-    if (value === '1') parts.push(box(.082, .065, .034, -1.565 + (letter * 6 + x) * .09, 4.75 - y * .077, 2.56));
+    if (value === '1') parts.push(box(.082, .065, .034, -1.565 + (letter * 6 + x) * .09, 4.20 - y * .077, 2.56));
   }));
   return combine(parts);
 }
 
 export function createArcadeHall() {
-  const shell: ShellParts = { walls: [], glass: [], frames: [] }, ceiling = 4.20;
+  const shell: ShellParts = { walls: [], glass: [], frames: [] }, ceiling = 3.65;
   doorway(shell, 0, 2.2, 1.25, FLOOR, ceiling);
   for (const x of [-1.9125, 1.9125]) windowBay(shell, x, 2.2, 2.575, FLOOR, ceiling, 0, .28);
   windowBay(shell, -3.12, .175, 4.05, FLOOR, ceiling, Math.PI / 2, .34);
@@ -42,18 +42,18 @@ export function createArcadeHall() {
   const ribs: BufferGeometry[] = [];
   for (const x of [-3.05, -1.52, 0, 1.52, 3.05]) {
     const start = x < -2.08 ? -1.94 - (x + 3.47) / 1.39 * 1.08 + .08 : -2.95;
-    ribs.push(stroke(t => new Vector3(x, 4.43, start + t * (2.4 - start)), .04, 12));
+    ribs.push(stroke(t => new Vector3(x, 3.88, start + t * (2.4 - start)), .04, 12));
   }
-  const roof = floorSlab('arcade-roof', [ARCADE_PLAN], 4.425, .23); delete roof.userData.floor;
+  const roof = floorSlab('arcade-roof', [ARCADE_PLAN], 3.875, .23); delete roof.userData.floor;
   return {
     base: floorSlab('arcade-foundation', [[[-3.275, -1.92], [-2.08, -2.88], [3.275, -2.88], [3.275, 2.28], [-3.275, 2.28]]], 1.05, .28, 'foundation'),
     threshold: floorSlab('arcade-threshold', [floorRectangle(0, 2.42, 1.4, .6)], 1.08, .28, 'threshold'),
     walls: combine(shell.walls), glass: combine(shell.glass), frames: combine(shell.frames),
     roof, ribs: combine(ribs),
-    fascia: roundedBox(4.58, .84, .22, .15).translate(0, 4.5, 2.4),
+    fascia: roundedBox(4.58, .84, .22, .15).translate(0, 3.95, 2.4),
     sign: marqueeLetters(),
-    marqueeRim: combine([stroke(t => new Vector3(-2.24 + t * 4.48, 4.95, 2.5), .045, 12), stroke(t => new Vector3(-2.24 + t * 4.48, 4.06, 2.5), .045, 12), ...[-1, 1].map(side => box(.055, .85, .07, side * 2.25, 4.50, 2.51))]),
-    fins: combine([-1, 1].flatMap(side => [roundedBox(.22, 1.8, .4, .09).rotateZ(-side * .12).translate(side * 3.05, 4.45, 1.73), box(.11, 1.27, .04, side * 3.07, 4.41, 1.951)])),
+    marqueeRim: combine([stroke(t => new Vector3(-2.24 + t * 4.48, 4.40, 2.5), .045, 12), stroke(t => new Vector3(-2.24 + t * 4.48, 3.51, 2.5), .045, 12), ...[-1, 1].map(side => box(.055, .85, .07, side * 2.25, 3.95, 2.51))]),
+    fins: combine([-1, 1].flatMap(side => [roundedBox(.22, 1.8, .4, .09).rotateZ(-side * .12).translate(side * 3.05, 3.90, 1.73), box(.11, 1.27, .04, side * 3.07, 3.86, 1.951)])),
     canopy: roundedBox(2.1, .13, .83, .16).translate(0, 3.32, 2.565),
     skirt: combine([box(.08, .18, 4.05, -3.19, 1.30, .175), box(.08, .18, 4.96, 3.19, 1.30, -.3)]),
   };
@@ -95,7 +95,7 @@ export function createArcadeInterior() {
   b.box('screen', .56, 1.11, .035, 2.49, FLOOR + 1.06, -.43);
   for (let row = 0; row < 4; row++) for (let bottle = 0; bottle < 3; bottle++) b.add(row % 2 ? 'paper' : 'light', new CylinderGeometry(.035, .035, .16, 7).translate(2.31 + bottle * .18, FLOOR + .63 + row * .24, -.39));
   b.plant(2.72, FLOOR, 1.77, .8); b.plant(-2.76, FLOOR, 1.79, .65);
-  for (const x of [-1.45, 1.45]) for (const z of [-1.4, 1]) b.lamp(x, 4.15, z, 1.15);
+  for (const x of [-1.45, 1.45]) for (const z of [-1.4, 1]) b.lamp(x, 3.60, z, 1.15);
   return b.finish();
 }
 
@@ -104,9 +104,9 @@ function createArcadeLights() {
   const lamps = new InstancedMesh(geometry, material, 54), transform = new Object3D(), tint = new Color();
   lamps.name = 'arcade-marquee-lamps'; lamps.position.y = FLOOR; lamps.frustumCulled = false; lamps.raycast = () => undefined;
   const positions = Array.from({ length: 48 }, (_, i) => {
-    if (i < 18) return [-2.06 + i * .243, 4.88, 2.541];
-    if (i < 36) return [-2.06 + (i - 18) * .243, 4.13, 2.541];
-    return [i < 42 ? -2.17 : 2.17, 4.24 + (i % 6) * .105, 2.541];
+    if (i < 18) return [-2.06 + i * .243, 4.33, 2.541];
+    if (i < 36) return [-2.06 + (i - 18) * .243, 3.58, 2.541];
+    return [i < 42 ? -2.17 : 2.17, 3.69 + (i % 6) * .105, 2.541];
   });
   for (let index = 0; index < 54; index++) {
     const cabinet = CABINETS[index - 48];

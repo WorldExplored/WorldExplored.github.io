@@ -2,14 +2,16 @@ import type { CameraPose } from '../../content/world';
 
 /** Deterministic inspection poses used by the local visual-QA capture server. */
 export const QA_VIEWS = Object.freeze({
-  'cave-lighthouse-bank': {position: [-44.47349,3,-39.02187], target: [-63.37857,-2.20612,-37.12504]},
-  'cave-city-bank': {position: [-53.01221,3,-55.30899], target: [-38.50287,-2.48906,-65.05730]},
+  'cave-lighthouse-bank': {position: [-50.524,3,-25.574], target: [-66.649,-1.82,-35.629]},
+  'cave-city-bank': {position: [-60.486,3,-49.435], target: [-47.306,-1.82,-63.12]},
+  'cave-garden-bank': { position: [-2.047,3,55.089], target: [-3.09,-1.82,36.118] },
+  'cave-experience-bank': { position: [-57.28,3,-9.28], target: [-38.35,-1.82,-9.33] },
   'lighthouse-tall': { position: [-49,16,-13], target: [-76,7,-36] },
   'sunset-horizon': { position: [35,10,43], target: [-45,7,-95] },
   'rain-ground': { position: [-16,25,33], target: [-7,10,3] },
   'rain-ground-close': { position: [-8,4,10], target: [-6,.9,3] },
   'rain-water': { position: [-49,25,13], target: [-43,10,-21] },
-  'visitor-berth': { position: [-35,7,-33], target: [-27,1.4,-49] },
+  'visitor-berth': { position: [-40,9,-25], target: [-27,1.7,-43] },
   'main-path-grades': { position: [-1, 14, 15], target: [-9, 1, 0] },
   'main-path-close': { position: [-1, 2.9, 7], target: [-4, 1.1, 4] },
   'experience-door': { position: [-24.4, 2.6, 6.5], target: [-26.6, 1.75, 1.1] },

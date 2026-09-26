@@ -4,13 +4,18 @@ import { Frustum, Matrix4, Mesh, PerspectiveCamera, Vector3 } from 'three';
 import { createSeabedMeadows, createSeabedMeadowSites, SEABED_FORMS } from '../src/components/world/SeabedMeadows';
 import { createIslandMeadowSites } from '../src/components/world/IslandMeadows';
 import { meadowGeometry } from '../src/components/world/MeadowGeometry';
-import { createFrontGardens, frontVineSites } from '../src/components/world/FrontGardens';
+import { createFrontGardens, frontVineSites, placeFrontVineGeometry } from '../src/components/world/FrontGardens';
 import { createFacadeGarden, vineHabit } from '../src/components/world/FacadeGarden';
 import { createLandscapePlan, distanceToSegment, terrainMeshHeight, vegetationSuitability } from '../src/components/world/terrain';
 import { coastalCaveClearance } from '../src/components/world/coastalCaveLayout';
 import { getReefHabitat, marineFloorHeight } from '../src/components/world/reefHabitat';
 import { createSeaweedGeometry, createSeaweedLayout, createForestKelpGeometry } from '../src/components/world/Seaweed';
 import { createFloraSites, floraGeometry } from '../src/components/world/Flora';
+import { structurePlantingClearance } from '../src/components/world/plantingFootprints';
+import { makeCampusHall } from '../src/components/world/CampusHall';
+import { makeReceptionTerminal } from '../src/components/world/ReceptionTerminal';
+import { makeGardenGallery } from '../src/components/world/GardenGallery';
+import { lighthouseRadius } from '../src/components/world/CoastalLighthouse';
 import { world } from '../src/content/world';
 
 const triangleCount=(geometry:Mesh['geometry'])=>(geometry.index?.count??geometry.attributes.position.count)/3;
@@ -98,9 +103,13 @@ test('seabed chunks retain density through LOD and cull the opposite coast in a 
 test('main building vines grow from the soil against measured walls with five distinct habits',()=>{
   const sites=frontVineSites(),scene=createFrontGardens();
   try{
-    assert.equal(sites.length,30);assert.equal(new Set(sites.map(site=>vineHabit(site.seed))).size,5);
-    assert.equal(new Set(sites.map(site=>site.building)).size,5);assert.equal(scene.root.children.length,5);
-    let triangles=0;scene.root.traverse(object=>{if(object instanceof Mesh)triangles+=triangleCount(object.geometry);});assert.ok(triangles<105000);
+    assert.equal(sites.length,47);assert.equal(new Set(sites.map(site=>vineHabit(site.seed))).size,5);
+    assert.equal(new Set(sites.map(site=>site.building)).size,10);assert.equal(scene.root.children.length,5);
+    let triangles=0;scene.root.traverse(object=>{if(object instanceof Mesh)triangles+=triangleCount(object.geometry);});assert.ok(triangles<160000);
+    const close=scene.root.children.map(object=>(object as Mesh).geometry);scene.setDetail(false);
+    const far=scene.root.children.reduce((sum,object)=>sum+triangleCount((object as Mesh).geometry),0);
+    assert.ok(far<70000&&far<triangles*.45,'all 47 rooted climbers retain their leaf silhouettes with cheaper distant stems');
+    scene.setDetail(true);scene.root.children.forEach((object,i)=>assert.equal((object as Mesh).geometry,close[i]));
     for(const site of sites){
       assert.ok(Math.abs(site.y-terrainMeshHeight(site.x,site.z)+.015)<1e-8);
       const vine=createFacadeGarden(site),positions=vine.wood.attributes.position;
@@ -109,6 +118,52 @@ test('main building vines grow from the soil against measured walls with five di
       Object.values(vine).forEach(geometry=>geometry.dispose());
     }
   }finally{scene.dispose();}
+});
+
+test('Purdue, Contact and About planting follows actual foundation triangles and fills old circular gaps',()=>{
+  const factories=[['purdue',makeCampusHall],['contact',makeReceptionTerminal],['about',makeGardenGallery]] as const;
+  const flora=createFloraSites(),meadows=createIslandMeadowSites();
+  for(const [id,make] of factories){
+    const building=world.landmarks.find(item=>item.id===id)!,yaw=building.rotationY??0,c=Math.cos(yaw),s=Math.sin(yaw),obstacle={id,x:building.position[0],z:building.position[2],radius:5.1};
+    const model=make(),foundation=('foundation' in model?model.foundation:model.base),p=foundation.attributes.position;
+    for(let i=0;i<p.count;i++){
+      const x=obstacle.x+p.getX(i)*c+p.getZ(i)*s,z=obstacle.z-p.getX(i)*s+p.getZ(i)*c;
+      assert.ok(structurePlantingClearance(x,z,obstacle)<.0001,`${id} actual foundation vertex must remain inside the exclusion`);
+    }
+    Object.values(model).forEach(geometry=>geometry.dispose());
+    const recovered=meadows.filter(site=>Math.hypot(site.x-obstacle.x,site.z-obstacle.z)<4.9&&structurePlantingClearance(site.x,site.z,obstacle)>.29);
+    assert.ok(recovered.length>20,`${id} has planted corners and side gardens inside the former circular moat`);
+    assert.ok(flora.some(site=>structurePlantingClearance(site.x,site.z,obstacle)>.3&&structurePlantingClearance(site.x,site.z,obstacle)<1.1),`${id} flowers or ferns approach the walls`);
+  }
+  assert.equal(createFloraSites(),flora,'seeded layouts are reused instead of regenerating quadratic fitting loops');
+  assert.equal(createIslandMeadowSites(),meadows);
+});
+
+test('the fountain and waterfront retain layered mixed planting without increasing the total population',()=>{
+  const front=(site:{x:number;z:number})=>site.z>-74&&site.z<-60&&site.x>-28&&site.x<16;
+  const flora=createFloraSites(),meadows=createIslandMeadowSites(),garden=flora.filter(front),grasses=meadows.filter(front);
+  assert.equal(flora.length,2103);assert.equal(meadows.length,4700);
+  assert.ok(garden.length>260&&grasses.length>430,'redistribute growth to the visible waterfront and fountain margins');
+  assert.ok(new Set(garden.map(site=>site.kind)).size>=9);assert.equal(new Set(grasses.map(site=>site.form)).size,3);
+  assert.ok(grasses.some(site=>site.height>1)&&grasses.some(site=>site.height<.3),'tall sedges and low young tufts form separate layers');
+});
+
+test('tower climbers conform to tapered masonry and turbine shafts rather than floating flat panels',()=>{
+  const sites=frontVineSites().filter(site=>site.support);
+  assert.equal(sites.length,5);
+  for(const site of sites){
+    const support=site.support!,vine=createFacadeGarden(site),stem=placeFrontVineGeometry(vine.wood,site).attributes.position;
+    let tested=0;
+    for(let i=0;i<19*5;i++){
+      const y=stem.getY(i)-support.floor;
+      if(y<(support.kind==='lighthouse'?1.3:.4))continue;
+      const radius=support.kind==='lighthouse'?lighthouseRadius(y):.27-.14*y/support.height;
+      const gap=Math.hypot(stem.getX(i)-support.x,stem.getZ(i)-support.z)-radius;
+      assert.ok(gap>=.003&&gap<.072,`${site.building} stem must touch its real support, gap ${gap}`);tested++;
+    }
+    assert.ok(tested>25);
+    Object.values(vine).forEach(geometry=>geometry.dispose());
+  }
 });
 
 test('medium plant geometry remains below one million triangles without deleting meadow roots',()=>{

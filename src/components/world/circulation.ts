@@ -109,7 +109,7 @@ export function createCirculationGraph() {
   const museumPoint=(x:number,z:number)=>({x:museum.position[0]+x*Math.cos(angle)+z*Math.sin(angle),z:museum.position[2]-x*Math.sin(angle)+z*Math.cos(angle)});
   const threshold=museumPoint(0,4.17),forecourt=museumPoint(0,5.7);
   const history=node('history',threshold.x,threshold.z,'entrance',1.07),historyCourt=node('history-court',forecourt.x,forecourt.z,'park');
-  const waterfront=node('city-waterfront',-15.5,-65.4,'park'),cityDock=node('city-dock-land',-12,-65,'dock',1.06),cityBoat=node('city-dock-boarding',-12.7,-60,'dock',1.06);
+  const waterfront=node('city-waterfront',-15.5,-65.4,'park'),cityDock=node('city-dock-land',-12,-58,'dock',1.06),cityBoat=node('city-dock-boarding',-12.7,-48.04,'dock',.4575);
   // These primary streets are authored town geometry. The router remains a
   // validator and supplies the short secondary building approaches below.
   edge('town-main-street-west',cityWest,cityCenter,[],1.12);
@@ -158,7 +158,7 @@ export function createCirculationGraph() {
     joinStreet(building.id,portal);
   }
   for(const entry of citySecondaryEntrances){const [x,y,z]=entry.world;const n=node('station-lobby',x,z,'entrance',y),p=node('station-lobby-plaza',x+.65,z+2,'landing');edge('station-lobby-threshold',n,p,[{x:x+.65,z}],.8);joinStreet('station-lobby',p);}
-  edge('city-dock',cityDock,cityBoat,[{x:-12,z:-60}],1.1,'dock');edge('water-taxi',mainBoat,cityBoat,[],1,'boat');
+  edge('city-dock',cityDock,cityBoat,[{x:-12,z:-48.04}],1.1,'dock');edge('water-taxi',mainBoat,cityBoat,[],1,'boat');
   const beacon=node('building',-76,-34.805,'entrance',2.86),beaconCourt=node('beacon-court',-74.1,-34,'park');
   const overlook=node('beacon-overlook',-73.5,-33.3,'park');
   edge('beacon-entrance',beacon,beaconCourt,[{x:-76,z:-33.9}],.85);edge('beacon-court-walk',beaconCourt,overlook,[],.85);

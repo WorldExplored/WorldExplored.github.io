@@ -9,6 +9,7 @@ import { BufferGeometry, Color, DoubleSide, Float32BufferAttribute, InstancedMes
 import { createLandscapePlan, distanceToSegment, landDistance, seededRandom, terrainMeshHeight, ISLANDS, islandContour, type LandscapePlan } from './terrain';
 import { coastExposure } from './waves';
 import { coastalCaveClearance } from './coastalCaveLayout';
+import { createClusteredMarineLOD } from './ClusteredMarineLOD';
 import type { EnvironmentProps } from './Water';
 
 export interface SeaweedSite {
@@ -23,20 +24,20 @@ export const SEAWEED_COVES = [
   { x: 18, z: -13, radius: 5.2 },
   { x: -2, z: -25, radius: 5.6 },
   { x: -76, z: -45, radius: 4.5 },
-  { x: -67, z: -38, radius: 4.8 },
+  { x: -70, z: -44, radius: 4.8 },
   { x: -36, z: -14, radius: 5.1 },
   { x: -29, z: -15, radius: 5.1 },
-  { x: -40, z: -90, radius: 5.4 },
+  { x: -46, z: -94, radius: 5.4 },
   { x: -25, z: 20, radius: 5.5 },
   { x: 30, z: 22, radius: 5.5 },
-  { x: 26, z: -88, radius: 5.6 },
+  { x: 44, z: -88, radius: 5.6 },
   { x: -20, z: -20, radius: 5.5 },
   { x: -84, z: -42, radius: 5.1 },
   { x: -72, z: -30, radius: 5.2 },
   { x: 30, z: -18, radius: 5.4 },
-  { x: 36, z: -72, radius: 5.6 },
-  { x: 12, z: -96, radius: 5.3 },
-  { x: -12, z: -96, radius: 5.1 },
+  { x: 48, z: -78, radius: 5.6 },
+  { x: 30, z: -100, radius: 5.3 },
+  { x: -30, z: -102, radius: 5.1 },
 ] as const;
 export const SEAWEED_REACH = 0.62;
 export const SEAWEED_FORMS = ['strap-leaved eelgrass', 'ruffled broad kelp', 'paired branching algae', 'twisting ribbon kelp', 'pleated sea fan', 'low seagrass turf', 'forked bladderwrack', 'serrated red algae'] as const;
@@ -79,7 +80,7 @@ export function createSeaweedLayout(plan = createLandscapePlan()): SeaweedSite[]
     return { x: cove.x + Math.cos(angle) * radius, z: cove.z + Math.sin(angle) * radius, radius: .65 + random() * 1.65 };
   }));
   // Round-robin ordering keeps complete beds and all forms on the low tier.
-  for (let round = 0; round < 190; round++) {
+  for (let round = 0; round < 200; round++) {
     SEAWEED_COVES.forEach((cove, coveIndex) => {
       if((coveIndex===7||coveIndex===9)&&round>=100)return;
       for (let attempt = 0; attempt < 80; attempt++) {
@@ -116,13 +117,13 @@ export function createSeaweedLayout(plan = createLandscapePlan()): SeaweedSite[]
   return mixed;
 }
 
-export function createSeaweedGeometry(variant: number, seed = 0, detail: 'near' | 'far' = 'near') {
+export function createSeaweedGeometry(variant: number, seed = 0, detail: 'near' | 'far' | 'distant' = 'near') {
   const positions: number[] = [], colors: number[] = [], indices: number[] = [];
   const random = seededRandom(694 + variant + seed * 71);
   const tint = new Color(['#547e52', '#8b8c46', '#618552', '#a79550', '#74966b', '#537d47', '#858847', '#a57367'][variant % 8]);
   function blade(angle:number,length:number,breadth:number,lean:number,base=0,side=0) {
     const start=positions.length/3;
-    const segments = detail === 'far' ? 2 : variant === 2 || variant === 6 || variant === 7 ? 3 : 4;
+    const segments = detail !== 'near' ? 2 : variant === 2 || variant === 6 || variant === 7 ? 3 : 4;
     for(let row=0;row<=segments;row++)for(let rib=0;rib<=2;rib++){
       const t=row/segments,v=rib-1;
       const edge=variant===1||variant===7?1+Math.sin(t*(variant===7?65:39)+angle)*.22:1;
@@ -136,7 +137,15 @@ export function createSeaweedGeometry(variant: number, seed = 0, detail: 'near' 
       if(row&&rib){const n=start+row*3+rib;if(row<segments)indices.push(n,n-3,n-1);if(row>1)indices.push(n-1,n-3,n-4);}
     }
   }
-  if(variant===0){
+  if(detail==='distant') {
+    const leaves=[7,5,3,6,5,10,3,4][variant%8];
+    for(let leaf=0;leaf<leaves;leaf++) {
+      const branched=variant===2||variant===6||variant===7;
+      blade(variant===4?.4+(leaf%2)*Math.PI:leaf*2.399,.62+random()*.36,
+        branched?.065:variant===1?.085:variant===4?.055:variant===5?.012:.026,
+        branched?.10:variant===4?.02:.16,0,variant===4?(leaf-2)*.12:0);
+    }
+  } else if(variant===0){
     // Eelgrass has parallel strap leaves, narrow midribs and gently drooping tips.
     for(let leaf=0;leaf<12;leaf++)blade(leaf*2.399,.64+random()*.34,.016+random()*.012,.14+random()*.07);
   }else if(variant===1){
@@ -151,21 +160,21 @@ export function createSeaweedGeometry(variant: number, seed = 0, detail: 'near' 
       }
     }
   }
-  if(variant===3){
+  if(detail!=='distant'&&variant===3){
     for(let leaf=0;leaf<10;leaf++) blade(leaf*2.399,.65+random()*.32,.027+random()*.022,.22+random()*.08);
-  }else if(variant===4){
+  }else if(detail!=='distant'&&variant===4){
     // A fan shares a holdfast and spreads into pleated lobes rather than repeating upright straps.
     for(let leaf=0;leaf<9;leaf++) blade(.4+(leaf%2)*Math.PI,.38+Math.sin(leaf/8*Math.PI)*.39,.035+random()*.028,.02,0,(leaf-4)*.075);
-  }else if(variant===5){
+  }else if(detail!=='distant'&&variant===5){
     for(let leaf=0;leaf<21;leaf++) blade(leaf*2.399,.32+random()*.42,.008+random()*.01,.09+random()*.18);
-  }else if(variant===6){
+  }else if(detail!=='distant'&&variant===6){
     for(let stem=0;stem<3;stem++){
       const angle=stem*2.399;blade(angle,.88,.013,.04);
       for(let level=1;level<=4;level++)for(const side of [-1,1]){
         blade(angle+side*.18,.32-level*.018,.02,.02,level*.13,side*(.28-level*.025));
       }
     }
-  }else if(variant===7){
+  }else if(detail!=='distant'&&variant===7){
     for(let stem=0;stem<4;stem++){
       const angle=stem*2.399;blade(angle,.75+random()*.2,.018,.05);
       for(let level=1;level<=4;level++)for(const side of [-1,1])blade(angle,.18,.03,.02,level*.14,side*(.22-level*.015));
@@ -214,27 +223,27 @@ export function Seaweed({ runtime, paused, quality }: EnvironmentProps) {
       mesh.computeBoundingSphere(); if(mesh.boundingSphere)mesh.boundingSphere.radius += .3;
       mesh.instanceMatrix.needsUpdate = true;
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-      const farGeometry = createSeaweedGeometry(variant, 0, 'far');
-      return { mesh, geometry, farGeometry, material, count: entries.length };
+      const farGeometry = createSeaweedGeometry(variant, 0, 'distant');
+      const lod=createClusteredMarineLOD(mesh,farGeometry);
+      return { mesh, geometry, farGeometry, material, lod, count: entries.length };
     });
     return { batches, time, timer: undefined as ReturnType<typeof setTimeout> | undefined };
   }, []);
   useEffect(() => {
     clearTimeout(seaweed.timer);
     return () => {
-      seaweed.timer = setTimeout(() => seaweed.batches.forEach(batch => { batch.geometry.dispose(); batch.farGeometry.dispose(); batch.material.dispose(); batch.mesh.dispose(); }), 0);
+      seaweed.timer = setTimeout(() => seaweed.batches.forEach(batch => { batch.geometry.dispose(); batch.farGeometry.dispose(); batch.material.dispose(); batch.mesh.dispose(); batch.lod.dispose(); }), 0);
     };
   }, [seaweed]);
   useEffect(() => {
     const fraction = quality === 'high' ? 1 : quality === 'medium' ? 0.75 : 0.5;
-    seaweed.batches.forEach(batch => { batch.mesh.count = Math.ceil(batch.count * fraction); batch.mesh.geometry = quality === 'high' ? batch.geometry : batch.farGeometry; });
+    seaweed.batches.forEach(batch => batch.lod.setCount(Math.ceil(batch.count * fraction)));
   }, [quality, seaweed]);
   useFrame(({camera}) => {
-    const close=quality==='high'&&camera.position.y<18;
-    seaweed.batches.forEach(batch=>{batch.mesh.geometry=close?batch.geometry:batch.farGeometry;});
+    for(const batch of seaweed.batches)batch.lod.update(camera.position,quality==='high'?30:quality==='medium'?24:16);
     if (!paused) seaweed.time.value = runtime.current.elapsed;
   });
-  return <group name="sheltered-seaweed-beds" dispose={null}>{seaweed.batches.map(batch => <primitive key={batch.mesh.name} object={batch.mesh} />)}</group>;
+  return <group name="sheltered-seaweed-beds" dispose={null}>{seaweed.batches.flatMap(batch => [<primitive key={batch.mesh.name} object={batch.mesh} />, <primitive key={batch.lod.far.name} object={batch.lod.far}/>])}</group>;
 }
 
 /** Four growth habits share LOD and animation but have distinct branching anatomy. */

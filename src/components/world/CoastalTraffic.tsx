@@ -27,12 +27,12 @@ export function createAeroBoat(index:number){
   if (large) for (const material of allMaterials) material.transparent = true;
   const geometries:BufferGeometry[]=[],moving:Group[]=[];
   const add=(name:string,parts:BufferGeometry[],paint:keyof typeof materials,parent=root)=>{const geometry=combine(parts);geometries.push(geometry);const mesh=new Mesh(geometry,materials[paint]);mesh.name=name;mesh.raycast=()=>{};mesh.castShadow=paint!=='glass';mesh.receiveShadow=true;parent.add(mesh);return mesh;};
-  const length=large?11.8:index===1?3.3:3.5,width=large?3.8:index===1?1.65:1.35;
+  const length=large?15.6:index===1?3.3:3.5,width=large?4.4:index===1?1.65:1.35;
   if(index===0)add('swept-hydrofoil-hull',[launchHull(length,width,.9)],'shell');
   else add('twin-fine-entry-hulls',[-1,1].map(side=>launchHull(length,width*(large?.28:.32),large?1.4:1).translate(side*width*.36,0,0)),'shell');
   add('connected-passenger-deck',[new BoxGeometry(width,.12,length*.75).translate(0,.28,-.12)],'shell');
   add('aqua-waterline-trim',[-1,1].map(side=>new BoxGeometry(.035,.065,length*.69).translate(side*width*.5,.27,-.17)),'trim');
-  const cabinLength=large?6.5:index===1?1.35:1.45,cabinHeight=large?1.66:.65;
+  const cabinLength=large?8.7:index===1?1.35:1.45,cabinHeight=large?1.94:.65;
   const frames:BufferGeometry[]=[],panes:BufferGeometry[]=[],seats:BufferGeometry[]=[];
   for(const side of [-1,1]){
     for(const z of [-cabinLength/2,0,cabinLength/2])frames.push(new BoxGeometry(.045,cabinHeight,.045).translate(side*width*.40,.37+cabinHeight/2,z));
@@ -65,6 +65,24 @@ export function createAeroBoat(index:number){
   if(index===1){add('survey-mast',[new CylinderGeometry(.024,.04,.72,8).translate(0,roof+.46,-.47),new SphereGeometry(.10,10,8).scale(1,.7,1).translate(0,roof+.84,-.47)],'shell');}
   if(index===0)add('hydrofoil-underwater-wings',[new BoxGeometry(width*1.18,.025,.21).translate(0,-.37,.55),new BoxGeometry(width*.76,.022,.16).translate(0,-.37,-.8)],'trim');
   if(large){
+    add('enclosed-lower-saloon-bulkheads', [
+      ...[-1,1].map(side=>new BoxGeometry(.08,.66,cabinLength).translate(side*width*.40,.70,0)),
+      new BoxGeometry(width*.8,cabinHeight,.10).translate(0,.37+cabinHeight/2,-cabinLength/2),
+      new BoxGeometry(width*.8,.63,.12).translate(0,.67,cabinLength/2),
+    ],'shell');
+    add('saloon-window-mullions',[-1,1].flatMap(side=>Array.from({length:8},(_,i)=>new BoxGeometry(.07,1.25,.06).translate(side*width*.403,1.62,-3.8+i*1.08))),'shell');
+    add('enclosed-wheelhouse-and-radar',[
+      new BoxGeometry(2.55,.65,3.15).translate(0,roof+.56,.7),
+      new BoxGeometry(2.5,1.3,.08).translate(0,roof+.92,-.85),
+      new CylinderGeometry(.05,.07,.9,8).translate(0,roof+2.2,.5),
+      new BoxGeometry(1.05,.13,.2).translate(0,roof+2.66,.5),
+    ],'shell');
+    add('raised-bow-breakwater',[-1,1].map(side=>new BoxGeometry(.07,.68,2.5).rotateY(-side*.25).translate(side*1.19,.65,5.52)),'shell');
+    add('attached-deck-and-wheelhouse-lights',[
+      ...[-1,1].flatMap(side=>[-3,0,3].map(z=>new BoxGeometry(.07,.05,.42).translate(side*1.7,roof-.1,z))),
+      new BoxGeometry(1.8,.035,.09).translate(0,roof+1.5,1.8),
+      new SphereGeometry(.09,8,6).translate(0,roof+2.73,.5),
+    ],'warm');
     add('starboard-boarding-step',[new BoxGeometry(.35,.09,.72).translate(width*.5,.435,-.925)],'shell');
     add('upper-saloon-pearl-shell',[
       new BoxGeometry(2.7,.12,3.3).translate(0,roof+.24,.7),
@@ -108,7 +126,7 @@ export function createAeroBoat(index:number){
       propellerPhase = (propellerPhase + dt * speed * 14) % (Math.PI * 2);
       for (const propeller of moving) propeller.rotation.z = propellerPhase;
       for (const material of allMaterials) material.opacity = opacity * (material === materials.glass ? .55 : 1);
-      materials.warm.emissiveIntensity = night * 1.5;
+      materials.warm.emissiveIntensity = night * 3.4;
       materials.red.emissiveIntensity = materials.green.emissiveIntensity = .2 + night * .7;
       const strength = Math.min(1, speed / (large ? 1.35 : index === 1 ? .75 : 1.05));
       wakeRoot.position.set(root.position.x, harborWaterHeight(root.position.x, root.position.z, time) + .06, root.position.z);
@@ -127,7 +145,7 @@ export function createAeroBoat(index:number){
 
 }
 export const VISITOR_PIER_SHORE = { x: -24, z: -69 };
-export const VISITOR_PIER_HEAD = { x: -27, z: -51.55, y: .49 };
+export const VISITOR_PIER_HEAD = { x: -27, z: -45.85, y: .49 };
 
 export function createVisitorPier() {
   const root = new Group(), pieces: BufferGeometry[] = [], steel: BufferGeometry[] = [];

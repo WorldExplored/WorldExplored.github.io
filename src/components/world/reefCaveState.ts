@@ -1,5 +1,5 @@
-import { getReefHabitat, marineFloorHeight, reefHabitatContains, reefFerryClearance, reefFloorHeight } from './reefHabitat';
-import { landDistance, seededRandom, terrainMeshHeight } from './terrain';
+import { marineFloorHeight, reefFloorHeight } from './reefHabitat';
+import { terrainMeshHeight } from './terrain';
 import { COASTAL_CAVE_LAYOUT, caveLocalXZ } from './coastalCaveLayout';
 
 export interface ReefCaveSite {x:number;y:number;z:number;scale:number;yaw:number;form:number;period:number;offset:number;kind:'bank'|'overhang'}
@@ -34,40 +34,13 @@ export function caveVisitorPose(site:ReefCaveSite,index:number,elapsed:number):C
   const swimFloor=(x:number,z:number)=>site.kind==='bank'?Math.max(terrainMeshHeight(x,z),reefFloorHeight(x,z)):marineFloorHeight(x,z);
   const dx=Math.cos(heading)*.25,dz=-Math.sin(heading)*.25;
   const pitch=Math.atan((swimFloor(p.x+dx,p.z+dz)-swimFloor(p.x-dx,p.z-dz))/.5);
-  return {x:p.x,y:swimFloor(p.x,p.z)+((site.kind==='bank'?.74:.45)+index*.025)*site.scale,z:p.z,heading,pitch,swimming:phase<.88,phase};
+  return {x:p.x,y:swimFloor(p.x,p.z)+((site.kind==='bank'?.60:.45)+index*.020)*site.scale,z:p.z,heading,pitch,swimming:phase<.88,phase};
 }
 
 let cached:ReefCaveSite[]|undefined;
 export function createReefCaveSites() {
   if(cached)return cached;
-  const random=seededRandom(17269),habitat=getReefHabitat(),sites:ReefCaveSite[]=COASTAL_CAVE_LAYOUT.map(site=>({...site,y:marineFloorHeight(site.x,site.z),period:96+site.form*21,offset:site.form*19,kind:'bank'}));
-  const blockers=[...habitat.rocks,...habitat.colonies,...habitat.kelp.map(plant=>({...plant,radius:plant.width*.55}))];
-  const centers=[[-54,-67,.9]];
-  for(let index=0;index<centers.length;index++){
-    const [cx,cz,scale]=centers[index];let accepted=false;
-    for(let attempt=0;attempt<3000&&!accepted;attempt++){
-      const angle=random()*Math.PI*2,r=Math.sqrt(random())*17,x=cx+Math.cos(angle)*r,z=cz+Math.sin(angle)*r;
-      if(!reefHabitatContains(x,z,.8)||landDistance(x,z)>-8||reefFerryClearance(x,z)<9)continue;
-      const site:ReefCaveSite={x,y:marineFloorHeight(x,z)-.09,z,scale,yaw:random()*Math.PI*2,form:2,period:124,offset:38,kind:'overhang'};
-      if(site.y< -10||site.y> -3.8||sites.some(other=>Math.hypot(x-other.x,z-other.z)<10))continue;
-      let clear=true,minFloor=site.y,maxFloor=site.y;
-      for(let a=0;a<Math.PI*2;a+=Math.PI/12){
-        const px=x+Math.cos(a)*2.2*scale,pz=z+Math.sin(a)*2.2*scale,floor=marineFloorHeight(px,pz);
-        minFloor=Math.min(minFloor,floor);maxFloor=Math.max(maxFloor,floor);
-      }
-      if(maxFloor-minFloor>.52)continue;
-      site.y=minFloor-.045;
-      const nearby=blockers.filter(item=>Math.hypot(item.x-x,item.z-z)<item.radius+8*scale);
-      if(nearby.some(item=>Math.hypot(item.x-x,item.z-z)<item.radius+2.2*scale))continue;
-      for(let step=0;step<=160&&clear;step++){
-        const p=worldPoint(site,step/160);
-        if(landDistance(p.x,p.z)>-5||marineFloorHeight(p.x,p.z)>-3||nearby.some(item=>Math.hypot(item.x-p.x,item.z-p.z)<item.radius+.4*scale))clear=false;
-      }
-      if(!clear)continue;
-      sites.push(site);accepted=true;
-    }
-    if(!accepted)throw new Error(`No clear cave habitat ${index}`);
-  }
+  const sites:ReefCaveSite[]=COASTAL_CAVE_LAYOUT.map(site=>({...site,y:marineFloorHeight(site.x,site.z),period:96+site.form*21,offset:site.form*19,kind:'bank'}));
   cached=sites;return sites;
 }
 

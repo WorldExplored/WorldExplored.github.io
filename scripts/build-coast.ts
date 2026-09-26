@@ -1,6 +1,6 @@
 import { writeFileSync } from 'node:fs';
-import { deflateSync } from 'node:zlib';
-import { landDistance } from '../src/components/world/terrain';
+import { deflateSync, gzipSync } from 'node:zlib';
+import { landDistance, archipelagoGeometry, generatePlantPositions, createLandscapePlan } from '../src/components/world/terrain';
 import { coastExposure } from '../src/components/world/waves';
 
 // Deterministic coast data belongs in the static export, not the startup task.
@@ -29,3 +29,9 @@ function chunk(type: string, data: Buffer) {
 const header = Buffer.alloc(13);
 header.writeUInt32BE(width); header.writeUInt32BE(width, 4); header[8] = 8; header[9] = 6;
 writeFileSync('public/coast-field.png', Buffer.concat([Buffer.from([137,80,78,71,13,10,26,10]), chunk('IHDR', header), chunk('IDAT', deflateSync(pixels, { level: 9 })), chunk('IEND', Buffer.alloc(0))]));
+
+const { encodeWorldLayout } = await import('../src/components/world/worldLayout');
+const { world } = await import('../src/content/world');
+const ground = archipelagoGeometry();
+writeFileSync('public/world-layout.bin.gz', gzipSync(new Uint8Array(encodeWorldLayout(ground, generatePlantPositions(world.quality.high.grass, createLandscapePlan()))), { level: 9 }));
+ground.dispose();

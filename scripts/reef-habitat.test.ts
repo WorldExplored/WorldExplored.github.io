@@ -86,14 +86,15 @@ test('eight coral forms and retained structural coverage fit a finite shared geo
       draws++;for(const value of object.geometry.getAttribute('position').array)assert.ok(Number.isFinite(value));
       triangles+=(object.geometry.index?.count??object.geometry.getAttribute('position').count)/3*(object instanceof InstancedMesh?object.count:1);
     });
-    assert.equal(draws,53,'four seaweed anatomies share eight spatial chunks; other reef batches remain unchanged');assert.ok(triangles<2550000,`${triangles} triangles`);
-    const batches=habitat.root.children.filter(child=>child instanceof InstancedMesh&&child.name!=='reef-soft-contact-shading') as InstancedMesh[];
-    const high=batches.map(batch=>batch.count);
+    assert.equal(draws,68,'eight coral and seven reef plant forms have cached near/far batches');assert.ok(triangles<1600000,`${triangles} triangles`);
+    const batches=habitat.root.children.filter(child=>child instanceof InstancedMesh&&child.name!=='reef-soft-contact-shading'&&!child.name.endsWith('-distant')) as InstancedMesh[];
+    const count=(batch:InstancedMesh)=>batch.count+((habitat.root.getObjectByName(`${batch.name}-distant`) as InstancedMesh|undefined)?.count??0);
+    const high=batches.map(count);
     for(const tier of ['low','medium','high'] as const){
-      habitat.setQuality(tier);batches.forEach((batch,i)=>{assert.equal(batch.count,Math.ceil(high[i]*(batch.name.startsWith('reef-weathered-')||tier==='high'?1:tier==='medium'?.76:.52)));assert.ok(batch.count>0);});
+      habitat.setQuality(tier);batches.forEach((batch,i)=>{assert.equal(count(batch),Math.ceil(high[i]*(batch.name.startsWith('reef-weathered-')||tier==='high'?1:tier==='medium'?.76:.52)));assert.ok(count(batch)>0);});
       const contact=habitat.root.getObjectByName('reef-soft-contact-shading') as InstancedMesh;
       let visible=0;for(let i=0;i<contact.count;i++){const values=contact.instanceMatrix.array;if(Math.hypot(values[i*16],values[i*16+1],values[i*16+2])>0)visible++;}
-      assert.equal(visible,batches.filter(batch=>batch.name.startsWith('reef-colony-')||batch.name.startsWith('reef-weathered-')).reduce((sum,batch)=>sum+batch.count,0),'hidden colonies leave no contact shadows');
+      assert.equal(visible,batches.filter(batch=>batch.name.startsWith('reef-colony-')||batch.name.startsWith('reef-weathered-')).reduce((sum,batch)=>sum+count(batch),0),'hidden colonies leave no contact shadows');
     }
   } finally {habitat.dispose();}
 });
@@ -154,7 +155,7 @@ test('shoal mineral talus has low slate, chips and boulders with mixed gray albe
   assert.ok(rocks.filter(rock=>rock.radius<.35).length>60);
   assert.ok(rocks.filter(rock=>rock.radius>.65&&rock.height>.45).length>15);
   assert.ok(rocks.filter(rock=>(rock.y+rock.height-marineFloorHeight(rock.x,rock.z))/rock.radius<.65).length>130,'low plates contrast with the tall canyon ridges');
-  assert.equal(new Set(rocks.map(rock=>islandAt(rock.x,rock.z).island.id)).size,7);
+  assert.equal(new Set(rocks.map(rock=>islandAt(rock.x,rock.z).island.id)).size,6,'the enlarged city contains the former museum shore');
   const habitat=createReefHabitat();
   try {
     const colors=new Set<string>();
@@ -201,7 +202,7 @@ test('kelp forest roots in the deeper pocket, stays submerged through sway and p
       habitat.setQuality(tier);
       for(let form=0;form<4;form++){
         const batch=habitat.root.getObjectByName(`reef-kelp-forest-${form}`) as InstancedMesh;
-        const visible=plan.kelp.filter(plant=>plant.form===form).slice(0,batch.count);
+        const visible=plan.kelp.filter(plant=>plant.form===form).slice(0,batch.count+(habitat.root.getObjectByName(`reef-kelp-forest-${form}-distant`) as InstancedMesh).count);
         assert.equal(new Set(visible.map(plant=>plant.patch)).size,KELP_POCKETS.length,'all kelp groves remain populated at every quality');
       }
     }
@@ -232,7 +233,7 @@ test('outer island aprons meet the reef without intersecting or retaining a tall
     maxSlope=Math.max(maxSlope,Math.hypot(terrainMeshHeight(x+.02,z)-terrainMeshHeight(x-.02,z),terrainMeshHeight(x,z+.02)-terrainMeshHeight(x,z-.02))/.04);
     sampled++;islands.add(islandAt(x,z).island.id);
   }
-  assert.ok(sampled>10000);assert.equal(islands.size,7,'all seven coasts contribute actual interpolated terrain samples');
+  assert.ok(sampled>10000);assert.deepEqual([...islands].sort(),['beacon','city','experience-meadow','garden','main','purdue'],'every exposed coast contributes actual interpolated samples; museum lies inside the city');
   assert.ok(minGap>.025,`separate depth surfaces: ${minGap}`);
   assert.ok(maxLip<.19,`outer transition lip: ${maxLip}`);
   assert.ok(maxSlope<1.25,`bounded continuous bank slope: ${maxSlope}`);
@@ -241,7 +242,7 @@ test('outer island aprons meet the reef without intersecting or retaining a tall
 
 test('coral ridges wrap around the whole lighthouse and the city far shores',()=>{
   const plan=getReefHabitat();
-  for(const [x,z,radius] of [[-89,-38,11],[-80,-51,9],[-79,-23,9],[-12,-103,18],[40,-79,15],[-51,-78,15]]){
+  for(const [x,z,radius] of [[-89,-38,11],[-80,-51,9],[-79,-23,9],[-12,-103,18],[57,-79,17],[-64,-78,17]]){
     assert.ok(plan.rocks.filter(rock=>Math.hypot(rock.x-x,rock.z-z)<radius&&rock.radius>2.7).length>=3,`geological continuity at ${x},${z}`);
     assert.ok(plan.colonies.filter(coral=>Math.hypot(coral.x-x,coral.z-z)<radius).length>45,`colonized ledges at ${x},${z}`);
   }
@@ -275,16 +276,22 @@ test('the finite reef shelf joins an abyss whose edge is hidden from oblique ove
 });
 
 
-test('high-tier distant reef foliage switches cached detail while paused without removing roots or corals',()=>{
+test('spatial reef detail follows the camera while paused without removing any colonies or roots',()=>{
   const habitat=createReefHabitat(),meshes:InstancedMesh[]=[];
   habitat.root.traverse(object=>{if(object instanceof InstancedMesh)meshes.push(object);});
+  const population=()=>meshes.reduce((sum,mesh)=>sum+mesh.count,0);
+  const triangles=()=>meshes.reduce((sum,mesh)=>sum+mesh.count*mesh.geometry.index!.count/3,0);
   try{
-    habitat.setQuality('high');const original=meshes.map(mesh=>({geometry:mesh.geometry,count:mesh.count}));
-    const plantTriangles=()=>meshes.filter(mesh=>/seagrass|kelp|meadow/.test(mesh.name)).reduce((sum,mesh)=>sum+mesh.count*mesh.geometry.index!.count/3,0),close=plantTriangles();
-    habitat.update(80,true,29);
-    assert.ok(plantTriangles()<close*.6,'overview uses low-detail leaves, not fewer plants');
-    meshes.forEach((mesh,i)=>assert.equal(mesh.count,original[i].count));
-    habitat.update(80,true,10);
-    meshes.forEach((mesh,i)=>assert.equal(mesh.geometry,original[i].geometry));
+    habitat.setQuality('high');const original=population(),full=meshes.filter(mesh=>mesh.userData.marineLOD==='near').reduce((sum,mesh)=>sum+(mesh.count+(habitat.root.getObjectByName(`${mesh.name}-distant`) as InstancedMesh).count)*mesh.geometry.index!.count/3,0)+meshes.filter(mesh=>!mesh.userData.marineLOD).reduce((sum,mesh)=>sum+mesh.count*mesh.geometry.index!.count/3,0);
+    habitat.update(80,true,new Vector3(42,29,76));
+    assert.equal(population(),original);
+    assert.ok(triangles()<full*.55,'overview retains every instance using lower-detail silhouettes');
+    const far=triangles();habitat.update(80,true,new Vector3(-16,2,-40));
+    assert.equal(population(),original);assert.ok(triangles()>far,'nearby clusters regain detailed anatomy');
+    assert.ok(meshes.some(mesh=>mesh.userData.marineLOD==='near'&&mesh.count>0));
+    assert.ok(meshes.some(mesh=>mesh.userData.marineLOD==='far'&&mesh.count>0),'distant regions stay inexpensive during a close inspection');
+    const matrices=meshes.map(mesh=>mesh.instanceMatrix.version);
+    habitat.update(81,true,new Vector3(-16,2,-40));
+    assert.deepEqual(meshes.map(mesh=>mesh.instanceMatrix.version),matrices,'stationary views do not upload instance matrices');
   }finally{habitat.dispose();}
 });

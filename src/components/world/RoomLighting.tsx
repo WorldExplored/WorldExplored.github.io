@@ -21,10 +21,25 @@ export function applyBakedRoomLighting<T extends MeshStandardMaterial>(material:
     shader.fragmentShader=`uniform float roomNight;${masked?'varying float roomFill;':''}\n${shader.fragmentShader}`;
     if(masked)shader.vertexShader=`attribute float aRoomFill;varying float roomFill;\n${shader.vertexShader}`.replace('#include <begin_vertex>','#include <begin_vertex>\nroomFill=aRoomFill;');
     shader.fragmentShader=shader.fragmentShader.replace('#include <lights_fragment_end>',`#include <lights_fragment_end>
-      reflectedLight.indirectDiffuse += diffuseColor.rgb * vec3(.105,.14,.135) * roomNight * ${masked?'roomFill':'1.'};
+      reflectedLight.indirectDiffuse += diffuseColor.rgb * vec3(.32,.42,.395) * roomNight * ${masked?'roomFill':'1.'};
     `);
   };
-  material.customProgramCacheKey=()=>`${cache()}-room-fill-${masked?'masked':'interior'}-v2`;
+  material.customProgramCacheKey=()=>`${cache()}-room-fill-${masked?'masked':'interior'}-v3`;
+  return material;
+}
+
+/** Light-producing surfaces share the weather uniform; no per-frame material updates. */
+export function applyNightSource<T extends MeshStandardMaterial>(material: T, strength = .8, masked = false): T {
+  const compile = material.onBeforeCompile, cache = material.customProgramCacheKey.bind(material);
+  material.onBeforeCompile = (shader, renderer) => {
+    compile.call(material, shader, renderer);
+    shader.uniforms.sourceNight = roomNightUniform;
+    shader.fragmentShader = `uniform float sourceNight;${masked ? 'varying float sourceMask;' : ''}\n${shader.fragmentShader}`;
+    if (masked) shader.vertexShader = `attribute float aNightSource;varying float sourceMask;\n${shader.vertexShader}`.replace('#include <begin_vertex>', '#include <begin_vertex>\nsourceMask=aNightSource;');
+    shader.fragmentShader = shader.fragmentShader.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+      totalEmissiveRadiance += vec3(.20,.66,.57) * sourceNight * ${strength.toFixed(3)} * ${masked ? 'sourceMask' : '1.'};`);
+  };
+  material.customProgramCacheKey = () => `${cache()}-night-source-${strength}-${masked}-v1`;
   return material;
 }
 
@@ -48,7 +63,7 @@ export function createRoomLighting(rooms: readonly RoomLamp[]) {
   const join=(parts:BufferGeometry[])=>{const geometry=parts.length?mergeGeometries(parts)!:new BufferGeometry();parts.forEach(g=>g.dispose());return geometry;};
   const fixture=new Mesh(join(housings),new MeshStandardMaterial({color:'#e5ede7',roughness:.42,metalness:.28}));
   const glow=new Mesh(join(diffusers),new MeshStandardMaterial({color:'#ffffff',vertexColors:true,roughness:.45,emissive:'#d8f1e9',emissiveIntensity:0}));
-  const wash=new Mesh(join(pools),new ShaderMaterial({transparent:true,depthWrite:false,blending:AdditiveBlending,uniforms:{night:{value:0}},vertexShader:'varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',fragmentShader:'varying vec2 vUv;uniform float night;void main(){float radius=length((vUv-.5)*2.);float soft=pow(max(0.,1.-radius),1.5);gl_FragColor=vec4(.42,.62,.57,soft*night*.20);}' }));
+  const wash=new Mesh(join(pools),new ShaderMaterial({transparent:true,depthWrite:false,blending:AdditiveBlending,uniforms:{night:{value:0}},vertexShader:'varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',fragmentShader:'varying vec2 vUv;uniform float night;void main(){float radius=length((vUv-.5)*2.);float soft=pow(max(0.,1.-radius),1.5);gl_FragColor=vec4(.42,.62,.57,soft*night*.34);\n#include <colorspace_fragment>\n}' }));
   wash.visible=false;
   fixture.name='ceiling-light-housings';glow.name='pearl-ceiling-diffusers';wash.name='interior-floor-light-pools';
   for(const mesh of [fixture,glow,wash]){mesh.raycast=()=>{};root.add(mesh);}
@@ -62,7 +77,7 @@ export function createRoomLighting(rooms: readonly RoomLamp[]) {
   const previousCamera = new Vector3(Infinity, Infinity, Infinity);
   const update = (night: number, camera: Vector3, time: number) => {
     roomNightUniform.value = night;
-    glow.material.emissiveIntensity = night * .72;
+    glow.material.emissiveIntensity = night * 1.2;
     wash.material.uniforms.night.value = night; wash.visible = night > .01 && rooms.length > 0;
     if (time >= nextSelection || previousCamera.distanceToSquared(camera) > 1) {
       nextSelection = time + .6; previousCamera.copy(camera); let best = Infinity;
@@ -78,7 +93,7 @@ export function createRoomLighting(rooms: readonly RoomLamp[]) {
         local.distance = height + .65;
       }
     }
-    local.intensity = rooms.length ? night * 5.5 : 0;
+    local.intensity = rooms.length ? night * 9 : 0;
   };
   let disposed = false;
   const dispose=()=>{if(disposed)return;disposed=true;for(const mesh of [fixture,glow,wash]){mesh.geometry.dispose();mesh.material.dispose();}};
@@ -102,7 +117,7 @@ export const mainRooms: ReadonlyArray<readonly [string,number,number,number,numb
   ['history',-2,0,1.075,6.883586,3.4,5],['history',2,0,1.075,6.883586,3.4,5],
   ['about',-.48,-2.075,1.078,4.03,5.5,1.25],['about',-2.42,0,1.078,4.393916,1.7,2.4],
   ['contact',0,0,1.086,3.35,2.2,2.2],['contact',2.58,-.91,1.086,3.375,2.1,2.7],
-  ['arcade',-1,0,1.075,4.195,2.2,3.5],['arcade',1.5,0,1.075,4.195,2.2,3.5],
+  ['arcade',-1,0,1.075,3.645,2.2,3.5],['arcade',1.5,0,1.075,3.645,2.2,3.5],
 ];
 export const mainRoomLamps:readonly RoomLamp[]=mainRooms.map(([id,x,z,floor,ceiling,width,depth])=>{
   const site=world.landmarks.find(p=>p.id===id)!,yaw=site.rotationY??0;

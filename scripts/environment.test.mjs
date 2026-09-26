@@ -1,3 +1,4 @@
+import { structurePlantingClearance } from '../src/components/world/plantingFootprints.ts';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import React, { useEffect } from 'react';
@@ -83,7 +84,7 @@ test('deterministic plants clear actual structures, paths, rocks, trees and shor
     assert.ok(canPlacePlant(plant.x, plant.z, plant.reach, plan));
     assert.ok(plant.reach >= .95);
     assert.ok(Math.abs(plant.y - terrainHeight(plant.x, plant.z) + .015) < 1e-9);
-    for (const circle of [...plan.structures, ...plan.rocks, ...plan.trees.map(tree => ({...tree, radius: tree.height * .15}))]) assert.ok(Math.hypot(plant.x - circle.x, plant.z - circle.z) > circle.radius + plant.reach, circle.id);
+    for (const circle of [...plan.structures, ...plan.rocks, ...plan.trees.map(tree => ({...tree, radius: tree.height * .15}))]) assert.ok(structurePlantingClearance(plant.x, plant.z, circle) > plant.reach, circle.id);
     for (const path of plan.paths) for (let index = 1; index < path.points.length; index++) assert.ok(distanceToSegment(plant.x, plant.z, path.points[index - 1], path.points[index]) > path.width / 2 + plant.reach);
     assert.ok(landDistance(plant.x, plant.z) > plant.reach + 1.1);
   }
@@ -246,7 +247,8 @@ test('organic shores and vegetation cover every suitable island without the form
       const x = island.x + Math.cos(angle) * island.rx * contour; const z = island.z + Math.sin(angle) * island.rz * contour;
       assert.ok(Math.abs(islandDistance(island, x, z)) < 1e-10, island.id); radii.push(contour);
     }
-    assert.ok(Math.max(...radii) - Math.min(...radii) > .2);
+    if (island.id === 'city') assert.ok(radii.every(radius => radius === 1), 'city shoreline is an oval');
+    else assert.ok(Math.max(...radii) - Math.min(...radii) > .2);
     if (island.id !== 'beacon') assert.ok(plants.some(p => Math.hypot((p.x-island.x)/island.rx,(p.z-island.z)/island.rz)<.8), island.id);
   }
   assert.ok(plants.some(p => p.x > 29));

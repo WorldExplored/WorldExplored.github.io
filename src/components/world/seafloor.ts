@@ -7,9 +7,9 @@ export const REEF_BASINS = [
   { x: -46, z: -55, rx: 23, rz: 14 },
   { x: -61, z: -37, rx: 18, rz: 22 },
   { x: -79, z: -36, rx: 22, rz: 23 },
-  { x: -7, z: -100, rx: 33, rz: 15 },
-  { x: 32, z: -79, rx: 18, rz: 26 },
-  { x: -46, z: -79, rx: 17, rz: 25 },
+  { x: -7, z: -113, rx: 44, rz: 19 },
+  { x: 52, z: -79, rx: 21, rz: 34 },
+  { x: -58, z: -79, rx: 20, rz: 32 },
 ] as const;
 
 function shelfInfluence(x: number, z: number) {
@@ -32,8 +32,9 @@ export function reefFloorVertexHeight(x: number, z: number) {
   const terraces=(smooth(-.3,.15,shelfBand)-.5)*1.05;
   const hollow=Math.exp(-(((x+34)/11)**2+((z+30)/8)**2))*1.35;
   const trough=Math.exp(-(((x+52)/7)**2+((z+45)/14)**2))*.95;
+  const forestHollows=(Math.exp(-(((x+13)/23)**2+((z+119)/8)**2))+Math.exp(-(((x-57)/9)**2+((z+83)/19)**2)))*1.25*smooth(8,13,-distance);
   const relief=shelf*smooth(7,12,-distance)*(terraces-hollow-trough);
-  const floor = terrainBaseHeight(x, z) - .36 + smooth(6.9, 9, -distance) * (waves + ripples) - basin * 1.9 + fractures + relief;
+  const floor = terrainBaseHeight(x, z) - .36 + smooth(6.9, 9, -distance) * (waves + ripples) - basin * 1.9 + fractures + relief - forestHollows;
   const height = Math.min(-2.4, floor) - smooth(22, 75, -distance) * 35 * (1 - shelf);
   floorVertices.set(key, height);
   return height;

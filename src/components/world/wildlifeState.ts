@@ -1,6 +1,7 @@
 import { Vector3 } from 'three';
+import { turtleBeachClearance } from './marineVisitorState';
 import type { QualityTier } from '../../content/world';
-import { createLandscapePlan, distanceToSegment, ISLANDS, islandContour, landDistance, seededRandom, terrainHeight, terrainSlope, type Island, type LandscapePlan } from './terrain';
+import { createLandscapePlan, distanceToSegment, ISLANDS, islandContour, landDistance, seededRandom, terrainHeight, terrainMeshHeight, terrainSlope, type Island, type LandscapePlan } from './terrain';
 export { createGullPerches, createGullStates, startGullTakeoff, stepGull, gullFlightFloor, GULL_TURN_RATE, GULL_MAX_PITCH, GULL_SEPARATION } from './gullLife';
 export type { GullMode, GullPerch, GullState } from './gullLife';
 export const WILDLIFE_COUNTS = { high: { gulls: 18, crabs: 10 }, medium: { gulls: 10, crabs: 6 }, low: { gulls: 6, crabs: 0 } } satisfies Record<QualityTier, { gulls: number; crabs: number }>;
@@ -11,38 +12,38 @@ export function writeCrabPosition(route: CrabRoute, progress: number, point: Vec
   const angle = route.angle + progress * route.extent;
   const r = islandContour(route.island, angle) - route.band / Math.min(route.island.rx, route.island.rz);
   const x = route.island.x + Math.cos(angle) * route.island.rx * r; const z = route.island.z + Math.sin(angle) * route.island.rz * r;
-  return point.set(x, terrainHeight(x, z) + .11, z);
+  return point.set(x, terrainMeshHeight(x, z) + .11, z);
 }
 export function validCrabPosition(point: Vector3, plan: LandscapePlan) {
   const distance = landDistance(point.x, point.z);
-  return distance > .85 && distance < 1.75 && terrainHeight(point.x, point.z) > .16 && terrainSlope(point.x, point.z) < .65
+  return turtleBeachClearance(point.x,point.z,.53)>.05 && distance > .85 && distance < 1.75 && terrainHeight(point.x, point.z) > .16 && terrainSlope(point.x, point.z) < .65
     && [...plan.structures, ...plan.rocks].every(item => Math.hypot(point.x - item.x, point.z - item.z) > item.radius + .6)
     && plan.paths.every(path => path.points.slice(1).every((b, index) => distanceToSegment(point.x, point.z, path.points[index], b) > path.width / 2 + .65));
 }
 export function createCrabRoutes(plan = createLandscapePlan()): CrabRoute[] {
   const random = seededRandom(5778); const routes: CrabRoute[] = []; const point = new Vector3();
-  const habitats = ['main', 'experience-meadow', 'garden', 'purdue'].map(id => ISLANDS.find(island => island.id === id)!);
+  const habitats = ['beacon', 'main', 'experience-meadow', 'garden', 'purdue'].map(id => ISLANDS.find(island => island.id === id)!);
   for (let attempt = 0; routes.length < 10 && attempt < 1000; attempt++) {
     const island = habitats[attempt % habitats.length];
-    const route = { island, angle: random() * TAU, extent: .05 + random() * .035, band: 1.15 + random() * .25, phase: random() * TAU };
+    const route = { island, angle: random() * TAU, extent: island.id==='beacon'?.025:.05 + random() * .035, band: island.id==='beacon'?1.65:1.15 + random() * .25, phase: random() * TAU };
     if (Array.from({ length: 41 }, (_, index) => validCrabPosition(writeCrabPosition(route, index / 20 - 1, point), plan)).every(Boolean) && routes.every(other => {
       const a=writeCrabPosition(other,0,new Vector3()), b=writeCrabPosition(route,0,new Vector3());
       const ar=a.distanceTo(writeCrabPosition(other,1,new Vector3())),br=b.distanceTo(writeCrabPosition(route,1,new Vector3()));
       return a.distanceTo(b)>ar+br+.8;
     })) routes.push(route);
   }
-  return routes;
+  return routes.toSorted((a,b)=>Number(b.island.id==='beacon')-Number(a.island.id==='beacon'));
 }
 export type CrabMode = 'Idle' | 'Walking' | 'Alert' | 'Fleeing' | 'Hiding' | 'Returning';
-export interface CrabState { route: CrabRoute; position: Vector3; time: number; progress: number; heading: number; scuttle: number; gait: number; mode: CrabMode; age: number; speed: number; target: number; retreat: number; home: number; armed: boolean; clearTime: number; routeLength: number }
+export interface CrabState { route: CrabRoute; position: Vector3; time: number; progress: number; heading: number; scuttle: number; gait: number; mode: CrabMode; age: number; speed: number; target: number; retreat: number; home: number; armed: boolean; clearTime: number; routeLength: number; burrow:number; emergeAt:number; nextBurrow:number }
 export function createCrabStates(): CrabState[] {
-  return createCrabRoutes().map(route=>{
+  return createCrabRoutes().map((route,index)=>{
     const progress=Math.sin(route.phase)*.7;
     const a=writeCrabPosition(route,-1,new Vector3()),b=writeCrabPosition(route,1,new Vector3());
-    return {route,position:writeCrabPosition(route,progress,new Vector3()),time:0,progress,heading:-route.angle,scuttle:0,gait:0,mode:'Idle',age:0,speed:0,target:progress,retreat:progress,home:progress,armed:true,clearTime:0,routeLength:a.distanceTo(b)};
+    return {route,position:writeCrabPosition(route,progress,new Vector3()),time:0,progress,heading:-route.angle,scuttle:0,gait:0,mode:'Idle',age:0,speed:0,target:progress,retreat:progress,home:progress,armed:true,clearTime:0,routeLength:a.distanceTo(b),burrow:0,emergeAt:-1,nextBurrow:index===0?18:90+index*7};
   });
 }
-function crabMode(state: CrabState, mode: CrabMode){state.mode=mode;state.age=0;}
+function crabMode(state: CrabState, mode: CrabMode){state.mode=mode;state.age=0;if(mode==='Hiding')state.emergeAt=-1;}
 export function stepCrab(state: CrabState, delta: number, camera: Vector3, pointer: readonly number[] | null, paused = false) {
   if(paused)return;
   const dt=Math.min(.05,Math.max(0,delta));if(!dt)return;state.time+=dt;state.age+=dt;
@@ -57,7 +58,15 @@ export function stepCrab(state: CrabState, delta: number, camera: Vector3, point
     state.target=state.progress;state.armed=false;crabMode(state,'Alert');
   }
   if(state.mode==='Alert'&&state.age>.28){state.target=state.retreat;crabMode(state,'Fleeing');}
-  if(state.mode==='Hiding'&&state.age>4&&distance>2.8){state.target=state.home;crabMode(state,'Returning');}
+  if(state.mode==='Hiding'){
+    if(state.age>7+state.route.phase&&distance>2.8&&state.emergeAt<0)state.emergeAt=state.time;
+    const emerge=state.emergeAt<0?0:Math.max(0,Math.min(1,(state.time-state.emergeAt)/1.15));
+    state.burrow=Math.min(1,state.age/.85)*(1-emerge*emerge*(3-2*emerge));
+    if(emerge>=1){state.target=state.home;state.nextBurrow=state.time+90+state.route.phase*9;crabMode(state,'Returning');}
+  }else state.burrow=0;
+  if(state.time>state.nextBurrow&&['Idle','Walking'].includes(state.mode)){
+    state.home=state.progress;state.retreat=state.route.phase>Math.PI?-.95:.95;state.target=state.retreat;state.armed=false;crabMode(state,'Fleeing');
+  }
   if(state.mode==='Idle'&&state.age>2.5){state.target=state.progress>0?-.65:.65;crabMode(state,'Walking');}
   const moving=['Walking','Fleeing','Returning'].includes(state.mode);
   const remaining=(state.target-state.progress)*state.routeLength/2;

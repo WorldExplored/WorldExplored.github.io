@@ -8,7 +8,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import { Environment, Lightformer } from '@react-three/drei';
 import { Vector3, Vector2, Raycaster } from 'three';
 import { world, type SceneRuntime, type QualityTier, type WorldProps } from '@/content/world';
-import { SURFACES_READY } from './surfaceMaterials';
+import { SURFACES_READY, surfaceLoadsPending } from './surfaceMaterials';
 import { CameraDirector } from './CameraDirector';
 import { intersectTerrainRay } from './cameraControls';
 import { Landmark } from './Landmark';
@@ -113,9 +113,22 @@ function PointerGround({ runtime }: { runtime: MutableRefObject<SceneRuntime> })
   return null;
 }
 
-export function AeroWorld(props: WorldProps & { runtime: MutableRefObject<SceneRuntime>; tier: QualityTier; onTier: (tier: QualityTier) => void; stage?: number; onPlantsReady?: () => void }) {
-  const { runtime, tier, onTier, paused, mobile, destination, onNavigate } = props;
+export function AeroWorld(props: WorldProps & { runtime: MutableRefObject<SceneRuntime>; tier: QualityTier; onTier: (tier: QualityTier) => void; stage?: number; onPlantsReady?: () => void; preparing?: boolean; onPrepared?: () => void }) {
+  const { runtime, tier, onTier, paused, mobile, destination, onNavigate, preparing, onPrepared, onFailure } = props;
   const stopped = paused;
+  const { gl, scene, camera } = useThree();
+  useEffect(() => {
+    if (!preparing) return;
+    let cancelled = false, compiled = false;
+    const ready = () => {
+      if (!cancelled && compiled && surfaceLoadsPending() === 0) onPrepared?.();
+    };
+    window.addEventListener(SURFACES_READY, ready);
+    // Map slots and color spaces are established before image decoding. Compile
+    // those programs in parallel, then wait for both before the first frame.
+    void gl.compileAsync(scene, camera).then(() => { compiled = true; ready(); }).catch(() => { if (!cancelled) onFailure(); });
+    return () => { cancelled = true; window.removeEventListener(SURFACES_READY, ready); };
+  }, [gl, scene, camera, preparing, onPrepared, onFailure]);
   const invalidate = useThree(state => state.invalidate);
   useEffect(() => { const refresh = () => invalidate(); window.addEventListener(SURFACES_READY, refresh); return () => window.removeEventListener(SURFACES_READY, refresh); }, [invalidate]);
   const stage = props.stage ?? 5;
@@ -164,6 +177,6 @@ export function AeroWorld(props: WorldProps & { runtime: MutableRefObject<SceneR
     <PointerGround runtime={runtime} />
     <CameraDirector {...props} />
     <Labels runtime={runtime} mobile={mobile} />
-    <QualityController mobile={mobile} runtime={runtime} tier={tier} onTier={onTier} paused={stopped} />
+    <QualityController preparing={props.preparing} mobile={mobile} runtime={runtime} tier={tier} onTier={onTier} paused={stopped} />
   </>;
 }

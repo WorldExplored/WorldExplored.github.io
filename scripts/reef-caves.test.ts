@@ -2,10 +2,11 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { DoubleSide, InstancedMesh, Mesh, MeshStandardMaterial, Object3D, Raycaster, Vector3 } from 'three';
 import { caveGroundLocal, caveVisitorPose, caveWorldPoint, createReefCaveSites } from '../src/components/world/reefCaveState';
-import { coastalBankCaveGeometry, createCaveEelGeometry, createReefCaves, reefCaveGeometry } from '../src/components/world/ReefCaves';
+import { coastalBankCaveGeometry, createCaveEelGeometry, createReefCaves } from '../src/components/world/ReefCaves';
 import { reefSeafloorGeometry } from '../src/components/world/ReefHabitatScene';
 import { getReefHabitat, marineFloorHeight } from '../src/components/world/reefHabitat';
-import { archipelagoGeometry } from '../src/components/world/terrain';
+import { COASTAL_CAVE_LAYOUT, coastalCaveFloor } from '../src/components/world/coastalCaveLayout';
+import { archipelagoGeometry, terrainBaseHeight, terrainMeshHeight } from '../src/components/world/terrain';
 
 const angleDistance=(a:number,b:number)=>Math.abs(Math.atan2(Math.sin(a-b),Math.cos(a-b)));
 
@@ -13,8 +14,8 @@ test('coastal mouths reveal recessed interiors through the actual island and sea
   const sites=createReefCaveSites(),material=new MeshStandardMaterial({side:DoubleSide});
   const terrain=new Mesh(archipelagoGeometry(),material),floor=new Mesh(reefSeafloorGeometry(),material);
   terrain.updateMatrixWorld();floor.updateMatrixWorld();
-  assert.equal(sites.filter(site=>site.kind==='bank').length,2);
-  assert.equal(sites.filter(site=>site.kind==='overhang').length,1);
+  assert.equal(sites.filter(site=>site.kind==='bank').length,4);
+  assert.equal(sites.filter(site=>site.kind==='overhang').length,0);
   try{
     for(const site of sites.filter(site=>site.kind==='bank')){
       const geometry=coastalBankCaveGeometry(site),mesh=new Mesh(geometry,material);
@@ -32,7 +33,7 @@ test('coastal mouths reveal recessed interiors through the actual island and sea
         let highest=-Infinity;
         for(let i=0;i<vertices.count;i++)highest=Math.max(highest,vertices.getY(i)*site.scale+site.y);
         assert.ok(highest<-.4,'the rock shelf never becomes a sandy dome above water');
-        assert.ok(geometry.boundingBox!.max.x-geometry.boundingBox!.min.x<6,'the opening stays in a modest coastal shelf, not a broad semicircular block');
+        assert.ok(geometry.boundingBox!.max.x-geometry.boundingBox!.min.x<6.8,'the opening stays in a modest coastal shelf, not a broad semicircular block');
         for(const [distance,cameraHeight,recess,lift] of [[18,3,1,.65],[18,3.5,1,.65],[18,4,1,.65],[24,4,1,.65],[30,4,1,.65]]){
           const c=caveWorldPoint(site,0,distance),inside=caveWorldPoint(site,0,-recess);
           const origin=new Vector3(c.x,cameraHeight,c.z),target=new Vector3(inside.x,marineFloorHeight(inside.x,inside.z)+lift,inside.z);
@@ -46,8 +47,6 @@ test('coastal mouths reveal recessed interiors through the actual island and sea
         }
       }finally{geometry.dispose();}
     }
-    const overhang=reefCaveGeometry(2),mesh=new Mesh(overhang,material);mesh.updateMatrixWorld();
-    assert.equal(new Raycaster(new Vector3(0,.42,3),new Vector3(0,0,-1)).intersectObject(mesh).length,0,'the single retained rock shelter remains open at both ends');overhang.dispose();
   }finally{terrain.geometry.dispose();floor.geometry.dispose();material.dispose();}
 });
 
@@ -73,7 +72,7 @@ test('complete ten-minute animal cycles remain below boats and clear of the inte
   }
 });
 
-test('the animated eel body, including its turning tail, fits inside both coastal tunnels',()=>{
+test('the animated eel body, including its turning tail, fits inside every coastal tunnel',()=>{
   const material=new MeshStandardMaterial({side:DoubleSide}),eel=createCaveEelGeometry(),transform=new Object3D(),point=new Vector3();
   try{
     for(const site of createReefCaveSites().filter(site=>site.kind==='bank')){
@@ -96,19 +95,35 @@ test('the animated eel body, including its turning tail, fits inside both coasta
   }finally{eel.dispose();material.dispose();}
 });
 
-test('two coastal banks, one shelter and their visitors retain eight draws, resources, and pause behavior',()=>{
+test('four embedded coastal banks retain nine draws, resources, and pause behavior',()=>{
   const caves=createReefCaves();
   try{
     const meshes:Mesh[]=[];caves.root.traverse(object=>{if(object instanceof Mesh)meshes.push(object);});
-    assert.equal(meshes.length,8);
+    assert.equal(meshes.length,9);
     const geometry=meshes.map(mesh=>mesh.geometry);let triangles=0;
     for(const mesh of meshes)triangles+=(mesh.geometry.index?.count??mesh.geometry.attributes.position.count)/3*(mesh instanceof InstancedMesh?mesh.count:1);
     assert.ok(triangles<14000,`${triangles} cave triangles`);
     const moving=meshes.filter(mesh=>mesh instanceof InstancedMesh) as InstancedMesh[];
     caves.update(32);const matrices=moving.map(mesh=>mesh.instanceMatrix.array.slice());
     caves.update(70,true);moving.forEach((mesh,index)=>assert.deepEqual(mesh.instanceMatrix.array,matrices[index]));
-    caves.setQuality('low');assert.equal((caves.root.getObjectByName('cave-minnow-bodies') as InstancedMesh).count,6);
+    caves.setQuality('low');assert.equal((caves.root.getObjectByName('cave-minnow-bodies') as InstancedMesh).count,4);
     assert.deepEqual(meshes.map(mesh=>mesh.geometry),geometry);
     caves.update(71);assert.notDeepEqual(moving[0].instanceMatrix.array,matrices[0]);
   }finally{caves.dispose();}
+});
+
+
+test('expanded cave entrances cut a local floor into the coast without moving the surrounding bank',()=>{
+  const widths=new Set<number>();
+  for(const site of createReefCaveSites()){
+    const geometry=coastalBankCaveGeometry(site);
+    try{widths.add(geometry.userData.mouthWidth);assert.ok(geometry.userData.mouthWidth>2.7,'wide entrances remain readable from above water');}
+    finally{geometry.dispose();}
+    const inside=caveWorldPoint(site,0,-1.3),outside=caveWorldPoint(site,5,-1.3);
+    assert.ok(terrainMeshHeight(inside.x,inside.z)<terrainBaseHeight(inside.x,inside.z)-.2,'the original shore slope is genuinely recessed');
+    assert.ok(terrainMeshHeight(inside.x,inside.z)<=-2.2,'the rendered floor stays below the visible tunnel interior');
+    assert.equal(coastalCaveFloor(outside.x,outside.z,-1),-1,'surrounding coast remains unchanged');
+    assert.ok(COASTAL_CAVE_LAYOUT.some(layout=>Math.hypot(site.x-layout.x,site.z-layout.z)<.001));
+  }
+  assert.equal(widths.size,4,'each mouth has a distinct span and silhouette');
 });

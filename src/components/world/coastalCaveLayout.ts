@@ -1,7 +1,9 @@
 /** Authored shore burrows. Pure layout data is shared by planting and animal clearance. */
 export const COASTAL_CAVE_LAYOUT = [
-  {x:-62.3835654675,z:-37.2248694082,yaw:Math.PI/2+.1,scale:1,form:0},
-  {x:-39.2665203266,z:-64.5442316709,yaw:Math.PI/2-2.55,scale:.92,form:1},
+  {x:-65.8,z:-35.1,yaw:1.0131930074,scale:1,form:0,floor:-2.55},
+  {x:-48,z:-62.4,yaw:-.7666186095,scale:1,form:1,floor:-2.55},
+  {x:-3.035,z:37.116,yaw:.0548991976,scale:1,form:3,floor:-2.55},
+  {x:-39.288,z:-9.328,yaw:-1.5681753265,scale:.94,form:4,floor:-2.55},
 ] as const;
 
 export function caveLocalXZ(site:{x:number;z:number;yaw:number;scale:number},x:number,z:number){
@@ -20,4 +22,18 @@ export function coastalCaveClearance(x:number,z:number,radius=0){
     distance=Math.min(distance,Math.min(bank,approach*2.3)*site.scale-radius);
   }
   return distance;
+}
+
+
+const ease=(a:number,b:number,value:number)=>{const t=Math.max(0,Math.min(1,(value-a)/(b-a)));return t*t*(3-2*t);};
+/** Lower only the floor inside each bank. The same terrain triangles remain the actual cave floor. */
+export function coastalCaveFloor(x:number,z:number,height:number){
+  let result=height;
+  for(const site of COASTAL_CAVE_LAYOUT){
+    const local=caveLocalXZ(site,x,z);
+    const across=1-ease(1.80,2.65,Math.abs(local.x));
+    const depth=ease(-4.35,-3.0,local.z)*(1-ease(.45,1.65,local.z));
+    result+=(Math.min(result,site.floor)-result)*across*depth;
+  }
+  return result;
 }

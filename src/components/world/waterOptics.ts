@@ -8,7 +8,8 @@ export function waterOpticalDepth(x: number, z: number, offshoreDistance: number
     shelf = Math.max(shelf, Math.exp(-rim * rim * 4));
   }
   const distance = Math.max(0, offshoreDistance) / (1 + shelf * 2);
-  return .85 + distance * .3 + Math.pow(distance / 10, 2.2) * 3;
+  // Beyond the visible shelf, the deep slope closes transparency before the floor edge.
+  return .85 + distance * .3 + Math.pow(distance / 10, 2.1) * 3 + Math.pow(Math.max(0, distance - 25), 2) * .3;
 }
 
 export function waterOpacity(depth:number,viewCosine=1) {
@@ -23,6 +24,6 @@ export const waterOpticsGLSL = /* glsl */ `
     float rim;
     ${REEF_BASINS.map(({ x, z, rx, rz }) => `rim = max(0., length((p - vec2(${x.toFixed(1)},${z.toFixed(1)})) / vec2(${rx.toFixed(1)},${rz.toFixed(1)})) - .7) * ${(Math.min(rx, rz) / 35).toFixed(7)};\n    shelf = max(shelf, exp(-rim * rim * 4.));`).join('\n    ')}
     float distance = max(0., offshoreDistance) / (1. + shelf * 2.);
-    return .85 + distance * .3 + pow(distance / 10., 2.2) * 3.;
+    return .85 + distance * .3 + pow(distance / 10., 2.1) * 3. + pow(max(0., distance - 25.), 2.) * .3;
   }
 `;

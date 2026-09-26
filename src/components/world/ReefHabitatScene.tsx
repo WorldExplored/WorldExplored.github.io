@@ -10,6 +10,7 @@ import { createSeabedMeadows } from './SeabedMeadows';
 import { createSeaweedGeometry, createForestKelpGeometry } from './Seaweed';
 import { getReefHabitat, reefFloorHeight, reefFloorVertexHeight, reefRockMesh, type ReefObstacle } from './reefHabitat';
 import { landDistance } from './terrain';
+import { createClusteredMarineLOD } from './ClusteredMarineLOD';
 import type { EnvironmentProps } from './Water';
 
 /** One translucent instance batch seats each colony in the actual rippled sand surface. */
@@ -70,7 +71,7 @@ export function reefSeafloorGeometry() {
   for(let col=width-2;col>=0;col--)perimeter.push((depth-1)*width+col);
   for(let row=depth-2;row>0;row--)perimeter.push(row*width);
   let previous=perimeter;
-  const outerExtent=1200;
+  const outerExtent=1800;
   for(const blend of [.08,.23,.5,1]){
     const ring=perimeter.map(index=>{
       const bx=positions[index*3],by=positions[index*3+1],bz=positions[index*3+2];
@@ -95,28 +96,29 @@ export function reefSeafloorGeometry() {
   return geometry;
 }
 
-function stem(ax:number,ay:number,az:number,bx:number,by:number,bz:number,radius:number) {
+function stem(ax:number,ay:number,az:number,bx:number,by:number,bz:number,radius:number,sides=5) {
   const a=new Vector3(ax,ay,az),b=new Vector3(bx,by,bz),axis=b.clone().sub(a),transform=new Object3D();
   transform.position.copy(a).add(b).multiplyScalar(.5);
   transform.quaternion.setFromUnitVectors(new Vector3(0,1,0),axis.clone().normalize());transform.updateMatrix();
-  return new CylinderGeometry(radius*.57,radius,axis.length(),5).applyMatrix4(transform.matrix);
+  return new CylinderGeometry(radius*.57,radius,axis.length(),sides).applyMatrix4(transform.matrix);
 }
 
 /** Eight growth habits mix plates, branches, fans, sponges and encrusting coral. */
-export function reefCoralGeometry(form:number) {
-  const parts:BufferGeometry[]=[];
+export function reefCoralGeometry(form:number,detail:'near'|'far'='near') {
+  const coarse=detail==='far',parts:BufferGeometry[]=[];
+  const branch=(ax:number,ay:number,az:number,bx:number,by:number,bz:number,radius:number)=>stem(ax,ay,az,bx,by,bz,radius,coarse?3:5);
   if(form===0) {
-    parts.push(stem(0,0,0,0,.73,0,.065));
-    for(let branch=0;branch<7;branch++) {
-      const a=branch*2.399, y=.2+branch*.055, x=Math.cos(a)*.33,z=Math.sin(a)*.33;
-      parts.push(stem(0,y,0,x,.75+branch*.03,z,.034));
-      for(let twig=0;twig<2;twig++)parts.push(stem(x*.55,y+.18,z*.55,x+Math.cos(a+.9+twig)*.16,.82+twig*.13,z+Math.sin(a+.9+twig)*.16,.019));
+    parts.push(branch(0,0,0,0,.73,0,.065));
+    for(let limb=0;limb<7;limb++) {
+      const a=limb*2.399, y=.2+limb*.055, x=Math.cos(a)*.33,z=Math.sin(a)*.33;
+      parts.push(branch(0,y,0,x,.75+limb*.03,z,.034));
+      for(let twig=0;twig<(coarse?0:2);twig++)parts.push(branch(x*.55,y+.18,z*.55,x+Math.cos(a+.9+twig)*.16,.82+twig*.13,z+Math.sin(a+.9+twig)*.16,.019));
     }
   } else if(form===1) {
-    parts.push(stem(0,0,0,0,.74,0,.08));
+    parts.push(branch(0,0,0,0,.74,0,.08));
     for(let level=0;level<3;level++) {
       const radius=.7-level*.13, y=.28+level*.27;
-      const table=new CylinderGeometry(radius,radius*.94,.06,20,1);
+      const table=new CylinderGeometry(radius,radius*.94,.06,coarse?8:20,1);
       const p=table.getAttribute('position');
       for(let i=0;i<p.count;i++) {
         const x=p.getX(i),z=p.getZ(i),a=Math.atan2(z,x);
@@ -125,53 +127,54 @@ export function reefCoralGeometry(form:number) {
       table.computeVertexNormals();parts.push(table);
     }
   } else if(form===2) {
-    parts.push(stem(0,0,0,0,.28,0,.045));
+    parts.push(branch(0,0,0,0,.28,0,.045));
     for(let rib=0;rib<9;rib++) {
       const a=-1.12+rib*.28, x=Math.sin(a)*.59,y=.28+Math.cos(a)*.75;
-      parts.push(stem(0,.18,0,x,y,.015*Math.sin(rib),.016));
-      for(let rung=1;rung<4&&rib<8;rung++) {
+      parts.push(branch(0,.18,0,x,y,.015*Math.sin(rib),.016));
+      for(let rung=1;rung<(coarse?1:4)&&rib<8;rung++) {
         const t=rung/4;
-        parts.push(stem(x*t,.18+(y-.18)*t,0,Math.sin(a+.28)*.59*t,.18+(.1+Math.cos(a+.28)*.75)*t,0,.008));
+        parts.push(branch(x*t,.18+(y-.18)*t,0,Math.sin(a+.28)*.59*t,.18+(.1+Math.cos(a+.28)*.75)*t,0,.008));
       }
     }
   } else if(form===3) {
     const positions:number[]=[],indices:number[]=[];
-    for(let ring=0;ring<=9;ring++)for(let side=0;side<=24;side++) {
-      const t=ring/9,a=side/24*Math.PI*2,r=.52*Math.cos(t*Math.PI/2),groove=.024*Math.sin(a*12+t*27)+.016*Math.sin(a*7-t*19);
+    const rings=coarse?4:9,sides=coarse?12:24;
+    for(let ring=0;ring<=rings;ring++)for(let side=0;side<=sides;side++) {
+      const t=ring/rings,a=side/sides*Math.PI*2,r=.52*Math.cos(t*Math.PI/2),groove=.024*Math.sin(a*12+t*27)+.016*Math.sin(a*7-t*19);
       positions.push(Math.cos(a)*(r+groove*Math.sin(t*Math.PI)),Math.sin(t*Math.PI/2)*.65,Math.sin(a)*(r+groove*Math.sin(t*Math.PI)));
-      if(ring&&side){const i=ring*25+side;indices.push(i,i-25,i-1,i-1,i-25,i-26);}
+      if(ring&&side){const i=ring*(sides+1)+side;indices.push(i,i-sides-1,i-1,i-1,i-sides-1,i-sides-2);}
     }
     const brain=new BufferGeometry();brain.setAttribute('position',new Float32BufferAttribute(positions,3));brain.setIndex(indices);brain.computeVertexNormals();parts.push(brain);
   } else if(form===4) {
     for(let tube=0;tube<7;tube++) {
       const a=tube*2.4,r=Math.sqrt(tube/7)*.3,h=.48+(tube%3)*.22;
       // An open hollow rim makes these distinct vase sponges rather than capped poles.
-      const wall=new CylinderGeometry(.105,.063,h,8,1,true).translate(Math.cos(a)*r,h*.5,Math.sin(a)*r);
+      const wall=new CylinderGeometry(.105,.063,h,coarse?5:8,1,true).translate(Math.cos(a)*r,h*.5,Math.sin(a)*r);
       parts.push(wall);
-      const rim=new CylinderGeometry(.105,.105,.018,8,1,true).scale(.75,1,.75).translate(Math.cos(a)*r,h-.009,Math.sin(a)*r);parts.push(rim);
+      const rim=new CylinderGeometry(.105,.105,.018,coarse?5:8,1,true).scale(.75,1,.75).translate(Math.cos(a)*r,h-.009,Math.sin(a)*r);parts.push(rim);
     }
   }
   if(form===5) {
     // Folded foliose rosettes spread over rock ledges in overlapping whorls.
     for(let petal=0;petal<6;petal++) {
-      const geometry=new CylinderGeometry(.32,.27,.04,12,1),a=petal*2.4;
+      const geometry=new CylinderGeometry(.32,.27,.04,coarse?6:12,1),a=petal*2.4;
       geometry.rotateZ(.16*Math.sin(a)).rotateX(.2*Math.cos(a));
       geometry.translate(Math.cos(a)*.25,.07+petal*.035,Math.sin(a)*.25);parts.push(geometry);
     }
   } else if(form===6) {
     // Thick finger coral forks into asymmetrical clubs.
-    for(let branch=0;branch<9;branch++) {
-      const a=branch*2.4,r=Math.sqrt(branch/9)*.35,h=.36+(branch%4)*.17;
-      parts.push(stem(Math.cos(a)*r*.5,0,Math.sin(a)*r*.5,Math.cos(a)*r,h,Math.sin(a)*r,.065));
-      if(branch%2===0)parts.push(stem(Math.cos(a)*r*.7,h*.55,Math.sin(a)*r*.7,Math.cos(a+.45)*(r+.11),h*.83,Math.sin(a+.45)*(r+.11),.045));
+    for(let limb=0;limb<9;limb++) {
+      const a=limb*2.4,r=Math.sqrt(limb/9)*.35,h=.36+(limb%4)*.17;
+      parts.push(branch(Math.cos(a)*r*.5,0,Math.sin(a)*r*.5,Math.cos(a)*r,h,Math.sin(a)*r,.065));
+      if(!coarse&&limb%2===0)parts.push(stem(Math.cos(a)*r*.7,h*.55,Math.sin(a)*r*.7,Math.cos(a+.45)*(r+.11),h*.83,Math.sin(a+.45)*(r+.11),.045));
     }
   } else if(form===7) {
     // Low irregular encrusting mats with contrasting miniature polyp nodules.
     for(let lobe=0;lobe<9;lobe++) {
       const a=lobe*2.4,r=Math.sqrt(lobe/9)*.37;
-      const mat=new CylinderGeometry(.18,.21,.09+(lobe%3)*.025,9);
+      const mat=new CylinderGeometry(.18,.21,.09+(lobe%3)*.025,coarse?5:9);
       mat.translate(Math.cos(a)*r,.055,Math.sin(a)*r);parts.push(mat);
-      for(let polyp=0;polyp<3;polyp++)parts.push(stem(Math.cos(a)*r+Math.cos(polyp*2.1)*.1,.1,Math.sin(a)*r+Math.sin(polyp*2.1)*.1,Math.cos(a)*r+Math.cos(polyp*2.1)*.1,.16,Math.sin(a)*r+Math.sin(polyp*2.1)*.1,.018));
+      for(let polyp=0;polyp<(coarse?0:3);polyp++)parts.push(branch(Math.cos(a)*r+Math.cos(polyp*2.1)*.1,.1,Math.sin(a)*r+Math.sin(polyp*2.1)*.1,Math.cos(a)*r+Math.cos(polyp*2.1)*.1,.16,Math.sin(a)*r+Math.sin(polyp*2.1)*.1,.018));
     }
   }
   parts.forEach(part=>part.deleteAttribute('uv'));
@@ -184,12 +187,12 @@ export function reefCoralGeometry(form:number) {
     colors.push(shade,shade,shade);
   }
   geometry.setAttribute('color',new Float32BufferAttribute(colors,3));geometry.computeBoundingSphere();
-  geometry.userData.form=['branching-staghorn','layered-table','reticulated-sea-fan','ridged-brain','hollow-vase-sponge','foliose-rosette','forked-finger-coral','encrusting-polyp-mat'][form];return geometry;
+  geometry.userData.detail=detail;geometry.userData.form=['branching-staghorn','layered-table','reticulated-sea-fan','ridged-brain','hollow-vase-sponge','foliose-rosette','forked-finger-coral','encrusting-polyp-mat'][form];return geometry;
 }
 
 export function createReefHabitat() {
   const root=new Group();root.name='full-channel-reef-habitat';
-  const geometries:BufferGeometry[]=[],materials:(MeshStandardMaterial|MeshBasicMaterial)[]=[],batches:{mesh:InstancedMesh;count:number;structural:boolean;near:BufferGeometry;far?:BufferGeometry}[]=[];
+  const geometries:BufferGeometry[]=[],materials:(MeshStandardMaterial|MeshBasicMaterial)[]=[],batches:{mesh:InstancedMesh;count:number;structural:boolean;near:BufferGeometry;far?:BufferGeometry;lod?:ReturnType<typeof createClusteredMarineLOD>}[]=[];
   const time={value:0}, transform=new Object3D(),color=new Color(),plan=getReefHabitat();
   const meadow=createSeabedMeadows(plan);root.add(meadow.root);
   const floorMaterial=new MeshPhysicalMaterial({color:'#ffffff',vertexColors:true,roughness:.97,envMapIntensity:.2,specularIntensity:.16});
@@ -224,13 +227,13 @@ export function createReefHabitat() {
       transform.position.set(entry.x,entry.y,entry.z);transform.rotation.set(0,entry.rotation,0);transform.scale.fromArray(scale(entry));transform.updateMatrix();mesh.setMatrixAt(i,transform.matrix);
       if(tint)mesh.setColorAt(i,color.set(tint(entry)));
     });
-    mesh.instanceMatrix.needsUpdate=true;mesh.computeBoundingSphere();batches.push({mesh,count:entries.length,structural:name.startsWith('reef-weathered-'),near:geometry,far});root.add(mesh);return mesh;
+    mesh.instanceMatrix.needsUpdate=true;mesh.computeBoundingSphere();const lod=far?createClusteredMarineLOD(mesh,far):undefined;batches.push({mesh,count:entries.length,structural:name.startsWith('reef-weathered-'),near:geometry,far,lod});root.add(mesh);if(lod)root.add(lod.far);return mesh;
   }
   for(let form=0;form<8;form++) {
     const geometry=reefCoralGeometry(form);geometry.computeBoundingBox();
     const positions=geometry.getAttribute('position');let radius=0;
     for(let i=0;i<positions.count;i++)radius=Math.max(radius,Math.hypot(positions.getX(i),positions.getZ(i)));
-    instances(`reef-colony-${geometry.userData.form}`,geometry,coralMaterial,plan.colonies.filter(entry=>entry.form===form),entry=>[entry.radius/radius,entry.height,entry.radius/radius],entry=>palette[entry.color]);
+    instances(`reef-colony-${geometry.userData.form}`,geometry,coralMaterial,plan.colonies.filter(entry=>entry.form===form),entry=>[entry.radius/radius,entry.height,entry.radius/radius],entry=>palette[entry.color],reefCoralGeometry(form,'far'));
   }
   const rockMaterial=applySurface(new MeshStandardMaterial({vertexColors:true,roughness:.96}),'mineral');materials.push(rockMaterial);
   rockMaterial.onBeforeCompile=shader=>{
@@ -270,7 +273,7 @@ export function createReefHabitat() {
     };
     material.customProgramCacheKey=()=>`channel-seaweed-${form}`;
     const entries=plan.plants.filter(entry=>entry.form===form);
-    instances(`reef-seagrass-${form}`,createSeaweedGeometry(form),material,entries,entry=>[(entry as typeof entries[number]).width,entry.height,(entry as typeof entries[number]).width],undefined,createSeaweedGeometry(form,0,'far'));
+    instances(`reef-seagrass-${form}`,createSeaweedGeometry(form),material,entries,entry=>[(entry as typeof entries[number]).width,entry.height,(entry as typeof entries[number]).width],undefined,createSeaweedGeometry(form,0,'distant'));
   }
   const kelpMaterial=new MeshStandardMaterial({vertexColors:true,roughness:.83,side:DoubleSide});materials.push(kelpMaterial);
   kelpMaterial.onBeforeCompile=shader=>{
@@ -285,22 +288,26 @@ export function createReefHabitat() {
   kelpMaterial.customProgramCacheKey=()=> 'submerged-forest-kelp-v1';
   for(let form=0;form<4;form++)instances(`reef-kelp-forest-${form}`,createForestKelpGeometry(form),kelpMaterial,plan.kelp.filter(entry=>entry.form===form),entry=>[(entry as typeof plan.kelp[number]).width,entry.height,(entry as typeof plan.kelp[number]).width],entry=>['#bec69c','#a0b881','#c2b18a','#91ac88','#b8c099','#95a86c','#c8b48f'][entry.color],createForestKelpGeometry(form,'far'));
   let timer:ReturnType<typeof setTimeout>|undefined;
-  function dispose(){meadow.dispose();sandNormal.dispose();geometries.forEach(geometry=>geometry.dispose());materials.forEach(material=>material.dispose());batches.forEach(batch=>batch.mesh.dispose());contact.mesh.dispose();}
+  function dispose(){meadow.dispose();sandNormal.dispose();geometries.forEach(geometry=>geometry.dispose());materials.forEach(material=>material.dispose());batches.forEach(batch=>{batch.mesh.dispose();batch.lod?.dispose();});contact.mesh.dispose();}
   let currentQuality:EnvironmentProps['quality']='high',distant=false;
   function applyPlantDetail(){
     meadow.setQuality(currentQuality,distant);
-    batches.forEach(batch=>{if(batch.far)batch.mesh.geometry=currentQuality==='high'&&!distant?batch.near:batch.far;});
+
   }
   function setQuality(quality:EnvironmentProps['quality']){
     currentQuality=quality;applyPlantDetail();
-    const fraction=quality==='high'?1:quality==='medium'?.76:.52;batches.forEach(batch=>{batch.mesh.count=Math.ceil(batch.count*(batch.structural?1:fraction));});
+    const fraction=quality==='high'?1:quality==='medium'?.76:.52;batches.forEach(batch=>{const count=Math.ceil(batch.count*(batch.structural?1:fraction));if(batch.lod)batch.lod.setCount(count);else batch.mesh.count=count;});
     const visible=new Set<ReefObstacle>();
     for(const entries of [plan.rocks,plan.colonies])for(let form=0;form<8;form++){
       const group=entries.filter(entry=>entry.form===form);group.slice(0,Math.ceil(group.length*(entries===plan.rocks?1:fraction))).forEach(entry=>visible.add(entry));
     }
     contact.setVisibleSites(visible);
   }
-  return {root,setQuality,update(elapsed:number,paused=false,cameraHeight=0){
+  const previousCamera=new Vector3();
+  return {root,setQuality,update(elapsed:number,paused=false,camera:Vector3|number=0){
+    const cameraHeight=typeof camera==='number'?camera:camera.y;
+    const position=typeof camera==='number'?previousCamera.set(0,camera,0):camera;
+    for(const batch of batches)batch.lod?.update(position,currentQuality==='high'?38:currentQuality==='medium'?28:20);
     const nextDistant=distant?cameraHeight>18:cameraHeight>22;
     if(nextDistant!==distant){distant=nextDistant;applyPlantDetail();}
     if(!paused){time.value=elapsed;meadow.update(elapsed);}
@@ -311,6 +318,6 @@ export function ReefHabitat({runtime,paused,quality}:EnvironmentProps) {
   const habitat=useMemo(()=>createReefHabitat(),[]);
   useEffect(()=>habitat.retain(),[habitat]);
   useEffect(()=>{habitat.setQuality(quality);},[habitat,quality]);
-  useFrame(({camera})=>habitat.update(runtime.current.elapsed,paused,camera.position.y));
+  useFrame(({camera})=>habitat.update(runtime.current.elapsed,paused,camera.position));
   return <primitive object={habitat.root} dispose={null} />;
 }

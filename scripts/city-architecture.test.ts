@@ -211,6 +211,29 @@ test('balcony planting is integrated into reachable terraces and all room floors
 });
 
 
+test('opaque city sidewalls carry broad connected canopies while glass homes retain slender vines',()=>{
+  const glazed=['terraced-apartments','narrow-mixed-use','rounded-housing','greenhouse-residences','winter-glasshouse'];
+  let broadWalls=0;
+  for(const building of cityBuildings.filter(value=>value.family!=='public-station')){
+    const item=fixture(building);
+    try{
+      const leaves=item.meshes.filter(mesh=>['foliage','light'].includes(mesh.geometry.userData.facadeGarden?.role));
+      for(const seed of new Set(leaves.map(mesh=>mesh.geometry.userData.facadeGarden.seed))){
+        const canopy=leaves.filter(mesh=>mesh.geometry.userData.facadeGarden.seed===seed),data=canopy[0].geometry.userData.facadeGarden;
+        assert.equal(data.spread,!glazed.includes(building.family));
+        if(!data.spread){assert.ok(data.width<=.8);continue;}
+        const points=canopy.flatMap(mesh=>{const p=mesh.geometry.attributes.position;return Array.from({length:p.count},(_,i)=>[p.getZ(i),p.getY(i)]);});
+        const min=Math.min(...points.map(p=>p[0])),max=Math.max(...points.map(p=>p[0]));
+        assert.ok(data.width>data.wallDepth*.8&&max-min>data.width*.80,'canopy spreads over most of the solid wall rather than a thin column');
+        const occupied=new Set(points.map(([z,y])=>`${Math.min(4,Math.floor((z-min)/(max-min)*5))},${Math.min(3,Math.floor(y/data.height*4))}`));
+        assert.ok(occupied.size>=16,'branches distribute leaves across the wall at several heights');
+        broadWalls++;
+      }
+    }finally{item.dispose();}
+  }
+  assert.equal(broadWalls,14);
+});
+
 test('continuous climbing gardens are rooted at ground with varied foliage and clear entrances', () => {
   let triangles = 0;
   for (const building of cityBuildings.filter(value => value.family !== 'public-station')) {
