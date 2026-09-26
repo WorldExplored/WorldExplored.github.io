@@ -31,14 +31,18 @@ export function dockEcologyPoles(): DockPole[] {
 
 export function createDockWeedSites(poles = dockEcologyPoles()): DockWeedSite[] {
   const random = seededRandom(71826), sites: DockWeedSite[] = [];
-  // One of each form per pile ensures even the thin lighthouse posts look inhabited.
-  for (const pole of poles) for (let variant = 0; variant < 3; variant++) {
-    const y = Math.max(pole.bottom + .08, -.74 + variant * .13);
-    const height = Math.min(.27 + random() * .14, -.14 - y);
-    if (height < .09) continue;
-    const rotation = variant * 2.399 + random() * .32;
-    sites.push({ pole: pole.id, x: pole.x + Math.sin(rotation) * pole.radius,
-      y, z: pole.z + Math.cos(rotation) * pole.radius, height, rotation, variant, radius: pole.radius });
+  // Spiralling holdfasts occupy the full wet length rather than a tiny collar.
+  for (const pole of poles) {
+    const bottom = Math.max(pole.bottom + .10, -2.8), top = -.28;
+    const rows = Math.max(3, Math.ceil((top-bottom)/.18));
+    for (let row=0;row<rows;row++) for(let side=0;side<3;side++) {
+      const y = bottom+(top-bottom)*row/rows;
+      const height = Math.min(.36+random()*.48,-.15-y);
+      if(height<.10)continue;
+      const rotation = row*1.73+side*Math.PI*2/3+random()*.35;
+      sites.push({pole:pole.id,x:pole.x+Math.sin(rotation)*pole.radius,y,
+        z:pole.z+Math.cos(rotation)*pole.radius,height,rotation,variant:(row+side)%3,radius:pole.radius});
+    }
   }
   return sites;
 }
@@ -47,11 +51,11 @@ export function createDockWeedSites(poles = dockEcologyPoles()): DockWeedSite[] 
 export function createDockWeedGeometry(variant: number) {
   const positions: number[] = [], colors: number[] = [], indices: number[] = [];
   const color = new Color(['#577849', '#7b874a', '#748054'][variant]);
-  for (let frond = 0; frond < (variant === 1 ? 4 : 3); frond++) {
+  for (let frond = 0; frond < (variant === 1 ? 7 : 5); frond++) {
     const start = positions.length / 3, side = frond - 1.2;
-    for (let row = 0; row <= 7; row++) for (const rib of [-1, 0, 1]) {
-      const t = row / 7, spread = t * t * (.11 + frond * .035);
-      const breadth = Math.sin(Math.PI * t) * (variant === 1 ? .030 : .019) * (1 + .14 * Math.sin(t * 31 + frond));
+    for (let row = 0; row <= 3; row++) for (const rib of [-1, 0, 1]) {
+      const t = row / 3, spread = t * t * (.17 + frond * .045);
+      const breadth = Math.sin(Math.PI * t) * (variant === 1 ? .046 : .027) * (1 + .14 * Math.sin(t * 31 + frond));
       positions.push(side * .018 * t + rib * breadth, t + .035 * Math.sin(t * 5 + frond) * t,
         spread + (rib === 0 ? .009 * Math.sin(t * Math.PI) : 0));
       const shade = .72 + .22 * t + (rib === 0 ? .11 : 0);

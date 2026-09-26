@@ -39,6 +39,9 @@ import { ReflectiveObject } from './ReflectiveObject';
 import { NatureResponses } from './NatureResponses';
 import { Sky, WeatherLighting } from './WeatherLighting';
 import { advanceSceneTime, daylightAt } from './weatherState';
+import { RoomLighting, mainRoomLamps } from './RoomLighting';
+import { CoastalTraffic } from './CoastalTraffic';
+import { FrontGardens } from './FrontGardens';
 import { StormSystem } from './StormSystem';
 
 function SceneClock({ runtime, paused }: { runtime: MutableRefObject<SceneRuntime>; paused: boolean }) {
@@ -90,10 +93,14 @@ function Labels({ runtime, mobile }: { runtime: MutableRefObject<SceneRuntime>; 
 }
 
 function PointerGround({ runtime }: { runtime: MutableRefObject<SceneRuntime> }) {
-  const math = useMemo(() => ({ ray: new Raycaster(), pointer: new Vector2(), hit: new Vector3() }), []);
+  const math = useMemo(() => ({ ray: new Raycaster(), pointer: new Vector2(10000,10000), hit: new Vector3(), camera: new Vector3(10000,10000,10000), matrix: new Float64Array(32) }), []);
   useFrame(({ camera }) => {
     const state = runtime.current;
-    if (!state.pointerActive) { state.pointerWorld[0] = 10000; state.pointerWorld[2] = 10000; return; }
+    if (!state.pointerActive) { math.pointer.set(10000,10000); state.pointerWorld[0] = 10000; state.pointerWorld[2] = 10000; return; }
+    let changed=math.pointer.x!==state.pointer[0]||math.pointer.y!==state.pointer[1]||!math.camera.equals(camera.position);
+    for(let i=0;i<16;i++)if(math.matrix[i]!==camera.matrixWorld.elements[i]||math.matrix[i+16]!==camera.projectionMatrix.elements[i])changed=true;
+    if(!changed)return;
+    math.camera.copy(camera.position);math.matrix.set(camera.matrixWorld.elements);math.matrix.set(camera.projectionMatrix.elements,16);
     math.pointer.fromArray(state.pointer);
     math.ray.setFromCamera(math.pointer, camera);
     const hit = intersectTerrainRay(math.ray.ray, math.hit) ? math.hit : null;
@@ -123,11 +130,13 @@ export function AeroWorld(props: WorldProps & { runtime: MutableRefObject<SceneR
     {stage >= 1 && <StormSystem runtime={runtime} paused={stopped} quality={tier}/>}
     {reflections}
 
+    {stage >= 1 && <RoomLighting rooms={mainRoomLamps} runtime={runtime}/>}
     {stage >= 1 && <EcoCity runtime={runtime} paused={stopped} quality={tier} />}
     {stage >= 3 && <CoastalLife runtime={runtime} paused={stopped} quality={tier} />}
     {stage >= 3 && <ReefHabitat runtime={runtime} paused={stopped} quality={tier} />}
     {stage >= 3 && <ReefCaves runtime={runtime} paused={stopped} quality={tier} />}
     {stage >= 4 && <MarineVisitors runtime={runtime} paused={stopped} quality={tier} />}
+    {stage >= 3 && <CoastalTraffic runtime={runtime} paused={stopped} quality={tier}/>}
     {stage >= 3 && <DolphinLife runtime={runtime} paused={stopped} quality={tier} />}
     {stage >= 3 && <ReefLife runtime={runtime} paused={stopped} quality={tier} />}
     {stage >= 3 && <CityVentilation runtime={runtime} paused={stopped} quality={tier} />}
@@ -136,6 +145,7 @@ export function AeroWorld(props: WorldProps & { runtime: MutableRefObject<SceneR
     {stage >= 3 && <BenthicLife quality={tier} />}
     {stage >= 3 && <CityPathEdges />}
     {stage >= 4 && <HistoryFlowerBorder />}
+    {stage >= 4 && <FrontGardens/>}
     {stage >= 4 && <Flora runtime={runtime} paused={stopped} quality={tier} />}
     {stage >= 4 && <Wildlife runtime={runtime} paused={stopped} quality={tier} />}
     {stage >= 5 && <GardenRover runtime={runtime} paused={stopped} quality={tier} active={false} />}

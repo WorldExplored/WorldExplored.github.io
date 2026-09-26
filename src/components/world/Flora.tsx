@@ -11,6 +11,7 @@ import { BufferGeometry, Color, DoubleSide, Float32BufferAttribute, InstancedMes
 import { createLandscapePlan, distanceToSegment, islandAt, landDistance, seededRandom, terrainHeight, terrainSlope, vegetationSuitability, ISLANDS, islandContour } from './terrain';
 import { coastalBiome, TOWN_BEDS } from './coastalBiome';
 import { createLighthouseEscarpment, lighthouseEscarpmentSites } from './LighthouseEscarpment';
+import { IslandMeadows } from './IslandMeadows';
 import type { EnvironmentProps } from './Water';
 
 export type FloraKind = 'reeds' | 'beach' | 'shrub' | 'flower' | 'broadleaf' | 'sedge' | 'clover' | 'fern' | 'foxglove' | 'bluebell' | 'poppy' | 'allium';
@@ -82,12 +83,13 @@ export function createFloraSites() {
   return sites;
 }
 
-export function floraGeometry(kind:FloraKind) {
+export function floraGeometry(kind:FloraKind, detail:'near'|'far'='near') {
+  const segments=detail==='near'?3:2,petalRows=detail==='near'?3:2,bellRows=detail==='near'?4:2,bellSides=detail==='near'?8:5;
   const positions:number[]=[];const colors:number[]=[];const indices:number[]=[];const random=seededRandom(940+KINDS.indexOf(kind));const tint=new Color();
   function leaf(angle:number,length:number,width:number,height:number,lean:number,color:string,offsetX=0,offsetZ=0) {
     const start=positions.length/3;tint.set(color);
-    for(let segment=0;segment<=6;segment++) {
-      const t=segment/6;
+    for(let segment=0;segment<=segments;segment++) {
+      const t=segment/segments;
       const serration=kind==='fern'||kind==='shrub'?1+.06*Math.sin(segment*Math.PI*.8):1;
       const breadth=Math.pow(Math.sin(t*Math.PI),.8)*width*serration;
       for(let rib=0;rib<=2;rib++) {
@@ -100,16 +102,16 @@ export function floraGeometry(kind:FloraKind) {
         const light=(.72+t*.22)+(vein?.12:0);
         colors.push(tint.r*light,tint.g*light,tint.b*light);
       }
-      if(segment<6)for(let rib=0;rib<2;rib++){const n=start+segment*3+rib;indices.push(n,n+1,n+3,n+1,n+4,n+3);}
+      if(segment<segments)for(let rib=0;rib<2;rib++){const n=start+segment*3+rib;if(segment>0)indices.push(n,n+1,n+3);if(segment<segments-1)indices.push(n+1,n+4,n+3);}
     }
   }
 
   function petal(cx:number,cy:number,cz:number,angle:number,color:string) {
     const start=positions.length/3;tint.set(color);
-    for(let ring=0;ring<=7;ring++){
-      const t=ring/7;const w=Math.sin(t*Math.PI)*.023;const r=.016+t*.066;
+    for(let ring=0;ring<=petalRows;ring++){
+      const t=ring/petalRows;const w=Math.sin(t*Math.PI)*.023;const r=.016+t*.066;
       for(const side of [-1,1]) {positions.push(cx+Math.cos(angle)*r-Math.sin(angle)*w*side,cy+Math.sin(t*Math.PI)*.018,cz+Math.sin(angle)*r+Math.cos(angle)*w*side);colors.push(tint.r,tint.g,tint.b);}
-      if(ring<7){const n=start+ring*2;indices.push(n,n+1,n+2,n+1,n+3,n+2);}
+      if(ring<petalRows){const n=start+ring*2;indices.push(n,n+1,n+2,n+1,n+3,n+2);}
     }
   }
   if(kind==='reeds'||kind==='beach'||kind==='sedge')for(let i=0;i<9;i++)leaf(i*2.399,.16+random()*.25,kind==='reeds'?.035:kind==='sedge'?.055:.018,(kind==='reeds'?1.3:kind==='sedge'?.32:.65)+random()*.3,.1,kind==='reeds'?'#608e2b':'#8da94a',(random()-.5)*.25,(random()-.5)*.25);
@@ -123,7 +125,7 @@ export function floraGeometry(kind:FloraKind) {
       const t=level/9,length=.20*Math.sin(t*Math.PI);
       leaf(a+side*1.12,length,.028,.07,.035,level%2?'#4d853a':'#639c44',Math.sin(a)*t*.65,Math.cos(a)*t*.65);
       // Lift the paired pinnae along the arching rachis.
-      const vertices=21;for(let j=positions.length-vertices*3;j<positions.length;j+=3)positions[j+1]+=.42*t+Math.sin(t*Math.PI)*.20;
+      const vertices=(segments+1)*3;for(let j=positions.length-vertices*3;j<positions.length;j+=3)positions[j+1]+=.42*t+Math.sin(t*Math.PI)*.20;
     }
   }
   if(kind==='broadleaf')for(let i=0;i<8;i++)leaf(i*2.399,.65+random()*.35,.20,.45+random()*.45,.27,i%2?'#287843':'#58a432');
@@ -139,11 +141,11 @@ export function floraGeometry(kind:FloraKind) {
   }
   const bell=(cx:number,cy:number,cz:number,radius:number,length:number,color:string,down:boolean)=>{
     const start=positions.length/3;tint.set(color);
-    for(let ring=0;ring<=5;ring++)for(let side=0;side<=10;side++){
-      const t=ring/5,a=side/10*Math.PI*2,r=radius*(.32+.68*Math.sin(t*Math.PI*.48))*(1+.12*t*Math.cos(a*5));
+    for(let ring=0;ring<=bellRows;ring++)for(let side=0;side<=bellSides;side++){
+      const t=ring/bellRows,a=side/bellSides*Math.PI*2,r=radius*(.32+.68*Math.sin(t*Math.PI*.48))*(1+.12*t*Math.cos(a*5));
       positions.push(cx+Math.cos(a)*r,cy+(down?-1:1)*length*t+Math.cos(a*5)*.009*t*t,cz+Math.sin(a)*r);
       const shade=.7+t*.3;colors.push(tint.r*shade,tint.g*shade,tint.b*shade);
-      if(ring&&side){const n=start+ring*11+side;indices.push(n,n-11,n-1,n-1,n-11,n-12);}
+      if(ring&&side){const stride=bellSides+1,n=start+ring*stride+side;indices.push(n,n-stride,n-1,n-1,n-stride,n-stride-1);}
     }
   };
   if(kind==='foxglove'){
@@ -192,17 +194,18 @@ export function Flora({runtime,paused,quality}:EnvironmentProps) {
         shader.vertexShader=`uniform float floraTime;uniform vec3 floraPointer;uniform float floraStrength;\n${shader.vertexShader}`.replace('#include <begin_vertex>',`#include <begin_vertex>\nvec2 origin=instanceMatrix[3].xz;float phase=origin.x*.7+origin.y*.4;float wind=sin(floraTime*${[.8,1.3,.48,1.1,.36,1.1,.5,.6,.67,.8,1.05,.55][index]}+phase)*.08+sin(floraTime*.43-phase)*.025;transformed.x+=wind*position.y*position.y;vec2 away=origin-floraPointer.xz;float wake=(1.-smoothstep(.2,2.4,length(away)))*floraStrength;transformed.xz+=away/max(.1,length(away))*wake*position.y*.25;`);
       };
       material.customProgramCacheKey=()=>`coastal-flora-${kind}`;
-      const mesh=new InstancedMesh(geometry,material,entries.length);mesh.name=`flora-${kind}`;mesh.frustumCulled=false;
+      const mesh=new InstancedMesh(geometry,material,entries.length);mesh.name=`flora-${kind}`;mesh.frustumCulled=true;
       entries.forEach((site,i)=>{transform.position.set(site.x,site.y,site.z);transform.rotation.set(0,site.rotation,0);transform.scale.setScalar(site.scale);transform.updateMatrix();mesh.setMatrixAt(i,transform.matrix);});
-      return {mesh,geometry,material,maximum:entries.length};
+      mesh.computeBoundingSphere(); if(mesh.boundingSphere)mesh.boundingSphere.radius+=.4;
+      return {mesh,geometry,farGeometry:floraGeometry(kind,'far'),material,maximum:entries.length};
     });
     return {batches,uniforms,escarpment,timer:undefined as ReturnType<typeof setTimeout>|undefined};
   },[]);
-  useEffect(()=>{clearTimeout(flora.timer);return()=>{flora.timer=setTimeout(()=>{flora.escarpment.dispose();flora.batches.forEach(b=>{b.geometry.dispose();b.material.dispose();b.mesh.dispose();});},0);};},[flora]);
+  useEffect(()=>{clearTimeout(flora.timer);return()=>{flora.timer=setTimeout(()=>{flora.escarpment.dispose();flora.batches.forEach(b=>{b.geometry.dispose();b.farGeometry.dispose();b.material.dispose();b.mesh.dispose();});},0);};},[flora]);
   useFrame(({camera})=>{
     const detail=camera.position.y>95?.5:camera.position.y>65?.75:1;
-    flora.batches.forEach(batch=>{batch.mesh.count=Math.ceil(batch.maximum*(quality==='high'?1:quality==='medium'?.7:.4)*detail);});
+    flora.batches.forEach(batch=>{batch.mesh.count=Math.ceil(batch.maximum*(quality==='high'?1:quality==='medium'?.7:.4)*detail);batch.mesh.geometry=quality==='high'&&detail===1?batch.geometry:batch.farGeometry;});
     if(paused)return;flora.uniforms.time.value=runtime.current.elapsed;flora.uniforms.pointer.value.fromArray(runtime.current.pointerWorld);flora.uniforms.strength.value=runtime.current.pointerActive?1:0;
   });
-  return <><group name="coastal-flora" dispose={null}>{flora.batches.map(batch=><primitive key={batch.mesh.uuid} object={batch.mesh}/>)}</group><primitive object={flora.escarpment.root} dispose={null}/></>;
+  return <><group name="coastal-flora" dispose={null}>{flora.batches.map(batch=><primitive key={batch.mesh.uuid} object={batch.mesh}/>)}</group><primitive object={flora.escarpment.root} dispose={null}/><IslandMeadows runtime={runtime} paused={paused} quality={quality}/></>;
 }

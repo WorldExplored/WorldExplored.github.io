@@ -5,7 +5,9 @@ import { windDisplacement } from './weatherState';
 
 export type CloudArchetype = 'layered' | 'cauliflower' | 'cotton' | 'bank' | 'atmospheric';
 export interface CloudPuff { offset: Vec3; scale: Vec3 }
-export interface CloudCluster { archetype: CloudArchetype; center: Vec3; azimuth: number; density: number; speed: number; layer: number; puffs: CloudPuff[]; response: number; targeted: boolean; interaction: Vec3 }
+export const MAX_CLOUDS = 36;
+export const CLOUD_WET_THRESHOLD = .30;
+export interface CloudCluster { moisture: number; capacity: number; recharge: number; archetype: CloudArchetype; center: Vec3; azimuth: number; density: number; speed: number; layer: number; puffs: CloudPuff[]; response: number; targeted: boolean; interaction: Vec3 }
 export interface PuffTransform { position: Vector3; scale: Vector3 }
 export interface CloudInstanceRange { start: number; count: number }
 
@@ -39,9 +41,9 @@ const PROMINENT_CENTERS: Vec3[] = [
   [6, 24, -81], [-112, 28, -48], [22, 25, 84], [-95, 29, -112], [112, 35, -125],
 ];
 
-export function createCloudClusters(count = world.quality.high.clouds): CloudCluster[] {
+export function createCloudClusters(count = MAX_CLOUDS): CloudCluster[] {
   const random = seededRandom(119);
-  return Array.from({ length: Math.max(0, Math.floor(count)) }, (_, index) => {
+  return Array.from({ length: Math.min(MAX_CLOUDS, Math.max(0, Math.floor(count))) }, (_, index) => {
     const archetype = ARCHETYPES[index % ARCHETYPES.length];
     const azimuth = (index % 2 ? -1 : 1) * (.15 + random() * .85);
     const density = 1.04 + random() * .12;
@@ -52,11 +54,19 @@ export function createCloudClusters(count = world.quality.high.clouds): CloudClu
     const distance = 85 + random() * 55;
     const center: Vec3 = index < PROMINENT_CENTERS.length ? [...PROMINENT_CENTERS[index]] : [Math.cos(angle) * distance - 15, 27 + random() * 9, Math.sin(angle) * distance - 35];
     if (archetype === 'atmospheric') center[1] += 3;
-    if (distantScale > 1) { center[1] += 24; center[2] -= 110; }
+    if (distantScale > 1) { center[1] += 24; center[2] -= 90; }
+    // Dense low cumulus gives way to a few broad, thin high-altitude banks.
+    if (index >= 24) {
+      center[0] = -165 + (index - 24) % 6 * 62;
+      center[2] = index < 30 ? -70 + Math.sin(index * 1.73) * 48 : -200 + Math.cos(index) * 65;
+      center[1] = index < 30 ? 21 + index % 4 * 3 : 78 + index % 3 * 9;
+    }
+    const capacity = archetype === 'atmospheric' || index >= 30 ? .21 : archetype === 'cotton' ? .27 : .93;
+    const moisture = Math.min(capacity, [.78, .24, .10, .91, .13][index % 5] + Math.sin(index * 2.17) * .045);
     const cosine = Math.cos(azimuth);
     const sine = Math.sin(azimuth);
     const layer = archetype === 'atmospheric' ? 2 : index % 3;
-    return { archetype, center, azimuth, density, layer, speed: world.environment.cloudSpeed * [2.1, 1.55, 1.1][layer], response: 0, targeted: false, interaction: [0, 0, 0],
+    return { moisture, capacity, recharge: .0012 + (index % 4) * .00035, archetype, center, azimuth, density, layer, speed: world.environment.cloudSpeed * [2.1, 1.55, 1.1][layer], response: 0, targeted: false, interaction: [0, 0, 0],
       puffs: PUFF_GRAPHS[archetype].map(([x, y, z, sx, sy, sz]) => {
         const spreadX = (x + (random()-.5)*.3) * stretch[0] / density;
         const spreadZ = (z + (random()-.5)*.3) * stretch[2] / density;
@@ -99,7 +109,7 @@ export function advanceCloudPress(clusters: CloudCluster[], selected: number, de
   const blend = reduced ? 1 : 1 - Math.exp(-7 * Math.min(.05, Math.max(0, delta)));
   for (let index = 0; index < clusters.length; index++) {
     const cluster = clusters[index];
-    cluster.targeted = index === selected;
+    cluster.targeted = index === selected && canSqueezeCloud(cluster);
     cluster.response += ((cluster.targeted ? 1 : 0) - cluster.response) * blend;
   }
 }
@@ -196,4 +206,41 @@ export function updateCloudResponses(clusters: CloudCluster[], ray: Ray | null, 
     cluster.response += ((target ? 1 : 0) - cluster.response) * blend;
   }
   return entries;
+}
+
+/** Whitened, depleted clouds no longer own a squeeze gesture. */
+export function canSqueezeCloud(cloud: CloudCluster) { return cloud.moisture > CLOUD_WET_THRESHOLD; }
+export function cloudRainYield(cloud: CloudCluster) {
+  return Math.max(0, (cloud.moisture - CLOUD_WET_THRESHOLD) / (1 - CLOUD_WET_THRESHOLD)) * cloud.response;
+}
+export function advanceCloudMoisture(clouds: readonly CloudCluster[], held: number, seconds: number) {
+  const dt = Math.max(0, Math.min(.15, seconds));
+  for (let index = 0; index < clouds.length; index++) {
+    const cloud = clouds[index];
+    cloud.moisture = index === held
+      ? Math.max(0, cloud.moisture - cloud.response * .082 * dt)
+      : Math.min(cloud.capacity, cloud.moisture + cloud.recharge * dt);
+  }
+}
+
+/** Sample the actual density underside, not an unrelated circular rain column. */
+export function createCloudRainSource(cloud: CloudCluster) {
+  const origin = new Vector3(), bounds = cloudBounds(cloud);
+  const weights = new Float64Array(cloud.puffs.length);
+  let area = 0;
+  cloud.puffs.forEach((puff, i) => { area += puff.scale[0] * puff.scale[2]; weights[i] = area; });
+  const hash = (n: number) => { const value = Math.sin(n * 127.1 + 311.7) * 43758.5453; return value - Math.floor(value); };
+  return { origin, sample(output: Float64Array, serial: number) {
+    const choice = hash(serial + 31) * area;
+    let index = 0;
+    while (index < weights.length - 1 && choice > weights[index]) index++;
+    const puff = cloud.puffs[index], angle = hash(serial + 91) * Math.PI * 2, radius = Math.sqrt(hash(serial + 131)) * .74;
+    const x = puff.offset[0] + Math.cos(angle) * radius * puff.scale[0], z = puff.offset[2] + Math.sin(angle) * radius * puff.scale[2];
+    let bottom = bounds.min.y, top = puff.offset[1];
+    for (let iteration = 0; iteration < 11; iteration++) {
+      const y = (bottom + top) * .5;
+      if (cloudDensity(cloud, x, y, z) > 0) top = y; else bottom = y;
+    }
+    output[0] = x + origin.x; output[1] = bottom + origin.y - .04; output[2] = z + origin.z;
+  } };
 }

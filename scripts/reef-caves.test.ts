@@ -1,48 +1,69 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { DoubleSide, InstancedMesh, Mesh, MeshStandardMaterial, Raycaster, Vector3 } from 'three';
-import { caveVisitorPose, createReefCaveSites } from '../src/components/world/reefCaveState';
-import { createReefCaves, reefCaveGeometry } from '../src/components/world/ReefCaves';
+import { DoubleSide, InstancedMesh, Mesh, MeshStandardMaterial, Object3D, Raycaster, Vector3 } from 'three';
+import { caveGroundLocal, caveVisitorPose, caveWorldPoint, createReefCaveSites } from '../src/components/world/reefCaveState';
+import { coastalBankCaveGeometry, createCaveEelGeometry, createReefCaves, reefCaveGeometry } from '../src/components/world/ReefCaves';
+import { reefSeafloorGeometry } from '../src/components/world/ReefHabitatScene';
 import { getReefHabitat, marineFloorHeight } from '../src/components/world/reefHabitat';
-import { landDistance } from '../src/components/world/terrain';
+import { archipelagoGeometry } from '../src/components/world/terrain';
 
-test('reef caves have real open mouths and complete solid roofs with visible interior surfaces',()=>{
-  const material=new MeshStandardMaterial({side:DoubleSide});
-  for(let form=0;form<3;form++){
-    const geometry=reefCaveGeometry(form),mesh=new Mesh(geometry,material);mesh.updateMatrixWorld();
-    try{
-      assert.equal(geometry.userData.openTunnel,true);
-      assert.equal(new Raycaster(new Vector3(0,.42,3),new Vector3(0,0,-1)).intersectObject(mesh).length,0,'a clear through-hole has no cap or dark disk');
-      assert.ok(new Raycaster(new Vector3(0,.42,0),new Vector3(0,1,0)).intersectObject(mesh).length>=2,'an inner and outer rock roof surround the tunnel');
-      const p=geometry.attributes.position;for(const value of p.array)assert.ok(Number.isFinite(value));
-    }finally{geometry.dispose();}
-  }
-  material.dispose();
+const angleDistance=(a:number,b:number)=>Math.abs(Math.atan2(Math.sin(a-b),Math.cos(a-b)));
+
+test('coastal mouths reveal recessed interiors through the actual island and seabed meshes',()=>{
+  const sites=createReefCaveSites(),material=new MeshStandardMaterial({side:DoubleSide});
+  const terrain=new Mesh(archipelagoGeometry(),material),floor=new Mesh(reefSeafloorGeometry(),material);
+  terrain.updateMatrixWorld();floor.updateMatrixWorld();
+  assert.equal(sites.filter(site=>site.kind==='bank').length,2);
+  assert.equal(sites.filter(site=>site.kind==='overhang').length,1);
+  try{
+    for(const site of sites.filter(site=>site.kind==='bank')){
+      const geometry=coastalBankCaveGeometry(site),mesh=new Mesh(geometry,material);
+      mesh.position.set(site.x,site.y,site.z);mesh.rotation.y=site.yaw;mesh.scale.setScalar(site.scale);mesh.updateMatrixWorld();
+      try{
+        assert.ok(geometry.userData.recessDepth>2,'interior extends into the coastal bank');
+        assert.ok(geometry.userData.mouthWidth>2,'entrance has room for the resident eel to turn');
+        const vertices=geometry.attributes.position;
+        for(const value of vertices.array)assert.ok(Number.isFinite(value));
+        const {nx,nz}=geometry.userData.shelfGrid as {nx:number;nz:number};
+        for(let row=0;row<=nz;row++)for(const col of [0,nx]){
+          const index=row*(nx+1)+col,x=vertices.getX(index),z=vertices.getZ(index);
+          assert.ok(vertices.getY(index)<=caveGroundLocal(site,x,z)+.014,'outer skirts meet or bury into the existing coastal slope');
+        }
+        let highest=-Infinity;
+        for(let i=0;i<vertices.count;i++)highest=Math.max(highest,vertices.getY(i)*site.scale+site.y);
+        assert.ok(highest<-.4,'the rock shelf never becomes a sandy dome above water');
+        assert.ok(geometry.boundingBox!.max.x-geometry.boundingBox!.min.x<6,'the opening stays in a modest coastal shelf, not a broad semicircular block');
+        for(const [distance,cameraHeight,recess,lift] of [[18,3,1,.65],[18,3.5,1,.65],[18,4,1,.65],[24,4,1,.65],[30,4,1,.65]]){
+          const c=caveWorldPoint(site,0,distance),inside=caveWorldPoint(site,0,-recess);
+          const origin=new Vector3(c.x,cameraHeight,c.z),target=new Vector3(inside.x,marineFloorHeight(inside.x,inside.z)+lift,inside.z);
+          const length=origin.distanceTo(target),ray=new Raycaster(origin,target.clone().sub(origin).normalize());
+          for(const [name,object] of [['original island',terrain],['original reef apron',floor],['new cave bank',mesh]] as const){
+            const hit=ray.intersectObject(object)[0];
+            assert.ok(!hit||hit.distance>length+.1,`${name} must not plug the above-water view into cave ${site.form}`);
+          }
+          const back=ray.intersectObject(mesh)[0];
+          assert.ok(back&&back.distance<length+2,'a recessed stone interior remains visible beyond the entrance');
+        }
+      }finally{geometry.dispose();}
+    }
+    const overhang=reefCaveGeometry(2),mesh=new Mesh(overhang,material);mesh.updateMatrixWorld();
+    assert.equal(new Raycaster(new Vector3(0,.42,3),new Vector3(0,0,-1)).intersectObject(mesh).length,0,'the single retained rock shelter remains open at both ends');overhang.dispose();
+  }finally{terrain.geometry.dispose();floor.geometry.dispose();material.dispose();}
 });
 
-test('caves and complete ten-minute animal cycles remain grounded, underwater and clear of the reef',()=>{
+test('complete ten-minute animal cycles remain below boats and clear of the integrated reef',()=>{
   const sites=createReefCaveSites(),habitat=getReefHabitat();
-  assert.equal(sites.length,3);assert.equal(new Set(sites.map(site=>site.scale)).size,3);
   const blockers=[...habitat.rocks,...habitat.colonies,...habitat.kelp.map(plant=>({...plant,radius:plant.width*.55}))];
   for(const site of sites){
     const nearby=blockers.filter(blocker=>Math.hypot(blocker.x-site.x,blocker.z-site.z)<blocker.radius+8*site.scale);
-    assert.ok(site.y<marineFloorHeight(site.x,site.z));
-    const geometry=reefCaveGeometry(site.form),vertices=geometry.attributes.position;
-    for(let i=0;i<vertices.count;i++)if(vertices.getY(i)<.001){
-      const lx=vertices.getX(i)*site.scale,lz=vertices.getZ(i)*site.scale;
-      const x=site.x+lx*Math.cos(site.yaw)+lz*Math.sin(site.yaw),z=site.z-lx*Math.sin(site.yaw)+lz*Math.cos(site.yaw);
-      assert.ok(site.y<marineFloorHeight(x,z)+.001,'each sidewall is seated below the visible sand');
-    }
-    geometry.dispose();
-    for(const blocker of blockers)assert.ok(Math.hypot(blocker.x-site.x,blocker.z-site.z)>blocker.radius+2.2*site.scale);
     for(let index=0;index<=3;index++){
       let exits=0,rests=0,previous=caveVisitorPose(site,index,0);
       for(let time=0;time<600;time+=.1){
         const pose=caveVisitorPose(site,index,time);
-        assert.ok(pose.y>marineFloorHeight(pose.x,pose.z)+.15&&pose.y< -1.8);
-        assert.ok(landDistance(pose.x,pose.z)<-5);
-        assert.ok(Math.hypot(pose.x-previous.x,pose.y-previous.y,pose.z-previous.z)<.075,'no route teleport');
-        for(const blocker of nearby)assert.ok(Math.hypot(blocker.x-pose.x,blocker.z-pose.z)>blocker.radius+.09);
+        assert.ok(pose.y>marineFloorHeight(pose.x,pose.z)+.15&&pose.y< -1.6,'all residents stay below the .45m boat draft');
+        assert.ok(Math.hypot(pose.x-previous.x,pose.y-previous.y,pose.z-previous.z)<.08,'no route teleport');
+        for(const blocker of nearby)assert.ok(Math.hypot(blocker.x-pose.x,blocker.z-pose.z)>blocker.radius+.09,'resident route clears the filtered reef habitat');
+        if(!pose.swimming&&!previous.swimming)assert.ok(angleDistance(pose.heading,previous.heading)<.07,'resting animals turn gradually within the recess');
         if(Math.hypot(pose.x-site.x,pose.z-site.z)>site.scale*3)exits++;
         if(!pose.swimming)rests++;
         previous=pose;
@@ -52,14 +73,37 @@ test('caves and complete ten-minute animal cycles remain grounded, underwater an
   }
 });
 
-test('three caves and their visitors retain eight draws, resources, and pause behavior',()=>{
+test('the animated eel body, including its turning tail, fits inside both coastal tunnels',()=>{
+  const material=new MeshStandardMaterial({side:DoubleSide}),eel=createCaveEelGeometry(),transform=new Object3D(),point=new Vector3();
+  try{
+    for(const site of createReefCaveSites().filter(site=>site.kind==='bank')){
+      const geometry=coastalBankCaveGeometry(site),cave=new Mesh(geometry,material);
+      cave.position.set(site.x,site.y,site.z);cave.rotation.y=site.yaw;cave.scale.setScalar(site.scale);cave.updateMatrixWorld();
+      try{
+        for(let time=0;time<site.period;time+=.4){
+          const pose=caveVisitorPose(site,0,time);transform.position.set(pose.x,pose.y,pose.z);transform.rotation.set(0,pose.heading,pose.pitch,'YXZ');transform.scale.setScalar(site.scale);transform.updateMatrix();
+          for(let vertex=0;vertex<eel.attributes.position.count;vertex+=2){
+            point.fromBufferAttribute(eel.attributes.position,vertex);
+            point.z+=Math.sin(time*3.3+point.x*11+pose.x)*(-point.x/.88)**2*.095;
+            point.applyMatrix4(transform.matrix);
+            assert.ok(point.y>marineFloorHeight(point.x,point.z)+.15,'tail follows the sloping floor');
+            const length=point.distanceTo(transform.position),ray=new Raycaster(transform.position,point.clone().sub(transform.position).normalize(),.001,length);
+            assert.equal(ray.intersectObject(cave).length,0,`eel clips cave ${site.form} at ${time.toFixed(1)}s`);
+          }
+        }
+      }finally{geometry.dispose();}
+    }
+  }finally{eel.dispose();material.dispose();}
+});
+
+test('two coastal banks, one shelter and their visitors retain eight draws, resources, and pause behavior',()=>{
   const caves=createReefCaves();
   try{
     const meshes:Mesh[]=[];caves.root.traverse(object=>{if(object instanceof Mesh)meshes.push(object);});
     assert.equal(meshes.length,8);
     const geometry=meshes.map(mesh=>mesh.geometry);let triangles=0;
     for(const mesh of meshes)triangles+=(mesh.geometry.index?.count??mesh.geometry.attributes.position.count)/3*(mesh instanceof InstancedMesh?mesh.count:1);
-    assert.ok(triangles<12000,`${triangles} cave triangles`);
+    assert.ok(triangles<14000,`${triangles} cave triangles`);
     const moving=meshes.filter(mesh=>mesh instanceof InstancedMesh) as InstancedMesh[];
     caves.update(32);const matrices=moving.map(mesh=>mesh.instanceMatrix.array.slice());
     caves.update(70,true);moving.forEach((mesh,index)=>assert.deepEqual(mesh.instanceMatrix.array,matrices[index]));

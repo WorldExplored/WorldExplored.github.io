@@ -2,6 +2,14 @@ import type { CameraPose } from '../../content/world';
 
 /** Deterministic inspection poses used by the local visual-QA capture server. */
 export const QA_VIEWS = Object.freeze({
+  'cave-lighthouse-bank': {position: [-44.47349,3,-39.02187], target: [-63.37857,-2.20612,-37.12504]},
+  'cave-city-bank': {position: [-53.01221,3,-55.30899], target: [-38.50287,-2.48906,-65.05730]},
+  'lighthouse-tall': { position: [-49,16,-13], target: [-76,7,-36] },
+  'sunset-horizon': { position: [35,10,43], target: [-45,7,-95] },
+  'rain-ground': { position: [-16,25,33], target: [-7,10,3] },
+  'rain-ground-close': { position: [-8,4,10], target: [-6,.9,3] },
+  'rain-water': { position: [-49,25,13], target: [-43,10,-21] },
+  'visitor-berth': { position: [-30,6,-42], target: [-24,.6,-56] },
   'main-path-grades': { position: [-1, 14, 15], target: [-9, 1, 0] },
   'main-path-close': { position: [-1, 2.9, 7], target: [-4, 1.1, 4] },
   'experience-door': { position: [-24.4, 2.6, 6.5], target: [-26.6, 1.75, 1.1] },
@@ -14,7 +22,7 @@ export const QA_VIEWS = Object.freeze({
   'city-setback-roofs': { position: [-12, 17, -72], target: [-12, 5, -85] },
   tree: { position: [5.5, 4.3, 24.8], target: [-.14, 2.7, 21.85] },
   street: { position: [-5.4, 5.5, -66.1], target: [-14.2, 1.7, -77.4] },
-  gull: { position: [-68.4, 10.6, -28.8], target: [-74.9, 7.8, -36] },
+  gull: { position: [-68.4, 17.6, -28.8], target: [-74.9, 14.8, -36] },
   crab: { position: [-19.6, 3.7, 12.1], target: [-26.1, .35, 6.8] },
   fish: { position: [1.2, 3.7, -17.8], target: [-4.5, -.45, -25.5] },
   landmark: { position: [-.4, 7.8, 12.4], target: [-8, 4.8, 0] },

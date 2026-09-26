@@ -93,7 +93,7 @@ test('all visible building vertices obey the exported collision footprints and h
     });
     // Lift cabins and hover boundaries remain bounded; four ferry photovoltaic fittings add four draws.
     // Invisible picking proxies and hidden focus outlines submit no GPU draws.
-    assert.ok(drawCalls <= 224, `Town architecture, water and six working controls use ${drawCalls} rendered draws (budget 224).`);
+    assert.ok(drawCalls <= 227, `Town architecture, water and six working controls use ${drawCalls} rendered draws (budget 227, including three shared room-light batches).`);
   } finally { await item.renderer.unmount(); }
 });
 

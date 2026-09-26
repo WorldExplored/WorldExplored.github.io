@@ -386,3 +386,5 @@ export const featured: FeaturedContribution[] = [
 // END GITHUB SNAPSHOT
 
 export const publicContributions = featured.filter(item => item.status === 'Open' || item.status === 'Merged');
+
+export const lighthouseSettings = { title: 'Lighthouse', label: 'Beacon', automatic: 'Automatic · dusk to dawn', on: 'On', off: 'Off' } as const;

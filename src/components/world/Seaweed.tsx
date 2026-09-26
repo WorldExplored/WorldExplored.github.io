@@ -8,6 +8,7 @@ import { useFrame } from '@react-three/fiber';
 import { BufferGeometry, Color, DoubleSide, Float32BufferAttribute, InstancedMesh, MeshStandardMaterial, Object3D } from 'three';
 import { createLandscapePlan, distanceToSegment, landDistance, seededRandom, terrainMeshHeight, ISLANDS, islandContour, type LandscapePlan } from './terrain';
 import { coastExposure } from './waves';
+import { coastalCaveClearance } from './coastalCaveLayout';
 import type { EnvironmentProps } from './Water';
 
 export interface SeaweedSite {
@@ -41,6 +42,7 @@ export const SEAWEED_REACH = 0.62;
 export const SEAWEED_FORMS = ['strap-leaved eelgrass', 'ruffled broad kelp', 'paired branching algae', 'twisting ribbon kelp', 'pleated sea fan', 'low seagrass turf', 'forked bladderwrack', 'serrated red algae'] as const;
 
 export function seaweedSiteClear(x: number, z: number, plan: LandscapePlan, sheltered = true) {
+  if (coastalCaveClearance(x,z,SEAWEED_REACH) <= 0) return false;
   const distance = landDistance(x, z);
   const seabed = terrainMeshHeight(x, z);
   if (distance > -1.6 || distance < -4.7 || seabed > -0.66 || seabed < -2.7 || coastExposure(x, z, distance) > (sheltered ? .3 : .7)) return false;
@@ -114,13 +116,13 @@ export function createSeaweedLayout(plan = createLandscapePlan()): SeaweedSite[]
   return mixed;
 }
 
-export function createSeaweedGeometry(variant: number, seed = 0) {
+export function createSeaweedGeometry(variant: number, seed = 0, detail: 'near' | 'far' = 'near') {
   const positions: number[] = [], colors: number[] = [], indices: number[] = [];
   const random = seededRandom(694 + variant + seed * 71);
   const tint = new Color(['#547e52', '#8b8c46', '#618552', '#a79550', '#74966b', '#537d47', '#858847', '#a57367'][variant % 8]);
   function blade(angle:number,length:number,breadth:number,lean:number,base=0,side=0) {
     const start=positions.length/3;
-    const segments = variant === 2 || variant === 6 || variant === 7 ? 4 : 8;
+    const segments = detail === 'far' ? 2 : variant === 2 || variant === 6 || variant === 7 ? 3 : 4;
     for(let row=0;row<=segments;row++)for(let rib=0;rib<=2;rib++){
       const t=row/segments,v=rib-1;
       const edge=variant===1||variant===7?1+Math.sin(t*(variant===7?65:39)+angle)*.22:1;
@@ -131,15 +133,15 @@ export function createSeaweedGeometry(variant: number, seed = 0) {
       positions.push(Math.sin(angle)*along+Math.cos(angle)*across,base+t*length+fold,Math.cos(angle)*along-Math.sin(angle)*across);
       const vein=rib===1?1.12:1;const light=(.62+(base+t*length)*.35)*vein;
       colors.push(tint.r*light,tint.g*light,tint.b*light);
-      if(row&&rib){const n=start+row*3+rib;indices.push(n,n-3,n-1,n-1,n-3,n-4);}
+      if(row&&rib){const n=start+row*3+rib;if(row<segments)indices.push(n,n-3,n-1);if(row>1)indices.push(n-1,n-3,n-4);}
     }
   }
   if(variant===0){
     // Eelgrass has parallel strap leaves, narrow midribs and gently drooping tips.
-    for(let leaf=0;leaf<7;leaf++)blade(leaf*2.399,.64+random()*.34,.016+random()*.012,.14+random()*.07);
+    for(let leaf=0;leaf<12;leaf++)blade(leaf*2.399,.64+random()*.34,.016+random()*.012,.14+random()*.07);
   }else if(variant===1){
     // Broad kelp rises from one holdfast; ruffled edges and raised stipes are part of the mesh.
-    for(let leaf=0;leaf<4;leaf++)blade(leaf*2.399,.69+random()*.27,.065+random()*.025,.12+random()*.05);
+    for(let leaf=0;leaf<7;leaf++)blade(leaf*2.399,.69+random()*.27,.065+random()*.025,.12+random()*.05);
   }else if(variant===2){
     // A branched algal frond has paired lateral blades attached along each central stipe.
     for(let stem=0;stem<3;stem++){
@@ -150,12 +152,12 @@ export function createSeaweedGeometry(variant: number, seed = 0) {
     }
   }
   if(variant===3){
-    for(let leaf=0;leaf<6;leaf++) blade(leaf*2.399,.65+random()*.32,.027+random()*.022,.22+random()*.08);
+    for(let leaf=0;leaf<10;leaf++) blade(leaf*2.399,.65+random()*.32,.027+random()*.022,.22+random()*.08);
   }else if(variant===4){
     // A fan shares a holdfast and spreads into pleated lobes rather than repeating upright straps.
     for(let leaf=0;leaf<9;leaf++) blade(.4+(leaf%2)*Math.PI,.38+Math.sin(leaf/8*Math.PI)*.39,.035+random()*.028,.02,0,(leaf-4)*.075);
   }else if(variant===5){
-    for(let leaf=0;leaf<13;leaf++) blade(leaf*2.399,.32+random()*.42,.008+random()*.01,.09+random()*.18);
+    for(let leaf=0;leaf<21;leaf++) blade(leaf*2.399,.32+random()*.42,.008+random()*.01,.09+random()*.18);
   }else if(variant===6){
     for(let stem=0;stem<3;stem++){
       const angle=stem*2.399;blade(angle,.88,.013,.04);
@@ -173,6 +175,7 @@ export function createSeaweedGeometry(variant: number, seed = 0) {
   geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
   geometry.setAttribute('color', new Float32BufferAttribute(colors, 3));
   geometry.setIndex(indices);geometry.computeVertexNormals();geometry.computeBoundingBox();geometry.computeBoundingSphere();
+  geometry.userData.detail=detail;
   geometry.userData.form=SEAWEED_FORMS[variant % SEAWEED_FORMS.length];
   return geometry;
 }
@@ -199,7 +202,7 @@ export function Seaweed({ runtime, paused, quality }: EnvironmentProps) {
       const mesh = new InstancedMesh(geometry, material, entries.length);
       mesh.name = `submerged-seaweed-${variant}`;
       mesh.raycast = () => {};
-      mesh.frustumCulled = false;
+      mesh.frustumCulled = true;
       entries.forEach((site, index) => {
         transform.position.set(site.x, site.y, site.z);
         transform.rotation.set(0, site.rotation, 0);
@@ -208,51 +211,54 @@ export function Seaweed({ runtime, paused, quality }: EnvironmentProps) {
         mesh.setMatrixAt(index, transform.matrix);
         mesh.setColorAt(index, new Color().setHSL(.10 + site.tint * .1, .13 + site.tint * .12, .72 + site.tint * .22));
       });
+      mesh.computeBoundingSphere(); if(mesh.boundingSphere)mesh.boundingSphere.radius += .3;
       mesh.instanceMatrix.needsUpdate = true;
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-      return { mesh, geometry, material, count: entries.length };
+      const farGeometry = createSeaweedGeometry(variant, 0, 'far');
+      return { mesh, geometry, farGeometry, material, count: entries.length };
     });
     return { batches, time, timer: undefined as ReturnType<typeof setTimeout> | undefined };
   }, []);
   useEffect(() => {
     clearTimeout(seaweed.timer);
     return () => {
-      seaweed.timer = setTimeout(() => seaweed.batches.forEach(batch => { batch.geometry.dispose(); batch.material.dispose(); batch.mesh.dispose(); }), 0);
+      seaweed.timer = setTimeout(() => seaweed.batches.forEach(batch => { batch.geometry.dispose(); batch.farGeometry.dispose(); batch.material.dispose(); batch.mesh.dispose(); }), 0);
     };
   }, [seaweed]);
   useEffect(() => {
     const fraction = quality === 'high' ? 1 : quality === 'medium' ? 0.75 : 0.5;
-    seaweed.batches.forEach(batch => { batch.mesh.count = Math.ceil(batch.count * fraction); });
+    seaweed.batches.forEach(batch => { batch.mesh.count = Math.ceil(batch.count * fraction); batch.mesh.geometry = quality === 'high' ? batch.geometry : batch.farGeometry; });
   }, [quality, seaweed]);
   useFrame(() => { if (!paused) seaweed.time.value = runtime.current.elapsed; });
   return <group name="sheltered-seaweed-beds" dispose={null}>{seaweed.batches.map(batch => <primitive key={batch.mesh.name} object={batch.mesh} />)}</group>;
 }
 
 /** Metre-tall kelp uses a flexible central stipe and separate drooping lateral fronds. */
-export function createForestKelpGeometry(variant:number) {
+export function createForestKelpGeometry(variant:number, detail:'near'|'far'='near') {
   const positions:number[]=[],colors:number[]=[],indices:number[]=[],random=seededRandom(1849+variant);
   const stem=(t:number)=>({x:Math.sin(t*5+variant)*.07*t,z:Math.sin(t*7+variant*.9)*.05*t});
   const vertex=(x:number,y:number,z:number,leaf=false)=>{
     positions.push(x,y,z);const light=.65+y*.35;
     colors.push((leaf?.28:.30)*light,(leaf?.39:.28)*light,(leaf?.12:.10)*light);
   };
-  const rings=16,sides=5;
+  const rings=detail==='near'?10:5,sides=detail==='near'?5:4;
   for(let ring=0;ring<=rings;ring++)for(let side=0;side<sides;side++){
     const t=ring/rings,a=side/sides*Math.PI*2,c=stem(t),r=(variant===2?.034:.019)*(1-t*.7);
     vertex(c.x+Math.cos(a)*r,t,c.z+Math.sin(a)*r);
     if(ring){const i=ring*sides+side,next=ring*sides+(side+1)%sides;indices.push(i,next,i-sides,next,next-sides,i-sides);}
   }
-  const levels=variant===0?13:variant===1?10:variant===2?8:11;
+  const levels=variant===0?13:variant===1?10:variant===2?8:11,rows=detail==='near'?3:2;
   for(let level=0;level<levels;level++)for(let side=0;side<2;side++){
     const base=.12+level/levels*.81,c=stem(base),a=level*(variant?1.8:.64)+side*Math.PI;
-    const length=(variant===2?.25:.19)+random()*.20,breadth=(variant===2?.07:variant===3?.035:variant?.048:.03)+random()*.025,start=positions.length/3;
-    for(let row=0;row<=5;row++)for(let rib=0;rib<3;rib++){
-      const t=row/5,lateral=(rib-1)*breadth*Math.sin(t*Math.PI)*(1+.16*Math.sin(t*25+level));
+    const length=(variant===2?.30:.26)+random()*.18,breadth=(variant===2?.11:variant===3?.070:variant?.086:.065)+random()*.025,start=positions.length/3;
+    for(let row=0;row<=rows;row++)for(let rib=0;rib<3;rib++){
+      const t=row/rows,lateral=(rib-1)*breadth*Math.sin(t*Math.PI)*(1+.16*Math.sin(t*25+level));
       const along=length*t,y=base+Math.sin(t*Math.PI)*.028-t*t*.037;
       vertex(c.x+Math.cos(a)*along-Math.sin(a)*lateral,y+(rib===1?.006*Math.sin(t*Math.PI):0),c.z+Math.sin(a)*along+Math.cos(a)*lateral,true);
-      if(row&&rib){const n=start+row*3+rib;indices.push(n,n-3,n-1,n-1,n-3,n-4);}
+      if(row&&rib){const n=start+row*3+rib;if(row<rows)indices.push(n,n-3,n-1);if(row>1)indices.push(n-1,n-3,n-4);}
     }
   }
   const geometry=new BufferGeometry();geometry.setAttribute('position',new Float32BufferAttribute(positions,3));geometry.setAttribute('color',new Float32BufferAttribute(colors,3));geometry.setIndex(indices);geometry.computeVertexNormals();geometry.computeBoundingBox();geometry.computeBoundingSphere();
+  geometry.userData.stem={rings,sides};
   geometry.userData.form=['spiral feather kelp','broad-frond canopy kelp','bull kelp with broad blades','twining bronze kelp'][variant%4];return geometry;
 }

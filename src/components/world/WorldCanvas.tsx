@@ -8,7 +8,7 @@ import { AeroWorld } from './AeroWorld';
 import { QA_VIEWS } from './qaViews';
 import { auditing, renderAudit, sampleFrame } from './renderDiagnostics';
 
-extend({ Mesh: THREE.Mesh, Group: THREE.Group, Object3D: THREE.Object3D,
+extend({ Mesh: THREE.Mesh, Group: THREE.Group, Object3D: THREE.Object3D, Sprite: THREE.Sprite,
   CylinderGeometry: THREE.CylinderGeometry, SphereGeometry: THREE.SphereGeometry, RingGeometry: THREE.RingGeometry, PlaneGeometry: THREE.PlaneGeometry,
   BoxGeometry: THREE.BoxGeometry, ShaderMaterial: THREE.ShaderMaterial, MeshBasicMaterial: THREE.MeshBasicMaterial,
   HemisphereLight: THREE.HemisphereLight, DirectionalLight: THREE.DirectionalLight, PointLight: THREE.PointLight,
@@ -108,7 +108,8 @@ export function WorldCanvas(props: WorldProps) {
         if (cancelled || runtime.current.frames === previousFrames) return;
         previousFrames = runtime.current.frames;
         if (!ready) { ready = true; performance.mark('world:core-frame'); setCoreVisible(true); latest.current.onReady(); }
-        if (auditing()) sampleFrame(context!);
+        // Explicit captures may read pixels; performance diagnostics never stall the GPU.
+        if (auditing() && search.has('pixelAudit')) sampleFrame(context!);
         if (!captureSent && captureName && (search.has('qaStill') || runtime.current.frames > 150) && captureState.current.stage === 5 && captureState.current.plantsReady) {
           captureSent = true;
           saveCapture(captureName, true);

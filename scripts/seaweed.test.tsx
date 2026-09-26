@@ -7,6 +7,7 @@ import { createLandscapePlan, distanceToSegment, landDistance, terrainMeshHeight
 import { coastExposure } from '../src/components/world/waves';
 import { createSceneRuntime, type QualityTier } from '../src/content/world';
 import { createDockWeedGeometry, createDockWeedSites, dockEcologyPoles } from '../src/components/world/DockEcology';
+import { coastalCaveClearance } from '../src/components/world/coastalCaveLayout';
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
@@ -14,11 +15,12 @@ test('dock algae begin on wet pile faces and remain below the water surface',()=
   const poles=dockEcologyPoles(),sites=createDockWeedSites(poles);
   assert.deepEqual(sites,createDockWeedSites(poles));
   assert.equal(poles.length,12);
-  assert.equal(sites.length,poles.length*3);
+  assert.ok(sites.length>150&&sites.length<220);
   const geometries=[0,1,2].map(createDockWeedGeometry);
   try{
     for(const pole of poles){
-      assert.equal(sites.filter(site=>site.pole===pole.id).length,3);
+      const attached=sites.filter(site=>site.pole===pole.id);assert.ok(attached.length>=9);
+      assert.ok(Math.max(...attached.map(site=>site.y))-Math.min(...attached.map(site=>site.y))>Math.min(.16,(-.38-pole.bottom)*.45));
       if(pole.id.startsWith('lighthouse'))assert.ok(pole.radius>.08);
     }
     for(const site of sites){
@@ -36,10 +38,11 @@ test('seaweed occupies dense irregular sheltered beds with seabed roots and stru
   const plan = createLandscapePlan();
   const sites = createSeaweedLayout(plan);
   assert.deepEqual(sites, createSeaweedLayout(plan));
-  assert.ok(sites.length >= 4500 && sites.length <= 4800);
+  assert.ok(sites.length >= 4400 && sites.length <= 4800);
   assert.equal(new Set(sites.map(site => site.cove)).size, SEAWEED_COVES.length + ISLANDS.length);
   for (const site of sites) {
     const distance = landDistance(site.x, site.z);
+    assert.ok(coastalCaveClearance(site.x, site.z, SEAWEED_REACH) > 0, 'foliage clears cave banks and swimming approaches');
     assert.ok(distance < -1.5 && distance > -5);
     assert.ok(coastExposure(site.x, site.z, distance) <= (site.cove < 0 ? .7 : .3));
     assert.ok(Math.abs(site.y - terrainMeshHeight(site.x, site.z) + 0.025) < 1e-10);
@@ -88,7 +91,7 @@ test('quality and reduced motion retain seaweed resources without pointer interc
       await renderer.update(render(quality));
       const sites = createSeaweedLayout();
       assert.equal(meshes.reduce((sum, mesh) => sum + mesh.count, 0), SEAWEED_FORMS.reduce((sum, _, variant) => sum + Math.ceil(sites.filter(site => site.variant === variant).length * population), 0));
-      assert.deepEqual(meshes.map(mesh => mesh.geometry), geometry);
+      meshes.forEach((mesh,i)=>{assert.ok(mesh.geometry.index!.count<=geometry[i].index!.count);if(quality==='high')assert.equal(mesh.geometry,geometry[i]);});
       assert.deepEqual(meshes.map(mesh => mesh.material), materials);
       for (const mesh of meshes) { const hits: unknown[] = []; mesh.raycast({} as never, hits as never); assert.equal(hits.length, 0); }
     }
@@ -107,12 +110,19 @@ test('beds mix silhouettes, sizes and colors locally rather than separating them
   const sites = createSeaweedLayout();
   for(let cove=0;cove<SEAWEED_COVES.length;cove++) {
     const bed=sites.filter(site=>site.cove===cove);
-    assert.equal(new Set(bed.map(site=>site.variant)).size,8);
+    // Cave banks can trim a meadow to a small remnant. Require six silhouettes
+    // there; full beds (at least eight roots per form) retain all eight.
+    const minimumForms = bed.length >= SEAWEED_FORMS.length * 8 ? SEAWEED_FORMS.length : 6;
+    assert.ok(new Set(bed.map(site=>site.variant)).size >= minimumForms, `cove ${cove} mixes plant silhouettes`);
     assert.ok(Math.max(...bed.map(site=>site.width))-Math.min(...bed.map(site=>site.width))>.4);
     assert.ok(Math.max(...bed.map(site=>site.tint))-Math.min(...bed.map(site=>site.tint))>.8);
     const distances=bed.map(site=>Math.min(...bed.filter(other=>other!==site).map(other=>Math.hypot(other.x-site.x,other.z-site.z))));
     assert.ok(distances.filter(distance=>distance<.45).length/bed.length>.78,'most roots belong to overlapping clumps');
-    assert.ok(Math.max(...distances)-Math.min(...distances)>.1,'bed density has irregular margins');
+    // Exclusions can leave a compact bed without isolated edge roots. Check spacing
+    // variation across its middle half instead of requiring one distant outlier.
+    const spacing = [...distances].sort((a, b) => a - b);
+    const quartileSpread = spacing[Math.floor(spacing.length * .75)] - spacing[Math.floor(spacing.length * .25)];
+    assert.ok(quartileSpread > spacing[Math.floor(spacing.length * .5)] * .1, `cove ${cove} has varied density throughout its clumps`);
   }
   const beds=sites.filter(site=>site.cove>=0);
   const mixed=beds.filter(site=>new Set(sites.filter(other=>Math.hypot(other.x-site.x,other.z-site.z)<1).map(other=>other.variant)).size>=4);

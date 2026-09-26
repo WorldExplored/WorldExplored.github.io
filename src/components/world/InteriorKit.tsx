@@ -5,6 +5,7 @@ import { BoxGeometry, BufferGeometry, CylinderGeometry, ExtrudeGeometry, Shape, 
 import { combine, strut, useResources } from './BuildingKit';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { applySurface } from './surfaceMaterials';
+import { applyBakedRoomLighting } from './RoomLighting';
 
 export type InteriorFinish = 'wood' | 'fabric' | 'metal' | 'paper' | 'screen' | 'light' | 'leaf' | 'soil' | 'coolant' | 'pipe';
 export type InteriorGeometry = Record<InteriorFinish, BufferGeometry>;
@@ -144,7 +145,7 @@ export class InteriorBuilder {
 
 export function FurnishedInterior({ build, name }: { build: () => InteriorGeometry; name: string }) {
   const geometry = useResources(build);
-  const [materials] = useState(() => ({
+  const [materials] = useState(() => {const result={
     wood: applySurface(new MeshStandardMaterial({color:'#986345',roughness:.8}),'cedar',1.2),
     fabric: new MeshStandardMaterial({ color: '#1262c4', roughness: .98 }),
     metal: new MeshStandardMaterial({ color: '#244f64', roughness: .46, metalness: .65 }),
@@ -155,7 +156,9 @@ export function FurnishedInterior({ build, name }: { build: () => InteriorGeomet
     soil: new MeshStandardMaterial({ color: '#433b2d', roughness: 1 }),
     coolant: new MeshStandardMaterial({ color: '#06abc1', roughness: .23, metalness: .05 }),
     pipe: new MeshPhysicalMaterial({ color: '#d4f9f4', roughness: .08, transparent: true, opacity: .2, depthWrite: false }),
-  }));
+  };
+    Object.entries(result).forEach(([finish,material])=>{if(finish!=='pipe')applyBakedRoomLighting(material);});return result;
+  });
   useEffect(() => { clearTimeout(timers.get(materials)); return () => { timers.set(materials, setTimeout(() => Object.values(materials).forEach(material => material.dispose()), 0)); }; }, [materials]);
   return <group name={name} dispose={null}>{finishes.filter(key => geometry[key].getAttribute('position')?.count > 0).map(key => <mesh key={key} name={`${name}-${key}`} geometry={geometry[key]} material={materials[key]} receiveShadow raycast={() => {}} />)}</group>;
 }

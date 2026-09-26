@@ -1,3 +1,4 @@
+import { coastalCaveClearance } from './coastalCaveLayout';
 import { REEF_BASINS, reefFloorHeight } from './seafloor';
 import { createCityFerryRoute } from './cityInfrastructure';
 import { landDistance, seededRandom, terrainMeshHeight, ISLANDS, islandContour } from './terrain';
@@ -225,5 +226,9 @@ export function getReefHabitat(): ReefHabitatPlan {
   for (const entries of [colonies, plants]) for (let i = entries.length - 1; i > 0; i--) {
     const j = Math.floor(random() * (i + 1)); [entries[i], entries[j]] = [entries[j], entries[i]];
   }
-  cached = { colonies, rocks, plants, kelp }; return cached;
+  const retainedRocks=rocks.filter(site=>coastalCaveClearance(site.x,site.z,site.radius)>0);
+  cached = {colonies:colonies.filter(site=>coastalCaveClearance(site.x,site.z,site.radius)>0&&retainedRocks.some(rock=>Math.abs(reefRockSurfaceHeight(rock,site.x,site.z)-site.y-.055)<.01)),
+    rocks:retainedRocks,
+    plants:plants.filter(site=>coastalCaveClearance(site.x,site.z,site.radius)>0),
+    kelp:kelp.filter(site=>coastalCaveClearance(site.x,site.z,site.radius)>0)}; return cached;
 }

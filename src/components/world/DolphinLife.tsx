@@ -6,6 +6,7 @@ import { BufferGeometry, CatmullRomCurve3, Color, CylinderGeometry, DoubleSide, 
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { EnvironmentProps } from './Water';
 import { createDolphinState, stepDolphin } from './dolphinRoutes';
+import { surfaceAnimals } from './marineTraffic';
 import { harborWaterHeight } from './waterSurface';
 
 function merge(parts: BufferGeometry[]) {
@@ -120,6 +121,11 @@ export function createDolphinLife() {
 export function DolphinLife({runtime,paused,quality}: EnvironmentProps) {
   const life = useMemo(()=>createDolphinLife(),[]);
   useEffect(()=>life.retain(),[life]);
+  useEffect(()=>{
+    const occupants=life.states.map(state=>({position:state.position,radius:state.shark?1.1:.65}));
+    surfaceAnimals.push(...occupants);
+    return()=>{occupants.forEach(item=>{const i=surfaceAnimals.indexOf(item);if(i>=0)surfaceAnimals.splice(i,1);});};
+  },[life]);
   useEffect(()=>{life.setQuality(quality);},[life,quality]);
   useFrame((_,delta)=>life.update(delta,paused,point=>{
     const state=runtime.current; state.ripple.x=point.x; state.ripple.z=point.z; state.ripple.time=state.elapsed; state.ripple.serial++;

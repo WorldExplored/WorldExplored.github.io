@@ -25,7 +25,7 @@ const temporary = new Vector3();
 const ahead = new Vector3();
 
 export function createGullPerches(plan = createLandscapePlan()): GullPerch[] {
-  const perches: GullPerch[] = [{ id: 'beacon-balcony-rail', position: new Vector3(-74.91, 7.88, -36), heading: 0, capacity: 1, owner: null }];
+  const perches: GullPerch[] = [{ id: 'beacon-balcony-rail', position: new Vector3(-74.91, 14.88, -36), heading: 0, capacity: 1, owner: null }];
   for (const rock of plan.rocks) {
     if (rock.y + rock.scale[1] < .3 || rock.scale[0] < .7) continue;
     const position = new Vector3(rock.x, rock.y + rock.scale[1] + .28, rock.z);
@@ -145,7 +145,7 @@ function pose(state:GullState,dt:number) {
   const bank=perched?0:Math.max(-.30,Math.min(.30,-turn/dt*.48));state.bank+=(bank-state.bank)*(1-Math.exp(-3*dt));
   let fold=perched?1:state.mode==='approach'?Math.max(0,(state.progress-.98)/.02)*.8:0;
   if(state.perch.id==='beacon-balcony-rail'){
-    const railClearance=Math.max((Math.hypot(state.position.x+76,state.position.z+36)-1.25)/2,(state.position.y-8.35)/1.2);
+    const railClearance=Math.max((Math.hypot(state.position.x+76,state.position.z+36)-1.25)/2,(state.position.y-15.35)/1.2);
     fold=Math.max(fold,1-Math.max(0,Math.min(1,railClearance)));
   }
   state.fold+=(fold-state.fold)*(1-Math.exp(-5*dt));

@@ -1,4 +1,5 @@
 import { Vector3 } from 'three';
+import { coastalCaveClearance } from './coastalCaveLayout';
 import { seededRandom } from './terrain';
 import { getReefHabitat, reefFloorHeight, reefHabitatContains, reefFerryClearance } from './reefHabitat';
 
@@ -32,6 +33,7 @@ function obstacles() {
 /** The same cylinders bound rendered coral and rock geometry; fish also keep clear of the sand. */
 export function reefFishPositionClear(x: number, y: number, z: number, padding = 0) {
   const radius = REEF_FISH_RADIUS + padding;
+  if(coastalCaveClearance(x,z,radius)<=0)return false;
   if (!outsideFerry(x, z) || !reefHabitatContains(x, z, radius + .5) || y < reefFloorHeight(x, z) + radius + .22 || y > -.75) return false;
   for (const obstacle of obstacles().get(`${Math.floor(x / CELL)},${Math.floor(z / CELL)}`) ?? []) {
     if (y + radius > obstacle.y && y - radius < obstacle.y + obstacle.height && Math.hypot(x - obstacle.x, z - obstacle.z) < obstacle.radius + radius) return false;

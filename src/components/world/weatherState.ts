@@ -31,7 +31,7 @@ export function easternHour(date = new Date()) {
 
 export function daylightAt(hour: number, output = new Vector3()) {
   const phase = (hour - 6) * Math.PI / 12;
-  return output.set(-Math.cos(phase), Math.sin(phase) * .94, -.34).normalize();
+  return output.set(Math.cos(phase) * .55, Math.sin(phase) * .94, -.84).normalize();
 }
 
 export function daylightWeights(hour: number) {
@@ -59,23 +59,23 @@ export function stormSchedule(index: number) {
   return { arrival: 480 + Math.max(0, index) * 2400, rainSeconds: 300 + random(index + 819) * 300, approachSeconds: 110, departureSeconds: 130 };
 }
 
+export interface StormSample { arrival: number; rainSeconds: number; approachSeconds: number; departureSeconds: number; active: boolean; age: number; cover: number; rain: number; center: Vec3 }
+export function createStormSample(): StormSample { return { arrival: 0, rainSeconds: 0, approachSeconds: 110, departureSeconds: 130, active: false, age: 0, cover: 0, rain: 0, center: [0, 57, 0] }; }
 const stormPosition=new Vector3(),stormAnchor=new Vector3();
-export function stormAt(seconds: number) {
+export function stormAt(seconds: number, output = createStormSample()) {
   const index = Math.max(0, Math.floor((seconds - 480) / 2400));
-  const schedule = stormSchedule(index);
-  const age = seconds - schedule.arrival;
-  const lifetime = schedule.approachSeconds + schedule.rainSeconds + schedule.departureSeconds;
+  const arrival = 480 + index * 2400, rainSeconds = 300 + random(index + 819) * 300;
+  const age = seconds - arrival, lifetime = 110 + rainSeconds + 130;
   const active = age >= 0 && age <= lifetime;
-  const entering = smooth(age / schedule.approachSeconds);
-  const leaving = 1 - smooth((age - schedule.approachSeconds - schedule.rainSeconds) / schedule.departureSeconds);
-  const cover = active ? entering * leaving : 0;
-  const rain = active ? smooth((age - schedule.approachSeconds) / 28) * (1 - smooth((age - schedule.approachSeconds - schedule.rainSeconds + 28) / 28)) : 0;
-  // The bank crosses the islands halfway through its rainfall, following the same wind integral as other clouds.
-  const sampleTime=schedule.arrival+Math.max(0,Math.min(lifetime,age));
-  windDisplacement(sampleTime,stormPosition);
-  windDisplacement(schedule.arrival+schedule.approachSeconds+schedule.rainSeconds*.5,stormAnchor);
-  stormPosition.sub(stormAnchor);
-  return { ...schedule, active, age, cover, rain, center: [-24+stormPosition.x,57,-42+stormPosition.z] as Vec3 };
+  const entering = smooth(age / 110), leaving = 1 - smooth((age - 110 - rainSeconds) / 130);
+  const sampleTime = arrival + Math.max(0, Math.min(lifetime, age));
+  windDisplacement(sampleTime, stormPosition);
+  windDisplacement(arrival + 110 + rainSeconds * .5, stormAnchor); stormPosition.sub(stormAnchor);
+  output.arrival = arrival; output.rainSeconds = rainSeconds; output.age = age; output.active = active;
+  output.cover = active ? entering * leaving : 0;
+  output.rain = active ? smooth((age - 110) / 28) * (1 - smooth((age - 110 - rainSeconds + 28) / 28)) : 0;
+  output.center[0] = -24 + stormPosition.x; output.center[1] = 57; output.center[2] = -42 + stormPosition.z;
+  return output;
 }
 
 export function initialWeather(): WeatherState {

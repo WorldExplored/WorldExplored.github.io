@@ -60,7 +60,7 @@ test('flora retains resources across tiers and freezes wind and pointer response
     await renderer.update(render('medium'));await renderer.advanceFrames(1,1/60);batches.forEach((b,i)=>assert.ok(b.count<=high[i]));
     await renderer.update(render('low',true));runtime.current.elapsed=50;runtime.current.pointerActive=true;await renderer.advanceFrames(10,1/60);
     assert.equal(shader.uniforms.floraTime.value,5);assert.equal(shader.uniforms.floraStrength.value,0);
-    batches.forEach((b,i)=>{assert.equal(b.geometry,resources[i][0]);assert.equal(b.material,resources[i][1]);assert.ok(b.count>0&&b.count<=high[i]);});
+    batches.forEach((b,i)=>{assert.ok(b.geometry.index!.count <= (resources[i][0] as InstancedMesh['geometry']).index!.count);assert.equal(b.material,resources[i][1]);assert.ok(b.count>0&&b.count<=high[i]);});
   }finally{await renderer.unmount();}
 });
 

@@ -3,6 +3,8 @@ import { cityDocks, createCityFerryRoute } from './cityInfrastructure';
 import { landDistance, seededRandom } from './terrain';
 import { harborWaterHeight } from './waterSurface';
 
+import { vesselClearance } from './marineTraffic';
+
 const TAU = Math.PI * 2;
 // Both lobes return through the channel, then take different coasts of each island group.
 const anchors = [[12,-42],[27,-48],[44,-60],[45,-80],[31,-101],[5,-109],[-24,-108],[-46,-93],[-50,-71],[-38,-51],[-25,-43],[-8,-39],[10,-34],[25,-33],[39,-24],[42,-5],[39,18],[27,36],[0,43],[-25,39],[-32,24],[-47,9],[-46,-14],[-32,-25],[-20,-33],[-4,-43]];
@@ -85,13 +87,20 @@ export function stepDolphin(state: DolphinState, delta: number, paused = false, 
     if (state.time >= state.nextJump) {
       const duration = 2.9 + state.random() * .7;
       const ahead = state.course.curve.getPointAt(((state.distance + dolphinSpeed(state) * duration) % state.course.length) / state.course.length);
-      if (dolphinFerryClearance(px, pz) > 5 && dolphinFerryClearance(ahead.x, ahead.z) > 5) {
+      if (dolphinFerryClearance(px, pz) > 5 && dolphinFerryClearance(ahead.x, ahead.z) > 5 && vesselClearance(px,pz) > 9 && vesselClearance(ahead.x,ahead.z) > 9) {
         state.jumpStart = state.time; state.jumpDuration = duration; state.jumpHeight = 1.3 + state.random() * .5;
         state.nextJump = state.time + 12 + state.random() * 15 + state.index * 1.8;
       } else state.nextJump = state.time + 3;
     }
   }
   writePose(state, waterTime);
+  // Dive below the hull envelope before crossing a live vessel lane.
+  const clearance=vesselClearance(state.position.x,state.position.z);
+  if(clearance<7) {
+    const yieldDepth=Math.max(0,Math.min(1,(7-clearance)/4));
+    state.position.y-=yieldDepth*(state.shark?1.8:2.4);
+    if(yieldDepth>.1)state.breach=false;
+  }
   const wt = waterTime ?? state.time;
   const before = py - harborWaterHeight(px, pz, wt - dt);
   const after = state.position.y - harborWaterHeight(state.position.x, state.position.z, wt);

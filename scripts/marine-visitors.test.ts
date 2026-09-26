@@ -1,10 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Box3, InstancedMesh, Mesh, Vector3 } from 'three';
+import { Box3, InstancedMesh, Mesh, MeshStandardMaterial, Raycaster, Vector3 } from 'three';
 import { createMarineVisitors } from '../src/components/world/MarineVisitors';
 import { OCTOPUS_ROUTE, turtleHatchlingPose, turtleRouteClear, visitorClear } from '../src/components/world/marineVisitorState';
 import { landDistance, terrainMeshHeight } from '../src/components/world/terrain';
 import { marineFloorHeight, reefHabitatContains } from '../src/components/world/reefHabitat';
+import { turtleCarapaceGeometry, turtlePlastronGeometry, turtleNestSandGeometry, turtleShellHeight } from '../src/components/world/turtleAnatomy';
 
 test('stonefish and octopuses retain clear habitats and complete both reef crossings for ten minutes',()=>{
   const life=createMarineVisitors(),travel=life.states.map(()=>0),reefTravel=life.states.map(()=>0),openTravel=life.states.map(()=>0);
@@ -164,4 +165,37 @@ test('nesting follows the uncapped active clock even when locomotion is renderin
     assert.equal(turtle.nursery!.stage,'leaving','a 20-minute guard finishes after 20 active minutes');
     life.update(.1,true,1800);assert.equal(turtle.time,1200,'hidden or reduced-motion scenes freeze the lifecycle');
   }finally{life.dispose();}
+});
+
+
+test('turtle shells are outward-facing, sealed to the plastron, with attached paddles and flush eyes',()=>{
+  const material=new MeshStandardMaterial(),shell=turtleCarapaceGeometry(),belly=turtlePlastronGeometry(),soil=turtleNestSandGeometry();
+  const life=createMarineVisitors();
+  try{
+    const upper=new Mesh(shell,material),lower=new Mesh(belly,material);upper.updateMatrixWorld();lower.updateMatrixWorld();
+    assert.ok(new Raycaster(new Vector3(-.08,1,0),new Vector3(0,-1,0)).intersectObject(upper).length>0,'the actual front faces of the shell render from above');
+    assert.ok(new Raycaster(new Vector3(-.08,-1,.04),new Vector3(0,1,0)).intersectObject(lower).length>0,'the underside faces outward');
+    const shellRim=14*37+37,bellyRim=8*37;
+    for(let i=0;i<=36;i++){
+      const a=new Vector3().fromBufferAttribute(shell.attributes.position,shellRim+i),b=new Vector3().fromBufferAttribute(belly.attributes.position,bellyRim+i);
+      assert.ok(a.distanceTo(b)<.003,'the carapace and plastron share the same perimeter');
+    }
+    const turtle=life.root.getObjectByName('turtle-0')!;
+    for(const flipper of turtle.children.filter(object=>object.name==='four-swimming-flippers')){
+      const q=((flipper.position.x+.08)/.65)**2+(flipper.position.z/.46)**2;
+      assert.ok(q<.9&&flipper.position.y<turtleShellHeight(flipper.position.x,flipper.position.z),'every paddle root is inside the shell boundary');
+      assert.ok(flipper.position.y>.119-.06*Math.sqrt(1-q),'paddles attach above the plastron');
+    }
+    const head=turtle.getObjectByName('sea-turtle-head') as Mesh,headMesh=new Mesh(head.geometry,material);headMesh.updateMatrixWorld();
+    for(const eye of turtle.children.filter(object=>object.name==='turtle-eye')){
+      const side=Math.sign(eye.position.z),origin=new Vector3(eye.position.x,eye.position.y,side);
+      const hit=new Raycaster(origin,new Vector3(0,0,-side)).intersectObject(headMesh)[0];
+      assert.ok(hit&&Math.abs(hit.point.z-eye.position.z)<.012,'tiny eyes meet the tapered head surface without stalks');
+    }
+    let low=Infinity,high=-Infinity;
+    for(let i=0;i<soil.attributes.position.count;i++){low=Math.min(low,soil.attributes.position.getY(i));high=Math.max(high,soil.attributes.position.getY(i));}
+    assert.ok(high-low<.03,'turtle nests are shallow disturbed sand, not a raised bird-nest ring');
+    const sandMesh=new Mesh(soil,material);sandMesh.updateMatrixWorld();
+    assert.ok(new Raycaster(new Vector3(.15,1,.1),new Vector3(0,-1,0)).intersectObject(sandMesh).length>0,'disturbed sand faces upward');
+  }finally{life.dispose();shell.dispose();belly.dispose();soil.dispose();material.dispose();}
 });

@@ -112,7 +112,8 @@ const fragmentShader = /* glsl */ `
     float outsideField = length(p - clamp(p, uCoastBounds.xy, uCoastBounds.xy+uCoastBounds.zw));
     float offshoreDistance = coastSample.b * 128. + outsideField;
     float depth = opticalDepth(p, offshoreDistance);
-    float shallows = exp(-depth * .055);
+    // Color darkens across a broader shelf than the optical transparency transition.
+    float shallows = exp(-pow(depth, .65) * .075);
     float offshore = 1. - exp(-offshoreDistance / 95.);
     vec3 color = mix(mix(uDeep, uWater, .5 + broad), vec3(.012,.065,.12), offshore * .86);
     color = mix(color, vec3(.035,.69,.66), shallows * .89);
@@ -130,7 +131,7 @@ const fragmentShader = /* glsl */ `
     float caustic = 0.;
     float causticNear = 1.-smoothstep(12.,38.,length(cameraPosition-vWorld));
     if (shallows*causticNear > .02) caustic = causticCell(p*3.9+vec2(seaNoise(p*1.4),seaNoise(p*1.7+3.))*1.8)*.008*shallows*causticNear*uDetail;
-    color = mix(color, uHorizon*.68, fresnel * .48) + caustic;
+    color = mix(color, uHorizon*.36, fresnel * .32) + caustic;
     color *= .19 + uDaylight * .81;
     vec3 sunsetWater = mix(vec3(.16,.075,.25),vec3(.72,.41,.19),pow(max(dot(normalize(vec3(uSunDirection.x,0.,uSunDirection.z)),normalize(vec3(view.x,0.,view.z))),0.),3.));
     color = mix(color, sunsetWater, uDusk * (.24 + fresnel * .28));
@@ -138,7 +139,8 @@ const fragmentShader = /* glsl */ `
     float sun = pow(max(dot(reflect(-uSunDirection, n), view), 0.), 110.);
     color += uSunColor * sun * uSunIntensity * .14;
     float haze = smoothstep(uFogRange.x, uFogRange.y, length(cameraPosition - vWorld));
-    color = mix(color, uFog, haze);
+    // Marine haze retains the deep-water color instead of bleaching the horizon.
+    color = mix(color, uFog, haze * .28);
     float viewCosine = clamp(dot(view,n),0.,1.);
     float absorption = 1. - exp(-depth * .085 / max(.08,viewCosine));
     float grazingReflection = pow(1. - viewCosine,5.);
@@ -150,8 +152,9 @@ const fragmentShader = /* glsl */ `
 const waterSunset = new Color('#ffc58a');
 const waterDayHorizon = new Color(world.lighting.horizon);
 const waterDuskHorizon = new Color('#ddb4a9');
-const waterDayFog = new Color('#c4eaff');
-const waterStormFog = new Color('#bdcbd9');
+const waterDayFog = new Color('#245675');
+const waterStormFog = new Color('#365767');
+const waterDuskFog = new Color('#504f76');
 
 function updateWater(material: ShaderMaterial, state: SceneRuntime, paused: boolean) {
   if (!paused) {
@@ -166,7 +169,7 @@ function updateWater(material: ShaderMaterial, state: SceneRuntime, paused: bool
   material.uniforms.uSunIntensity.value = (weather?.daylight ?? 1) * world.lighting.sunIntensity * (1 - (weather?.storm ?? 0) * .9);
   material.uniforms.uSunColor.value.set('#fff8df').lerp(waterSunset, weather?.dusk ?? 0);
   material.uniforms.uHorizon.value.set('#293a5a').lerp(waterDayHorizon, weather?.daylight ?? 1).lerp(waterDuskHorizon, (weather?.dusk ?? 0) * .75);
-  material.uniforms.uFog.value.set('#293a5a').lerp(waterDayFog, weather?.daylight ?? 1).lerp(waterSunset, (weather?.dusk ?? 0) * .67).lerp(waterStormFog, (weather?.storm ?? 0) * .75 * (weather?.daylight ?? 1));
+  material.uniforms.uFog.value.set('#101d35').lerp(waterDayFog, weather?.daylight ?? 1).lerp(waterDuskFog, (weather?.dusk ?? 0) * .8).lerp(waterStormFog, (weather?.storm ?? 0) * .75 * (weather?.daylight ?? 1));
 }
 
 function startRipple(state: SceneRuntime, x: number, z: number) {

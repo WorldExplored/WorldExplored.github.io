@@ -7,6 +7,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { EnvironmentProps } from './Water';
 import { createMarineVisitor, sampleTurtleCycle, stepMarineVisitor, turtleHatchlingPose, type MarineVisitorState } from './marineVisitorState';
 import { terrainMeshHeight } from './terrain';
+import { turtleCarapaceGeometry, turtlePlastronGeometry, turtleHeadGeometry, turtleFlipperGeometry, turtleScuteGeometry, turtleNestSandGeometry } from './turtleAnatomy';
 
 function oval(x:number,y:number,z:number,sx:number,sy:number,sz:number){return new SphereGeometry(1,12,8).scale(sx,sy,sz).translate(x,y,z);}
 
@@ -32,55 +33,22 @@ export function createMarineVisitors(){
   }
   armPositions.needsUpdate=true;octArm.computeVertexNormals();
   const suckers=shape(new SphereGeometry(1,5,4).scale(.023,.012,.024));
-  const shell=shape(oval(-.08,.31,0,.67,.27,.48)),belly=shape(oval(-.08,.15,0,.58,.09,.42)),turtleHead=shape(oval(.59,.18,0,.24,.16,.18));
-  const flipper=shape(oval(.10,.06,0,.34,.045,.15));
+  const shell=shape(turtleCarapaceGeometry()),belly=shape(turtlePlastronGeometry()),turtleHead=shape(turtleHeadGeometry());
+  const flipper=shape(turtleFlipperGeometry());
   const eggShape=shape(new SphereGeometry(.057,12,8));
-  const combine=(parts:BufferGeometry[])=>{const geometry=mergeGeometries(parts)!;parts.forEach(part=>part.dispose());return shape(geometry);};
+  const combine=(parts:BufferGeometry[])=>{parts.forEach(part=>part.deleteAttribute('uv'));const geometry=mergeGeometries(parts)!;parts.forEach(part=>part.dispose());return shape(geometry);};
   const stoneMarkings=[0,1].map(tint=>combine(Array.from({length:17},(_,spot)=>{
     const a=spot*2.399,r=.07+Math.sqrt((spot*13%17)/17)*.28;
     return spot%2===tint?stoneSpot.clone().translate(Math.cos(a)*r,.192-Math.abs(Math.sin(a))*r*.13,Math.sin(a)*r*.62):null;
   }).filter((part):part is BufferGeometry=>part!==null)));
-  const scutePositions:number[]=[];
-  const shellPoint=(u:number,v:number)=>{
-    let x=-.08+u*1.4,z=v,q=((x+.08)/.67)**2+(z/.48)**2;
-    if(q>.88){const scale=Math.sqrt(.88/q);x=-.08+(x+.08)*scale;z*=scale;q=.88;}
-    return [x,.31+.27*Math.sqrt(1-q)+.015,z];
-  };
-  const plates:[number,number,number][]=[];
-  for(let i=0;i<5;i++)plates.push([-.32+i*.16,0,.101]);
-  for(const side of [-1,1])for(let i=0;i<4;i++)plates.push([-.27+i*.18,side*.21,.108]);
-  for(let i=0;i<14;i++){const a=i/14*Math.PI*2;plates.push([Math.cos(a)*.405,Math.sin(a)*.365,.072]);}
-  for(const [cu,cv,radius] of plates){
-    const center=shellPoint(cu,cv);
-    for(let edge=0;edge<6;edge++){
-      const a=Math.PI/6+edge*Math.PI/3,b=a+Math.PI/3;
-      scutePositions.push(...center,...shellPoint(cu+Math.cos(b)*radius*.89,cv+Math.sin(b)*radius*.89),...shellPoint(cu+Math.cos(a)*radius*.89,cv+Math.sin(a)*radius*.89));
-    }
-  }
-  const shellScutes=shape(new BufferGeometry());shellScutes.setAttribute('position',new Float32BufferAttribute(scutePositions,3));shellScutes.computeVertexNormals();shellScutes.userData.plateCount=plates.length;
+  const shellScutes=shape(turtleScuteGeometry());
   const suckerCluster=combine(Array.from({length:3},(_,n)=>{const p=armPath.getPointAt(.39+n*.21);return suckers.clone().translate(p.x,p.y-.038,p.z);}));
   const turtleTail=shape(new CylinderGeometry(.002,.067,.21,8).rotateZ(Math.PI/2).translate(-.68,.15,0));
-  const turtleMarkings=combine([-1,1].flatMap(side=>Array.from({length:13},(_,i)=>{
-    const a=i*2.4;
-    return oval(.58+Math.cos(a)*.12,.23+Math.sin(a)*.043,side*(.12+Math.sin(a)*.025),.025,.009,.008);
-  })));
-  const nestDebris=combine(Array.from({length:11},(_,i)=>{
-    const a=i*2.399,r=.37+(i%3)*.073;
-    return new CylinderGeometry(.007,.016,.16+(i%4)*.08,5).rotateZ(Math.PI/2).rotateY(a+.6).translate(Math.cos(a)*r,.018+(i%3)*.012,Math.sin(a)*r);
-  }));
-  const nestLeaves=combine(Array.from({length:14},(_,i)=>{
-    const a=i*2.19,r=.28+(i%5)*.06;
-    return oval(Math.cos(a)*r,.025+(i%3)*.004,Math.sin(a)*r,.09+(i%3)*.018,.008,.022).rotateY(a);
-  }));
-  const nestShells=combine(Array.from({length:9},(_,i)=>{
-    const a=i*2.399,r=.32+(i%4)*.05;
-    return new SphereGeometry(.026,7,4,0,Math.PI*2,0,Math.PI*.5).scale(1,.4,.8).translate(Math.cos(a)*r,.012,Math.sin(a)*r);
-  }));
-  // Uneven deposited sand and scrape marks, without a manufactured torus rim.
-  const disturbedSand=combine(Array.from({length:21},(_,i)=>{
-    const a=i*2.399,r=.22+(i%6)*.040;
-    return oval(Math.cos(a)*r,-.018,Math.sin(a)*r,.10+(i%3)*.014,.037+(i%4)*.004,.075).rotateY(a);
-  }));
+  const turtleMarkings=combine([-1,1].map(side=>oval(.795,.215,side*.035,.012,.004,.006)));
+  const nestDebris=combine([[.61,.03,-.24,-.6],[-.48,.016,-.38,.7],[.73,.025,.17,1.1]].map(([x,y,z,a])=>new CylinderGeometry(.005,.010,.22,5).rotateZ(Math.PI/2).rotateY(a).translate(x,y,z)));
+  const nestLeaves=combine(Array.from({length:6},(_,i)=>oval(.45+(i%3)*.10,.015+(i%2)*.007,-.29+(i%4)*.11,.07,.005,.019).rotateY(i*.17)));
+  const nestShells=combine([[.37,-.46],[-.63,.24],[-.31,-.48],[.65,.32]].map(([x,z])=>new SphereGeometry(.022,7,4,0,Math.PI*2,0,Math.PI*.5).scale(1,.3,.8).translate(x,.008,z)));
+  const disturbedSand=shape(turtleNestSandGeometry());
   const contactShadow=combine([
     new CircleGeometry(1,24).rotateX(-Math.PI/2).scale(.60,1,.36),
     new CircleGeometry(1,14).rotateX(-Math.PI/2).scale(.23,1,.13).translate(.08,0,-.35),
@@ -112,10 +80,10 @@ export function createMarineVisitors(){
     }else{
       add(animal,'arched-sea-turtle-shell',shell,turtleShell);add(animal,'pale-plastron',belly,turtleBelly);add(animal,'sea-turtle-head',turtleHead,turtleSkin);
       add(animal,'shell-scutes',shellScutes,turtlePlates);add(animal,'sea-turtle-tail',turtleTail,turtleSkin);add(animal,'head-scale-markings',turtleMarkings,turtleShell);
-      for(const side of [-1,1])add(animal,'turtle-eye',eye,octopusEye,.72,.23,side*.142).scale.set(.7,.7,.55);
+      for(const side of [-1,1])add(animal,'turtle-eye',eye,octopusEye,.692,.244,side*.1045).scale.set(.62,.58,.28);
       actor.flippers=[];
       for(const side of [-1,1])for(const forward of [-1,1]){
-        const limb=add(animal,'four-swimming-flippers',flipper,turtleSkin,forward*.36,.075,side*.38);limb.rotation.y=side*(forward>0?.62:-.25);limb.scale.set(forward>0?1.13:.67,1,forward>0?.75:.95);actor.flippers.push(limb);
+        const limb=add(animal,'four-swimming-flippers',flipper,turtleSkin,forward>0?.32:-.51,.135,side*.28);limb.rotation.y=side*(forward>0?.22:-.24);limb.scale.set(forward>0?1:.72,1,side*(forward>0?1:.62));actor.flippers.push(limb);
       }
       animal.traverse(object=>{if(object instanceof Mesh)object.castShadow=true;});
       const shadow=add(root,'turtle-contact-shadow',contactShadow,shadowMaterial);shadow.renderOrder=2;actor.shadow=shadow;
@@ -130,7 +98,7 @@ export function createMarineVisitors(){
 
     }
   }
-  const babyAnatomy=[{geometry:shell,color:'#314d38'},{geometry:turtleHead,color:'#668a64'},...[-1,1].map(side=>({geometry:eye.clone().translate(.72,.23,side*.14),color:'#162a31'}))];
+  const babyAnatomy=[{geometry:shell,color:'#314d38'},{geometry:belly,color:'#d2c99a'},{geometry:turtleTail,color:'#668a64'},{geometry:turtleHead,color:'#668a64'},...[-1,1].map(side=>({geometry:eye.clone().scale(.62,.58,.28).translate(.692,.244,side*.1045),color:'#162a31'}))];
   const babyParts=babyAnatomy.map(({geometry,color})=>{
     const part=geometry.clone(),tint=new Color(color),count=part.getAttribute('position').count;
     part.setAttribute('color',new Float32BufferAttribute(Array.from({length:count},()=>[tint.r,tint.g,tint.b]).flat(),3));return part;
@@ -161,7 +129,7 @@ export function createMarineVisitors(){
       const gx=swimming?0:(terrainMeshHeight(x+.25,z)-terrainMeshHeight(x-.25,z))/.5;
       const gz=swimming?0:(terrainMeshHeight(x,z+.25)-terrainMeshHeight(x,z-.25))/.5;
       animal.rotation.set(-Math.atan(gx*Math.sin(h)+gz*Math.cos(h)),h,Math.atan(gx*Math.cos(h)-gz*Math.sin(h)),'YXZ');
-      flippers?.forEach((flipper,index)=>{flipper.rotation.z=Math.sin(state.time*(swimming?2:3)+index*Math.PI)*(swimming?.22:state.moving||nursery.stage==='digging'?.13:.014);});
+      flippers?.forEach((flipper,index)=>{flipper.rotation.x=(index<2?-1:1)*Math.sin(state.time*(swimming?2:3)+index*Math.PI)*(swimming?.25:state.moving||nursery.stage==='digging'?.13:.014);});
       const shown=quality==='high'||state.index===0||(quality==='medium'&&state.index<2);
       animal.visible=shown&&!['incubating','hatching','resting-at-sea'].includes(nursery.stage);
       if(shadow){shadow.visible=animal.visible&&!swimming;shadow.position.set(x,terrainMeshHeight(x,z)+.016,z);shadow.rotation.y=h;}
@@ -172,7 +140,7 @@ export function createMarineVisitors(){
         babyBody.setMatrixAt(slot,babyTransform.matrix);babyPlates.setMatrixAt(slot,babyTransform.matrix);
         for(let i=0;i<4;i++){
           const side=i<2?-1:1,forward=i%2?-1:1;
-          limbTransform.position.set(forward*.36,.075,side*.38);limbTransform.rotation.set(0,side*.6,Math.sin(state.time*6+index+i*Math.PI)*.20);limbTransform.scale.set(forward>0?1.1:.65,1,.75);limbTransform.updateMatrix();limbTransform.matrix.premultiply(babyTransform.matrix);babyFlippers.setMatrixAt(slot*4+i,limbTransform.matrix);
+          limbTransform.position.set(forward>0?.32:-.51,.135,side*.28);limbTransform.rotation.set(side*Math.sin(state.time*6+index+i*Math.PI)*.20,side*(forward>0?.22:-.24),0);limbTransform.scale.set(forward>0?1:.72,1,side*(forward>0?1:.62));limbTransform.updateMatrix();limbTransform.matrix.premultiply(babyTransform.matrix);babyFlippers.setMatrixAt(slot*4+i,limbTransform.matrix);
         }
       }
       for(const mesh of [babyBody,babyPlates,babyFlippers])mesh.instanceMatrix.needsUpdate=true;

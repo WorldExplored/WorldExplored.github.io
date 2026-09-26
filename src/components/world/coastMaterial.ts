@@ -5,7 +5,11 @@ export const coastalSandGLSL = /* glsl */ `
 float sandHash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
 float sandNoise(vec2 p){vec2 c=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(sandHash(c),sandHash(c+vec2(1.,0.)),f.x),mix(sandHash(c+vec2(0.,1.)),sandHash(c+1.),f.x),f.y);}
 vec3 submergedSand(float depth){return mix(vec3(.68,.65,.47),vec3(.39,.49,.40),smoothstep(.35,5.,depth));}
-float sandGrain(vec2 p){return .976+sandNoise(p*64.)*.048;}
+float sandGrain(vec2 p){
+  // Fade subpixel grains before they alias into moving shoreline stripes.
+  float resolved=1.-smoothstep(.008,.04,max(length(dFdx(p)),length(dFdy(p))));
+  return 1.+(sandNoise(p*64.)-.5)*.042*resolved;
+}
 `;
 
 /** Sub-centimetre mineral grains, not the large rocks in the previous shore normal scan. */

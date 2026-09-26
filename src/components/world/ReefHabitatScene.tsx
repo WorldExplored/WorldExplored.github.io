@@ -6,6 +6,7 @@ import { BufferGeometry, Color, CylinderGeometry, DoubleSide, Float32BufferAttri
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { coastalSandGLSL, createSandMicroNormal } from './coastMaterial';
 import { applySurface, surfaceTexture } from './surfaceMaterials';
+import { createSeabedMeadows } from './SeabedMeadows';
 import { createSeaweedGeometry, createForestKelpGeometry } from './Seaweed';
 import { getReefHabitat, reefFloorHeight, reefFloorVertexHeight, reefRockMesh, type ReefObstacle } from './reefHabitat';
 import { landDistance } from './terrain';
@@ -188,8 +189,9 @@ export function reefCoralGeometry(form:number) {
 
 export function createReefHabitat() {
   const root=new Group();root.name='full-channel-reef-habitat';
-  const geometries:BufferGeometry[]=[],materials:(MeshStandardMaterial|MeshBasicMaterial)[]=[],batches:{mesh:InstancedMesh;count:number;structural:boolean}[]=[];
+  const geometries:BufferGeometry[]=[],materials:(MeshStandardMaterial|MeshBasicMaterial)[]=[],batches:{mesh:InstancedMesh;count:number;structural:boolean;near:BufferGeometry;far?:BufferGeometry}[]=[];
   const time={value:0}, transform=new Object3D(),color=new Color(),plan=getReefHabitat();
+  const meadow=createSeabedMeadows(plan);root.add(meadow.root);
   const floorMaterial=new MeshPhysicalMaterial({color:'#ffffff',vertexColors:true,roughness:.97,envMapIntensity:.2,specularIntensity:.16});
   const sandNormal=createSandMicroNormal();floorMaterial.normalMap=sandNormal;floorMaterial.normalScale.set(.16,.16);
   floorMaterial.onBeforeCompile=shader=>{
@@ -216,13 +218,13 @@ export function createReefHabitat() {
   const contact=createReefContactShade([...plan.rocks,...plan.colonies]);geometries.push(contact.geometry);materials.push(contact.material);root.add(contact.mesh);
   const coralMaterial=new MeshStandardMaterial({color:'#ffffff',vertexColors:true,roughness:.88,side:DoubleSide});materials.push(coralMaterial);
   const palette=['#c8734d','#b06793','#cead62','#528ca3','#a84e6c','#7a914f','#55a593','#ad8bae','#c88479','#9ba57c'];
-  function instances(name:string,geometry:BufferGeometry,material:MeshStandardMaterial,entries:ReefObstacle[],scale:(entry:ReefObstacle)=>[number,number,number],tint?:(entry:ReefObstacle)=>string) {
-    geometries.push(geometry);const mesh=new InstancedMesh(geometry,material,entries.length);mesh.name=name;mesh.raycast=()=>{};mesh.receiveShadow=true;
+  function instances(name:string,geometry:BufferGeometry,material:MeshStandardMaterial,entries:ReefObstacle[],scale:(entry:ReefObstacle)=>[number,number,number],tint?:(entry:ReefObstacle)=>string,far?:BufferGeometry) {
+    geometries.push(geometry);if(far)geometries.push(far);const mesh=new InstancedMesh(geometry,material,entries.length);mesh.name=name;mesh.raycast=()=>{};mesh.receiveShadow=true;
     entries.forEach((entry,i)=>{
       transform.position.set(entry.x,entry.y,entry.z);transform.rotation.set(0,entry.rotation,0);transform.scale.fromArray(scale(entry));transform.updateMatrix();mesh.setMatrixAt(i,transform.matrix);
       if(tint)mesh.setColorAt(i,color.set(tint(entry)));
     });
-    mesh.instanceMatrix.needsUpdate=true;mesh.computeBoundingSphere();batches.push({mesh,count:entries.length,structural:name.startsWith('reef-weathered-')});root.add(mesh);return mesh;
+    mesh.instanceMatrix.needsUpdate=true;mesh.computeBoundingSphere();batches.push({mesh,count:entries.length,structural:name.startsWith('reef-weathered-'),near:geometry,far});root.add(mesh);return mesh;
   }
   for(let form=0;form<8;form++) {
     const geometry=reefCoralGeometry(form);geometry.computeBoundingBox();
@@ -268,7 +270,7 @@ export function createReefHabitat() {
     };
     material.customProgramCacheKey=()=>`channel-seaweed-${form}`;
     const entries=plan.plants.filter(entry=>entry.form===form);
-    instances(`reef-seagrass-${form}`,createSeaweedGeometry(form),material,entries,entry=>[(entry as typeof entries[number]).width,entry.height,(entry as typeof entries[number]).width]);
+    instances(`reef-seagrass-${form}`,createSeaweedGeometry(form),material,entries,entry=>[(entry as typeof entries[number]).width,entry.height,(entry as typeof entries[number]).width],undefined,createSeaweedGeometry(form,0,'far'));
   }
   const kelpMaterial=new MeshStandardMaterial({vertexColors:true,roughness:.83,side:DoubleSide});materials.push(kelpMaterial);
   kelpMaterial.onBeforeCompile=shader=>{
@@ -281,18 +283,19 @@ export function createReefHabitat() {
     `);
   };
   kelpMaterial.customProgramCacheKey=()=> 'submerged-forest-kelp-v1';
-  for(let form=0;form<4;form++)instances(`reef-kelp-forest-${form}`,createForestKelpGeometry(form),kelpMaterial,plan.kelp.filter(entry=>entry.form===form),entry=>[(entry as typeof plan.kelp[number]).width,entry.height,(entry as typeof plan.kelp[number]).width],entry=>['#bec69c','#a0b881','#c2b18a','#91ac88','#b8c099','#95a86c','#c8b48f'][entry.color]);
+  for(let form=0;form<4;form++)instances(`reef-kelp-forest-${form}`,createForestKelpGeometry(form),kelpMaterial,plan.kelp.filter(entry=>entry.form===form),entry=>[(entry as typeof plan.kelp[number]).width,entry.height,(entry as typeof plan.kelp[number]).width],entry=>['#bec69c','#a0b881','#c2b18a','#91ac88','#b8c099','#95a86c','#c8b48f'][entry.color],createForestKelpGeometry(form,'far'));
   let timer:ReturnType<typeof setTimeout>|undefined;
-  function dispose(){sandNormal.dispose();geometries.forEach(geometry=>geometry.dispose());materials.forEach(material=>material.dispose());batches.forEach(batch=>batch.mesh.dispose());contact.mesh.dispose();}
+  function dispose(){meadow.dispose();sandNormal.dispose();geometries.forEach(geometry=>geometry.dispose());materials.forEach(material=>material.dispose());batches.forEach(batch=>batch.mesh.dispose());contact.mesh.dispose();}
   function setQuality(quality:EnvironmentProps['quality']){
-    const fraction=quality==='high'?1:quality==='medium'?.76:.52;batches.forEach(batch=>{batch.mesh.count=Math.ceil(batch.count*(batch.structural?1:fraction));});
+    meadow.setQuality(quality);
+    const fraction=quality==='high'?1:quality==='medium'?.76:.52;batches.forEach(batch=>{batch.mesh.count=Math.ceil(batch.count*(batch.structural?1:fraction));if(batch.far)batch.mesh.geometry=quality==='high'?batch.near:batch.far;});
     const visible=new Set<ReefObstacle>();
     for(const entries of [plan.rocks,plan.colonies])for(let form=0;form<8;form++){
       const group=entries.filter(entry=>entry.form===form);group.slice(0,Math.ceil(group.length*(entries===plan.rocks?1:fraction))).forEach(entry=>visible.add(entry));
     }
     contact.setVisibleSites(visible);
   }
-  return {root,setQuality,update(elapsed:number,paused=false){if(!paused)time.value=elapsed;},dispose,retain(){clearTimeout(timer);return()=>{timer=setTimeout(dispose,0);};}};
+  return {root,setQuality,update(elapsed:number,paused=false){if(!paused){time.value=elapsed;meadow.update(elapsed);}},dispose,retain(){clearTimeout(timer);return()=>{timer=setTimeout(dispose,0);};}};
 }
 
 export function ReefHabitat({runtime,paused,quality}:EnvironmentProps) {

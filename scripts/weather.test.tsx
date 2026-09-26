@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { create } from '@react-three/test-renderer';
-import { Vector3, type Mesh, type ShaderMaterial } from 'three';
+import { Vector3, type Mesh } from 'three';
 import { advanceSceneTime, easternHour, daylightAt, daylightWeights, stormAt, stormSchedule, windAt, windDisplacement } from '../src/components/world/weatherState';
 import { createSceneRuntime, world } from '../src/content/world';
 import { CloudSystem } from '../src/components/world/AmbientSystem';
@@ -21,7 +21,7 @@ test('Eastern clock follows winter, summer and both DST transitions', () => {
 });
 
 test('one solar direction passes through dawn, noon, sunset and night smoothly', () => {
-  assert.ok(daylightAt(6).x < -.9); assert.ok(daylightAt(12).y > .9); assert.ok(daylightAt(18).x > .9); assert.ok(daylightAt(0).y < -.9);
+  assert.ok(daylightAt(6).x > .5); assert.ok(daylightAt(12).y > .7); assert.ok(daylightAt(18).x < -.5); assert.ok(daylightAt(0).y < -.7);
   assert.equal(daylightWeights(12).daylight, 1); assert.equal(daylightWeights(0).night, 1);
   assert.ok(daylightWeights(18).dusk > .9);
   for (let hour = 0; hour < 24; hour += .01) assert.ok(daylightAt(hour).distanceTo(daylightAt(hour + .01)) < .004);
@@ -68,13 +68,13 @@ test('the sky includes city-scale cloud banks and hides distant recycling', () =
 });
 
 test('squeezing has a damped response and reduced motion has a stable immediate release', () => {
-  const clouds = createCloudClusters(2);
+  const clouds = createCloudClusters(2); clouds[1].moisture = .8;
   advanceCloudPress(clouds, 0, 1 / 60, false); assert.ok(clouds[0].response > 0 && clouds[0].response < .2);
   advanceCloudPress(clouds, 1, 1 / 60, true); assert.equal(clouds[0].response, 0); assert.equal(clouds[1].response, 1);
   advanceCloudPress(clouds, -1, 1 / 60, true); assert.ok(clouds.every(cloud => !cloud.targeted && cloud.response === 0));
 });
 
-test('cloud pointer capture owns the gesture, emits rain and releases on cancellation', async () => {
+test('cloud capture emits falling drops and cancellation preserves drops already in flight', async () => {
   const runtime = { current: createSceneRuntime() };
   const renderer = await create(<CloudSystem runtime={runtime} paused={false} quality="low"/>);
   const cloud = renderer.scene.findByProps({ object: renderer.scene.children[0].children[0].instance });
@@ -82,21 +82,23 @@ test('cloud pointer capture owns the gesture, emits rain and releases on cancell
   try {
     await renderer.fireEvent(cloud, 'pointerDown', { faceIndex: 0, button: 0, shiftKey: false, pointerId: 7, point: new Vector3(-43, 23, -15), target, stopPropagation() {} });
     assert.equal(runtime.current.dragging, true);
-    await renderer.advanceFrames(12, 1 / 60);
-    const rain = renderer.scene.children[0].children[1].instance as Mesh;
-    assert.equal(rain.visible, true); assert.ok((rain.material as ShaderMaterial).uniforms.uStrength.value > .5);
-    await renderer.fireEvent(cloud, 'pointerCancel', {});
-    assert.equal(runtime.current.dragging, false); assert.equal(rain.visible, false);
+    for(let i=0;i<12;i++){runtime.current.activeElapsed+=1/60;await renderer.advanceFrames(1,1/60);}
+    const rain = renderer.scene.children[0].children[1].instance.children[0] as Mesh;
+    const births = rain.geometry.getAttribute('aBirth');
+    assert.ok(Array.from({length:births.count},(_,i)=>births.getW(i)).some(born=>born>=0));
+    const before = births.array.slice();
+    await renderer.fireEvent(cloud, 'pointerCancel', {}); assert.equal(runtime.current.dragging, false);
+    runtime.current.activeElapsed += .1; await renderer.advanceFrames(1,.1);
+    assert.deepEqual(births.array,before,'Releasing ends emission without teleporting in-flight drops.');
   } finally { await renderer.unmount(); }
 });
 
-test('rain geometry remains one draw with a fixed bounded population', () => {
-  const rain = createRain(4400, 140, 52);
-  assert.equal(rain.geometry.instanceCount, 4400);
+test('rain geometry remains two instanced draws with fixed bounded populations', () => {
+  const rain = createRain({capacity:4400,impacts:540});
+  assert.equal(rain.geometry.instanceCount, 4400); assert.equal(rain.impactGeometry.instanceCount,540);
   assert.equal(rain.geometry.getAttribute('position').count, 6);
-  assert.equal(rain.geometry.getAttribute('aSeed').count, 4400);
-  assert.equal(rain.material.depthWrite, false);
-  rain.dispose();
+  assert.equal(rain.geometry.getAttribute('aBirth').count, 4400);
+  assert.equal(rain.material.depthWrite, false); rain.dispose();
 });
 
 

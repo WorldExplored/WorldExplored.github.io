@@ -1,4 +1,5 @@
 import { Vector3 } from 'three';
+import { coastalCaveClearance } from './coastalCaveLayout';
 import { getReefHabitat, marineFloorHeight, reefHabitatContains, reefFerryClearance } from './reefHabitat';
 import { createLandscapePlan, ISLANDS, islandContour, landDistance, seededRandom, terrainMeshHeight } from './terrain';
 
@@ -56,6 +57,7 @@ export function visitorClear(kind: VisitorKind, x: number, z: number, radius: nu
       if (Math.abs(terrainMeshHeight(x+dx,z+dz)-y) > .19) return false;
     return true;
   }
+  if (coastalCaveClearance(x,z,radius)<=0)return false;
   if (landDistance(x,z) > -4.2-radius || reefFerryClearance(x,z) < 3.6+radius) return false;
   const floor = marineFloorHeight(x,z);
   if (floor > -2.35 || floor < -9.5) return false;

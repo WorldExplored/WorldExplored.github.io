@@ -50,7 +50,7 @@ test('botanical assets have different crown envelopes, raised leaf midribs and d
     assert.ok(rib.distanceTo(edgeA.clone().lerp(edgeB,.5))>.02,'leaf has cupped depth');
   }
   foliage.dispose();[0,1,2].forEach(form=>{const wood=treeWoodGeometry(form);wood.computeBoundingBox();assert.ok(wood.boundingBox!.min.y<0);wood.dispose();});
-  const seaweed=[0,1,2].map(createSeaweedGeometry);assert.equal(new Set(seaweed.map(g=>g.userData.form)).size,3);seaweed.forEach(g=>g.dispose());
+  const seaweed=[0,1,2].map(variant=>createSeaweedGeometry(variant));assert.equal(new Set(seaweed.map(g=>g.userData.form)).size,3);seaweed.forEach(g=>g.dispose());
 });
 
 
