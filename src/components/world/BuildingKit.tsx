@@ -2,9 +2,8 @@
 
 import { measureConstruction } from './renderDiagnostics';
 
-import { useEffect, useRef, useState, type MutableRefObject } from 'react';
-import { useFrame } from '@react-three/fiber';
-import { BoxGeometry, BufferGeometry, CatmullRomCurve3, DoubleSide, ExtrudeGeometry, Float32BufferAttribute, MathUtils, MeshPhysicalMaterial, Quaternion, Shape, TubeGeometry, Vector2, Vector3 } from 'three';
+import { useEffect, useState, type MutableRefObject } from 'react';
+import { BoxGeometry, BufferGeometry, CatmullRomCurve3, DoubleSide, ExtrudeGeometry, Float32BufferAttribute, MeshPhysicalMaterial, Quaternion, Shape, TubeGeometry, Vector2, Vector3 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { applySurface, surfacePalette, surfaceTexture } from './surfaceMaterials';
 import { world, type LandmarkId, type QualityTier, type SceneRuntime } from '@/content/world';
@@ -151,7 +150,10 @@ export function curvedWall(roof: Surface, edge: number, start: number, end: numb
   return platform(outline, top, top - 1.07);
 }
 
-export function usePalette({ active, paused, runtime }: ModelProps, id: LandmarkId) {
+export function usePalette(props: ModelProps, id: LandmarkId) {
+  // Keep the shared model API; selection is indicated by labels and the entry ring.
+  // Physical paint and glazing never become light sources on pointer hover.
+  void props; void id;
   const [materials] = useState(() => ({
     porcelain: new MeshPhysicalMaterial({ name: 'painted-ceramic-shell', normalMap: surfaceTexture('mineral', 'normal'), normalScale: new Vector2(.07,.07), roughnessMap: surfaceTexture('mineral', 'arm'), color: surfacePalette.porcelain, emissive: '#d7f8ff', emissiveIntensity: 0, roughness: .42, metalness: .015, clearcoat: .2, clearcoatRoughness: .28, envMapIntensity: .68, side: DoubleSide }),
     edge: new MeshPhysicalMaterial({ name: 'satin-aluminum-trim', color: '#427e8c', roughness: .43, metalness: .65, clearcoat: .08, envMapIntensity: .7 }),
@@ -165,29 +167,9 @@ export function usePalette({ active, paused, runtime }: ModelProps, id: Landmark
     black: new MeshPhysicalMaterial({ name: 'dark-composite', color: '#202523', roughness: .72, metalness: .03, clearcoat: 0 }),
     gold: new MeshPhysicalMaterial({ name: 'brushed-brass', color: '#b99a4c', roughness: .43, metalness: .72, clearcoat: .08, envMapIntensity: .65 }),
   }));
-  const animated = useRef<typeof materials | null>(null);
   useEffect(() => {
     clearTimeout(resourceTimers.get(materials));
-    animated.current = materials;
-    return () => {
-      animated.current = null;
-      resourceTimers.set(materials, setTimeout(() => Object.values(materials).forEach(material => material.dispose()), 0));
-    };
+    return () => { resourceTimers.set(materials, setTimeout(() => Object.values(materials).forEach(material => material.dispose()), 0)); };
   }, [materials]);
-  useFrame((_, delta) => {
-    if (!animated.current) return;
-    if (paused) delta = 1;
-    const highlighted = (active || runtime.current.hovered === id) && (id !== 'building' || world.lighting.lampEnabled);
-    const palette = animated.current;
-    if (id === 'building' && !world.lighting.lampEnabled) {
-      palette.cyan.emissiveIntensity = 0;
-      palette.glass.emissiveIntensity = 0;
-      palette.porcelain.emissiveIntensity = 0;
-      return;
-    }
-    palette.cyan.emissiveIntensity = MathUtils.damp(palette.cyan.emissiveIntensity, highlighted ? world.lighting.windowIllumination + 0.2 : 0, 16, delta);
-    palette.glass.emissiveIntensity = MathUtils.damp(palette.glass.emissiveIntensity, highlighted ? 0.055 : 0, 16, delta);
-    palette.porcelain.emissiveIntensity = MathUtils.damp(palette.porcelain.emissiveIntensity, highlighted ? 0.035 : 0, 16, delta);
-  });
   return materials;
 }

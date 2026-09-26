@@ -181,7 +181,7 @@ test('effect replay retains traffic resources, pause freezes motion, and final c
   traffic.detach(); await new Promise(resolve => setTimeout(resolve, 5));
   assert.equal(vesselOccupants.length, 0);
   assert.equal(geometryDisposals, geometries.size); assert.equal(materialDisposals, materials.size);
-  assert.ok(geometries.size < 65, 'all fittings and wakes remain within the fleet draw budget');
+  assert.ok(geometries.size < 75, 'all fittings and wakes remain within the fleet draw budget');
 });
 
 
@@ -221,4 +221,17 @@ test('visitor pier algae stays attached to wet post faces within a small instanc
       assert.ok(site.y + site.height * 1.04 <= -.30 + .00001);
     }
   } finally { pier.dispose(); }
+});
+
+test('visitor has a full second deck at distinct scale while launches have different hull forms', async()=>{
+  const {Box3}=await import('three');const boats=[0,1,2].map(createAeroBoat);
+  try{
+    const sizes=boats.map(boat=>new Box3().setFromObject(boat.root).getSize(new Vector3()));
+    assert.ok(sizes[2].z>11.5&&sizes[2].z>sizes[0].z*3);
+    assert.ok(sizes[2].y>4,'visitor includes a standing-height upper saloon');
+    assert.ok(boats[2].root.getObjectByName('upper-saloon-glazing'));
+    assert.ok(boats[0].root.getObjectByName('swept-hydrofoil-hull'));
+    assert.ok(boats[1].root.getObjectByName('survey-mast'));
+    assert.ok(sizes[1].x>sizes[0].x,'survey launch is broader than the hydrofoil');
+  }finally{boats.forEach(boat=>boat.dispose());}
 });

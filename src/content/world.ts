@@ -53,7 +53,7 @@ export const world = {
     { id: 'history', rotationY: -.28, position: [21, 0, -72], label: [21, 9.2, -72], color: '#8ff0bc' },
     { id: 'about', position: [-10, 0, 23], label: [-10, 5.6, 23], color: '#a6e65c' },
     { id: 'contact', position: [12, 0, 23], label: [12, 7, 23], color: '#72deff' },
-    { id: 'arcade', position: [-26, 0, -85], label: [-26, 6, -85], color: '#b5f66d' },
+    { id: 'arcade', position: [-28.8, 0, -74.5], label: [-28.8, 6, -74.5], color: '#b5f66d' },
     { id: 'building', position: [-76, 1.8, -36], label: [-76, 16.8, -36], color: '#bcffff' },
   ] as LandmarkConfig[],
   quality: {

@@ -1,3 +1,4 @@
+export const BEACH_PALMS = [{x:-11.2,z:29.8,scale:.92,yaw:.4},{x:-1.6,z:31,scale:1.05,yaw:2.1},{x:20,z:23.8,scale:.84,yaw:4.4}] as const;
 export const TOWN_BEDS = [[-4,-85,1.8,4.2],[6,-81,1.8,4],[-14,-84,1.1,3],[-25,-83,.9,3.1],[8,-86,1,3.3],[2,-76,.9,2.2],[-18,-88,.8,2.6],[-22,-67,.8,2.5],[13,-76,.7,2.3],[-3,-90,1.1,3.8],[5,-90,1,3.5],[12,-82,.9,3.2],[-5,-64,.7,2.6]] as const;
 /** One ecological field drives both terrain color and instanced planting. */
 export function biomeSmooth(a: number, b: number, value: number) {

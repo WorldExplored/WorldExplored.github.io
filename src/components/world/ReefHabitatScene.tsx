@@ -286,22 +286,31 @@ export function createReefHabitat() {
   for(let form=0;form<4;form++)instances(`reef-kelp-forest-${form}`,createForestKelpGeometry(form),kelpMaterial,plan.kelp.filter(entry=>entry.form===form),entry=>[(entry as typeof plan.kelp[number]).width,entry.height,(entry as typeof plan.kelp[number]).width],entry=>['#bec69c','#a0b881','#c2b18a','#91ac88','#b8c099','#95a86c','#c8b48f'][entry.color],createForestKelpGeometry(form,'far'));
   let timer:ReturnType<typeof setTimeout>|undefined;
   function dispose(){meadow.dispose();sandNormal.dispose();geometries.forEach(geometry=>geometry.dispose());materials.forEach(material=>material.dispose());batches.forEach(batch=>batch.mesh.dispose());contact.mesh.dispose();}
+  let currentQuality:EnvironmentProps['quality']='high',distant=false;
+  function applyPlantDetail(){
+    meadow.setQuality(currentQuality,distant);
+    batches.forEach(batch=>{if(batch.far)batch.mesh.geometry=currentQuality==='high'&&!distant?batch.near:batch.far;});
+  }
   function setQuality(quality:EnvironmentProps['quality']){
-    meadow.setQuality(quality);
-    const fraction=quality==='high'?1:quality==='medium'?.76:.52;batches.forEach(batch=>{batch.mesh.count=Math.ceil(batch.count*(batch.structural?1:fraction));if(batch.far)batch.mesh.geometry=quality==='high'?batch.near:batch.far;});
+    currentQuality=quality;applyPlantDetail();
+    const fraction=quality==='high'?1:quality==='medium'?.76:.52;batches.forEach(batch=>{batch.mesh.count=Math.ceil(batch.count*(batch.structural?1:fraction));});
     const visible=new Set<ReefObstacle>();
     for(const entries of [plan.rocks,plan.colonies])for(let form=0;form<8;form++){
       const group=entries.filter(entry=>entry.form===form);group.slice(0,Math.ceil(group.length*(entries===plan.rocks?1:fraction))).forEach(entry=>visible.add(entry));
     }
     contact.setVisibleSites(visible);
   }
-  return {root,setQuality,update(elapsed:number,paused=false){if(!paused){time.value=elapsed;meadow.update(elapsed);}},dispose,retain(){clearTimeout(timer);return()=>{timer=setTimeout(dispose,0);};}};
+  return {root,setQuality,update(elapsed:number,paused=false,cameraHeight=0){
+    const nextDistant=distant?cameraHeight>18:cameraHeight>22;
+    if(nextDistant!==distant){distant=nextDistant;applyPlantDetail();}
+    if(!paused){time.value=elapsed;meadow.update(elapsed);}
+  },dispose,retain(){clearTimeout(timer);return()=>{timer=setTimeout(dispose,0);};}};
 }
 
 export function ReefHabitat({runtime,paused,quality}:EnvironmentProps) {
   const habitat=useMemo(()=>createReefHabitat(),[]);
   useEffect(()=>habitat.retain(),[habitat]);
   useEffect(()=>{habitat.setQuality(quality);},[habitat,quality]);
-  useFrame(()=>habitat.update(runtime.current.elapsed,paused));
+  useFrame(({camera})=>habitat.update(runtime.current.elapsed,paused,camera.position.y));
   return <primitive object={habitat.root} dispose={null} />;
 }

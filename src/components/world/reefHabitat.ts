@@ -213,13 +213,15 @@ export function getReefHabitat(): ReefHabitatPlan {
     plants.push({x,z,y:floor-.035,radius:width*.55,height:.20+random()*.45,width,rotation:random()*Math.PI*2,form:i%2,color:0,patch:100+meadow.patch});break;
   }
   const forestRandom=seededRandom(56903);
-  const groves=KELP_POCKETS.flatMap((pocket,patch)=>Array.from({length:7},()=>({x:pocket.x+(forestRandom()-.5)*pocket.rx*1.1,z:pocket.z+(forestRandom()-.5)*pocket.rz*1.1,pocket,patch})));
+  const groves=KELP_POCKETS.flatMap((pocket,patch)=>Array.from({length:7},()=>({x:pocket.x+(forestRandom()-.5)*pocket.rx*1.1,z:pocket.z+(forestRandom()-.5)*pocket.rz*1.1,radius:1.5+forestRandom()*3.6,aspect:.35+forestRandom()*.65,yaw:forestRandom()*Math.PI*2,pocket,patch})));
   for(let i=0;i<700;i++)for(let attempt=0;attempt<70;attempt++){
-    const grove=groves[i%groves.length],a=forestRandom()*Math.PI*2,r=Math.pow(forestRandom(),.65)*3.6,pocket=grove.pocket;
-    const x=grove.x+Math.cos(a)*r,z=grove.z+Math.sin(a)*r;
+    const grove=groves[i%groves.length],a=forestRandom()*Math.PI*2,r=Math.pow(forestRandom(),1.2)*grove.radius,pocket=grove.pocket;
+    const dx=Math.cos(a)*r,dz=Math.sin(a)*r*grove.aspect;
+    const x=grove.x+Math.cos(grove.yaw)*dx-Math.sin(grove.yaw)*dz,z=grove.z+Math.sin(grove.yaw)*dx+Math.cos(grove.yaw)*dz;
     if(Math.hypot((x-pocket.x)/pocket.rx,(z-pocket.z)/pocket.rz)>1||!reefHabitatContains(x,z,.4))continue;
-    const y=reefFloorHeight(x,z)-.025,width=.74+forestRandom()*1.05,height=Math.min(2.8+forestRandom()*3.5,KELP_TOP-y);
-    if(height<2.7||rocks.some(rock=>Math.hypot(x-rock.x,z-rock.z)<rock.radius+.25&&reefRockSurfaceHeight(rock,x,z)>y+.14)||kelp.some(plant=>Math.hypot(x-plant.x,z-plant.z)<.53))continue;
+    const y=reefFloorHeight(x,z)-.025,young=forestRandom()<.30,width=(young?.48:.8)+forestRandom()*(young?.63:1.0);
+    const height=Math.min(young?1.25+forestRandom()*1.4:2.85+forestRandom()*3.6,KELP_TOP-y),spacing=.26+forestRandom()*.36;
+    if(height<1.2||rocks.some(rock=>Math.hypot(x-rock.x,z-rock.z)<rock.radius+.25&&reefRockSurfaceHeight(rock,x,z)>y+.14)||kelp.some(plant=>Math.hypot(x-plant.x,z-plant.z)<spacing))continue;
     kelp.push({x,y,z,width,height,radius:width*.58,rotation:forestRandom()*Math.PI*2,form:Math.floor(forestRandom()*4),color:Math.floor(forestRandom()*7),patch:grove.patch});break;
   }
   // Prefix-based quality tiers retain growth across every ridge, not just the first few.

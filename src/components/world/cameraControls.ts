@@ -1,3 +1,4 @@
+import { BEACH_PALMS } from './coastalBiome';
 import { BRIDGES } from './bridgePlan';
 import { createCityInfrastructureObstacles } from './cityInfrastructure';
 import { MathUtils, Ray, Vector3 } from 'three';
@@ -27,6 +28,7 @@ export function cameraObstacles(): CameraObstacle[] {
     ...BRIDGES.flatMap(bridge => bridge.samples.filter((_,i) => i % 4 === 0).map(({point}) => ({ x: point.x, z: point.z, radius: bridge.width/2 + CLEARANCE, top: point.y + bridge.railHeight + CLEARANCE }))),
     ...createCityInfrastructureObstacles().map(item => ({ x: item.x, z: item.z, radius: item.radius + CLEARANCE, top: item.base + item.height + CLEARANCE })),
     ...architectureFootprints().map(item => ({ x: item.x, z: item.z, radius: item.radius + CLEARANCE, top: terrainHeight(item.x, item.z) + HEIGHTS[item.id as LandmarkId] + CLEARANCE })),
+    ...BEACH_PALMS.map(palm=>({x:palm.x,z:palm.z,radius:.5+CLEARANCE,top:terrainHeight(palm.x,palm.z)+3.3*palm.scale+CLEARANCE})),
     ...cityBuildings.map(item => ({ x: item.x, z: item.z, radius: item.radius + CLEARANCE, top: terrainHeight(item.x, item.z) + item.height + CLEARANCE })),
     ...createCityTransitRoute().curve.getPoints(100).map(point => ({ x: point.x, z: point.z, radius: 1.5, top: point.y + 2.2 })),
   ].map(obstacle => Object.freeze(obstacle))) as CameraObstacle[];

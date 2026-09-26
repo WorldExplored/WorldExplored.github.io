@@ -77,7 +77,7 @@ test('land impacts converge on sampled slope and accumulate temporary ground pud
   assert.ok(pools.length >= 1 && pools.length <= 3, 'Nearby droplets feed existing puddles.');
   for (const i of pools) {
     assert.ok(rain.shapes[i * 4] > .29 && rain.shapes[i * 4] <= .620001);
-    assert.ok(rain.shapes[i * 4 + 1] >= 11 && rain.shapes[i * 4 + 1] <= 20);
+    assert.ok(rain.shapes[i * 4 + 1] >= 7 && rain.shapes[i * 4 + 1] <= 13);
     assert.ok(Math.abs(rain.slopes[i * 2] - .08) < .00001);
     assert.ok(Math.abs(rain.slopes[i * 2 + 1] + .04) < .00001);
   }
@@ -128,4 +128,78 @@ test('a depleted white cloud stops emitting while its earlier droplets finish fa
   }
   assert.equal(rain.emitted, emitted); assert.equal(rain.live, 0);
   assert.ok(rain.groundHits > landed, 'the remaining drops become genuine delayed impacts');
+});
+
+test('roof triangles stop descending rain and temporary puddles fully evaporate', async()=>{
+  const {BoxGeometry,Mesh,MeshStandardMaterial,Group}=await import('three');
+  const {createRainCatchments}=await import('../src/components/world/rainCatchments');
+  const root=new Group(),roof=new Mesh(new BoxGeometry(8,.2,6),new MeshStandardMaterial());
+  roof.position.set(3,8,-2);roof.rotation.z=.08;root.add(roof);
+  const catchments=createRainCatchments([root]);
+  assert.ok(catchments.triangles>0);assert.ok(catchments.height(3,-2)>8);
+  assert.equal(catchments.height(20,-2),-Infinity,'no invisible roof outside the actual triangles');
+  const rain=createRain({capacity:150,impacts:30,sampleHeight:(x,z)=>Math.max(1,catchments.height(x,z))});
+  try{
+    rain.simulation.emit(pointSource(3,24,-2),300,.15,.15,[.05,0,.02]);
+    for(let i=0;i<rain.simulation.capacity;i++)if(rain.simulation.active[i])assert.ok(rain.simulation.landing[i*4+1]>8,'drops hit the roof before floors beneath');
+    rain.update(4,false);assert.equal(rain.simulation.live,0);assert.ok(rain.simulation.groundHits>0);assert.ok(rain.root.visible);
+    rain.update(18,false);assert.equal(rain.root.visible,false,'all drop and puddle batches disappear after the last impact dries');
+  }finally{rain.dispose();roof.geometry.dispose();roof.material.dispose();}
+});
+
+test('cloud families stay in consistent atmospheric shelves',()=>{
+  const clouds=createCloudClusters();
+  for(const family of new Set(clouds.map(cloud=>cloud.archetype))){
+    const group=clouds.filter(cloud=>cloud.archetype===family);
+    assert.equal(new Set(group.map(cloud=>cloud.layer)).size,1);
+    assert.ok(Math.max(...group.map(cloud=>cloud.center[1]))-Math.min(...group.map(cloud=>cloud.center[1]))<3.3);
+  }
+});
+
+test('rain catches roofs above furniture and ignores invisible or decorative subtrees', async()=>{
+  const {BoxGeometry,Mesh,MeshStandardMaterial,Group}=await import('three');
+  const {createRainCatchments}=await import('../src/components/world/rainCatchments');
+  const root=new Group(),geometry=new BoxGeometry(2,.2,2),material=new MeshStandardMaterial();
+  const roof=new Mesh(geometry,material);roof.position.y=5;root.add(roof);
+  const interior=new Mesh(geometry,material);interior.geometry=new BoxGeometry(2,.2,2);interior.geometry.userData.floors=[];interior.position.set(3,7,0);root.add(interior);
+  const vines=new Mesh(geometry,material);vines.name='eco-city-test-garden';vines.position.set(6,8,0);root.add(vines);
+  const mechanisms=new Group();mechanisms.name='work-operating-assembly';mechanisms.position.set(9,9,0);mechanisms.add(new Mesh(geometry,material));root.add(mechanisms);
+  const hidden=new Group();hidden.visible=false;hidden.position.set(12,10,0);hidden.add(new Mesh(geometry,material));root.add(hidden);
+  try{
+    const catches=createRainCatchments([root]);
+    assert.ok(Math.abs(catches.height(0,0)-5.1)<1e-5);
+    for(const x of [3,6,9,12])assert.equal(catches.height(x,0),-Infinity,'Decorative or hidden geometry cannot create an invisible rain shelter');
+    assert.equal(catches.triangles,2,'Only the two actual upward roof triangles enter the spatial index');
+  }finally{geometry.dispose();interior.geometry.dispose();material.dispose();}
+});
+
+test('pruned catchments retain every actual room roof and both bridge decks', async()=>{
+  const {createElement}=await import('react');
+  const {create}=await import('@react-three/test-renderer');
+  const {world,createSceneRuntime}=await import('../src/content/world');
+  const {LandmarkModel}=await import('../src/components/world/LandmarkModels');
+  const {EcoCity}=await import('../src/components/world/EcoCity');
+  const {createBridges}=await import('../src/components/world/Bridges');
+  const {BRIDGES}=await import('../src/components/world/bridgePlan');
+  const {mainRoomLamps}=await import('../src/components/world/RoomLighting');
+  const {createRainCatchments}=await import('../src/components/world/rainCatchments');
+  Object.assign(globalThis,{IS_REACT_ACT_ENVIRONMENT:true});
+  const props={runtime:{current:createSceneRuntime()},active:false,paused:true,quality:'high' as const};
+  const buildings=world.landmarks.map(site=>createElement('group',{key:site.id,name:`landmark-model-${site.id}`,position:site.position,rotation:[0,site.rotationY??0,0]},createElement(LandmarkModel,{...props,id:site.id})));
+  const renderer=await create(createElement('group',null,...buildings,createElement(EcoCity,props))),bridges=createBridges();
+  try{
+    const roots:import('three').Object3D[]=[bridges.root],rooms=[...mainRoomLamps];
+    renderer.scene.instance.traverse(object=>{
+      if(object.name.startsWith('landmark-model-')||object.name.startsWith('city-building-'))roots.push(object);
+      if(object.name==='interior-light-fixtures')rooms.push(...object.userData.rooms);
+    });
+    const catches=createRainCatchments(roots);
+    assert.ok(rooms.length>50,'Actual city room coverage is included');
+    for(const room of rooms)assert.ok(catches.height(room.x,room.z)>=room.ceiling-.005,`Missing weather roof at ${room.x},${room.z}`);
+    for(const bridge of BRIDGES)for(let i=1;i<bridge.samples.length;i++){
+      const point=bridge.samples[i-1].point.clone().lerp(bridge.samples[i].point,.5);
+      assert.ok(catches.height(point.x,point.z)>=point.y-.005,`${bridge.id}: bridge deck no longer catches rain`);
+    }
+    assert.ok(catches.triangles<70000,'Furniture and vines must not double the rain query budget');
+  }finally{bridges.dispose();await renderer.unmount();}
 });

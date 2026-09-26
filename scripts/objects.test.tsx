@@ -157,13 +157,13 @@ test('all nine landmarks have finite geometry and localized lighting at every qu
       const untouched = unrelated.map(material => material.emissiveIntensity);
       runtime.current.hovered = 'contact';
       await advance(renderer, 30);
-      assert.ok(contactMaterials.some((material, index) => material.emissiveIntensity > before[index] + 0.1));
+      assert.deepEqual(contactMaterials.map(material => material.emissiveIntensity), before, 'Hover must not turn paint, doors or glazing into light sources.');
       assert.ok(unrelated.every((material, index) => Math.abs(material.emissiveIntensity - untouched[index]) < 0.0001));
       await renderer.update(render(true));
       const frozen = contactMaterials.map(material => material.emissiveIntensity);
       runtime.current.hovered = null;
       await advance(renderer, 60);
-      assert.ok(contactMaterials.some((material, index) => material.emissiveIntensity < frozen[index]), 'Reduced motion still acknowledges hover exit without animated transforms.');
+      assert.deepEqual(contactMaterials.map(material => material.emissiveIntensity), frozen, 'Reduced-motion hover exit keeps physical materials unchanged.');
       console.log(JSON.stringify({ quality, meshes: meshes.length, colorCalls: calls, triangles, windowIllumination: world.lighting.windowIllumination }));
     } finally { await renderer.unmount(); }
   }

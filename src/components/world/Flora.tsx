@@ -9,15 +9,15 @@ import { useEffect, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { BufferGeometry, Color, DoubleSide, Float32BufferAttribute, InstancedMesh, MeshPhysicalMaterial, Object3D, Vector3 } from 'three';
 import { createLandscapePlan, distanceToSegment, islandAt, landDistance, seededRandom, terrainHeight, terrainSlope, vegetationSuitability, ISLANDS, islandContour } from './terrain';
-import { coastalBiome, TOWN_BEDS } from './coastalBiome';
+import { coastalBiome, TOWN_BEDS, BEACH_PALMS } from './coastalBiome';
 import { createLighthouseEscarpment, lighthouseEscarpmentSites } from './LighthouseEscarpment';
 import { IslandMeadows } from './IslandMeadows';
 import type { EnvironmentProps } from './Water';
 
-export type FloraKind = 'reeds' | 'beach' | 'shrub' | 'flower' | 'broadleaf' | 'sedge' | 'clover' | 'fern' | 'foxglove' | 'bluebell' | 'poppy' | 'allium';
+export type FloraKind = 'reeds' | 'beach' | 'shrub' | 'flower' | 'broadleaf' | 'sedge' | 'clover' | 'fern' | 'foxglove' | 'bluebell' | 'poppy' | 'allium' | 'palm';
 export const FLOWER_KINDS: FloraKind[] = ['flower', 'foxglove', 'bluebell', 'poppy', 'allium'];
 export interface FloraSite { x: number; y: number; z: number; scale: number; rotation: number; kind: FloraKind; reach: number }
-const KINDS: FloraKind[] = ['reeds', 'beach', 'shrub', 'flower', 'broadleaf', 'sedge', 'clover', 'fern', 'foxglove', 'bluebell', 'poppy', 'allium'];
+const KINDS: FloraKind[] = ['reeds', 'beach', 'shrub', 'flower', 'broadleaf', 'sedge', 'clover', 'fern', 'foxglove', 'bluebell', 'poppy', 'allium', 'palm'];
 
 export function createFloraSites() {
   const random = seededRandom(4621); const plan = createLandscapePlan(); const sites: FloraSite[] = [];
@@ -80,11 +80,22 @@ export function createFloraSites() {
     const scale=kind==='fern'?.50+random()*.22:kind==='broadleaf'?.34+random()*.12:kind==='shrub'?.45+random()*.16:.50+random()*.24;
     sites.push({x,y:terrainHeight(x,z),z,kind,reach,scale,rotation:random()*Math.PI*2});
   }
+  const parents=[...sites],recruits:FloraKind[]=['fern','shrub','clover','broadleaf','flower','bluebell','poppy','foxglove'];
+  for(let attempt=0;attempt<18000&&sites.length<2100;attempt++){
+    const parent=parents[Math.floor(random()*parents.length)],angle=random()*Math.PI*2,r=.22+Math.pow(random(),.8)*1.7;
+    const x=parent.x+Math.cos(angle)*r,z=parent.z+Math.sin(angle)*r*.72,kind=recruits[Math.floor(random()*recruits.length)];
+    const reach=kind==='shrub'?.67:kind==='broadleaf'?.64:kind==='fern'?.52:.36;
+    if(islandAt(x,z).island.id==='beacon'?!beaconClear(x,z,reach):vegetationSuitability(x,z,reach,plan)<.07)continue;
+    if(sites.some(site=>Math.hypot(x-site.x,z-site.z)<.22))continue;
+    const scale=kind==='shrub'?.49+random()*.22:kind==='broadleaf'?.36+random()*.16:kind==='fern'?.49+random()*.21:.46+random()*.32;
+    sites.push({x,y:terrainHeight(x,z),z,kind,reach,scale,rotation:random()*Math.PI*2});
+  }
+  for(const palm of BEACH_PALMS)sites.push({x:palm.x,y:terrainHeight(palm.x,palm.z),z:palm.z,kind:'palm',reach:1.85,scale:palm.scale,rotation:palm.yaw});
   return sites;
 }
 
 export function floraGeometry(kind:FloraKind, detail:'near'|'far'='near') {
-  const segments=detail==='near'?3:2,petalRows=detail==='near'?3:2,bellRows=detail==='near'?4:2,bellSides=detail==='near'?8:5;
+  const segments=detail==='near'?3:2,petalRows=detail==='near'?3:2,bellRows=detail==='near'?4:2,bellSides=detail==='near'?8:4;
   const positions:number[]=[];const colors:number[]=[];const indices:number[]=[];const random=seededRandom(940+KINDS.indexOf(kind));const tint=new Color();
   function leaf(angle:number,length:number,width:number,height:number,lean:number,color:string,offsetX=0,offsetZ=0) {
     const start=positions.length/3;tint.set(color);
@@ -111,7 +122,7 @@ export function floraGeometry(kind:FloraKind, detail:'near'|'far'='near') {
     for(let ring=0;ring<=petalRows;ring++){
       const t=ring/petalRows;const w=Math.sin(t*Math.PI)*.023;const r=.016+t*.066;
       for(const side of [-1,1]) {positions.push(cx+Math.cos(angle)*r-Math.sin(angle)*w*side,cy+Math.sin(t*Math.PI)*.018,cz+Math.sin(angle)*r+Math.cos(angle)*w*side);colors.push(tint.r,tint.g,tint.b);}
-      if(ring<petalRows){const n=start+ring*2;indices.push(n,n+1,n+2,n+1,n+3,n+2);}
+      if(ring<petalRows){const n=start+ring*2;if(ring>0)indices.push(n,n+1,n+2);if(ring<petalRows-1)indices.push(n+1,n+3,n+2);}
     }
   }
   if(kind==='reeds'||kind==='beach'||kind==='sedge')for(let i=0;i<9;i++)leaf(i*2.399,.16+random()*.25,kind==='reeds'?.035:kind==='sedge'?.055:.018,(kind==='reeds'?1.3:kind==='sedge'?.32:.65)+random()*.3,.1,kind==='reeds'?'#608e2b':'#8da94a',(random()-.5)*.25,(random()-.5)*.25);
@@ -119,7 +130,7 @@ export function floraGeometry(kind:FloraKind, detail:'near'|'far'='near') {
     const a=cluster*2.399,r=Math.sqrt(cluster/9)*.5,x=Math.cos(a)*r,z=Math.sin(a)*r;
     for(let l=0;l<3;l++)leaf(l*Math.PI*2/3,.13,.075,.09,.025,l===0?'#70974c':'#517f37',x,z);
   }
-  if(kind==='fern')for(let frond=0;frond<7;frond++) {
+  if(kind==='fern')for(let frond=0;frond<(detail==='near'?7:5);frond++) {
     const a=frond*2.399;leaf(a,.65,.016,.42,.20,'#5b8539');
     for(let level=1;level<8;level++)for(const side of [-1,1]) {
       const t=level/9,length=.20*Math.sin(t*Math.PI);
@@ -168,8 +179,9 @@ export function floraGeometry(kind:FloraKind, detail:'near'|'far'='near') {
   if(kind==='allium')for(let bloom=0;bloom<2;bloom++){
     const x=(bloom-.5)*.3,y=.74+bloom*.14;
     leaf(bloom,.01,.009,y,0,'#597d4d',x,0);
-    for(let floret=0;floret<18;floret++){
-      const t=(floret+.5)/18,vertical=1-t*2,a=floret*2.399,r=Math.sqrt(1-vertical*vertical)*.14;
+    const florets=detail==='near'?18:10;
+    for(let floret=0;floret<florets;floret++){
+      const t=(floret+.5)/florets,vertical=1-t*2,a=floret*2.399,r=Math.sqrt(1-vertical*vertical)*.14;
       const cx=x+Math.cos(a)*r,cy=y+vertical*.14,cz=Math.sin(a)*r;
       for(let p=0;p<4;p++){
         const from=positions.length;petal(cx,cy,cz,p*Math.PI*2/4,'#b69bc9');
@@ -177,6 +189,26 @@ export function floraGeometry(kind:FloraKind, detail:'near'|'far'='near') {
       }
     }
     leaf(bloom+1,.31,.022,.26,.09,'#609044',x,0);
+  }
+  if(kind==='palm'){
+    const start=positions.length/3,rings=12,sides=7;
+    for(let ring=0;ring<=rings;ring++)for(let side=0;side<sides;side++){
+      const t=ring/rings,a=side/sides*Math.PI*2,radius=(.12-t*.047)*(ring%2?.93:1);
+      positions.push(.17*t*t+Math.cos(a)*radius,t*2.8,Math.sin(a)*radius);
+      tint.set(ring%2?'#9c9673':'#787c58');colors.push(tint.r,tint.g,tint.b);
+      if(ring){const i=start+ring*sides+side,next=start+ring*sides+(side+1)%sides;indices.push(i,next,i-sides,next,next-sides,i-sides);}
+    }
+    // Arched rachises and alternating narrow leaflets form real palm fronds.
+    for(let frond=0;frond<8;frond++){
+      const angle=frond*2.399,length=1.13+random()*.30,crown=2.68+random()*.15;
+      let from=positions.length;leaf(angle,length,.020,.20,.33,'#5e8b3e',.17,0);
+      for(let i=from;i<positions.length;i+=3)positions[i+1]+=crown;
+      for(let level=1;level<=8;level++)for(const side of [-1,1]){
+        const t=level/9,branch=.33*Math.sin(t*Math.PI)+.035;
+        from=positions.length;leaf(angle+side*1.1,branch,.028,-.16*t,.06,level%2?'#4f873d':'#749b48',.17+Math.sin(angle)*length*t,Math.cos(angle)*length*t);
+        for(let i=from;i<positions.length;i+=3)positions[i+1]+=crown+.20*t+Math.sin(t*Math.PI)*.33;
+      }
+    }
   }
   const geometry=new BufferGeometry();geometry.setAttribute('position',new Float32BufferAttribute(positions,3));geometry.setAttribute('color',new Float32BufferAttribute(colors,3));geometry.setIndex(indices);geometry.computeVertexNormals();return geometry;
 }
@@ -191,11 +223,11 @@ export function Flora({runtime,paused,quality}:EnvironmentProps) {
       const material=new MeshPhysicalMaterial({vertexColors:true,side:DoubleSide,roughness:kind==='broadleaf'?.46:.78,clearcoat:kind==='broadleaf'?.18:.02,envMapIntensity:.2});
       material.onBeforeCompile=shader=>{
         shader.uniforms.floraTime=uniforms.time;shader.uniforms.floraPointer=uniforms.pointer;shader.uniforms.floraStrength=uniforms.strength;
-        shader.vertexShader=`uniform float floraTime;uniform vec3 floraPointer;uniform float floraStrength;\n${shader.vertexShader}`.replace('#include <begin_vertex>',`#include <begin_vertex>\nvec2 origin=instanceMatrix[3].xz;float phase=origin.x*.7+origin.y*.4;float wind=sin(floraTime*${[.8,1.3,.48,1.1,.36,1.1,.5,.6,.67,.8,1.05,.55][index]}+phase)*.08+sin(floraTime*.43-phase)*.025;transformed.x+=wind*position.y*position.y;vec2 away=origin-floraPointer.xz;float wake=(1.-smoothstep(.2,2.4,length(away)))*floraStrength;transformed.xz+=away/max(.1,length(away))*wake*position.y*.25;`);
+        shader.vertexShader=`uniform float floraTime;uniform vec3 floraPointer;uniform float floraStrength;\n${shader.vertexShader}`.replace('#include <begin_vertex>',`#include <begin_vertex>\nvec2 origin=instanceMatrix[3].xz;float phase=origin.x*.7+origin.y*.4;float wind=sin(floraTime*${[.8,1.3,.48,1.1,.36,1.1,.5,.6,.67,.8,1.05,.55,.35][index].toFixed(3)}+phase)*.08+sin(floraTime*.43-phase)*.025;transformed.x+=wind*position.y*position.y*${(kind==='palm'?.16:1).toFixed(3)};vec2 away=origin-floraPointer.xz;float wake=(1.-smoothstep(.2,2.4,length(away)))*floraStrength;transformed.xz+=away/max(.1,length(away))*wake*position.y*${(kind==='palm'?.035:.25).toFixed(3)};`);
       };
       material.customProgramCacheKey=()=>`coastal-flora-${kind}`;
-      const mesh=new InstancedMesh(geometry,material,entries.length);mesh.name=`flora-${kind}`;mesh.frustumCulled=true;
-      entries.forEach((site,i)=>{transform.position.set(site.x,site.y,site.z);transform.rotation.set(0,site.rotation,0);transform.scale.setScalar(site.scale);transform.updateMatrix();mesh.setMatrixAt(i,transform.matrix);});
+      const mesh=new InstancedMesh(geometry,material,entries.length);mesh.name=`flora-${kind}`;mesh.frustumCulled=true;mesh.receiveShadow=true;mesh.castShadow=kind==='palm';
+      entries.forEach((site,i)=>{transform.position.set(site.x,site.y,site.z);transform.rotation.set(0,site.rotation,0);transform.scale.setScalar(site.scale);transform.updateMatrix();mesh.setMatrixAt(i,transform.matrix);const shade=.72+.22*(Math.sin(site.x*11.37+site.z*7.91)*.5+.5);mesh.setColorAt(i,new Color().setRGB(shade,Math.min(1,shade+.06),shade));});
       mesh.computeBoundingSphere(); if(mesh.boundingSphere)mesh.boundingSphere.radius+=.4;
       return {mesh,geometry,farGeometry:floraGeometry(kind,'far'),material,maximum:entries.length};
     });
@@ -204,7 +236,7 @@ export function Flora({runtime,paused,quality}:EnvironmentProps) {
   useEffect(()=>{clearTimeout(flora.timer);return()=>{flora.timer=setTimeout(()=>{flora.escarpment.dispose();flora.batches.forEach(b=>{b.geometry.dispose();b.farGeometry.dispose();b.material.dispose();b.mesh.dispose();});},0);};},[flora]);
   useFrame(({camera})=>{
     const detail=camera.position.y>95?.5:camera.position.y>65?.75:1;
-    flora.batches.forEach(batch=>{batch.mesh.count=Math.ceil(batch.maximum*(quality==='high'?1:quality==='medium'?.7:.4)*detail);batch.mesh.geometry=quality==='high'&&detail===1?batch.geometry:batch.farGeometry;});
+    flora.batches.forEach(batch=>{batch.mesh.count=Math.ceil(batch.maximum*(quality==='high'?1:quality==='medium'?.7:.4)*detail);batch.mesh.geometry=quality==='high'&&detail===1&&camera.position.y<22?batch.geometry:batch.farGeometry;});
     if(paused)return;flora.uniforms.time.value=runtime.current.elapsed;flora.uniforms.pointer.value.fromArray(runtime.current.pointerWorld);flora.uniforms.strength.value=runtime.current.pointerActive?1:0;
   });
   return <><group name="coastal-flora" dispose={null}>{flora.batches.map(batch=><primitive key={batch.mesh.uuid} object={batch.mesh}/>)}</group><primitive object={flora.escarpment.root} dispose={null}/><IslandMeadows runtime={runtime} paused={paused} quality={quality}/></>;

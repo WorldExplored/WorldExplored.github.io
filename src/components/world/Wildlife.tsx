@@ -5,9 +5,10 @@ import { measureConstruction } from './renderDiagnostics';
 /* eslint-disable react-hooks/immutability */
 import { useEffect, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { BufferGeometry, CatmullRomCurve3, CylinderGeometry, Float32BufferAttribute, Group, InstancedMesh, MeshStandardMaterial, Object3D, SphereGeometry, Vector3 } from 'three';
+import { BufferGeometry, CatmullRomCurve3, Color, CylinderGeometry, Float32BufferAttribute, Group, InstancedMesh, MeshStandardMaterial, Object3D, SphereGeometry, Vector3 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { EnvironmentProps } from './Water';
+import { crabVariation } from './crabVariation';
 import { createCrabStates, createGullStates, stepCrab, stepGull, WILDLIFE_COUNTS, type GullState } from './wildlifeState';
 
 function ellipsoid(x: number, y: number, z: number, sx: number, sy: number, sz: number, turn = 0) {
@@ -73,7 +74,7 @@ export function crabCarapaceGeometry() {
 
 export function createWildlife() {
   const group = new Group(); group.name = 'coastal-wildlife';
-  const materials = [new MeshStandardMaterial({ side: 2, color: '#f8fbfa', roughness: .65 }), new MeshStandardMaterial({ side: 2, color: '#b8c6cc', roughness: .7 }), new MeshStandardMaterial({ side: 2, color: '#263640', roughness: .75 }), new MeshStandardMaterial({ side: 2, color: '#eaba42', roughness: .58 }), new MeshStandardMaterial({ side: 2, color: '#b84f2e', roughness: .67, vertexColors: true }), new MeshStandardMaterial({ side: 2, color: '#ed8a50', roughness: .65 }), new MeshStandardMaterial({ color: '#7b6747', roughness: .94 }), new MeshStandardMaterial({ color: '#acd9d2', roughness: .36, metalness: .15 }), new MeshStandardMaterial({ color: '#e5dec5', roughness: .9 })];
+  const materials = [new MeshStandardMaterial({ side: 2, color: '#f8fbfa', roughness: .65 }), new MeshStandardMaterial({ side: 2, color: '#b8c6cc', roughness: .7 }), new MeshStandardMaterial({ side: 2, color: '#263640', roughness: .75 }), new MeshStandardMaterial({ side: 2, color: '#eaba42', roughness: .58 }), new MeshStandardMaterial({ side: 2, color: '#ffffff', roughness: .67, vertexColors: true }), new MeshStandardMaterial({ side: 2, color: '#ffffff', roughness: .65 }), new MeshStandardMaterial({ color: '#7b6747', roughness: .94 }), new MeshStandardMaterial({ color: '#acd9d2', roughness: .36, metalness: .15 }), new MeshStandardMaterial({ color: '#e5dec5', roughness: .9 })];
   const meshes: InstancedMesh[] = [];
   const instances = (name: string, geometry: BufferGeometry, material: number, count: number) => {
     const mesh = new InstancedMesh(geometry, materials[material], count); mesh.name = name; mesh.frustumCulled = false; mesh.castShadow = false; mesh.raycast = () => {};
@@ -145,6 +146,11 @@ export function createWildlife() {
   ]), 4, 10);
   const leftCrabLegs = instances('crab-left-legs', mirrored(crabLegs.geometry), 5, 40);
   const leftCrabClaws = instances('crab-left-claws', mirrored(crabClaws.geometry), 4, 10);
+  for(let index=0;index<10;index++){
+    const traits=crabVariation(index),shell=new Color(traits.color),legs=new Color(traits.legColor);
+    for(const mesh of [crabBody,crabClaws,leftCrabClaws])mesh.setColorAt(index,shell);
+    for(let leg=0;leg<4;leg++)for(const mesh of [crabLegs,leftCrabLegs])mesh.setColorAt(index*4+leg,legs);
+  }
   return { leftWing, leftPrimaries, leftCrabLegs, leftCrabClaws, group, meshes, materials, gullBody, gullHead, gullEyes, gullBill, wing, primaries, gullLegs, crabBody, crabEyes, crabLegs, crabClaws, gulls, gullPrey, preyEyes, crabs: createCrabStates(), root: new Object3D(), hinge: new Object3D(), tip: new Object3D(), local: new Object3D(), timer: undefined as ReturnType<typeof setTimeout> | undefined };
 }
 
@@ -190,7 +196,8 @@ export function Wildlife({ runtime, paused, quality }: EnvironmentProps) {
     });
     life.crabs.forEach((crab, index) => {
       stepCrab(crab, delta, camera.position, pointer, paused);
-      root.position.copy(crab.position); root.rotation.set(0, crab.heading, 0); root.scale.setScalar(1.15 + index % 3 * .12); root.updateMatrix();
+      const traits=crabVariation(index);
+      root.position.copy(crab.position);root.position.y+=(traits.size-1)*.08; root.rotation.set(0, crab.heading, 0); root.scale.set(traits.size*traits.width,traits.size,traits.size*traits.depth); root.updateMatrix();
       life.crabBody.setMatrixAt(index, root.matrix); life.crabEyes.setMatrixAt(index, root.matrix);
       for (let sideIndex = 0; sideIndex < 2; sideIndex++) {
         const side = sideIndex === 0 ? -1 : 1;
@@ -199,7 +206,7 @@ export function Wildlife({ runtime, paused, quality }: EnvironmentProps) {
           local.position.set(side * .12, 0, (leg - 1.5) * .053); local.rotation.set(0, side * ((leg - 1.5) * -.36 + Math.sin(phase) * .15), side * Math.max(0, Math.cos(phase)) * .16); local.scale.set(1, 1, 1); local.updateMatrix(); local.matrix.premultiply(root.matrix);
           (side < 0 ? life.leftCrabLegs : life.crabLegs).setMatrixAt(index * 4 + leg, local.matrix);
         }
-        local.position.set(side * .10, 0, -.065); local.rotation.set(0, side * -.25, side * crab.scuttle * -.20); local.scale.set(1, 1, 1); local.updateMatrix(); local.matrix.premultiply(root.matrix); (side < 0 ? life.leftCrabClaws : life.crabClaws).setMatrixAt(index, local.matrix);
+        local.position.set(side * .10, 0, -.065); local.rotation.set(0, side * -.25, side * crab.scuttle * -.20); const claw=side<0?traits.leftClaw:traits.rightClaw;local.scale.set(claw,claw,claw); local.updateMatrix(); local.matrix.premultiply(root.matrix); (side < 0 ? life.leftCrabClaws : life.crabClaws).setMatrixAt(index, local.matrix);
       }
     });
     life.meshes.forEach(mesh => { mesh.instanceMatrix.needsUpdate = true; });

@@ -86,7 +86,7 @@ test('eight coral forms and retained structural coverage fit a finite shared geo
       draws++;for(const value of object.geometry.getAttribute('position').array)assert.ok(Number.isFinite(value));
       triangles+=(object.geometry.index?.count??object.geometry.getAttribute('position').count)/3*(object instanceof InstancedMesh?object.count:1);
     });
-    assert.equal(draws,37);assert.ok(triangles<2550000,`${triangles} triangles`);
+    assert.equal(draws,53,'four seaweed anatomies share eight spatial chunks; other reef batches remain unchanged');assert.ok(triangles<2550000,`${triangles} triangles`);
     const batches=habitat.root.children.filter(child=>child instanceof InstancedMesh&&child.name!=='reef-soft-contact-shading') as InstancedMesh[];
     const high=batches.map(batch=>batch.count);
     for(const tier of ['low','medium','high'] as const){
@@ -170,13 +170,16 @@ test('kelp forest roots in the deeper pocket, stays submerged through sway and p
   const plan=getReefHabitat(),habitat=createReefHabitat();
   const geometries=[0,1,2,3].map(variant=>createForestKelpGeometry(variant));
   try {
-    assert.ok(plan.kelp.length>=450);
+    assert.ok(plan.kelp.length>=450&&plan.kelp.length<=700);
+    assert.ok(plan.kelp.filter(plant=>plant.height<2.7).length>150,'young understory grows beneath the canopy');
+    assert.ok(plan.kelp.filter(plant=>plant.height>3.5).length>150,'tall mature stems remain prominent');
+    assert.equal(new Set(geometries.map(geometry=>geometry.userData.blades)).size,4,'each kelp habit has different branching and leaf counts');
     assert.equal(new Set(plan.kelp.map(plant=>plant.color)).size,7);
     assert.ok(Math.max(...plan.kelp.map(plant=>plant.width))-Math.min(...plan.kelp.map(plant=>plant.width))>1);
     for(const plant of plan.kelp){
       assert.ok(KELP_POCKETS.some(pocket=>Math.hypot((plant.x-pocket.x)/pocket.rx,(plant.z-pocket.z)/pocket.rz)<=1));
       assert.ok(Math.abs(plant.y-reefFloorHeight(plant.x,plant.z)+.025)<1e-9);
-      assert.ok(plant.height>2.7&&plant.y+plant.height<=KELP_TOP+1e-8);
+      assert.ok(plant.height>1.2&&plant.y+plant.height<=KELP_TOP+1e-8);
       const geometry=geometries[plant.form],position=geometry.attributes.position;
       for(let i=0;i<position.count;i++){
         assert.ok(plant.y+position.getY(i)*plant.height<=-2.4499,'all actual leaves remain below the minimum surface by over two metres');
@@ -269,4 +272,19 @@ test('the finite reef shelf joins an abyss whose edge is hidden from oblique ove
     assert.equal(waterOpacity(3,1),1-Math.exp(-3*.085),'top-down reef visibility is preserved');
     assert.ok(waterOpacity(3,.1)>.96,'grazing paths gain absorption and reflection');
   }finally{geometry.dispose();}
+});
+
+
+test('high-tier distant reef foliage switches cached detail while paused without removing roots or corals',()=>{
+  const habitat=createReefHabitat(),meshes:InstancedMesh[]=[];
+  habitat.root.traverse(object=>{if(object instanceof InstancedMesh)meshes.push(object);});
+  try{
+    habitat.setQuality('high');const original=meshes.map(mesh=>({geometry:mesh.geometry,count:mesh.count}));
+    const plantTriangles=()=>meshes.filter(mesh=>/seagrass|kelp|meadow/.test(mesh.name)).reduce((sum,mesh)=>sum+mesh.count*mesh.geometry.index!.count/3,0),close=plantTriangles();
+    habitat.update(80,true,29);
+    assert.ok(plantTriangles()<close*.6,'overview uses low-detail leaves, not fewer plants');
+    meshes.forEach((mesh,i)=>assert.equal(mesh.count,original[i].count));
+    habitat.update(80,true,10);
+    meshes.forEach((mesh,i)=>assert.equal(mesh.geometry,original[i].geometry));
+  }finally{habitat.dispose();}
 });

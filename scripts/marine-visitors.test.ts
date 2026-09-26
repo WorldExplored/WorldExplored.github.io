@@ -66,8 +66,10 @@ test('detailed animals and natural nests use shared geometry and release every r
   geometries.forEach(geometry=>geometry.addEventListener('dispose',()=>{geometryDisposals++;}));
   materials.forEach(material=>material.addEventListener('dispose',()=>{materialDisposals++;}));
   try{
-    assert.ok(meshes.length<150,'hatchlings are batched rather than adding many separate draws');
-    assert.ok(geometries.size<40);
+    const residentMeshes:Mesh[]=[];life.residents.root.traverse(object=>{if(object instanceof Mesh)residentMeshes.push(object);});
+    assert.ok(meshes.length-residentMeshes.length<150,'hatchlings retain their existing batched draw budget');
+    assert.equal(residentMeshes.length,10,'new residents, offshore whale and particles share ten draws');
+    assert.ok(geometries.size<=42,'marine geometry remains shared across individual animals');
     for(const state of life.states){
       const animal=life.root.getObjectByName(`${state.kind}-${state.index}`)!;
       const size=new Box3().setFromObject(animal).getSize(new Vector3());
@@ -198,4 +200,58 @@ test('turtle shells are outward-facing, sealed to the plastron, with attached pa
     const sandMesh=new Mesh(soil,material);sandMesh.updateMatrixWorld();
     assert.ok(new Raycaster(new Vector3(.15,1,.1),new Vector3(0,-1,0)).intersectObject(sandMesh).length>0,'disturbed sand faces upward');
   }finally{life.dispose();shell.dispose();belly.dispose();soil.dispose();material.dispose();}
+});
+
+test('new marine residents forage with clear swept bodies, rests and distinct squid bursts',async()=>{
+  const {createMarineResidentsState,stepMarineResidents,residentPositionClear}=await import('../src/components/world/marineResidentState');
+  const states=createMarineResidentsState(),rested=new Set<string>(),moved=new Set<string>();let squidFast=0,squidSlow=Infinity;
+  assert.deepEqual(['crawling-octopus','sea-snake','squid'].map(kind=>states.filter(s=>s.kind===kind).length),[4,3,5]);
+  for(let frame=0;frame<3600;frame++){
+    const before=states.map(s=>s.position.clone());stepMarineResidents(states,.05);
+    states.forEach((state,index)=>{
+      const distance=state.position.distanceTo(before[index]);assert.ok(distance<.10,'small continuous movement, even at target changes');
+      if(state.moving&&distance>.0001){moved.add(`${state.kind}-${state.index}`);if(state.kind==='squid'){squidFast=Math.max(squidFast,distance/.05);squidSlow=Math.min(squidSlow,distance/.05);}}
+      else rested.add(`${state.kind}-${state.index}`);
+      if(frame%20===0){assert.ok(residentPositionClear(state.position.x,state.position.z,state.radius));assert.ok(state.position.y< -1.2,'residents stay below boat draft');}
+    });
+  }
+  assert.equal(moved.size,12);assert.equal(rested.size,12);assert.ok(squidFast>squidSlow*4);
+  const snapshot=states.map(s=>[...s.position.toArray(),s.time]);stepMarineResidents(states,10,true);assert.deepEqual(states.map(s=>[...s.position.toArray(),s.time]),snapshot);
+});
+
+test('rare whale stays beyond islands and vessel routes, breaches and breathes through reusable pools',async()=>{
+  const {createMarineResidents}=await import('../src/components/world/MarineResidents');
+  const {sampleOffshoreWhale,offshoreWhaleClear}=await import('../src/components/world/marineResidentState');
+  const {createVesselRoute,surfaceAnimals,vesselOccupants}=await import('../src/components/world/marineTraffic');
+  const routes=[0,1,2].map(createVesselRoute),point=new Vector3();let breaches=0;
+  for(let time=0;time<1800;time+=3){
+    const pose=sampleOffshoreWhale(time);if(pose.breaching)breaches++;
+    for(let angle=0;angle<Math.PI*2;angle+=Math.PI/4)assert.ok(offshoreWhaleClear(pose.position.x+Math.cos(angle)*6,pose.position.z+Math.sin(angle)*6),'the complete animal stays in deep dark offshore water');
+    for(const route of routes)for(let step=0;step<=100;step++){route.curve.getPointAt(step/100,point);assert.ok(Math.hypot(point.x-pose.position.x,point.z-pose.position.z)>25,'whale never crosses the boat routes');}
+  }
+  assert.ok(breaches>5&&breaches<16,'breaches occupy a small fraction of the offshore cycle');
+  const count=surfaceAnimals.length,life=createMarineResidents(),geometry=life.spray.geometry,matrix=life.spray.instanceMatrix;
+  try{
+    assert.equal(surfaceAnimals.length,count+1);
+    life.update(0,false,226);assert.ok(life.whale.visible&&life.whale.position.y>3);
+    life.update(0,false,229.3);assert.ok(life.spray.count>60&&life.foam.visible,'large breach produces a pooled particle splash');
+    life.update(0,false,62.8);assert.ok(life.spray.count>15&&!life.foam.visible,'blowhole produces its own mist plume');
+    const before=life.whale.position.clone();life.update(15,true,400);assert.deepEqual(life.whale.position,before);
+    vesselOccupants.push({position:life.whale.position.clone(),radius:3});life.update(0,false,62.8);assert.equal(life.whale.visible,false,'unexpected vessels suppress nearby surfacing');vesselOccupants.pop();
+    for(const tier of ['low','medium','high']as const)life.setQuality(tier);
+    assert.equal(life.spray.geometry,geometry);assert.equal(life.spray.instanceMatrix,matrix);
+    const meshes:Mesh[]=[];life.root.traverse(object=>{if(object instanceof Mesh)meshes.push(object);});
+    assert.equal(meshes.length,10,'twelve residents and whale use ten shared draws');
+  }finally{life.dispose();}
+  assert.equal(surfaceAnimals.length,count);
+});
+
+test('crabs have independent shell proportions, six colors and asymmetric claw forms',async()=>{
+  const {crabVariation}=await import('../src/components/world/crabVariation');
+  const traits=Array.from({length:15},(_,index)=>crabVariation(index));
+  assert.equal(new Set(traits.map(t=>t.color)).size,6);
+  assert.ok(Math.max(...traits.map(t=>t.size))/Math.min(...traits.map(t=>t.size))>1.5);
+  assert.ok(Math.max(...traits.map(t=>t.width))-Math.min(...traits.map(t=>t.width))>.2);
+  assert.ok(traits.some(t=>t.leftClaw/t.rightClaw>1.8));
+  assert.deepEqual(crabVariation(4),crabVariation(4),'variation stays stable while animals move');
 });

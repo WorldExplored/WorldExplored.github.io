@@ -20,7 +20,7 @@ test('lighthouse foundation is circular and openings penetrate a real masonry sh
   try {
     const foundation=geometry.foundation.getAttribute('position');let maximumRadius=0;
     for(let i=0;i<foundation.count;i++)maximumRadius=Math.max(maximumRadius,Math.hypot(foundation.getX(i),foundation.getZ(i)));
-    assert.ok(maximumRadius<=1.16001);assert.ok(maximumRadius>1.15);
+    assert.ok(maximumRadius<=1.36881);assert.ok(maximumRadius>1.36);
     const shaft=new Mesh(geometry.shaft,material);shaft.updateMatrixWorld(true);
     for(const opening of LIGHTHOUSE_OPENINGS){const y=(opening.bottom+opening.top)/2;ray.set(new Vector3(.01,y,3),new Vector3(0,0,-1));const hits=ray.intersectObject(shaft,false);assert.ok(hits.length);assert.ok(hits[0].point.z<0,`${opening.name} must cut the front masonry`);}
     ray.set(new Vector3(.01,2.6,3),new Vector3(0,0,-1));assert.ok(ray.intersectObject(shaft,false)[0].point.z>.65,'wall remains between openings');
@@ -33,8 +33,8 @@ test('balcony supports touch its underside and the original resident gull keeps 
   const geometry=createLighthouseGeometry();
   try {
     const brackets=geometry.balconyBrackets.getAttribute('position');let top=-Infinity;for(let i=0;i<brackets.count;i++)top=Math.max(top,brackets.getY(i));assert.ok(top>=5.17+LIGHTHOUSE_RISE&&top<5.22+LIGHTHOUSE_RISE);
-    const rails=geometry.rails.getAttribute('position');const perch=new Vector3(1.09,5.83+LIGHTHOUSE_RISE,0);let nearest=Infinity;const point=new Vector3();for(let i=0;i<rails.count;i++)nearest=Math.min(nearest,point.fromBufferAttribute(rails,i).distanceTo(perch));assert.ok(nearest<.05);
-    const floor=geometry.balcony.getAttribute('position');for(let i=0;i<floor.count;i++)assert.ok(Math.hypot(floor.getX(i),floor.getZ(i))<=1.13001);
+    const rails=geometry.rails.getAttribute('position');const perch=new Vector3(1.09*1.18,5.83+LIGHTHOUSE_RISE,0);let nearest=Infinity;const point=new Vector3();for(let i=0;i<rails.count;i++)nearest=Math.min(nearest,point.fromBufferAttribute(rails,i).distanceTo(perch));assert.ok(nearest<.05);
+    const floor=geometry.balcony.getAttribute('position');for(let i=0;i<floor.count;i++)assert.ok(Math.hypot(floor.getX(i),floor.getZ(i))<=1.33341);
     const joints=geometry.masonrySeams.getAttribute('position');assert.ok(joints.count>1000,'courses and staggered mortar joints are physical merged geometry');
   }finally{Object.values(geometry).forEach(g=>g.dispose());}
 });

@@ -17,18 +17,18 @@ export interface CityBuilding {
 
 export const CITY_BASE_Y = .8;
 const layouts: Array<[string, CityArchetype, number, number, number, number, number, number]> = [
-  ['residence-west', 'residential', -19, -83.5, 4.6, 3, 9.8, -.16],
-  ['residence-garden', 'residential', -9, -87, 5, 3, 12, .12],
-  ['residence-east', 'residential', 2, -86, 4.1, 2.8, 10.4, -.22],
-  ['residence-cove', 'residential', 12, -81.5, 4, 2.8, 8.6, .18],
-  ['office-west', 'garden-office', -25, -77, 4.5, 3.8, 6.8, -.12],
-  ['office-courtyard', 'garden-office', -14, -77.5, 5, 4, 7.8, .12],
-  ['office-park', 'garden-office', -3, -78, 5, 3.6, 8.8, -.14],
-  ['office-east', 'garden-office', 7, -75, 4, 3.4, 6.2, .18],
-  ['waterfront-west', 'pavilion', -21, -72, 5.2, 3.6, 3.4, -.12],
-  ['winter-garden', 'dome', -11, -69.5, 6, 4, 3.6, .08],
-  ['waterfront-gallery', 'pavilion', 0, -69, 4.8, 3.2, 3.3, .08],
-  ['waterfront-east', 'dome', 8, -68, 4.2, 3.4, 4.6, -.15],
+  ['residence-west', 'residential', -19, -83.5, 4.6, 3, 9.8, 0],
+  ['residence-garden', 'residential', -9, -87, 5, 3, 12, 0],
+  ['residence-east', 'residential', 2, -86, 4.1, 2.8, 10.4, 0],
+  ['residence-cove', 'residential', 12, -81.5, 4, 2.8, 8.6, 0],
+  ['office-west', 'garden-office', -26, -84, 4.5, 3.8, 6.8, 0],
+  ['office-courtyard', 'garden-office', -14, -77.75, 5, 4, 7.8, 0],
+  ['office-park', 'garden-office', -3, -78, 5, 3.6, 8.8, 0],
+  ['office-east', 'garden-office', 7, -75, 4, 3.4, 6.2, 0],
+  ['waterfront-west', 'pavilion', -21, -72, 5.2, 3.6, 3.4, 0],
+  ['winter-garden', 'dome', -11, -69.5, 6, 4, 3.6, 0],
+  ['waterfront-gallery', 'pavilion', 0, -69, 4.8, 3.2, 3.3, 0],
+  ['waterfront-east', 'dome', 8, -68, 4.2, 3.4, 4.6, 0],
   ['transit-garden', 'transit-hall', -5, -68, 3.2, 2.8, 4.8, Math.PI / 2],
 ];
 

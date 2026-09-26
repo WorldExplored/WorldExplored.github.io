@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { AdditiveBlending, BoxGeometry, BufferGeometry, Color, Float32BufferAttribute, Group, Mesh, MeshBasicMaterial, MeshStandardMaterial, PlaneGeometry, PointLight, ShaderMaterial, Vector3 } from 'three';
+import { AdditiveBlending, BoxGeometry, BufferGeometry, Color, Float32BufferAttribute, Group, Mesh, MeshStandardMaterial, PlaneGeometry, SpotLight, ShaderMaterial, Vector3 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { EnvironmentProps } from './Water';
 import { nightLightingLevel } from './lighthouseControl';
@@ -12,7 +12,7 @@ export const roomNightUniform = {value:0};
 const roomMaterials=new WeakSet<MeshStandardMaterial>();
 /** Baked diffuse fill belongs to opaque room surfaces, never glazing or the outer facade. */
 export function applyBakedRoomLighting<T extends MeshStandardMaterial>(material:T, masked=false):T {
-  if(roomMaterials.has(material))return material;
+  if(material.transparent || roomMaterials.has(material))return material;
   roomMaterials.add(material);
   material.userData.bakedRoomLighting=true;
   const compile=material.onBeforeCompile,cache=material.customProgramCacheKey.bind(material);
@@ -21,10 +21,10 @@ export function applyBakedRoomLighting<T extends MeshStandardMaterial>(material:
     shader.fragmentShader=`uniform float roomNight;${masked?'varying float roomFill;':''}\n${shader.fragmentShader}`;
     if(masked)shader.vertexShader=`attribute float aRoomFill;varying float roomFill;\n${shader.vertexShader}`.replace('#include <begin_vertex>','#include <begin_vertex>\nroomFill=aRoomFill;');
     shader.fragmentShader=shader.fragmentShader.replace('#include <lights_fragment_end>',`#include <lights_fragment_end>
-      reflectedLight.indirectDiffuse += diffuseColor.rgb * vec3(.92,.63,.34) * roomNight * ${masked?'roomFill':'1.'};
+      reflectedLight.indirectDiffuse += diffuseColor.rgb * vec3(.105,.14,.135) * roomNight * ${masked?'roomFill':'1.'};
     `);
   };
-  material.customProgramCacheKey=()=>`${cache()}-room-fill-${masked?'masked':'interior'}-v1`;
+  material.customProgramCacheKey=()=>`${cache()}-room-fill-${masked?'masked':'interior'}-v2`;
   return material;
 }
 
@@ -35,7 +35,7 @@ export function createRoomLighting(rooms: readonly RoomLamp[]) {
   const positions: Vector3[] = [];
   rooms.forEach((room, i) => {
     const {x,z,floor,ceiling,width,depth,yaw}=room;
-    const length=Math.min(.8,width*.45), color=new Color(i%3===0?'#d5f4ed':'#ffe2ac');
+    const length=Math.min(.8,width*.45), color=new Color(['#e6f5ed','#d1f1ed','#dceef5'][i%3]);
     const place=(geometry:BufferGeometry,y:number)=>geometry.rotateY(yaw).translate(x,y,z);
     housings.push(place(new BoxGeometry(length+.08,.065,.20),ceiling-.0325));
     const lamp=place(new BoxGeometry(length,.018,.145),ceiling-.074);
@@ -45,22 +45,43 @@ export function createRoomLighting(rooms: readonly RoomLamp[]) {
     pools.push(place(new PlaneGeometry(Math.min(width*.76,2.2),Math.min(depth*.82,2.4)).rotateX(-Math.PI/2),floor+.003));
     positions.push(new Vector3(x,ceiling-.15,z));
   });
-  const join=(parts:BufferGeometry[])=>{const geometry=mergeGeometries(parts)!;parts.forEach(g=>g.dispose());return geometry;};
+  const join=(parts:BufferGeometry[])=>{const geometry=parts.length?mergeGeometries(parts)!:new BufferGeometry();parts.forEach(g=>g.dispose());return geometry;};
   const fixture=new Mesh(join(housings),new MeshStandardMaterial({color:'#e5ede7',roughness:.42,metalness:.28}));
-  const glow=new Mesh(join(diffusers),new MeshBasicMaterial({color:'#ffffff',vertexColors:true,toneMapped:false}));
-  const wash=new Mesh(join(pools),new ShaderMaterial({transparent:true,depthWrite:false,blending:AdditiveBlending,uniforms:{night:{value:0}},vertexShader:'varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',fragmentShader:'varying vec2 vUv;uniform float night;void main(){float radius=length((vUv-.5)*2.);float soft=pow(max(0.,1.-radius),1.5);gl_FragColor=vec4(.85,.53,.22,soft*night*.30);}' }));
+  const glow=new Mesh(join(diffusers),new MeshStandardMaterial({color:'#ffffff',vertexColors:true,roughness:.45,emissive:'#d8f1e9',emissiveIntensity:0}));
+  const wash=new Mesh(join(pools),new ShaderMaterial({transparent:true,depthWrite:false,blending:AdditiveBlending,uniforms:{night:{value:0}},vertexShader:'varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',fragmentShader:'varying vec2 vUv;uniform float night;void main(){float radius=length((vUv-.5)*2.);float soft=pow(max(0.,1.-radius),1.5);gl_FragColor=vec4(.42,.62,.57,soft*night*.20);}' }));
   wash.visible=false;
-  fixture.name='ceiling-light-housings';glow.name='warm-ceiling-diffusers';wash.name='interior-floor-light-pools';
+  fixture.name='ceiling-light-housings';glow.name='pearl-ceiling-diffusers';wash.name='interior-floor-light-pools';
   for(const mesh of [fixture,glow,wash]){mesh.raycast=()=>{};root.add(mesh);}
-  // One actual local light per district follows the nearest room; distant rooms use baked pools.
-  const local=new PointLight('#ffe1ab',0,5,2); local.name='nearest-room-light';root.add(local);
-  let selected=0,nextSelection=0;const previousCamera=new Vector3(Infinity,Infinity,Infinity);
-  const update=(night:number,camera:Vector3,time:number)=>{
-    roomNightUniform.value=night;glow.material.color.setScalar(.18+night*1.65); wash.material.uniforms.night.value=night;wash.visible=night>.01;
-    if(time>=nextSelection||previousCamera.distanceToSquared(camera)>1){nextSelection=time+.6;previousCamera.copy(camera);let best=Infinity;positions.forEach((p,i)=>{const distance=p.distanceToSquared(camera);if(distance<best){best=distance;selected=i;}});local.position.copy(positions[selected]);}
-    local.intensity=night*9;
+  // One downward light per district adds depth to nearby furniture. Its cone
+  // stays inside the selected room; other fixtures use the fitted floor pools.
+  const local = new SpotLight('#e0f6ed', 0, 4, .58, .75, 2);
+  local.name = 'nearest-room-light'; local.castShadow = false;
+  const target = new Group(); target.name = 'nearest-room-light-target';
+  local.target = target; root.add(local, target);
+  let selected = 0, nextSelection = 0;
+  const previousCamera = new Vector3(Infinity, Infinity, Infinity);
+  const update = (night: number, camera: Vector3, time: number) => {
+    roomNightUniform.value = night;
+    glow.material.emissiveIntensity = night * .72;
+    wash.material.uniforms.night.value = night; wash.visible = night > .01 && rooms.length > 0;
+    if (time >= nextSelection || previousCamera.distanceToSquared(camera) > 1) {
+      nextSelection = time + .6; previousCamera.copy(camera); let best = Infinity;
+      for (let i = 0; i < positions.length; i++) {
+        const distance = positions[i].distanceToSquared(camera);
+        if (distance < best) { best = distance; selected = i; }
+      }
+      const room = rooms[selected];
+      if (room) {
+        local.position.copy(positions[selected]); target.position.set(room.x, room.floor, room.z);
+        const height = Math.max(.5, room.ceiling - room.floor);
+        local.angle = Math.atan(Math.min(room.width, room.depth) * .40 / height);
+        local.distance = height + .65;
+      }
+    }
+    local.intensity = rooms.length ? night * 5.5 : 0;
   };
-  const dispose=()=>{for(const mesh of [fixture,glow,wash]){mesh.geometry.dispose();mesh.material.dispose();}};
+  let disposed = false;
+  const dispose=()=>{if(disposed)return;disposed=true;for(const mesh of [fixture,glow,wash]){mesh.geometry.dispose();mesh.material.dispose();}};
   let timer:ReturnType<typeof setTimeout>;
   return {root,positions,update,dispose,retain(){clearTimeout(timer);return()=>{timer=setTimeout(dispose,0);};}};
 }

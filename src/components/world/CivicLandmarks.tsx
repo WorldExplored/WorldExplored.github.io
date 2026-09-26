@@ -115,7 +115,7 @@ export function createHistoryFlowerBorder(material: MeshPhysicalMaterial) {
     ...[-2.8, -1.9, -1, -.1, .8, 1.7, 2.5].flatMap(z => [[-6.08, z], [6.08, z]] as Array<[number, number]>),
   ];
   const entries: Record<FloraKind, Array<{ x: number; y: number; z: number; scale: number; rotation: number }>> = {
-    reeds: [], beach: [], shrub: [], flower: [], broadleaf: [], sedge: [], clover: [], fern: [], foxglove: [], bluebell: [], poppy: [], allium: [],
+    reeds: [], beach: [], shrub: [], flower: [], broadleaf: [], sedge: [], clover: [], fern: [], foxglove: [], bluebell: [], poppy: [], allium: [], palm: [],
   };
   for (const [localX, localZ] of borderSites) {
     const x = landmark.position[0] + localX * Math.cos(heading) + localZ * Math.sin(heading);

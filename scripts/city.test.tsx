@@ -154,22 +154,16 @@ test('quality, selection and pause preserve architecture and dispose mounted res
   assert.ok([...resources.values()].every(record => record.disposals === 1));
 });
 
-test('background-building hover stays local across child surfaces and never owns navigation',async()=>{
+test('decorative city buildings do not intercept navigation or change their lighting on hover',async()=>{
   const item=await fixture();
   try{
     const building=cityBuildings[0],owner=item.renderer.scene.find(node=>node.instance.name===`city-building-${building.id}`);
-    const materials=()=>meshesIn(owner.instance).map(mesh=>mesh.material as import('three').MeshPhysicalMaterial).filter(material=>material.userData.hoverResponse);
-    const other=item.scene.getObjectByName(`city-building-${cityBuildings[1].id}`)!;
-    await item.renderer.fireEvent(owner,'pointerOver',{pointerType:'mouse',stopPropagation(){}});await item.renderer.advanceFrames(30,1/60);
-    assert.ok(materials().some(material=>material.emissiveIntensity>.1));
-    assert.ok(meshesIn(other).every(mesh=>!(mesh.material as import('three').MeshPhysicalMaterial).userData.hoverResponse||(mesh.material as import('three').MeshPhysicalMaterial).emissiveIntensity===0));
-    await item.renderer.fireEvent(owner,'pointerOut',{});
-    await new Promise(resolve=>setTimeout(resolve,50));
-    await item.renderer.fireEvent(owner,'pointerMove',{pointerType:'mouse',stopPropagation(){}});await item.renderer.advanceFrames(1,1/60);
-    assert.ok(materials().some(material=>material.emissiveIntensity>.1));
-    assert.equal(owner.props.onClick,undefined);assert.equal(item.runtime.current.hovered,null);
-    await item.renderer.fireEvent(owner,'pointerOut',{});await new Promise(resolve=>setTimeout(resolve,150));await item.renderer.advanceFrames(60,1/60);
-    assert.ok(materials().every(material=>material.emissiveIntensity<.001));
+    const materials=meshesIn(owner.instance).map(mesh=>mesh.material as import('three').MeshPhysicalMaterial);
+    const glow=materials.map(material=>material.emissiveIntensity);
+    for(const handler of ['onPointerOver','onPointerMove','onPointerOut','onClick'])assert.equal(owner.props[handler],undefined);
+    await item.renderer.advanceFrames(30,1/60);
+    assert.deepEqual(materials.map(material=>material.emissiveIntensity),glow);
+    assert.equal(item.runtime.current.hovered,null);
   }finally{await item.renderer.unmount();}
 });
 

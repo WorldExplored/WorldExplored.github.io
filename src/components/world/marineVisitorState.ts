@@ -190,8 +190,8 @@ export function turtleHatchlingPose(state:MarineVisitorState,index:number,target
 
 export function createMarineVisitor(kind: VisitorKind,index: number): MarineVisitorState {
   const random=seededRandom(271901+index*2719+(kind==='octopus'?17000:kind==='turtle'?42000:0));
-  const size=kind==='octopus'?(index%2?.48:.74):kind==='stonefish'?.36:.68;
-  const radius=kind==='octopus'?size*.85:kind==='stonefish'?.33:.58;
+  const size=kind==='octopus'?(index%2?.48:.74):kind==='stonefish'?.54+index*.13:.68;
+  const radius=kind==='octopus'?size*.85:kind==='stonefish'?Math.max(.33,size*.65):.58;
   const endpoint=OCTOPUS_ROUTE[index%2?OCTOPUS_ROUTE.length-1:0];
   const position=kind==='octopus'?new Vector3(endpoint[0],marineFloorHeight(...endpoint)+.075,endpoint[1]):kind==='turtle'?initialTurtlePosition(index,random,radius):initialWaterPosition(kind,index,random,radius);
   const direction=index%2?-1:1;
@@ -208,18 +208,18 @@ export function createMarineVisitor(kind: VisitorKind,index: number): MarineVisi
 }
 
 function chooseTarget(state:MarineVisitorState) {
-  const {kind,position,random,size}=state,radius=kind==='octopus'?size*.85:kind==='stonefish'?.33:.58;
+  const {kind,position,random,size}=state,radius=kind==='octopus'?size*.85:kind==='stonefish'?Math.max(.33,size*.65):.58;
   if(kind==='octopus'){
     state.routeIndex+=state.routeDirection;
     const [x,z]=OCTOPUS_ROUTE[state.routeIndex];
     state.target.set(x,0,z);state.moving=true;return;
   }
-  const reach=2.7;
+  const reach=kind==='stonefish'?.95:2.7;
   for(let attempt=0;attempt<140;attempt++){
     const angle=random()*Math.PI*2,distance=(.35+random()*.65)*reach;
     const x=position.x+Math.cos(angle)*distance,z=position.z+Math.sin(angle)*distance;
     if(!visitorClear(kind,x,z,radius)||!pathClear(kind,position,x,z,radius))continue;
-    state.target.set(x,0,z);state.moving=true;state.moveUntil=state.time+distance/.045+2;return;
+    state.target.set(x,0,z);state.moving=true;state.moveUntil=state.time+distance/.11+2;return;
   }
   state.nextMove=state.time+4;
 }
@@ -234,11 +234,11 @@ export function stepMarineVisitor(state:MarineVisitorState,delta:number,paused=f
     const dx=state.target.x-state.position.x,dz=state.target.z-state.position.z,distance=Math.hypot(dx,dz);
     const desired=Math.atan2(-dz,dx),turn=Math.atan2(Math.sin(desired-state.heading),Math.cos(desired-state.heading));
     state.heading+=Math.max(-dt*.75,Math.min(dt*.75,turn));
-    const speed=state.kind==='octopus'?.12+Math.pow(Math.max(0,Math.sin(state.time*1.55+state.index*2)),4)*.9:state.kind==='stonefish'?.045:.055;
+    const speed=state.kind==='octopus'?.12+Math.pow(Math.max(0,Math.sin(state.time*1.55+state.index*2)),4)*.9:state.kind==='stonefish'?.11:.055;
     const move=Math.min(distance,speed*dt)*(state.kind==='octopus'&&Math.abs(turn)>.18?0:1);
     const x=state.position.x+(state.kind==='octopus'?dx/Math.max(distance,.0001):Math.cos(state.heading))*move;
     const z=state.position.z+(state.kind==='octopus'?dz/Math.max(distance,.0001):-Math.sin(state.heading))*move;
-    const radius=state.kind==='octopus'?state.size*.85:state.kind==='stonefish'?.33:.58;
+    const radius=state.kind==='octopus'?state.size*.85:state.kind==='stonefish'?Math.max(.33,state.size*.65):.58;
     if(visitorClear(state.kind,x,z,radius))state.position.set(x,marineFloorHeight(x,z)+.075,z);
     else if(state.kind!=='octopus')state.moveUntil=state.time;
     state.jet=state.kind==='octopus'?Math.pow(Math.max(0,Math.sin(state.time*1.55+state.index*2)),4):0;
@@ -251,7 +251,7 @@ export function stepMarineVisitor(state:MarineVisitorState,delta:number,paused=f
           state.routeDirection*=-1;
           state.nextMove=state.time+3+state.random()*5;
         }else state.nextMove=state.time;
-      }else state.nextMove=state.time+(state.kind==='stonefish'?32+state.random()*55:30+state.random()*48);
+      }else state.nextMove=state.time+(state.kind==='stonefish'?48+state.random()*64:30+state.random()*48);
     }
   }
 }

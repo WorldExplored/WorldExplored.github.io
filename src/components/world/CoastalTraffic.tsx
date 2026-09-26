@@ -4,12 +4,20 @@ import { useEffect,useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { BoxGeometry, BufferGeometry, CylinderGeometry, DoubleSide, Float32BufferAttribute, Group, InstancedMesh, Mesh, MeshPhysicalMaterial, MeshStandardMaterial, Object3D, SphereGeometry, Vector3 } from 'three';
 import { combine, strut } from './BuildingKit';
-import { ferryPontoonGeometry } from './CoastalFerry';
 import { createVesselState, stepVessel, vesselOccupants, VISITOR_BERTH, VISITOR_DWELL, writeVesselPose } from './marineTraffic';
 import { harborWaterHeight } from './waterSurface';
 import { seededRandom, terrainMeshHeight } from './terrain';
 import { createDockWeedGeometry } from './DockEcology';
 import type { EnvironmentProps } from './Water';
+
+/** Swept chines, a fine bow and broad transom give launches distinct built hulls. */
+export function launchHull(length:number,width:number,height:number){
+  const positions:number[]=[],indices:number[]=[],sections=[[.50,.035],[.38,.61],[.04,1],[-.34,.95],[-.48,.76]];
+  for(const [z,w]of sections)for(const [x,y]of [[-1,.22],[-.91,-.23],[-.52,-.55],[.52,-.55],[.91,-.23],[1,.22]])positions.push(x*w*width*.5,y*height,z*length);
+  for(let row=0;row<sections.length-1;row++)for(let side=0;side<6;side++){const a=row*6+side,b=row*6+(side+1)%6,c=b+6,d=a+6;indices.push(a,b,d,b,c,d);}
+  for(const start of [0,(sections.length-1)*6])for(let i=1;i<5;i++)indices.push(start,start+i,start+i+1);
+  const g=new BufferGeometry();g.setAttribute('position',new Float32BufferAttribute(positions,3));g.setIndex(indices);g.computeVertexNormals();return g;
+}
 
 export function createAeroBoat(index:number){
   const large=index===2,root=new Group();root.name=large?'solar-coastal-visitor':index===1?'beacon-survey-launch':'aero-hydrofoil';
@@ -19,17 +27,18 @@ export function createAeroBoat(index:number){
   if (large) for (const material of allMaterials) material.transparent = true;
   const geometries:BufferGeometry[]=[],moving:Group[]=[];
   const add=(name:string,parts:BufferGeometry[],paint:keyof typeof materials,parent=root)=>{const geometry=combine(parts);geometries.push(geometry);const mesh=new Mesh(geometry,materials[paint]);mesh.name=name;mesh.raycast=()=>{};mesh.castShadow=paint!=='glass';mesh.receiveShadow=true;parent.add(mesh);return mesh;};
-  const length=large?5.7:2.9,width=large?2.25:1.15;
-  add('twin-fine-entry-hulls',[-1,1].map(side=>ferryPontoonGeometry().scale(large?1.2:.86,large?1.2:.8,length/2.45).translate(side*width*.36,0,0)),'shell');
+  const length=large?11.8:index===1?3.3:3.5,width=large?3.8:index===1?1.65:1.35;
+  if(index===0)add('swept-hydrofoil-hull',[launchHull(length,width,.9)],'shell');
+  else add('twin-fine-entry-hulls',[-1,1].map(side=>launchHull(length,width*(large?.28:.32),large?1.4:1).translate(side*width*.36,0,0)),'shell');
   add('connected-passenger-deck',[new BoxGeometry(width,.12,length*.75).translate(0,.28,-.12)],'shell');
   add('aqua-waterline-trim',[-1,1].map(side=>new BoxGeometry(.035,.065,length*.69).translate(side*width*.5,.27,-.17)),'trim');
-  const cabinLength=large?2.9:index===1?1.55:1.18,cabinHeight=large?1.22:.62;
+  const cabinLength=large?6.5:index===1?1.35:1.45,cabinHeight=large?1.66:.65;
   const frames:BufferGeometry[]=[],panes:BufferGeometry[]=[],seats:BufferGeometry[]=[];
   for(const side of [-1,1]){
     for(const z of [-cabinLength/2,0,cabinLength/2])frames.push(new BoxGeometry(.045,cabinHeight,.045).translate(side*width*.40,.37+cabinHeight/2,z));
     panes.push(new BoxGeometry(.016,cabinHeight-.12,cabinLength-.04).translate(side*width*.4,.38+cabinHeight/2,0));
-    for(let row=0;row<(large?4:2);row++){
-      const z=-cabinLength*.36+row*(large?.61:.48);
+    for(let row=0;row<(large?8:2);row++){
+      const z=-cabinLength*.36+row*(large?.72:.48);
       seats.push(new BoxGeometry(large?.38:.24,.08,.29).translate(side*width*.23,.55,z),new BoxGeometry(large?.38:.24,.27,.045).translate(side*width*.23,.69,z-.14));
       frames.push(new CylinderGeometry(.022,.03,.2,6).translate(side*width*.23,.41,z));
     }
@@ -56,7 +65,18 @@ export function createAeroBoat(index:number){
   if(index===1){add('survey-mast',[new CylinderGeometry(.024,.04,.72,8).translate(0,roof+.46,-.47),new SphereGeometry(.10,10,8).scale(1,.7,1).translate(0,roof+.84,-.47)],'shell');}
   if(index===0)add('hydrofoil-underwater-wings',[new BoxGeometry(width*1.18,.025,.21).translate(0,-.37,.55),new BoxGeometry(width*.76,.022,.16).translate(0,-.37,-.8)],'trim');
   if(large){
-    add('starboard-boarding-step',[new BoxGeometry(.35,.09,.72).translate(1.11,.435,-.925)],'shell');
+    add('starboard-boarding-step',[new BoxGeometry(.35,.09,.72).translate(width*.5,.435,-.925)],'shell');
+    add('upper-saloon-pearl-shell',[
+      new BoxGeometry(2.7,.12,3.3).translate(0,roof+.24,.7),
+      ...[-1,1].flatMap(side=>[-.85,2.25].map(z=>new BoxGeometry(.08,1.3,.08).translate(side*1.25,roof+.92,z))),
+      new SphereGeometry(1,20,8,0,Math.PI*2,0,Math.PI/2).scale(1.45,.27,1.8).translate(0,roof+1.59,.7),
+    ],'shell');
+    add('upper-saloon-glazing',[-1,1].map(side=>new BoxGeometry(.024,1.15,3).translate(side*1.25,roof+.94,.7)).concat([new BoxGeometry(2.4,1.15,.024).rotateX(-.08).translate(0,roof+.94,2.25)]),'glass');
+    add('upper-deck-solar-array',Array.from({length:10},(_,i)=>new BoxGeometry(.47,.03,.5).translate((i%5-2)*.51,roof+1.83,.16+Math.floor(i/5)*.56)),'solar');
+    add('upper-lounge-seats',[-1,1].flatMap(side=>[-.35,.4,1.15].flatMap(z=>[new BoxGeometry(.42,.1,.38).translate(side*.72,roof+.56,z),new BoxGeometry(.42,.37,.07).translate(side*.72,roof+.78,z-.18)])),'trim');
+    add('stern-boarding-stair',Array.from({length:9},(_,i)=>new BoxGeometry(.6,.12,.32).translate(-1.12,.55+i*.19,-4.9+i*.22)),'shell');
+    add('hull-portholes',[-1,1].flatMap(side=>Array.from({length:9},(_,i)=>new CylinderGeometry(.12,.12,.025,12).rotateZ(Math.PI/2).translate(side*1.48,.12,-3.7+i*.84))),'glass');
+    add('passenger-deck-bollards',[-1,1].flatMap(side=>[-4.7,4.7].map(z=>new CylinderGeometry(.075,.11,.22,8).translate(side*1.4,.48,z))),'metal');
     add('rear-luggage-lockers',[-1,1].map(side=>new BoxGeometry(.45,.45,.64).translate(side*.66,.56,-2.0)),'trim');
     add('boarding-handrails',[strut(new Vector3(-.95,.8,-1.95),new Vector3(-.95,.8,-2.47),.022),strut(new Vector3(.95,.8,-1.95),new Vector3(.95,.8,-2.47),.022)],'metal');
   }
@@ -107,7 +127,7 @@ export function createAeroBoat(index:number){
 
 }
 export const VISITOR_PIER_SHORE = { x: -24, z: -69 };
-export const VISITOR_PIER_HEAD = { x: -24, z: -55.78, y: .49 };
+export const VISITOR_PIER_HEAD = { x: -27, z: -51.55, y: .49 };
 
 export function createVisitorPier() {
   const root = new Group(), pieces: BufferGeometry[] = [], steel: BufferGeometry[] = [];

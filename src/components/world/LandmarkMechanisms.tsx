@@ -138,7 +138,7 @@ export function createLandmarkMechanism(id: LandmarkId) {
   const update = (time: number, target: number, delta: number) => {
     response = MathUtils.damp(response, target, 5, Math.min(delta, .1));
     for (const apply of motion) apply(time, response);
-    materials.aqua.emissiveIntensity = id === 'building' && !world.lighting.lampEnabled ? 0 : response * .28;
+    if(id !== 'building') materials.aqua.emissiveIntensity = 0;
     root.userData.response = response;
   };
   update(0, 0, 0);

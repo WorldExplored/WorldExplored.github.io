@@ -65,7 +65,9 @@ export function createCloudClusters(count = MAX_CLOUDS): CloudCluster[] {
     const moisture = Math.min(capacity, [.78, .24, .10, .91, .13][index % 5] + Math.sin(index * 2.17) * .045);
     const cosine = Math.cos(azimuth);
     const sine = Math.sin(azimuth);
-    const layer = archetype === 'atmospheric' ? 2 : index % 3;
+    // Cloud family determines its atmospheric shelf, never an arbitrary instance index.
+    const layer = archetype === 'atmospheric' ? 2 : archetype === 'bank' ? 1 : 0;
+    center[1] = [26, 45, 66][layer] + Math.sin(index * 1.71) * [1.2, 1.6, 1][layer];
     return { moisture, capacity, recharge: .0012 + (index % 4) * .00035, archetype, center, azimuth, density, layer, speed: world.environment.cloudSpeed * [2.1, 1.55, 1.1][layer], response: 0, targeted: false, interaction: [0, 0, 0],
       puffs: PUFF_GRAPHS[archetype].map(([x, y, z, sx, sy, sz]) => {
         const spreadX = (x + (random()-.5)*.3) * stretch[0] / density;
@@ -131,10 +133,9 @@ export function cloudDensity(cluster: CloudCluster, x: number, y: number, z: num
     const radius = dx * dx + dy * dy + dz * dz;
     if (radius < 5) field += Math.exp(-2.2 * radius);
   }
-  // Correlated relief belongs to the volume, so the outline and shading agree.
-  const coarse = Math.sin(x * 2.2 + Math.sin(z * 1.1)) * Math.sin(y * 2.4 + z * .7);
-  const fine = Math.sin(x * 5.1 + y * 1.3) * Math.sin(z * 4.7 - y * 3.8);
-  return field - .22 + coarse * .023 + fine * .009;
+  // Broad, irregular puff volumes provide relief. Periodic high-frequency noise
+  // aliases against the tetrahedral sampling lattice into a checkerboard.
+  return field - .22;
 }
 
 export function cloudBounds(cluster: CloudCluster) {

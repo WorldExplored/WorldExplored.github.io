@@ -1,9 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { create } from '@react-three/test-renderer';
-import { MeshPhysicalMaterial, Vector3, type InstancedMesh, type WebGLProgramParametersWithUniforms, type WebGLRenderer } from 'three';
+import { MeshPhysicalMaterial, PerspectiveCamera, Vector3, InstancedMesh, type WebGLProgramParametersWithUniforms, type WebGLRenderer } from 'three';
 import { Flora, createFloraSites, floraGeometry, FLOWER_KINDS } from '../src/components/world/Flora';
 import { lighthouseEscarpmentSites } from '../src/components/world/LighthouseEscarpment';
+import { BEACH_PALMS } from '../src/components/world/coastalBiome';
 import { coastalRockGeometry } from '../src/components/world/coastalRocks';
 import { terrainMeshHeight } from '../src/components/world/terrain';
 import { createHistoryFlowerBorder } from '../src/components/world/CivicLandmarks';
@@ -14,8 +15,8 @@ import { cameraObstacles, constrainCameraPose, focusPose } from '../src/componen
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
 test('clustered flora stays grounded and clears structures and circulation',()=>{
-  const sites=createFloraSites();assert.deepEqual(sites,createFloraSites());assert.ok(sites.length>1200);
-  assert.equal(new Set(sites.map(s=>s.kind)).size,12);
+  const sites=createFloraSites();assert.deepEqual(sites,createFloraSites());assert.ok(sites.length>2000&&sites.length<2200);
+  assert.equal(new Set(sites.map(s=>s.kind)).size,13);
   const city=sites.filter(site=>site.z<-58&&site.x<18);
   assert.ok(city.length>=450,'courtyards and parks form a visible planted city layer');
   assert.ok(new Set(city.map(site=>site.kind)).size>=5);
@@ -86,7 +87,7 @@ test('five flower silhouettes and lush groundcover retain a bounded instanced me
     assert.equal(new Set(shapes.filter(shape=>FLOWER_KINDS.includes(shape.kind)).map(shape=>shape.geometry.index!.count)).size,5);
     for(const kind of FLOWER_KINDS)assert.ok(sites.filter(site=>site.kind===kind).length>75);
     const triangles=shapes.reduce((total,shape)=>total+shape.geometry.index!.count/3*sites.filter(site=>site.kind===shape.kind).length,0);
-    assert.ok(triangles<1500000,`Twelve instanced plant meshes: ${triangles}`);
+    assert.ok(triangles<1500000,`Thirteen instanced plant meshes: ${triangles}`);
   }finally{shapes.forEach(shape=>shape.geometry.dispose());}
 });
 
@@ -105,4 +106,57 @@ test('jagged beacon ledges embed their full bases without obstructing the landin
       for(const path of paths)for(let i=1;i<path.points.length;i++)assert.ok(distanceToSegment(rock.x,rock.z,path.points[i-1],path.points[i])>path.width/2+rock.radius+.27);
     }finally{geometry.dispose();}
   });
+});
+
+
+test('beach palms have curved trunks and attached feather crowns with camera clearance',()=>{
+  const sites=createFloraSites().filter(site=>site.kind==='palm'),geometry=floraGeometry('palm');
+  try{
+    assert.equal(sites.length,3);const p=geometry.attributes.position;
+    assert.ok(Math.max(...Array.from({length:p.count},(_,i)=>p.getY(i)))>3,'palms include a full trunk and arching crown');
+    assert.ok(geometry.index!.count/3<1600,'three palms share one compact leaf-and-trunk mesh');
+    for(const site of sites){
+      assert.ok(BEACH_PALMS.some(palm=>palm.x===site.x&&palm.z===site.z));
+      assert.ok(landDistance(site.x,site.z)>1.5&&landDistance(site.x,site.z)<3.3,'palms root on the beach rather than a lawn or water');
+      assert.ok(cameraObstacles().some(obstacle=>obstacle.x===site.x&&obstacle.z===site.z&&obstacle.top>site.y+3*site.scale));
+    }
+  }finally{geometry.dispose();}
+});
+
+
+test('every foliage shader emits typed float arithmetic in the instanced vertex scaffold',async()=>{
+  const runtime={current:createSceneRuntime()},renderer=await create(<Flora runtime={runtime} paused quality="high"/>);
+  try{
+    const batches=renderer.scene.instance.children[0].children as InstancedMesh[];
+    assert.equal(batches.length,13);
+    for(const batch of batches){
+      const shader={uniforms:{},vertexShader:'precision highp float; attribute vec3 position; attribute mat4 instanceMatrix; void main(){\n#include <begin_vertex>\ngl_Position=vec4(transformed,1.);}',fragmentShader:''} as WebGLProgramParametersWithUniforms;
+      (batch.material as MeshPhysicalMaterial).onBeforeCompile(shader,{} as WebGLRenderer);
+      const source=shader.vertexShader.replace('#include <begin_vertex>','vec3 transformed=position;');
+      assert.doesNotMatch(source,/\b(?:undefined|NaN|Infinity)\b/,batch.name);
+      const scalarFactors=[...source.matchAll(/\*\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)(?=[^\w.]|$)/g)];
+      assert.ok(scalarFactors.length>=8,`all ${batch.name} displacement factors reach the shader scaffold`);
+      for(const factor of scalarFactors)assert.match(factor[1],/[.eE]/,`${batch.name}: multiplying a GLSL float by integer literal ${factor[1]} does not compile`);
+      assert.match(source,/position\.y\*position\.y\*(?:0\.160|1\.000)/);
+      assert.ok(shader.uniforms.floraTime&&shader.uniforms.floraPointer&&shader.uniforms.floraStrength);
+    }
+  }finally{await renderer.unmount();}
+});
+
+
+test('distant high-quality foliage keeps every plant while reducing geometry and restores detail while paused',async()=>{
+  const runtime={current:createSceneRuntime()},camera=new PerspectiveCamera();camera.position.set(0,8,12);
+  const renderer=await create(<Flora runtime={runtime} paused quality="high"/>,{camera});
+  try{
+    const meshes:InstancedMesh[]=[];renderer.scene.instance.traverse(object=>{if(object instanceof InstancedMesh)meshes.push(object);});
+    await renderer.advanceFrames(1,1/60);
+    const original=meshes.map(mesh=>({geometry:mesh.geometry,count:mesh.count}));
+    const triangles=()=>meshes.reduce((sum,mesh)=>sum+mesh.count*(mesh.geometry.index?.count??mesh.geometry.attributes.position.count)/3,0),close=triangles();
+    camera.position.y=30;await renderer.advanceFrames(1,1/60);
+    assert.ok(triangles()<close*.55,'small overview plants do not render detailed petals and leaf folds');
+    meshes.forEach((mesh,i)=>assert.equal(mesh.count,original[i].count,'LOD preserves the full plant population'));
+    camera.position.y=8;await renderer.advanceFrames(1,1/60);
+    meshes.forEach((mesh,i)=>assert.equal(mesh.geometry,original[i].geometry,'paused camera moves restore the cached close-up geometry'));
+    assert.deepEqual(meshes.filter(mesh=>mesh.name.startsWith('flora-')&&mesh.castShadow).map(mesh=>mesh.name),['flora-palm'],'only palm crowns cast an additional foliage shadow; cliff rocks keep their existing shadows');
+  }finally{await renderer.unmount();}
 });

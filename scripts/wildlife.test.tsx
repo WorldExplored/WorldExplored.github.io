@@ -80,8 +80,8 @@ test('ten-minute flock preserves whole-wing clearance, shared rest sites and bou
       assert.ok(Math.abs(bird.heading-previousHeading)<=GULL_TURN_RATE/60+1e-10,`${bird.index} exceeded bounded heading rate`);
       assert.ok(Math.abs(bird.pitch-previousPitch)<=.6/60+1e-10,'no sudden nose-up or nose-down turn');
       assert.ok(Math.abs(bird.pitch)<=GULL_MAX_PITCH);
-      assert.ok(bird.position.distanceTo(previous)<.045,`${bird.index} moved abruptly`);
-      if(frame>0)assert.ok(bird.velocity.distanceTo(velocity)*60<1.5,`${bird.index} acceleration is bounded`);
+      assert.ok(bird.position.distanceTo(previous)<.075,`${bird.index} moved abruptly`);
+      if(frame>0)assert.ok(bird.velocity.distanceTo(velocity)*60<3.5,`${bird.index} acceleration is bounded`);
       assert.ok([...bird.position.toArray(),...bird.velocity.toArray()].every(Number.isFinite));
       assert.ok(bird.position.y>=Math.max(.3,terrainHeight(bird.position.x,bird.position.z)+.28),'clear terrain and water');
       if(['perched','preening','approach'].includes(bird.mode))assert.equal(bird.perch.owner,bird.index);

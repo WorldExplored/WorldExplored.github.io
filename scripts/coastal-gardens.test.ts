@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Frustum, Matrix4, Mesh, PerspectiveCamera, Vector3 } from 'three';
-import { createSeabedMeadows, createSeabedMeadowSites } from '../src/components/world/SeabedMeadows';
+import { createSeabedMeadows, createSeabedMeadowSites, SEABED_FORMS } from '../src/components/world/SeabedMeadows';
 import { createIslandMeadowSites } from '../src/components/world/IslandMeadows';
 import { meadowGeometry } from '../src/components/world/MeadowGeometry';
 import { createFrontGardens, frontVineSites } from '../src/components/world/FrontGardens';
@@ -25,14 +25,33 @@ test('meadows form broad continuous beds around both cities and keep cave approa
     assert.ok(coastalCaveClearance(site.x,site.z,.65)>0);
   }
   const near=samples(sites),occupied=new Set(sites.map(site=>`${Math.floor(site.x/3)},${Math.floor(site.z/3)}`));
-  assert.ok(occupied.size>1150,'coverage spans the banks and open seabed, not a few tiny clumps');
+  assert.ok(occupied.size>1000,'irregular beds still span over 9,000 square metres of banks and open seabed');
   assert.ok(near.filter(distance=>distance<1.4).length/near.length>.95,'neighboring crowns overlap into meadows');
   for(const site of [...habitat.rocks,...habitat.colonies,...habitat.plants,...habitat.kelp])assert.ok(coastalCaveClearance(site.x,site.z,site.radius)>0);
 });
 function samples(sites:{x:number;z:number}[]){return sites.filter((_,i)=>i%29===0).map(site=>Math.min(...sites.filter(other=>other!==site).map(other=>Math.hypot(other.x-site.x,other.z-site.z))));}
 
+test('seabed growth forms uneven clumps with sparse recruits and genuinely different leaf anatomy',()=>{
+  const sites=createSeabedMeadowSites();assert.deepEqual(sites,createSeabedMeadowSites());
+  const spacing=samples(sites).sort((a,b)=>a-b);
+  assert.ok(spacing[Math.floor(spacing.length*.25)]<.35,'close siblings form dense crowns');
+  assert.ok(spacing[Math.floor(spacing.length*.95)]>.9,'sparse growth remains between patches');
+  const cells=new Map<string,number>();for(const site of sites){const key=`${Math.floor(site.x/3)},${Math.floor(site.z/3)}`;cells.set(key,(cells.get(key)??0)+1);}
+  const density=[...cells.values()].sort((a,b)=>a-b);
+  assert.ok(density[Math.floor(density.length*.9)]>=density[Math.floor(density.length*.1)]*8,'density must vary strongly rather than jittering a planting grid');
+  assert.ok(sites.filter(site=>site.cluster<0).length>250,'sparse recruits break up patch boundaries');
+  assert.ok(Math.max(...sites.map(site=>site.height))/Math.min(...sites.map(site=>site.height))>6);
+  const geometries=SEABED_FORMS.map((_,form)=>meadowGeometry(true,'near',form));
+  try{
+    assert.equal(new Set(geometries.map(geometry=>geometry.userData.blades)).size,4,'tufts, broad blades, branching ferns and fans have different leaf counts');
+    assert.equal(new Set(geometries.map(geometry=>geometry.attributes.position.count)).size,4,'forms change anatomy, not just instance scale');
+    assert.ok(new Set(sites.map(site=>site.form)).size===4);
+    for(let region=0;region<16;region++){const local=sites.filter(site=>site.region===region);if(local.length>100)assert.equal(new Set(local.map(site=>site.form)).size,4);}
+  }finally{geometries.forEach(geometry=>geometry.dispose());}
+});
+
 test('island understory follows actual ground and preserves complete walking clearance',()=>{
-  const sites=createIslandMeadowSites(),plan=createLandscapePlan();assert.ok(sites.length>2400&&sites.length<2800);
+  const sites=createIslandMeadowSites(),plan=createLandscapePlan();assert.ok(sites.length>4500&&sites.length<4800);
   assert.ok(sites.filter(site=>site.region==='city').length>800);
   assert.ok(sites.filter(site=>site.region==='main').length>750);
   for(const site of sites){
@@ -59,7 +78,7 @@ test('distant meadow geometry retains every blade and a real silhouette at half 
 test('seabed chunks retain density through LOD and cull the opposite coast in a detail view',()=>{
   const scene=createSeabedMeadows();
   try{
-    assert.equal(scene.batches.length,16);assert.equal(new Set(scene.batches.map(mesh=>mesh.geometry)).size,1);
+    assert.equal(scene.batches.length,8*SEABED_FORMS.length);assert.equal(new Set(scene.batches.map(mesh=>mesh.geometry)).size,SEABED_FORMS.length);
     const population=scene.batches.map(mesh=>mesh.count),near=scene.batches[0].geometry;
     scene.setQuality('medium');const far=scene.batches[0].geometry;
     assert.ok(triangleCount(far)<triangleCount(near));assert.deepEqual(scene.batches.map(mesh=>mesh.count),population);
@@ -79,9 +98,9 @@ test('seabed chunks retain density through LOD and cull the opposite coast in a 
 test('main building vines grow from the soil against measured walls with five distinct habits',()=>{
   const sites=frontVineSites(),scene=createFrontGardens();
   try{
-    assert.equal(sites.length,23);assert.equal(new Set(sites.map(site=>vineHabit(site.seed))).size,5);
+    assert.equal(sites.length,30);assert.equal(new Set(sites.map(site=>vineHabit(site.seed))).size,5);
     assert.equal(new Set(sites.map(site=>site.building)).size,5);assert.equal(scene.root.children.length,5);
-    let triangles=0;scene.root.traverse(object=>{if(object instanceof Mesh)triangles+=triangleCount(object.geometry);});assert.ok(triangles<80000);
+    let triangles=0;scene.root.traverse(object=>{if(object instanceof Mesh)triangles+=triangleCount(object.geometry);});assert.ok(triangles<105000);
     for(const site of sites){
       assert.ok(Math.abs(site.y-terrainMeshHeight(site.x,site.z)+.015)<1e-8);
       const vine=createFacadeGarden(site),positions=vine.wood.attributes.position;
@@ -100,8 +119,8 @@ test('medium plant geometry remains below one million triangles without deleting
       +flora.reduce((sum,site)=>sum+triangleCount(geometry(`flora${site.kind}`,()=>floraGeometry(site.kind,'far')))*.7,0)
       +reef.plants.reduce((sum,site)=>sum+triangleCount(geometry(`sea${site.form}`,()=>createSeaweedGeometry(site.form,0,'far')))*.76,0)
       +reef.kelp.reduce((sum,site)=>sum+triangleCount(geometry(`kelp${site.form}`,()=>createForestKelpGeometry(site.form,'far')))*.76,0)
-      +createSeabedMeadowSites().length*triangleCount(geometry('water',()=>meadowGeometry(true,'far')))
-      +createIslandMeadowSites().length*triangleCount(geometry('ground',()=>meadowGeometry(false,'far')))+75516+10000;
+      +createSeabedMeadowSites().reduce((sum,site)=>sum+triangleCount(geometry(`water${site.form}`,()=>meadowGeometry(true,'far',site.form))),0)
+      +createIslandMeadowSites().reduce((sum,site)=>sum+triangleCount(geometry(`ground${site.form}`,()=>meadowGeometry(false,'far',site.form))),0)+100000+10000;
     assert.ok(triangles<1000000,`${triangles} medium foliage triangles including the main wall vines and dock growth`);
   }finally{shapes.forEach(geometry=>geometry.dispose());}
 });

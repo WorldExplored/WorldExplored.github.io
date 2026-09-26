@@ -5,7 +5,7 @@ import { Box3, InstancedMesh, Mesh } from 'three';
 import { newPong, stepPong, PONG, blockCells, blocksFit, blocksGhost, dropBlocks, moveBlocks, newBlocks, rotateBlocks, stepBlocks, type BlocksState } from '../src/components/arcade/retroLogic';
 import { ArcadeHall, ARCADE_BOUNDS, ARCADE_PLAN, createArcadeHall, createArcadeInterior } from '../src/components/world/ArcadeHall';
 import { createCityTransitRoute, cityBuildings } from '../src/components/world/city';
-import { createSceneRuntime } from '../src/content/world';
+import { createSceneRuntime, world } from '../src/content/world';
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 const random = () => .314;
@@ -90,9 +90,9 @@ test('enlarged arcade has closed room geometry, inset floors and clearance from 
         }
       }
     }
-    const route = createCityTransitRoute();
+    const route = createCityTransitRoute(), arcade = world.landmarks.find(item => item.id === 'arcade')!;
     for (let i = 0; i < 4000; i++) {
-      const point = route.curve.getPointAt(i / 4000), x = point.x + 26, z = point.z + 85;
+      const point = route.curve.getPointAt(i / 4000), x = point.x - arcade.position[0], z = point.z - arcade.position[2];
       const clearance = Math.min(...ARCADE_PLAN.map((a, j) => {
         const b = ARCADE_PLAN[(j + 1) % ARCADE_PLAN.length], dx = b[0] - a[0], dz = b[1] - a[1];
         const t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (z - a[1]) * dz) / (dx * dx + dz * dz)));
@@ -101,8 +101,11 @@ test('enlarged arcade has closed room geometry, inset floors and clearance from 
       assert.ok(clearance > 1.1, `Monorail clearance at ${point.x},${point.z}`);
     }
     for (const building of cityBuildings) {
-      const dx = Math.max(Math.abs(building.x + 26) - 3.45, 0), dz = Math.max(-88 - building.z, 0, building.z + 82.02);
-      assert.ok(Math.hypot(dx, dz) > Math.hypot(building.width, building.depth) / 2, building.id);
+      const halfX = Math.abs(Math.cos(building.rotation)) * building.width / 2 + Math.abs(Math.sin(building.rotation)) * building.depth / 2;
+      const halfZ = Math.abs(Math.sin(building.rotation)) * building.width / 2 + Math.abs(Math.cos(building.rotation)) * building.depth / 2;
+      const gapX = Math.abs(building.x - arcade.position[0]) - ARCADE_BOUNDS.halfWidth - halfX;
+      const gapZ = Math.abs(building.z - (arcade.position[2] - .25)) - 2.78 - halfZ;
+      assert.ok(Math.max(gapX, gapZ) > .55, `${building.id}: shell and walkway clearance`);
     }
   } finally { Object.values(shell).forEach(g => g.dispose()); Object.values(interior).forEach(g => g.dispose()); }
 });

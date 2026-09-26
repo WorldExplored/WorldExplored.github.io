@@ -6,6 +6,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { getReefHabitat, reefFloorHeight, reefRockSurfaceHeight } from './reefHabitat';
 import { seededRandom } from './terrain';
 import { crabCarapaceGeometry } from './Wildlife';
+import { crabVariation } from './crabVariation';
 import type { EnvironmentProps } from './Water';
 
 export const BENTHIC_KINDS = ['starfish', 'ribbed-clam', 'barnacle-colony', 'reef-crab'] as const;
@@ -36,10 +37,10 @@ export function createBenthicLayout(): BenthicSite[] {
   const ledges=plan.rocks.filter(rock=>rock.patch<200);
   for (let index = 0; index < 45; index++) for (let attempt = 0; attempt < 35; attempt++) {
     const rock = ledges[Math.floor(random() * ledges.length)], angle = random() * Math.PI * 2;
-    const x = rock.x + Math.cos(angle) * (rock.radius + .6), z = rock.z + Math.sin(angle) * (rock.radius + .6);
+    const x = rock.x + Math.cos(angle) * (rock.radius + .95), z = rock.z + Math.sin(angle) * (rock.radius + .95);
     const y = reefFloorHeight(x, z);
-    if (y > -2 || y < -12 || plan.rocks.some(other => Math.hypot(x - other.x, z - other.z) < other.radius + .4)
-      || sites.some(site => Math.hypot(x - site.x, z - site.z) < .7)) continue;
+    if (y > -2 || y < -12 || plan.rocks.some(other => Math.hypot(x - other.x, z - other.z) < other.radius + .65)
+      || sites.some(site => Math.hypot(x - site.x, z - site.z) < 1.0)) continue;
     sites.push({ kind: 3, x, y: y + .095, z, normal: new Vector3(0, 1, 0), yaw: random() * Math.PI * 2, scale: .85 + random() * .3, tint: random(), host: -1 });
     break;
   }
@@ -51,7 +52,7 @@ export function createBenthicLayout(): BenthicSite[] {
   return sites;
 }
 
-export function benthicGeometry(kind: number) {
+export function benthicGeometry(kind: number,variant=0) {
   const parts: BufferGeometry[] = [];
   const add = (geometry: BufferGeometry, color: string) => {
     geometry.deleteAttribute('uv'); const tint = new Color(color), count = geometry.attributes.position.count, colors = new Float32Array(count * 3);
@@ -97,14 +98,16 @@ export function benthicGeometry(kind: number) {
       add(new CylinderGeometry(.031, .031, .012, 7).translate(x, height * .65, z), '#565850');
     }
   } else {
-    add(crabCarapaceGeometry(), '#ad6747');
+    const traits=crabVariation(variant*4+2);
+    add(crabCarapaceGeometry().scale(traits.width,1,traits.depth), traits.color);
     for (const side of [-1, 1]) {
       for (let leg = 0; leg < 4; leg++) {
-        const z = -.075 + leg * .05, a = new Vector3(side * .13, .035, z), b = new Vector3(side * .25, .05, z + .015), c = new Vector3(side * .32, -.085, z + .045);
+        const z = -.075 + leg * .05, a = new Vector3(side * .13*traits.width, .035, z), b = new Vector3(side * .25*traits.width, .05, z + .015), c = new Vector3(side * .32*traits.width, -.085, z + .045);
         bone(a, b, .016, '#b57a50'); bone(b, c, .011, '#c28c60');
       }
-      bone(new Vector3(side * .10, .02, -.08), new Vector3(side * .19, .075, -.21), .028, '#c1844e');
-      for (const claw of [-1, 1]) bone(new Vector3(side * .19, .075, -.21), new Vector3(side * (.18 + claw * .035), .085, -.29), .018, '#deaa72');
+      const clawScale=side<0?traits.leftClaw:traits.rightClaw;
+      bone(new Vector3(side * .10, .02, -.08), new Vector3(side * (.10+.09*clawScale), .075, -.08-.13*clawScale), .028*clawScale, traits.legColor);
+      for (const claw of [-1, 1]) bone(new Vector3(side * (.10+.09*clawScale), .075, -.08-.13*clawScale), new Vector3(side * (.10+(.08+claw*.035)*clawScale), .085, -.08-.21*clawScale), .018*clawScale, '#deaa72');
       bone(new Vector3(side * .06, .05, -.09), new Vector3(side * .07, .15, -.11), .009, '#a17755');
       add(new SphereGeometry(.022, 7, 5).translate(side * .07, .15, -.11), '#182e30');
     }
@@ -115,12 +118,12 @@ export function benthicGeometry(kind: number) {
 export function createBenthicLife() {
   const root = new Group(), sites = createBenthicLayout(), transform = new Object3D(); root.name = 'reef-floor-invertebrates';
   const material = new MeshStandardMaterial({ vertexColors: true, roughness: .86, side: DoubleSide });
-  const batches = BENTHIC_KINDS.map((kind, form) => {
-    const entries = sites.filter(site => site.kind === form), geometry = benthicGeometry(form), mesh = new InstancedMesh(geometry, material, entries.length);
+  const batches = BENTHIC_KINDS.flatMap((kind,form)=>Array.from({length:form===3?3:1},(_,variant)=>({kind,form,variant}))).map(({kind,form,variant}) => {
+    const entries = sites.filter(site => site.kind === form).filter((_,index)=>form!==3||index%3===variant), geometry = benthicGeometry(form,variant), mesh = new InstancedMesh(geometry, material, entries.length);
     mesh.name = kind; mesh.raycast = () => {}; mesh.receiveShadow = true;
     entries.forEach((site, index) => {
-      transform.position.set(site.x, site.y, site.z); transform.quaternion.setFromUnitVectors(new Vector3(0, 1, 0), site.normal); transform.rotateY(site.yaw); transform.scale.setScalar(site.scale); transform.updateMatrix(); mesh.setMatrixAt(index, transform.matrix);
-      mesh.setColorAt(index, new Color().setHSL(.06 + site.tint * .06, .10, .76 + site.tint * .18));
+      transform.position.set(site.x, site.y, site.z); transform.quaternion.setFromUnitVectors(new Vector3(0, 1, 0), site.normal); transform.rotateY(site.yaw); const size=form===3?site.scale*(.65+(index%5)*.14):site.scale;transform.scale.setScalar(size); transform.updateMatrix(); mesh.setMatrixAt(index, transform.matrix);
+      mesh.setColorAt(index, form===3?new Color(crabVariation(index+variant*9).color).lerp(new Color('#ffffff'),.55):new Color().setHSL(.06 + site.tint * .06, .10, .76 + site.tint * .18));
     });
     mesh.computeBoundingSphere(); root.add(mesh); return { mesh, geometry, count: entries.length };
   });

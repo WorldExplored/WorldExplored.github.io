@@ -12,7 +12,7 @@ export const LIGHTHOUSE_OPENINGS = [
   { name: 'lower-window', bottom: 5.16, top: 5.60, halfAngle: .19, recess: .045 },
   { name: 'upper-window', bottom: 9.10, top: 9.50, halfAngle: .19, recess: .045 },
 ] as const;
-export function lighthouseRadius(y: number) { const t = (y - 1.02) / 11.24; return .87 - .31 * t + .045 * Math.sin(Math.PI * t); }
+export function lighthouseRadius(y: number) { const t = (y - 1.02) / 11.24; return (.87 - .31 * t + .045 * Math.sin(Math.PI * t)) * 1.18; }
 function masonryShell() {
   const ys = [...new Set([1.02,12.26,...LIGHTHOUSE_OPENINGS.flatMap(o=>[o.bottom,o.top]),...Array.from({length:33},(_,i)=>1.02+11.24*i/32)])].sort((a,b)=>a-b);
   const angles = [...new Set([-Math.PI,Math.PI,-.30,.30,-.19,.19,...Array.from({length:49},(_,i)=>-Math.PI+i/48*TAU)])].sort((a,b)=>a-b);
@@ -93,6 +93,8 @@ export function createLighthouseGeometry(){
   };
   // Extend the masonry shaft; keep windows, door and lantern at their human-scale dimensions.
   for (const part of [parts.balcony,parts.balconyBrackets,parts.rails,parts.lantern,parts.frames,parts.cap,parts.roofSeams,parts.finial,parts.maintenance,parts.lanternVentRing]) part.translate(0,LIGHTHOUSE_RISE,0);
+  // Widen fixed balcony/cap fittings with the shaft; retain all vertical levels.
+  for(const [key,part] of Object.entries(parts))if(!['shaft','masonrySeams','windowFrames','windowGlass','sills','drainage','beam','hitbox'].includes(key))part.scale(1.18,1,1.18);
   return parts;
 }
 
@@ -122,7 +124,18 @@ export function CoastalLighthouse(props:ModelProps){
       shader.fragmentShader=`varying float vBeamLength;\n${shader.fragmentShader}`.replace('#include <alphamap_fragment>','#include <alphamap_fragment>\n diffuseColor.a *= smoothstep(0., .16, vBeamLength) * (1. - smoothstep(.68, 1., vBeamLength));');
     };
     beam.customProgramCacheKey=()=> 'soft-open-beam-v1';
-    return{hitbox:new MeshStandardMaterial({name:'lighthouse-interaction-proxy',visible:false,colorWrite:false,depthWrite:false}),masonry:new MeshStandardMaterial({name:'weathered-painted-masonry',color:'#e9e8da',roughness:.83,metalness:0,side:DoubleSide}),mortar:new MeshStandardMaterial({color:'#b0b8ac',roughness:1}),beam,halo};
+    const masonry=new MeshStandardMaterial({name:'pearl-aqua-striped-masonry',color:'#f0f8ee',roughness:.77,metalness:0,side:DoubleSide});
+    masonry.onBeforeCompile=shader=>{
+      shader.vertexShader='varying float towerHeight;\n'+shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\n towerHeight=position.y;');
+      shader.fragmentShader='varying float towerHeight;\n'+shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
+        float cyanBand=(smoothstep(3.08,3.12,towerHeight)-smoothstep(4.12,4.16,towerHeight))+(smoothstep(10.42,10.46,towerHeight)-smoothstep(11.40,11.44,towerHeight));
+        float greenBand=smoothstep(6.60,6.64,towerHeight)-smoothstep(7.52,7.56,towerHeight);
+        diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.028,.57,.66),cyanBand);
+        diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.37,.71,.22),greenBand);
+      `);
+    };
+    masonry.customProgramCacheKey=()=> 'pearl-aqua-lighthouse-stripes-v1';
+    return{hitbox:new MeshStandardMaterial({name:'lighthouse-interaction-proxy',visible:false,colorWrite:false,depthWrite:false}),masonry,mortar:new MeshStandardMaterial({color:'#b0b8ac',roughness:1}),beam,halo};
   });
   const lamp=useRef<PointLight>(null),halo=useRef<Sprite>(null),haloView=useRef(new Vector3());
   const timer=useRef<ReturnType<typeof setTimeout>|undefined>(undefined),rotation=useRef(0);

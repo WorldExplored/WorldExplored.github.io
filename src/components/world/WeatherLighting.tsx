@@ -59,7 +59,7 @@ export function WeatherLighting({ runtime, shadows, paused }: { runtime: Mutable
     daylightAt(weather.hour, direction); direction.toArray(runtime.current.sunDirection);
     if (ambient.current) {
       ambient.current.color.copy(colors.night).lerp(colors.day, weather.daylight).lerp(colors.overcast, weather.storm * .6);
-      ambient.current.intensity = .36 + weather.daylight * .25 + weather.storm * .12;
+      ambient.current.intensity = .14 + weather.daylight * .43 + weather.storm * .07;
     }
     scene.environmentIntensity = Math.max(.06, .10 + weather.daylight * .64 - weather.storm * .15);
     if (scene.fog) scene.fog.color.set('#293a5a').lerp(colors.day, weather.daylight).lerp(colors.sunset, weather.dusk * .67).lerp(colors.overcast, weather.storm * .75 * weather.daylight);

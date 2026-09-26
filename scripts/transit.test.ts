@@ -46,9 +46,12 @@ test('the complete train swept envelope clears every city shell and rotated Hist
   let clearance = Infinity, historyClearance = Infinity, bodyClearance = Infinity;
   const tangent = new Vector3();
   const segmentDistance = (p: number[], a: number[], b: number[]) => {
-    const dx = b[0] - a[0], dz = b[1] - a[1], t = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dz) / (dx * dx + dz * dz)));
+    const dx = b[0] - a[0], dz = b[1] - a[1], lengthSquared = dx * dx + dz * dz;
+    // Axis-aligned glass can project to a line: its collapsed box edges are points.
+    const t = lengthSquared > 0 ? Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dz) / lengthSquared)) : 0;
     return Math.hypot(p[0] - a[0] - t * dx, p[1] - a[1] - t * dz);
   };
+  assert.equal(segmentDistance([3, 4], [0, 0], [0, 0]), 5, 'Collapsed shell edges retain their point clearance');
   const loop = route.curve.getSpacedPoints(12000);
   for (const [sample, point] of loop.entries()) {
     route.curve.getTangentAt(sample / 12000, tangent);
@@ -70,7 +73,7 @@ test('the complete train swept envelope clears every city shell and rotated Hist
   for (const building of cityBuildings.filter(item => item.family !== 'public-station')) assert.ok(isInside(building.x, building.z, loop), `${building.id} belongs inside the loop`);
   for (const { box } of bounds.filter(item => item.id === 'history')) for (const x of [box.min.x, box.max.x]) for (const z of [box.min.z, box.max.z]) assert.ok(isInside(x, z, loop), 'All rotated History parts are inside the loop');
   assert.ok(historyClearance > 1.5, `History minimum clearance ${historyClearance}`);
-  assert.ok(bodyClearance > .35, `True carriage body clearance ${bodyClearance}`);
+  assert.ok(Number.isFinite(bodyClearance) && bodyClearance > .35, `True carriage body clearance ${bodyClearance}`);
   console.info(`Oriented carriage clearance: ${bodyClearance.toFixed(3)}m; Transit minimum swept clearance: ${clearance.toFixed(3)}m; History: ${historyClearance.toFixed(3)}m; ${loop.length} loop samples`);
 });
 

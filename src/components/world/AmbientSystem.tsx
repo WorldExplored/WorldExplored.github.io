@@ -23,6 +23,7 @@ import { createRain } from './Rain';
 import { shorelineWaveGLSL } from './waves';
 import { makeClouds, writeCloudMatrices } from './CloudSurface';
 import type { EnvironmentProps } from './Water';
+import { exteriorIlluminance } from './ExteriorLighting';
 
 const plantVertex = /* glsl */ `
   uniform float uTime;
@@ -30,6 +31,8 @@ const plantVertex = /* glsl */ `
   uniform vec3 uPointerWorld;
   attribute float aPhase;
   attribute vec3 aTint;
+  attribute float aEntryLight;
+  varying float vEntryLight;
   varying vec3 vTint;
   varying float vLight;
   varying float vDistance;
@@ -45,6 +48,7 @@ const plantVertex = /* glsl */ `
     local.y -= bend * .045;
     vec4 mv = modelViewMatrix * local;
     vTint = aTint;
+    vEntryLight = aEntryLight;
     vLight = .57 + min(position.y * 1.7,1.) * .46;
     vDistance = length(mv.xyz);
     gl_Position = projectionMatrix * mv;
@@ -56,10 +60,12 @@ const plantFragment = /* glsl */ `
   uniform vec3 uFog;
   uniform vec2 uFogRange;
   varying vec3 vTint;
+  varying float vEntryLight;
   varying float vLight;
   varying float vDistance;
   void main() {
-    vec3 color = vTint * vLight * (.24 + .76 * uDaylight) * (1. - uStorm * .24);
+    float lighting = .035 + .965 * uDaylight + vEntryLight * (1. - uDaylight);
+    vec3 color = vTint * vLight * lighting * (1. - uStorm * .24);
     color = mix(color, uFog, smoothstep(uFogRange.x, uFogRange.y, vDistance));
     gl_FragColor = vec4(color, 1.);
     #include <colorspace_fragment>
@@ -131,6 +137,7 @@ function makePlants(plan: LandscapePlan, flowers: boolean, prepared?: PlantPosit
   const mesh = new InstancedMesh(geometry, material, maximum);
   mesh.name = flowers ? 'environment-flowers' : 'environment-grass';
   const phases = new Float32Array(maximum);
+  const entryLight = new Float32Array(maximum);
   const colors = new Float32Array(maximum * 3);
   const transform = new Object3D();
   const tint = new Color();
@@ -141,6 +148,7 @@ function makePlants(plan: LandscapePlan, flowers: boolean, prepared?: PlantPosit
   const occupied = new Uint16Array(160 * 160);
   for (let index = 0; index < maximum; index++) {
     const plant = positions[index];
+    entryLight[index] = exteriorIlluminance(plant.x, plant.y, plant.z);
     transform.position.set(plant.x, plant.y, plant.z);
     transform.scale.setScalar(plant.scale);
     transform.rotation.set(0, plant.rotation, 0);
@@ -160,6 +168,7 @@ function makePlants(plan: LandscapePlan, flowers: boolean, prepared?: PlantPosit
     occupied[z * 160 + x] ||= index + 1;
   }
   geometry.setAttribute('aPhase', new InstancedBufferAttribute(phases, 1));
+  geometry.setAttribute('aEntryLight', new InstancedBufferAttribute(entryLight, 1));
   geometry.setAttribute('aTint', new InstancedBufferAttribute(colors, 3));
   mesh.instanceMatrix.needsUpdate = true;
   mesh.frustumCulled = false;
@@ -233,7 +242,11 @@ function makeLandscape(plan: LandscapePlan) {
       float grass = ecology.x * (1.-smoothstep(.48,.86,slope)) * (.78 + .22*smoothstep(.16,.73,meadow));
       float pathAA=max(fwidth(paving)*1.6,.018);
       float pathMask=1.-smoothstep(-pathAA,pathAA*2.2,paving);
-      float wet = 1.-smoothstep(.09,.40,elevation);
+      float along=sin(groundXZ.x*.17+groundXZ.y*.11)*.6+sin(groundXZ.y*.39-groundXZ.x*.13)*.23;
+      float washAge=mod(uShoreTime*1.45+along-.65+6.2831853,6.2831853);
+      float absorption=(1.-smoothstep(.12,5.8,washAge))*smoothstep(0.,.12,washAge);
+      float washReach=(1.-smoothstep(.05,1.35,coast))*(1.-smoothstep(.32,.75,elevation));
+      float wet = max(1.-smoothstep(.09,.40,elevation),absorption*washReach*shoreExposure*.88);
       float depth = max(0.,-elevation);
       float stone = smoothstep(.65,1.3,slope) * smoothstep(.5,1.2,elevation);
       vec3 sandScan = texture2D(uSandColor,groundXZ*.27).rgb;
@@ -276,7 +289,7 @@ function makeLandscape(plan: LandscapePlan) {
         roughnessFactor=mix(roughnessFactor,texture2D(uGrassArm,grassUv).g,grass*ecology.y*(1.-pathMask));
       `);
   };
-  material.customProgramCacheKey = () => 'coastal-pbr-continuous-sand-v6';
+  material.customProgramCacheKey = () => 'coastal-pbr-draining-shorewash-v7';
   const rockResources=createCoastalRocks(plan.rocks),rocks=rockResources.root;
   const shoreDetails=createShoreDetails(plan),townLandscape=createTownLandscape(plan);
   const transform=new Object3D();
@@ -441,11 +454,11 @@ export function CloudSystem({ runtime, paused, quality }: EnvironmentProps) {
   const inspection = useMemo(() => {
     if (typeof window === 'undefined' || !['localhost', '127.0.0.1'].includes(window.location.hostname)) return null;
     const requested = new URLSearchParams(window.location.search).get('qaRain');
-    return requested === 'ground' || requested === 'water' ? requested : null;
+    return requested === 'ground' || requested === 'water' || requested === 'roof' ? requested : null;
   }, []);
   const clouds = useMemo(() => measureConstruction('clouds', () => {
     const result = makeClouds(false);
-    if (inspection) { const cloud = result.clusters[0]; cloud.center = inspection === 'ground' ? [-7, 18, 3] : [-43, 18, -21]; cloud.speed = 0; cloud.moisture = .9; }
+    if (inspection) { const cloud = result.clusters[0]; cloud.center = inspection === 'ground' ? [-7, 18, 3] : inspection === 'roof' ? [-8,20,0] : [-43, 18, -21]; cloud.speed = 0; cloud.moisture = .9; }
     return result;
   }), [inspection]);
   const rain = useMemo(() => createRain({ capacity: 900, impacts: 240 }), []);

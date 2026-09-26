@@ -34,11 +34,27 @@ export function shoreBreakup(x: number, z: number, time: number, secondary = fal
   return smooth(.32, .65, broad * .74 + fine * .26);
 }
 
+/** Water time is elapsed seconds multiplied by the configured water speed. */
+export function shorelinePhase(distance: number, x: number, z: number, time: number) {
+  return -distance * 1.32 + time * 1.45 + shoreAlong(x, z);
+}
+
+/** Exact arrival of a primary crest, expressed in water time. */
+export function shorelineCrestTime(distance: number, x: number, z: number, cycle: number) {
+  return (Math.PI * 2 * cycle + distance * 1.32 - shoreAlong(x, z)) / 1.45;
+}
+
+export function shorelineWash(distance: number, x: number, z: number, time: number, exposure = coastExposure(x, z, distance)) {
+  const along = shoreAlong(x, z), arrival = Math.pow(Math.max(0, Math.cos(time * 1.45 + along - .65)), 4);
+  const runup = .28 + Math.sin(time * 1.45 + along - .35) * .48;
+  return Math.exp(-Math.pow((-distance - runup) / (.42 + arrival * .38), 2)) * arrival * shoreBreakup(x, z, time) * exposure;
+}
+
 export function shorelineWave(distance: number, x: number, z: number, time: number, exposure = coastExposure(x, z, distance)) {
   const sea = -distance;
   if (sea > 10 || sea < -.4) return { crest: 0, foam: 0, curl: 0, rocky: islandAt(x, z).island.id === 'beacon' };
   const along = shoreAlong(x, z);
-  const phase = sea * 1.32 + time * 1.45 + along;
+  const phase = shorelinePhase(distance, x, z, time);
   const secondPhase = sea * .78 + time * .93 + along * 1.7;
   const front = Math.pow(Math.max(0, Math.cos(phase)), 14);
   const swell = Math.pow(Math.max(0, Math.cos(secondPhase)), 18) * .55;
@@ -47,9 +63,7 @@ export function shorelineWave(distance: number, x: number, z: number, time: numb
   const crest = (front * breakMask + swell * secondPatch) * shallows * exposure;
   const curl = (-Math.sin(phase) * Math.pow(Math.max(0, Math.cos(phase)), 8) * breakMask - Math.sin(secondPhase) * Math.pow(Math.max(0, Math.cos(secondPhase)), 10) * secondPatch * .45) * shallows * exposure;
   // Wash follows each arrival, spreads briefly, then drains completely between sets.
-  const arrival = Math.pow(Math.max(0, Math.cos(time * 1.45 + along - .65)), 4);
-  const runup = .28 + Math.sin(time * 1.45 + along - .35) * .48;
-  const wash = Math.exp(-Math.pow((sea - runup) / (.42 + arrival * .38), 2)) * arrival * breakMask * exposure;
+  const wash = shorelineWash(distance, x, z, time, exposure);
   const lace = .6 + .4 * Math.sin(x * 2.8 - z * 2.2 + time * .35) * Math.sin(z * 3.2 + x * 1.1);
   const foam = Math.min(1, crest * .82 + wash * .72) * lace;
   return { crest, foam, curl, rocky: islandAt(x, z).island.id === 'beacon' };

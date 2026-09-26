@@ -55,7 +55,7 @@ export function Landmark({ config, runtime, paused, onNavigate, children }: { co
     if (!ring.current) return;
     const active = runtime.current.hovered === config.id;
     const material = ring.current.material as MeshBasicMaterial;
-    material.opacity += ((active ? .65 : .16) - material.opacity) * (paused ? 1 : Math.min(1, delta * 8));
+    material.opacity += ((active ? .24 : 0) - material.opacity) * (paused ? 1 : Math.min(1, delta * 8));
   });
   return <group name={`landmark-${config.id}`} position={config.position}
       onPointerOver={enter}
@@ -74,12 +74,12 @@ export function Landmark({ config, runtime, paused, onNavigate, children }: { co
         if (event.delta < 6 && !runtime.current.dragging && dragCount.current === runtime.current.dragCount) { emitTechnologySound('activate', config.position); onNavigate(config.id); }
       }}>
     {config.id === 'building' && <mesh name="lighthouse-navigation-hit" position={[0,7.6,0]}>
-      <cylinderGeometry args={[1.4,1.4,14,20]} /><meshBasicMaterial transparent opacity={0} depthWrite={false} colorWrite={false}/>
+      <cylinderGeometry args={[1.6,1.6,14,20]} /><meshBasicMaterial transparent opacity={0} depthWrite={false} colorWrite={false}/>
     </mesh>}
     <group name={`landmark-model-${config.id}`} rotation={[0, config.rotationY ?? 0, 0]}>{children}</group>
     <mesh ref={ring} raycast={() => {}} position={[0, bounds.floor + .04, 0]} rotation={[-Math.PI / 2, 0, 0]}>
       <ringGeometry args={[bounds.radius - .05, bounds.radius, world.quality.high.segments]} />
-      <meshBasicMaterial color={config.color} transparent opacity={.16} depthWrite={false} />
+      <meshBasicMaterial color={config.color} transparent opacity={0} depthWrite={false} />
     </mesh>
 
 

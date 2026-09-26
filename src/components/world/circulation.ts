@@ -32,6 +32,12 @@ function clearLine(a: PathPoint,b: PathPoint,margin:number) {
 /** Route streets around final rotated foundations, then remove unnecessary grid bends. */
 export function routeCityWalk(start: PathPoint,end: PathPoint,width=.95): PathPoint[] {
   const step=.4, margin=width/2+.05;
+  const dx=Math.abs(end.x-start.x),dz=Math.abs(end.z-start.z);
+  // Keep approach walks square to doors and street edges; tiny offsets do not
+  // warrant another corner where a coast-facing promenade changes direction.
+  if(Math.min(dx,dz)>.12)for(const corner of [{x:start.x,z:end.z},{x:end.x,z:start.z}]) {
+    if(clearLine(start,corner,margin)&&clearLine(corner,end,margin))return [{...start},corner,{...end}];
+  }
   if(clearLine(start,end,margin))return [{...start},{...end}];
   // Authored street waypoints avoid repeating A* during startup; validate against current buildings.
   const prepared=(cityStreetRoutes as Record<string,PathPoint[]>)[JSON.stringify([start.x,start.z,end.x,end.z,width])];
@@ -98,7 +104,7 @@ export function createCirculationGraph() {
   edge('main-harbor-walk',west,mainDock,[{x:-14.8,z:-16.6},{x:-8,z:-16.6}],1.25);
   edge('main-dock',mainDock,mainBoat,[],1.1,'dock');
   for(const bridge of BRIDGES){const ends=bridge.id==='garden'?[gardenNorth,gardenSouth]:[purdueWest,purdueEast];const e=edge(`bridge-${bridge.id}`,ends[0],ends[1],[],bridge.width,'bridge');e.bridge=true;e.bridgeId=bridge.id;e.points=bridge.samples.map(p=>({x:p.point.x,z:p.point.z}));}
-  const cityWest=node('city-west-street',-19.5,-74.7),cityCenter=node('city-center-street',-5,-74.2),cityEast=node('city-east-street',13,-72);
+  const cityWest=node('city-west-street',-19.5,-74.7),cityCenter=node('city-center-street',-5,-74.7),cityEast=node('city-east-street',13,-72);
   const museum=world.landmarks.find(item=>item.id==='history')!,angle=museum.rotationY??0;
   const museumPoint=(x:number,z:number)=>({x:museum.position[0]+x*Math.cos(angle)+z*Math.sin(angle),z:museum.position[2]-x*Math.sin(angle)+z*Math.cos(angle)});
   const threshold=museumPoint(0,4.17),forecourt=museumPoint(0,5.7);
@@ -106,25 +112,19 @@ export function createCirculationGraph() {
   const waterfront=node('city-waterfront',-15.5,-65.4,'park'),cityDock=node('city-dock-land',-12,-65,'dock',1.06),cityBoat=node('city-dock-boarding',-12.7,-60,'dock',1.06);
   // These primary streets are authored town geometry. The router remains a
   // validator and supplies the short secondary building approaches below.
-  edge('town-main-street-west',cityWest,cityCenter,[{x:-14.8,z:-73.85},{x:-9.5,z:-73.95}],1.12);
-  edge('town-main-street-east',cityCenter,cityEast,[{x:0,z:-72.35},{x:6,z:-71.65}],1.22);
-  edge('town-waterfront-route',cityWest,waterfront,[{x:-21.6,z:-79.6},{x:-27.6,z:-80.4},{x:-29,z:-75},{x:-25.5,z:-69.25},{x:-20.5,z:-66.2}],1.05);
+  edge('town-main-street-west',cityWest,cityCenter,[],1.12);
+  edge('town-main-street-east',cityCenter,cityEast,[{x:0,z:-74.7},{x:0,z:-72}],1.22);
+  const visitorCourt=node('visitor-dock-plaza',-24.45,-69.25,'landing'),visitorDock=node('visitor-dock-shore',-24,-69,'dock',.84);
+  edge('town-waterfront-route',cityWest,visitorCourt,[{x:-24.45,z:-74.7}],1.05);
+  edge('town-visitor-promenade',visitorCourt,waterfront,[{x:-20.5,z:-66.2}],1.05);
+  edge('visitor-dock-walk',visitorCourt,visitorDock,[],.95);
   edge('town-dock-walk',waterfront,cityDock,[],1.08);
   edge('town-south-promenade',waterfront,cityEast,[{x:-12,z:-64.7},{x:-5,z:-64.5},{x:3,z:-64.3},{x:8,z:-64.7},{x:10.7,z:-65.25},{x:12,z:-66.5}],1.05);
   edge('history-threshold',history,historyCourt,[],1.35);
   edge('history-promenade',historyCourt,cityEast,[museumPoint(-4.8,5.7),museumPoint(-6.7,4.9),museumPoint(-7.2,2.2)],1.35);
-  const park=node('city-park',-16.2,-68.51,'park');const parkEdge=edge('city-park-walk',park,cityWest,[],.5);parkEdge.points=routeCityWalk(park,cityWest,.5);
+  const park=node('city-park',-16.2,-68.51,'park');const parkEdge=edge('city-park-walk',park,waterfront,[],.5);parkEdge.points=routeCityWalk(park,waterfront,.5);
   edge('fountain-plaza',park,park,Array.from({length:47},(_,i)=>({x:-16.2+Math.sin((i+1)/48*Math.PI*2)*1.49,z:-70+Math.cos((i+1)/48*Math.PI*2)*1.49})),.5);
   const streets=edges.filter(e=>e.id.startsWith('town-')&&e.id!=='town-dock-walk');
-  for(const street of streets){
-    const straight=[street.points[0]];let index=0;
-    while(index<street.points.length-1){
-      let next=street.points.length-1;
-      while(next>index+1&&!clearLine(street.points[index],street.points[next],street.width/2+.08))next--;
-      straight.push(street.points[next]);index=next;
-    }
-    street.points=straight;
-  }
   const joinStreet=(id:string,portal:CirculationNode)=>{
     let best:{street:CirculationEdge;point:PathPoint;segment:number;distance:number}|undefined;
     for(const street of streets)for(let i=1;i<street.points.length;i++){

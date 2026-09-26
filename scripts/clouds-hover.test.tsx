@@ -113,7 +113,7 @@ test('cloud field fills all compass directions and has coherent diagonal wind wi
       assert.ok(Math.abs(first.x) <= 520);
     }
   }
-  const a = clusters[0]; const b = clusters[3];
+  const a = clusters[0]; const b = clusters[5];
   assert.equal(a.layer, b.layer);
   cloudOrigin(a, 70, first).sub(new Vector3().fromArray(a.center)); cloudOrigin(b, 70, next).sub(new Vector3().fromArray(b.center));
   assert.ok(first.distanceTo(next) < 1e-10);

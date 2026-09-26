@@ -43,6 +43,8 @@ import { RoomLighting, mainRoomLamps } from './RoomLighting';
 import { CoastalTraffic } from './CoastalTraffic';
 import { FrontGardens } from './FrontGardens';
 import { StormSystem } from './StormSystem';
+import { RainRoofRegistry } from './RainRoofRegistry';
+import { ExteriorLighting } from './ExteriorLighting';
 
 function SceneClock({ runtime, paused }: { runtime: MutableRefObject<SceneRuntime>; paused: boolean }) {
   const firstFrame=useRef(true);
@@ -130,6 +132,7 @@ export function AeroWorld(props: WorldProps & { runtime: MutableRefObject<SceneR
     {stage >= 1 && <StormSystem runtime={runtime} paused={stopped} quality={tier}/>}
     {reflections}
 
+    {stage >= 1 && <ExteriorLighting runtime={runtime}/>}
     {stage >= 1 && <RoomLighting rooms={mainRoomLamps} runtime={runtime}/>}
     {stage >= 1 && <EcoCity runtime={runtime} paused={stopped} quality={tier} />}
     {stage >= 3 && <CoastalLife runtime={runtime} paused={stopped} quality={tier} />}
@@ -157,6 +160,7 @@ export function AeroWorld(props: WorldProps & { runtime: MutableRefObject<SceneR
     <AmbientSystem onPlantsReady={props.onPlantsReady} stage={stage} runtime={runtime} paused={stopped} quality={tier} />
     {world.landmarks.map(config => <Landmark key={config.id} config={config} runtime={runtime} paused={stopped} onNavigate={onNavigate}><LandmarkModel id={config.id} active={destination === config.id} runtime={runtime} paused={stopped} quality={tier} /></Landmark>)}
     <ReflectiveObject position={[-10, 2.5, 23]} runtime={runtime} paused={stopped} quality={tier} command={props.rotationCommand} />
+    <RainRoofRegistry stage={stage}/>
     <PointerGround runtime={runtime} />
     <CameraDirector {...props} />
     <Labels runtime={runtime} mobile={mobile} />

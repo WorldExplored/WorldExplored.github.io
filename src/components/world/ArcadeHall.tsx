@@ -114,13 +114,14 @@ function createArcadeLights() {
     transform.position.set(position[0], position[1] - FLOOR, position[2]); transform.updateMatrix();
     lamps.setMatrixAt(index, transform.matrix); lamps.setColorAt(index, tint.set(index % 3 ? '#9ef3e7' : '#dcf77e'));
   }
-  return { lamps, material, geometry, transform, tint, positions };
+  const lettering = new MeshStandardMaterial({ color: '#b3eb79', emissive: '#86c65e', emissiveIntensity: .65, roughness: .38 });
+  return { lamps, material, lettering, geometry, transform, tint, positions };
 }
 
 export function ArcadeHall(props: ModelProps) {
   const geometry = useResources(createArcadeHall), material = usePalette(props, 'arcade');
   const lights = useMemo(() => createArcadeLights(), []);
-  useEffect(() => () => { lights.lamps.dispose(); lights.geometry.dispose(); lights.material.dispose(); }, [lights]);
+  useEffect(() => () => { lights.lamps.dispose(); lights.geometry.dispose(); lights.material.dispose(); lights.lettering.dispose(); }, [lights]);
   useFrame(() => {
     const time = props.paused ? 0 : props.runtime.current.elapsed;
     for (let i = 0; i < 48; i++) {
@@ -145,7 +146,7 @@ export function ArcadeHall(props: ModelProps) {
     <mesh geometry={geometry.roof} material={material.cyan} castShadow receiveShadow/>
     <mesh geometry={geometry.ribs} material={material.edge} castShadow/>
     <mesh geometry={geometry.fascia} material={material.navy} castShadow/>
-    <mesh geometry={geometry.sign} material={material.green}/>
+    <mesh geometry={geometry.sign} material={lights.lettering}/>
     <mesh geometry={geometry.marqueeRim} material={material.edge}/>
     <mesh geometry={geometry.fins} material={material.porcelain} castShadow/>
     <mesh geometry={geometry.canopy} material={material.porcelain} castShadow/>

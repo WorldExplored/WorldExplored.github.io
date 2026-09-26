@@ -25,7 +25,7 @@ const temporary = new Vector3();
 const ahead = new Vector3();
 
 export function createGullPerches(plan = createLandscapePlan()): GullPerch[] {
-  const perches: GullPerch[] = [{ id: 'beacon-balcony-rail', position: new Vector3(-74.91, 14.88, -36), heading: 0, capacity: 1, owner: null }];
+  const perches: GullPerch[] = [{ id: 'beacon-balcony-rail', position: new Vector3(-74.7138, 14.88, -36), heading: 0, capacity: 1, owner: null }];
   for (const rock of plan.rocks) {
     if (rock.y + rock.scale[1] < .3 || rock.scale[0] < .7) continue;
     const position = new Vector3(rock.x, rock.y + rock.scale[1] + .28, rock.z);
@@ -59,7 +59,7 @@ function safePoint(point: Vector3, perch: GullPerch, obstacles: readonly CameraO
   for (const obstacle of obstacles) {
     if (beacon && Math.hypot(obstacle.x+76,obstacle.z+36)<.2) {
       // The rail is outside the lantern, and this circuit stays on its ocean-facing half.
-      if (Math.hypot(point.x+76,point.z+36)<1.03) return false;
+      if (Math.hypot(point.x+76,point.z+36)<1.21) return false;
       continue;
     }
     if (Math.hypot(point.x-obstacle.x,point.z-obstacle.z)<obstacle.radius+1.35 && point.y<obstacle.top+1.1) return false;
@@ -88,7 +88,7 @@ function planCircuits(perches: GullPerch[], obstacles: CameraObstacle[]) {
       if(!points.every(point=>safePoint(point,perch,obstacles,false))||!separated(points,accepted))continue;
       flight.points=points;
       flight.length=points.slice(1).reduce((sum,p,i)=>sum+p.distanceTo(points[i]),0);
-      flight.duration=flight.length/(1.85+accepted.length*.065)+4;
+      flight.duration=flight.length/(2.65+accepted.length*.065)+2;
       const huntPoints=routeSamples(flight,true);
       if(huntPoints.every((point,i)=>safePoint(point,perch,obstacles,true)&&(i===0||Math.abs(point.y-huntPoints[i-1].y)<.72*Math.hypot(point.x-huntPoints[i-1].x,point.z-huntPoints[i-1].z)))&&separated(huntPoints,accepted))flight.huntPoints=huntPoints;
       perch.heading=Math.atan2(Math.sin(flight.outward),-Math.cos(flight.outward));
@@ -109,7 +109,7 @@ export function createGullStates(perches = createGullPerches()): GullState[] {
   // Widely separated sky lanes are the fallback for birds without a clear shore approach.
   while(flights.length<18){
     const i=flights.length,home=homes[i-shoreCount*2]??homes[0],perch:GullPerch={id:`sky-${i}`,position:new Vector3(...home),heading:0,capacity:1,owner:null};
-    const flight:GullFlight={perch,outward:random()*TAU,radius:4.5+random()*2,width:4.5+random()*2,height:.4,duration:46+i,points:[],length:0,airborne:true};
+    const flight:GullFlight={perch,outward:random()*TAU,radius:4.5+random()*2,width:4.5+random()*2,height:.4,duration:18+i*.45,points:[],length:0,airborne:true};
     flight.points=routeSamples(flight);flight.length=flight.points.slice(1).reduce((sum,p,j)=>sum+p.distanceTo(flight.points[j]),0);flights.push(flight);
   }
   const birds=flights.map((flight,index)=>{
@@ -145,7 +145,7 @@ function pose(state:GullState,dt:number) {
   const bank=perched?0:Math.max(-.30,Math.min(.30,-turn/dt*.48));state.bank+=(bank-state.bank)*(1-Math.exp(-3*dt));
   let fold=perched?1:state.mode==='approach'?Math.max(0,(state.progress-.98)/.02)*.8:0;
   if(state.perch.id==='beacon-balcony-rail'){
-    const railClearance=Math.max((Math.hypot(state.position.x+76,state.position.z+36)-1.25)/2,(state.position.y-15.35)/1.2);
+    const railClearance=Math.max((Math.hypot(state.position.x+76,state.position.z+36)-1.45)/2,(state.position.y-15.35)/1.2);
     fold=Math.max(fold,1-Math.max(0,Math.min(1,railClearance)));
   }
   state.fold+=(fold-state.fold)*(1-Math.exp(-5*dt));
@@ -170,16 +170,25 @@ export function stepGull(state:GullState,delta:number,camera:Vector3,pointer:rea
     return;
   }
   const previous=state.position.clone(),oldProgress=state.progress;
+  let travelDelta=dt;
   if(state.holding>0){
     // Complete a shallow holding turn offshore before asking for the occupied nest again.
     const radius=4.5,speed=state.holdSpeed,angle=(state.holding+dt)*speed/radius;
     if(angle>=TAU){
-      state.holding=0;state.position.copy(state.holdOrigin);
-      if(state.perch.owner===null)state.perch.owner=state.index;
+      if(state.perch.owner!==null&&state.perch.owner!==state.index){
+        state.holding+=dt-TAU*radius/speed;
+        const wrapped=state.holding*speed/radius,tangent=state.holdTangent;
+        state.position.copy(state.holdOrigin);state.position.y+=Math.sin(wrapped)*Math.exp(-3*(1-Math.cos(wrapped)))*radius*state.holdTangent.y;
+        state.position.x+=radius*(Math.sin(wrapped)*tangent.x+state.holdSide*(1-Math.cos(wrapped))*tangent.z);
+        state.position.z+=radius*(Math.sin(wrapped)*tangent.z-state.holdSide*(1-Math.cos(wrapped))*tangent.x);
+        state.velocity.copy(state.position).sub(previous).divideScalar(dt);pose(state,dt);return;
+      }
+      travelDelta=(angle-TAU)*radius/speed;
+      state.holding=0;state.position.copy(state.holdOrigin);state.perch.owner=state.index;
     }else{
       state.holding+=dt;
       const tangent=state.holdTangent;
-      state.position.copy(state.holdOrigin);
+      state.position.copy(state.holdOrigin);state.position.y+=Math.sin(angle)*Math.exp(-3*(1-Math.cos(angle)))*radius*state.holdTangent.y;
       state.position.x+=radius*(Math.sin(angle)*tangent.x+state.holdSide*(1-Math.cos(angle))*tangent.z);
       state.position.z+=radius*(Math.sin(angle)*tangent.z-state.holdSide*(1-Math.cos(angle))*tangent.x);
       state.mode='circling';state.velocity.copy(state.position).sub(previous).divideScalar(dt);pose(state,dt);return;
@@ -187,13 +196,13 @@ export function stepGull(state:GullState,delta:number,camera:Vector3,pointer:rea
   }
   const desired=state.flight.airborne?1:Math.min(1,Math.sqrt(Math.max(0,1-state.progress)*state.duration/2));
   state.travelSpeed+=Math.max(-.45*dt,Math.min(.45*dt,desired-state.travelSpeed));
-  state.progress+=dt*state.travelSpeed/state.duration;
+  state.progress+=travelDelta*state.travelSpeed/state.duration;
   if(!state.flight.airborne&&state.progress>.86){
     if(state.perch.owner===null)state.perch.owner=state.index;
     if(state.perch.owner!==state.index){
       state.progress=oldProgress;
       state.holding=.000001;state.holdSpeed=Math.max(.3,Math.hypot(state.velocity.x,state.velocity.z));state.holdOrigin.copy(previous);
-      routePoint(state.flight,oldProgress+.001,state.holdTangent,state.hunt).sub(previous);state.holdTangent.y=0;state.holdTangent.normalize();
+      routePoint(state.flight,oldProgress+.001,state.holdTangent,state.hunt).sub(previous);state.holdTangent.y=0;state.holdTangent.normalize();state.holdTangent.y=state.velocity.y/state.holdSpeed;
       state.holdSide=(previous.x-state.perch.position.x)*state.holdTangent.z-(previous.z-state.perch.position.z)*state.holdTangent.x>=0?1:-1;
       state.mode='circling';return;
     }

@@ -12,7 +12,7 @@ import { applySurface } from './surfaceMaterials';
 export function cityEdgeClear(x: number, z: number) {
   const museum = world.landmarks.find(item => item.id === 'history')!;
   const arcade = world.landmarks.find(item => item.id === 'arcade')!;
-  const buildings = [...cityBuildings, { x: arcade.position[0], z: arcade.position[2], rotation: 0, width: 5.4, depth: 4.4 }, { x: museum.position[0], z: museum.position[2], rotation: museum.rotationY ?? 0, width: 11.6, depth: 8.1 }];
+  const buildings = [...cityBuildings, { x: arcade.position[0], z: arcade.position[2] - .25, rotation: 0, width: 6.96, depth: 5.56 }, { x: museum.position[0], z: museum.position[2], rotation: museum.rotationY ?? 0, width: 11.6, depth: 8.1 }];
   return landDistance(x, z) > 1.5 && buildings.every(building => {
     const dx = x - building.x, dz = z - building.z, c = Math.cos(building.rotation), s = Math.sin(building.rotation);
     return Math.abs(dx * c - dz * s) > building.width / 2 + .3 || Math.abs(dx * s + dz * c) > building.depth / 2 + .3;

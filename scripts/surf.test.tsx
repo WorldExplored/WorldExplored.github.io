@@ -2,10 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { create, act } from '@react-three/test-renderer';
 import { Matrix4, Vector3, type InstancedMesh, type Mesh, type ShaderMaterial } from 'three';
-import { coastExposure, coastNormal, shoreAlong, shoreBreakup, shorelineWave } from '../src/components/world/waves';
-import { rockImpactPosition, createShoreDrops, createShoreImpactSites, createShoreImpactSystem, shoreDropPose, ShoreImpacts, updateShoreImpacts } from '../src/components/world/ShoreImpacts';
+import { coastExposure, coastNormal, shoreAlong, shoreBreakup, shorelineCrestTime, shorelinePhase, shorelineWash, shorelineWave } from '../src/components/world/waves';
+import { rockImpactPosition, createShoreDrops, createShoreImpactSites, createShoreImpactSystem, shoreDropPose, ShoreImpacts, SHORE_DROPS_PER_SITE, updateShoreImpacts } from '../src/components/world/ShoreImpacts';
 import { Water } from '../src/components/world/Water';
-import { createSceneRuntime, type QualityTier } from '../src/content/world';
+import { createSceneRuntime, world, type QualityTier } from '../src/content/world';
 import { createLandscapePlan, landDistance } from '../src/components/world/terrain';
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
@@ -54,32 +54,32 @@ test('impact sites follow exposed headlands, include the distant beacon and keep
   assert.deepEqual(createShoreImpactSites(), sites); assert.ok(sites.length >= 4 && sites.length <= 8);
   assert.ok(sites.every(site=>site.rock.startsWith('coast-rock-')));
   assert.ok(new Set(sites.map(site => site.start)).size === sites.length);
-  sites.forEach(site => { assert.ok(landDistance(site.x, site.z) < .06); assert.ok(site.exposure > .28); assert.ok(site.period > 15);assert.ok(site.energy>.6); });
+  sites.forEach(site => { assert.ok(landDistance(site.x, site.z) < .06); assert.ok(site.exposure > .28); assert.ok(site.period >= 7 && site.period < 25);assert.ok(site.energy>.6); });
   for (const drop of drops) {
     const site = sites[drop.site];
     let peak = 0; let sawDescending = false; let previousY = -Infinity;
-    for (let age = 0; age <= 1.2; age += .015) {
+    for (let age = 0; age <= 1.6; age += .015) {
       const size = shoreDropPose(site, drop, age, position);
       if (size > 0) {
         peak = Math.max(peak, position.y); sawDescending ||= position.y < previousY; previousY = position.y;
         assert.ok(landDistance(position.x, position.z) < -.1, 'Rebounding droplets land back in the sea.');
       }
     }
-    assert.ok(peak > .35 && peak < 1); assert.ok(sawDescending);
+    assert.ok(peak > .35 && peak < 2.4); assert.ok(sawDescending);
     assert.equal(shoreDropPose(site, drop, 2, position), 0); assert.ok(position.y < 0);
   }
 });
 
-test('pooled shore impacts are sparse, present during the opening and have no input ownership', () => {
+test('pooled shore spray is substantial at crest arrivals and leaves calm intervals', () => {
   const system = createShoreImpactSystem(); const matrix = new Matrix4(); const scale = new Vector3(); const counts: number[] = [];
   for (let time = 0; time < 16; time += .05) {
     updateShoreImpacts(system, time, 'high'); let visible = 0;
     for (let index = 0; index < system.mesh.count; index++) { system.mesh.getMatrixAt(index, matrix); scale.setFromMatrixScale(matrix); if (scale.x > .002) visible++; }
     counts.push(visible);
   }
-  assert.ok(Math.max(...counts) > 0, 'An exposed coast has a short impact during the opening view.');
+  assert.ok(Math.max(...counts) >= 72, 'The exposed lighthouse has multiple detailed spray fans during the opening.');
   assert.ok(counts.filter(count => count === 0).length > counts.length * .65, 'There is no continuous spray.');
-  assert.ok(Math.max(...counts) <= 21, 'No more than three small localized impacts overlap.');
+  assert.ok(Math.max(...counts) <= SHORE_DROPS_PER_SITE * 4, 'Only local rock faces emit; there is no continuous island-wide spray.');
   assert.equal(system.mesh.raycast.length, 0);
   system.dispose();
 });
@@ -112,7 +112,7 @@ test('impact resources and active particle poses survive quality changes and red
     const frozen = Array.from(mesh.instanceMatrix.array);
     await renderer.update(render('high', true)); runtime.current.elapsed = 200; await advance();
     assert.deepEqual(Array.from(mesh.instanceMatrix.array), frozen);
-    for (const [quality, count] of [['low', 0], ['medium', Math.min(28,mesh.instanceMatrix.count)], ['high', mesh.instanceMatrix.count]] as const) {
+    for (const [quality, count] of [['low', 0], ['medium', Math.min(4*SHORE_DROPS_PER_SITE,mesh.instanceMatrix.count)], ['high', mesh.instanceMatrix.count]] as const) {
       await renderer.update(render(quality, true)); await advance();
       assert.equal(mesh.count, count); assert.equal(mesh.geometry, geometry); assert.equal(mesh.material, material);
       assert.deepEqual(Array.from(mesh.instanceMatrix.array), frozen);
@@ -145,4 +145,44 @@ test('direct rock responses start in visible water beyond the modeled rock footp
     assert.ok(landDistance(point.x, point.z) < 0, rock.id);
     assert.ok(Math.hypot(point.x-rock.x, point.z-rock.z) < rock.radius+2.2);
   }
+});
+
+
+test('rock spray and wet sand share the actual advancing wave clock', () => {
+  const sites=createShoreImpactSites();
+  assert.equal(sites.filter(site=>site.island==='beacon').length,3);
+  for(const site of sites){
+    const distance=landDistance(site.x,site.z);
+    for(let cycle=0;cycle<12;cycle++){
+      const time=(site.start+site.period*cycle)*world.environment.waterSpeed;
+      assert.ok(Math.abs(Math.sin(shorelinePhase(distance,site.x,site.z,time)))<1e-10,'every spray set starts on a visible primary crest');
+    }
+    for(let cycle=-3;cycle<4;cycle++)assert.ok(Math.abs(shorelinePhase(distance,site.x,site.z,shorelineCrestTime(distance,site.x,site.z,cycle))-cycle*Math.PI*2)<1e-10);
+  }
+  const wash=Array.from({length:400},(_,i)=>shorelineWash(-.2,-10,20,i*.04,1));
+  assert.ok(Math.min(...wash)<.001&&Math.max(...wash)>.2);
+});
+
+test('impact foam fans expand seaward with reusable geometry and no complete rings',()=>{
+  const system=createShoreImpactSystem(),matrix=new Matrix4(),vertex=new Vector3();
+  const geometry=system.foam.geometry,material=system.foam.material;
+  let geometryDisposals=0,materialDisposals=0;geometry.addEventListener('dispose',()=>geometryDisposals++);
+  system.foamMaterial.addEventListener('dispose',()=>materialDisposals++);
+  try{
+    assert.ok(system.foamGeometry.parameters.thetaLength<Math.PI,'foam fans do not draw complete circles around rocks');
+    let visible=0;
+    for(let time=0;time<16;time+=.13){
+      updateShoreImpacts(system,time,'high');
+      for(let index=0;index<system.foam.count;index++)if(system.foamFades.getX(index)>.01){
+        visible++;system.foam.getMatrixAt(index,matrix);
+        for(let v=0;v<geometry.attributes.position.count;v++){vertex.fromBufferAttribute(geometry.attributes.position,v).applyMatrix4(matrix);assert.ok(landDistance(vertex.x,vertex.z)<-.15,'foam stays on the water side of the cliff');}
+      }
+    }
+    assert.ok(visible>20);
+    const frozen=Array.from(system.foam.instanceMatrix.array),fade=Array.from(system.foamFades.array);
+    for(const quality of ['low','medium','high'] as const){updateShoreImpacts(system,200,quality,true);assert.deepEqual(Array.from(system.foam.instanceMatrix.array),frozen);assert.deepEqual(Array.from(system.foamFades.array),fade);}
+    assert.equal(system.foam.geometry,geometry);assert.equal(system.foam.material,material);
+    assert.equal(system.mesh.geometry.index!.count/3*system.mesh.instanceMatrix.count+geometry.index!.count/3*system.foam.instanceMatrix.count,12744,'two pooled draws stay within their fixed triangle budget');
+  }finally{system.dispose();}
+  assert.equal(geometryDisposals,1);assert.equal(materialDisposals,1);
 });

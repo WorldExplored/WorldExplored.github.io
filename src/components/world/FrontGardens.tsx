@@ -23,6 +23,11 @@ export function frontVineSites():FrontVineSite[]{
     ['about',1.51,-3.025,Math.PI,.76,2.5],['about',2.655,-2.2,Math.PI/2,.67,2.6],
     ['contact',4.005,-1.7,Math.PI/2,.65,2.2],['contact',2.87,-2.735,Math.PI,.72,2.5],
     ['contact',3.16,.96,0,.56,2.2],
+    // Younger climbers fill gaps between mature vines on the same measured walls.
+    ['work',-4.325,1.52,-Math.PI/2,.42,1.7],['work',4.325,-1.46,Math.PI/2,.45,1.9],
+    ['research',-3.815,-.85,-Math.PI/2,.44,1.8],
+    ['experience',-2.46,3.015,0,.40,1.6],['experience',2.1,-3.015,Math.PI,.42,1.9],
+    ['about',-.79,-3.025,Math.PI,.42,1.7],['contact',3.65,-2.735,Math.PI,.32,1.5],
   ];
   return walls.map(([building,x,z,yaw,width,height],i)=>{
     const landmark=world.landmarks.find(item=>item.id===building)!,rotation=landmark.rotationY??0;

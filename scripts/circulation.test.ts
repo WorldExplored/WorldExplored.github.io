@@ -322,18 +322,19 @@ test('garden paths meet the bridge and all entrances with bounded rendered grade
 });
 
 test('Arcade has a connected front approach outside its room and the train corridor',()=>{
-  const graph=createCirculationGraph(),entry=graph.nodes.find(node=>node.id==='arcade')!;
-  assert.deepEqual([entry.x,entry.y,entry.z],[-26,1.08,-82.58]);
+  const graph=createCirculationGraph(),entry=graph.nodes.find(node=>node.id==='arcade')!,arcade=world.landmarks.find(item=>item.id==='arcade')!;
+  const [ax,,az]=arcade.position;
+  assert.deepEqual([entry.x,entry.y,entry.z],[ax,1.08,az+2.42]);
   assert.ok(reachable('work',true).has('arcade'));
   const paths=circulationPaths(),route=createCityTransitRoute(),track=route.curve.getSpacedPoints(800);
   for(const path of paths) {
     const geometry=pathGeometry([path]);
     try {
       const p=geometry.attributes.position;
-      for(let i=0;i<p.count;i++)assert.ok(Math.abs(p.getX(i)+26)>=2.7||Math.abs(p.getZ(i)+85)>=2.2,`${path.id}: walk enters Arcade room`);
+      for(let i=0;i<p.count;i++)assert.ok(Math.abs(p.getX(i)-ax)>=2.7||Math.abs(p.getZ(i)-az)>=2.2,`${path.id}: walk enters Arcade room`);
     }finally{geometry.dispose();}
     if(!path.id?.startsWith('arcade-'))continue;
     for(const point of path.points)assert.ok(track.every(trackPoint=>Math.hypot(point.x-trackPoint.x,point.z-trackPoint.z)>path.width/2+1),`${path.id}: enters train clearance`);
   }
-  for(let x=-28.6;x<=-23.4;x+=.3)for(let z=-87.1;z<=-82.9;z+=.3)assert.ok(groundRouteAt(x,z).distance>.02,'Arcade room must exclude paving');
+  for(let x=ax-2.6;x<=ax+2.6;x+=.3)for(let z=az-2.1;z<=az+2.1;z+=.3)assert.ok(groundRouteAt(x,z).distance>.02,'Arcade room must exclude paving');
 });

@@ -1,12 +1,9 @@
 'use client';
 
-// Retained Three.js materials are updated only by frame callbacks.
-/* eslint-disable react-hooks/immutability */
-
 import { measureConstruction } from './renderDiagnostics';
 
-import { useEffect, useMemo, useRef } from 'react';
-import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
+import { useEffect, useMemo } from 'react';
+import { useFrame } from '@react-three/fiber';
 import { BufferGeometry, CatmullRomCurve3, Color, DoubleSide, Float32BufferAttribute, Uint8BufferAttribute, Group, Matrix4, Mesh, MeshPhysicalMaterial, Object3D, TubeGeometry, Vector3 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { cityBuildings, createCityTransitRoute, writeCityTransitPose, type CityTransitRoute, type CityBuilding } from './city';
@@ -309,19 +306,9 @@ export function EcoCity({ runtime, paused, quality }: EnvironmentProps) {
   });
   return <group name="coastal-eco-city" dispose={null}>
     <RoomLighting rooms={city.lights} runtime={runtime}/>
-    {city.buildings.map(group => <CityBuildingBoundary object={group} paused={paused} key={group.uuid} />)}
+    {city.buildings.map(group => <primitive object={group} key={group.uuid} />)}
     {city.cars.map(car => <primitive object={car} key={car.uuid} />)}
     <StationAccess />
     <CityLife runtime={runtime} paused={paused} quality={quality} route={city.route} />
   </group>;
-}
-
-function CityBuildingBoundary({ object, paused }: { object: Group; paused: boolean }) {
-  const hover = useRef(false), exit = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const invalidate = useThree(state => state.invalidate);
-  const materials = useMemo(() => object.children.flatMap(child => { const material = (child as Mesh).material as MeshPhysicalMaterial; return material?.userData.hoverResponse ? [material] : []; }), [object]);
-  useEffect(() => () => clearTimeout(exit.current), []);
-  useFrame((_, delta) => { for (const material of materials) { material.emissive.set('#11c8e0'); material.emissiveIntensity += ((hover.current ? .13 : 0) - material.emissiveIntensity) * (paused ? 1 : 1 - Math.exp(-12 * delta)); } });
-  const enter = (event: ThreeEvent<PointerEvent>) => { if (!object.userData.building) return; event.stopPropagation(); clearTimeout(exit.current); hover.current = event.pointerType !== 'touch'; invalidate(); };
-  return <primitive object={object} onPointerOver={enter} onPointerMove={enter} onPointerOut={() => { clearTimeout(exit.current); exit.current = setTimeout(() => { hover.current = false; invalidate(); }, 120); }} />;
 }

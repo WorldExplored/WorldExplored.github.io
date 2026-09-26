@@ -7,6 +7,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { EnvironmentProps } from './Water';
 import { createMarineVisitor, sampleTurtleCycle, stepMarineVisitor, turtleHatchlingPose, type MarineVisitorState } from './marineVisitorState';
 import { terrainMeshHeight } from './terrain';
+import { createMarineResidents } from './MarineResidents';
 import { turtleCarapaceGeometry, turtlePlastronGeometry, turtleHeadGeometry, turtleFlipperGeometry, turtleScuteGeometry, turtleNestSandGeometry } from './turtleAnatomy';
 
 function oval(x:number,y:number,z:number,sx:number,sy:number,sz:number){return new SphereGeometry(1,12,8).scale(sx,sy,sz).translate(x,y,z);}
@@ -14,14 +15,16 @@ function oval(x:number,y:number,z:number,sx:number,sy:number,sz:number){return n
 /** Small populations share anatomy, colors and the nest details across instances. */
 export function createMarineVisitors(){
   const root=new Group();root.name='reef-visitors-and-beach-nursery';
+  const residents=createMarineResidents();root.add(residents.root);
   const geometries=new Set<BufferGeometry>(),materials=new Set<MeshStandardMaterial>();
   const shape=(geometry:BufferGeometry)=>{geometries.add(geometry);return geometry;};
   const paint=(color:string,roughness=.78)=>{const material=new MeshStandardMaterial({color,roughness,side:DoubleSide});materials.add(material);return material;};
-  const stone=paint('#66715b'),stoneMottles=[paint('#a2a98a'),paint('#525e50')],stoneEye=paint('#191e20');
+  const stoneMottles=[paint('#a2a98a'),paint('#525e50')],stoneEye=paint('#191e20');
   const octopusSkin=[paint('#c56e64',.58),paint('#8265a5',.57)],octopusUnderside=paint('#e8ad9e'),octopusEye=paint('#162a31');
   const turtleShell=paint('#314d38'),turtlePlates=paint('#6b8656'),turtleSkin=paint('#668a64'),turtleBelly=paint('#d2c99a'),egg=paint('#f3ead8'),nestSand=paint('#b5a17e'),nestWrack=paint('#72745a'),nestWood=paint('#988b6d');
   const shadowMaterial=new MeshStandardMaterial({color:'#263e30',transparent:true,opacity:.24,depthWrite:false,roughness:1,side:DoubleSide});materials.add(shadowMaterial);
-  const bodyStone=shape(oval(0,.105,0,.43,.11,.30)),stoneFin=shape(new SphereGeometry(1,7,5).scale(.12,.17,.028));
+  const bodyStone=shape(oval(0,.105,0,.43,.11,.30)),stoneFin=shape(new SphereGeometry(1,7,5).scale(.042,.084,.018));
+  const stonePectoral=shape(oval(0,0,0,.22,.027,.13));
   const stoneSpot=shape(new SphereGeometry(1,6,4).scale(.032,.009,.026)),eye=shape(new SphereGeometry(1,7,5).scale(.018,.018,.014));
   const mantle=shape(oval(.12,.24,0,.44,.145,.16)),head=shape(oval(-.24,.185,0,.17,.11,.125)),siphon=shape(new CylinderGeometry(.026,.038,.11,9).rotateX(Math.PI/2));
   const armPath=new CatmullRomCurve3([new Vector3(0,0,0),new Vector3(.12,-.06,.025),new Vector3(.27,-.075,.055),new Vector3(.42,-.07,.10),new Vector3(.47,-.025,.17),new Vector3(.42,.03,.21)]);
@@ -56,15 +59,17 @@ export function createMarineVisitors(){
   ]);
   const add=(parent:Group,name:string,geometry:BufferGeometry,material:MeshStandardMaterial,x=0,y=0,z=0)=>{const mesh=new Mesh(geometry,material);mesh.name=name;mesh.position.set(x,y,z);mesh.raycast=()=>{};parent.add(mesh);return mesh;};
   const states:MarineVisitorState[]=[];
-  type Actor={state:MarineVisitorState;animal:Group;arms?:Group[];flippers?:Mesh[];shadow?:Mesh;mantle?:Mesh;eggs?:Group};
+  type Actor={state:MarineVisitorState;animal:Group;arms?:Group[];flippers?:Mesh[];shadow?:Mesh;mantle?:Mesh;eggs?:Group;camouflage?:MeshStandardMaterial};
   const actors:Actor[]=[];
   for(const [kind,count] of [['stonefish',2],['octopus',2],['turtle',3]] as const) for(let index=0;index<count;index++){
     const state=createMarineVisitor(kind,index);states.push(state);
     const animal=new Group();animal.name=`${kind}-${index}`;animal.scale.setScalar(state.size);root.add(animal);
     const actor:Actor={state,animal};actors.push(actor);
     if(kind==='stonefish'){
-      add(animal,'low-camouflaged-stonefish',bodyStone,stone);
-      for(let fin=0;fin<9;fin++){const angle=fin/9*Math.PI*2;const mesh=add(animal,'venomous-dorsal-and-pectoral-spines',stoneFin,fin%3?stone:stoneMottles[fin%2],Math.cos(angle)*.32,.18,Math.sin(angle)*.23);mesh.rotation.z=.5*Math.cos(angle);mesh.rotation.x=.55*Math.sin(angle);}
+      const skin=paint(index%2?'#818573':'#6e8175');actor.camouflage=skin;
+      add(animal,'low-camouflaged-stonefish',bodyStone,skin);
+      for(let fin=0;fin<6;fin++){const mesh=add(animal,'stonefish-dorsal-spines',stoneFin,skin,-.26+fin*.09,.20,0);mesh.rotation.z=.2-fin*.06;}
+      for(const side of [-1,1])add(animal,'broad-stonefish-pectoral',stonePectoral,skin,-.10,.065,side*.25).rotation.y=side*.25;
       stoneMarkings.forEach((geometry,tint)=>add(animal,'reef-stone-mottling',geometry,stoneMottles[tint]));
       for(const side of [-1,1])add(animal,'stonefish-eyes',eye,stoneEye,.27,.17,side*.14);
     }else if(kind==='octopus'){
@@ -103,7 +108,7 @@ export function createMarineVisitors(){
     const part=geometry.clone(),tint=new Color(color),count=part.getAttribute('position').count;
     part.setAttribute('color',new Float32BufferAttribute(Array.from({length:count},()=>[tint.r,tint.g,tint.b]).flat(),3));return part;
   });
-  babyAnatomy.slice(2).forEach(part=>part.geometry.dispose());
+  babyAnatomy.slice(4).forEach(part=>part.geometry.dispose());
   const babyBodyGeometry=combine(babyParts),babyMaterial=paint('#ffffff');babyMaterial.vertexColors=true;
   const babyBody=new InstancedMesh(babyBodyGeometry,babyMaterial,18),babyPlates=new InstancedMesh(shellScutes,turtlePlates,18),babyFlippers=new InstancedMesh(flipper,turtleSkin,72);
   babyBody.name='turtle-hatchling-bodies';babyPlates.name='turtle-hatchling-shell-scutes';babyFlippers.name='turtle-hatchling-paddling-flippers';
@@ -111,8 +116,12 @@ export function createMarineVisitors(){
   const babyTransform=new Object3D(),limbTransform=new Object3D();
   let quality:EnvironmentProps['quality']='high';
   const hatchlingPoint=new Vector3();
-  function writeActors(){for(const {state,animal,arms,flippers,shadow,mantle,eggs} of actors){
+  function writeActors(){for(const {state,animal,arms,flippers,shadow,mantle,eggs,camouflage} of actors){
     animal.position.copy(state.position);animal.rotation.y=state.heading;
+    if(state.kind==='stonefish'){
+      animal.position.y-=state.moving?.038:.066;
+      camouflage?.color.set(state.moving?'#969270':state.index%2?'#818573':'#6e8175');
+    }
     if(state.kind==='octopus'){
       animal.position.y+=state.moving?.09+state.jet*.055:0;
       if(mantle){mantle.scale.y=1-state.jet*.17;mantle.scale.z=1-state.jet*.16;}
@@ -146,32 +155,33 @@ export function createMarineVisitors(){
       for(const mesh of [babyBody,babyPlates,babyFlippers])mesh.instanceMatrix.needsUpdate=true;
     }
   }}
-  function update(delta:number,paused=false,turtleTime?:number){
+  function update(delta:number,paused=false,turtleTime?:number,marineTime?:number){
     if(paused)return;
     actors.forEach(({state})=>{
       if(state.kind==='turtle'&&turtleTime!==undefined){state.time=Math.max(0,turtleTime);sampleTurtleCycle(state,state.time);}
       else stepMarineVisitor(state,delta);
     });
-    writeActors();
+    residents.update(delta,false,marineTime??turtleTime);writeActors();
   }
   function seekTurtles(seconds:number){actors.forEach(({state})=>{if(state.kind==='turtle'){state.time=Math.max(0,seconds);sampleTurtleCycle(state,state.time);}});writeActors();}
-  function setQuality(tier:EnvironmentProps['quality']){quality=tier;actors.forEach(({animal,state})=>{animal.visible=tier==='high'||state.index===0||(tier==='medium'&&state.index<2);});root.children.filter(child=>child.name.startsWith('guarded-turtle-nest-')).forEach((nest,index)=>{nest.visible=tier==='high'||index===0||(tier==='medium'&&index<2);});writeActors();}
+  function setQuality(tier:EnvironmentProps['quality']){residents.setQuality(tier);quality=tier;actors.forEach(({animal,state})=>{animal.visible=tier==='high'||state.index===0||(tier==='medium'&&state.index<2);});root.children.filter(child=>child.name.startsWith('guarded-turtle-nest-')).forEach((nest,index)=>{nest.visible=tier==='high'||index===0||(tier==='medium'&&index<2);});writeActors();}
   update(0);
   let timer:ReturnType<typeof setTimeout>;
-  function dispose(){for(const mesh of [babyBody,babyPlates,babyFlippers])mesh.dispose();geometries.forEach(item=>item.dispose());materials.forEach(item=>item.dispose());}
-  return {root,states,update,setQuality,seekTurtles,dispose,retain(){clearTimeout(timer);return()=>{timer=setTimeout(dispose,0);};}};
+  function dispose(){residents.dispose();for(const mesh of [babyBody,babyPlates,babyFlippers])mesh.dispose();geometries.forEach(item=>item.dispose());materials.forEach(item=>item.dispose());}
+  return {root,states,residents,update,setQuality,seekTurtles,dispose,retain(){clearTimeout(timer);return()=>{timer=setTimeout(dispose,0);};}};
 }
 
 export function MarineVisitors({runtime,paused,quality}:EnvironmentProps){
   const life=useMemo(()=>createMarineVisitors(),[]);
-  const nurseryStart=useRef(runtime.current.activeElapsed),qaOffset=useRef(0);
+  const nurseryStart=useRef(runtime.current.activeElapsed),qaOffset=useRef(0),marineOffset=useRef(0);
   useEffect(()=>life.retain(),[life]);
   useEffect(()=>{
     if(!['localhost','127.0.0.1'].includes(window.location.hostname))return;
-    const time=new URLSearchParams(window.location.search).get('qaWildlifeTime');
+    const query=new URLSearchParams(window.location.search),time=query.get('qaWildlifeTime'),marineTime=query.get('qaMarineTime');
+    if(marineTime!==null&&Number.isFinite(Number(marineTime))){marineOffset.current=Number(marineTime);life.residents.update(0,false,marineOffset.current);}
     if(time!==null&&Number.isFinite(Number(time))){qaOffset.current=Number(time);life.seekTurtles(qaOffset.current);}
   },[life]);
   useEffect(()=>{life.setQuality(quality);},[life,quality]);
-  useFrame((_,delta)=>life.update(delta,paused,runtime.current.activeElapsed-nurseryStart.current+qaOffset.current));
+  useFrame((_,delta)=>life.update(delta,paused,runtime.current.activeElapsed-nurseryStart.current+qaOffset.current,runtime.current.activeElapsed-nurseryStart.current+marineOffset.current));
   return <primitive object={life.root}/>;
 }

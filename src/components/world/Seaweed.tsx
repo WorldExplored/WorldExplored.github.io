@@ -229,36 +229,67 @@ export function Seaweed({ runtime, paused, quality }: EnvironmentProps) {
     const fraction = quality === 'high' ? 1 : quality === 'medium' ? 0.75 : 0.5;
     seaweed.batches.forEach(batch => { batch.mesh.count = Math.ceil(batch.count * fraction); batch.mesh.geometry = quality === 'high' ? batch.geometry : batch.farGeometry; });
   }, [quality, seaweed]);
-  useFrame(() => { if (!paused) seaweed.time.value = runtime.current.elapsed; });
+  useFrame(({camera}) => {
+    const close=quality==='high'&&camera.position.y<18;
+    seaweed.batches.forEach(batch=>{batch.mesh.geometry=close?batch.geometry:batch.farGeometry;});
+    if (!paused) seaweed.time.value = runtime.current.elapsed;
+  });
   return <group name="sheltered-seaweed-beds" dispose={null}>{seaweed.batches.map(batch => <primitive key={batch.mesh.name} object={batch.mesh} />)}</group>;
 }
 
-/** Metre-tall kelp uses a flexible central stipe and separate drooping lateral fronds. */
+/** Four growth habits share LOD and animation but have distinct branching anatomy. */
 export function createForestKelpGeometry(variant:number, detail:'near'|'far'='near') {
   const positions:number[]=[],colors:number[]=[],indices:number[]=[],random=seededRandom(1849+variant);
-  const stem=(t:number)=>({x:Math.sin(t*5+variant)*.07*t,z:Math.sin(t*7+variant*.9)*.05*t});
+  const stem=(t:number)=>({x:Math.sin(t*(variant===3?7:5)+variant)*.07*t,z:Math.sin(t*7+variant*.9)*.05*t});
+  const tint=new Color(['#728b45','#9a8b42','#728047','#856249'][variant]);
   const vertex=(x:number,y:number,z:number,leaf=false)=>{
-    positions.push(x,y,z);const light=.65+y*.35;
-    colors.push((leaf?.28:.30)*light,(leaf?.39:.28)*light,(leaf?.12:.10)*light);
+    positions.push(x,y,z);const light=.60+y*.40;
+    colors.push(tint.r*light*(leaf?1:.84),tint.g*light,tint.b*light*(leaf?1:.79));
   };
   const rings=detail==='near'?10:5,sides=detail==='near'?5:4;
   for(let ring=0;ring<=rings;ring++)for(let side=0;side<sides;side++){
-    const t=ring/rings,a=side/sides*Math.PI*2,c=stem(t),r=(variant===2?.034:.019)*(1-t*.7);
+    const t=ring/rings,a=side/sides*Math.PI*2,c=stem(t),r=(variant===2?.031:.015)*(1-t*.7);
     vertex(c.x+Math.cos(a)*r,t,c.z+Math.sin(a)*r);
     if(ring){const i=ring*sides+side,next=ring*sides+(side+1)%sides;indices.push(i,next,i-sides,next,next-sides,i-sides);}
   }
-  const levels=variant===0?13:variant===1?10:variant===2?8:11,rows=detail==='near'?3:2;
-  for(let level=0;level<levels;level++)for(let side=0;side<2;side++){
-    const base=.12+level/levels*.81,c=stem(base),a=level*(variant?1.8:.64)+side*Math.PI;
-    const length=(variant===2?.30:.26)+random()*.18,breadth=(variant===2?.11:variant===3?.070:variant?.086:.065)+random()*.025,start=positions.length/3;
+  const rows=detail==='near'?3:2;
+  function blade(base:number,a:number,length:number,breadth:number,rise:number,droop:number){
+    const c=stem(base),start=positions.length/3;
     for(let row=0;row<=rows;row++)for(let rib=0;rib<3;rib++){
-      const t=row/rows,lateral=(rib-1)*breadth*Math.sin(t*Math.PI)*(1+.16*Math.sin(t*25+level));
-      const along=length*t,y=base+Math.sin(t*Math.PI)*.028-t*t*.037;
-      vertex(c.x+Math.cos(a)*along-Math.sin(a)*lateral,y+(rib===1?.006*Math.sin(t*Math.PI):0),c.z+Math.sin(a)*along+Math.cos(a)*lateral,true);
+      const t=row/rows,ruffle=variant===1?1+.24*Math.sin(t*20+a):1+.12*Math.sin(t*25+a);
+      const lateral=(rib-1)*breadth*Math.sin(t*Math.PI)*ruffle,along=length*t;
+      const y=base+Math.sin(t*Math.PI)*rise-t*t*droop;
+      vertex(c.x+Math.cos(a)*along-Math.sin(a)*lateral,y+(rib===1?.008*Math.sin(t*Math.PI):0),c.z+Math.sin(a)*along+Math.cos(a)*lateral,true);
       if(row&&rib){const n=start+row*3+rib;if(row<rows)indices.push(n,n-3,n-1);if(row>1)indices.push(n-1,n-3,n-4);}
     }
   }
+  let blades=0;
+  if(variant===0){
+    // Feather kelp has offset, unequal paired pinnae and occasional broken gaps.
+    for(let level=0;level<12;level++)for(let side=0;side<2;side++){
+      if(level===3&&side===1||level===8&&side===0)continue;
+      const base=.11+level*.069+(random()-.5)*.026;
+      blade(base,level*.55+side*Math.PI+(random()-.5)*.5,.14+random()*.17,.035+random()*.03,.025,.027);blades++;
+    }
+  }else if(variant===1){
+    // Sparse broad laminae hang in a canopy, rather than a regular fern ladder.
+    for(let leaf=0;leaf<7;leaf++){
+      blade(.28+leaf*.086+random()*.035,leaf*2.399+random()*.7,.23+random()*.12,.075+random()*.065,.12,.10+random()*.06);blades++;
+    }
+  }else if(variant===2){
+    // A real gas bladder and a crown of long straps distinguish bull kelp.
+    const start=positions.length/3,latitudes=detail==='near'?6:4,longitudes=detail==='near'?8:6,c=stem(.76);
+    for(let row=0;row<=latitudes;row++)for(let side=0;side<longitudes;side++){
+      const t=row/latitudes,a=side/longitudes*Math.PI*2,r=Math.sin(t*Math.PI)*.073;
+      vertex(c.x+Math.cos(a)*r,.66+t*.19,c.z+Math.sin(a)*r,true);
+      if(row){const i=start+row*longitudes+side,next=start+row*longitudes+(side+1)%longitudes;indices.push(i,next,i-longitudes,next,next-longitudes,i-longitudes);}
+    }
+    for(let leaf=0;leaf<6;leaf++){blade(.79+random()*.03,leaf*2.399+random()*.6,.25+random()*.095,.045+random()*.037,.11,.15+random()*.11);blades++;}
+  }else{
+    // Unpaired bronze ribbons twist away from an uneven branching stipe.
+    for(let leaf=0;leaf<9;leaf++){blade(.16+leaf*.087+random()*.022,leaf*2.0+random(),.16+random()*.20,.028+random()*.035,.07,.07+random()*.05);blades++;}
+  }
   const geometry=new BufferGeometry();geometry.setAttribute('position',new Float32BufferAttribute(positions,3));geometry.setAttribute('color',new Float32BufferAttribute(colors,3));geometry.setIndex(indices);geometry.computeVertexNormals();geometry.computeBoundingBox();geometry.computeBoundingSphere();
-  geometry.userData.stem={rings,sides};
-  geometry.userData.form=['spiral feather kelp','broad-frond canopy kelp','bull kelp with broad blades','twining bronze kelp'][variant%4];return geometry;
+  geometry.userData.stem={rings,sides};geometry.userData.blades=blades;
+  geometry.userData.form=['offset feather kelp','broad hanging canopy kelp','bull kelp with gas bladder','twining bronze ribbon kelp'][variant%4];return geometry;
 }

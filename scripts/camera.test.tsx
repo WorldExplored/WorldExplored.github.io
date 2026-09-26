@@ -403,7 +403,8 @@ test('decorative trees are permeable and cannot trap close zoom', () => {
 });
 
 test('pointer rays intersect the rendered graded triangles rather than the analytic surface between vertices', () => {
-  const x = -11.08, z = -63.72;
+  // The straight waterfront path grades into the winter-garden apron here.
+  const x = -12.18, z = -68.12;
   const renderedHeight = terrainMeshHeight(x, z);
   assert.ok(Math.abs(renderedHeight - terrainHeight(x, z)) > .1, 'The crossing exercises a real grade interpolation difference');
   const hit = new Vector3(); const ray = new Ray(new Vector3(x, 12, z), new Vector3(0, -1, 0));

@@ -146,12 +146,12 @@ export class InteriorBuilder {
 export function FurnishedInterior({ build, name }: { build: () => InteriorGeometry; name: string }) {
   const geometry = useResources(build);
   const [materials] = useState(() => {const result={
-    wood: applySurface(new MeshStandardMaterial({color:'#986345',roughness:.8}),'cedar',1.2),
+    wood: applySurface(new MeshStandardMaterial({color:'#d1e5dd',roughness:.69}),'mineral',1.3),
     fabric: new MeshStandardMaterial({ color: '#1262c4', roughness: .98 }),
     metal: new MeshStandardMaterial({ color: '#244f64', roughness: .46, metalness: .65 }),
     paper: new MeshStandardMaterial({ color: '#edf6ef', roughness: .92 }),
     screen: new MeshStandardMaterial({ color: '#143a49', roughness: .38, emissive: '#3c8791', emissiveIntensity: .22 }),
-    light: new MeshStandardMaterial({ color: '#fff0cc', roughness: .5, emissive: '#ffda91', emissiveIntensity: .65 }),
+    light: new MeshStandardMaterial({ color: '#e4f4ee', roughness: .5, emissive: '#ccebe2', emissiveIntensity: .32 }),
     leaf: new MeshStandardMaterial({ color: '#287843', roughness: .85 }),
     soil: new MeshStandardMaterial({ color: '#433b2d', roughness: 1 }),
     coolant: new MeshStandardMaterial({ color: '#06abc1', roughness: .23, metalness: .05 }),

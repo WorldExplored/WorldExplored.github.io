@@ -5,13 +5,13 @@ import { landDistance } from './terrain';
 export interface MarineOccupant { position: Vector3; radius: number }
 export const surfaceAnimals: MarineOccupant[] = [];
 export const vesselOccupants: MarineOccupant[] = [];
-export const VISITOR_BERTH = new Vector3(-24, 0, -54);
+export const VISITOR_BERTH = new Vector3(-27, 0, -49);
 export const VISITOR_DWELL = 32;
 export const VESSEL_ACCELERATION = .42;
 const points = [
   [[-54, -19], [-46, 18], [-20, 49], [23, 47], [49, 10], [51, -25], [22, -35], [-18, -35]],
   [[-76, -14], [-91, -20], [-97, -42], [-85, -60], [-66, -58], [-59, -38], [-65, -19]],
-  [[-230, -53], [-130, -53], [-76, -65], [-42, -58], [-32, -54], [-24, -54], [-16, -54], [-5, -53], [34, -47], [94, -50], [240, -49]],
+  [[-230, -53], [-130, -53], [-76, -65], [-44, -49], [-37, -49], [-27, -49], [-17, -49], [-3, -45], [34, -43], [94, -50], [240, -49]],
 ];
 
 export function createVesselRoute(index: number) {
@@ -32,7 +32,7 @@ export function createVesselRoute(index: number) {
     }
     berth = (low + high) * .5 * length;
   }
-  return { curve, length, berth, speed: index === 2 ? 1.35 : index === 1 ? .75 : 1.05 };
+  return { curve, length, berth, speed: index === 2 ? 1.65 : index === 1 ? .75 : 1.05 };
 }
 
 export interface VesselState extends MarineOccupant {
@@ -46,14 +46,15 @@ export interface VesselState extends MarineOccupant {
   speed: number;
   checkIn: number;
   yielding: boolean;
+  crossing: boolean;
 }
 
 export function createVesselState(index: number): VesselState {
   const route = createVesselRoute(index);
   const state: VesselState = {
-    index, route, position: new Vector3(), radius: index === 2 ? 3.25 : 1.6,
-    distance: index === 2 ? route.berth - 75 : index === 1 ? route.length * .4 : route.length * .13,
-    dwell: 0, departed: false, heading: 0, opacity: 1, speed: 0, checkIn: 0, yielding: false,
+    index, route, position: new Vector3(), radius: index === 2 ? 6.25 : 1.8,
+    distance: index === 2 ? route.berth - 110 : index === 1 ? route.length * .4 : route.length * .13,
+    dwell: 0, departed: false, heading: 0, opacity: 1, speed: 0, checkIn: 0, yielding: false, crossing: false,
   };
   writeVesselPose(state);
   return state;
@@ -103,10 +104,10 @@ function isVessel(other: MarineOccupant): other is VesselState { return 'route' 
 function crossingOccupied(state: VesselState, time: number, traffic: readonly MarineOccupant[], animals: readonly MarineOccupant[]) {
   // Forecast before entering the ferry lane. The scheduled ferry has priority;
   // the smaller launches also have priority over the visiting passenger boat.
-  for (let seconds = 0; seconds <= 16; seconds += .75) {
+  for (let seconds = 0; seconds <= (state.index===2?35:16); seconds += .75) {
     futurePosition(state, seconds, future);
     writeCityFerryPose(ferryRoute, time + seconds, ferryPosition, ferryTangent);
-    if (horizontalDistance(future, ferryPosition) < state.radius + 1.5 + 1.3) return true;
+    if (!state.crossing && horizontalDistance(future, ferryPosition) < state.radius + 1.5 + 1.3) return true;
     for (const other of traffic) {
       if (other === state || other.position.y < -.8) continue;
       if (isVessel(other) && other.index > state.index) continue;
@@ -140,10 +141,14 @@ export function stepVessel(state: VesselState, delta: number, time: number, traf
     state.checkIn -= dt;
     if (state.checkIn <= 0) {
       state.yielding = crossingOccupied(state, clock, traffic, animals);
+      // Reserve the complete ferry crossing before leaving the visitor berth.
+      // Once committed, clear that lane instead of braking in its middle.
+      if(state.index===2&&state.departed&&!state.yielding&&state.position.x<5)state.crossing=true;
+      if(state.position.x>5)state.crossing=false;
       state.checkIn = .25;
     }
     const toBerth = state.route.berth - state.distance;
-    const braking = state.index === 2 && !state.departed ? Math.sqrt(Math.max(0, 2 * VESSEL_ACCELERATION * toBerth)) : state.route.speed;
+    const braking = state.index === 2 && !state.departed ? Math.sqrt(Math.max(0, 1.3 * VESSEL_ACCELERATION * toBerth)) : state.route.speed;
     const target = state.yielding ? 0 : Math.min(state.route.speed, braking);
     const nextSpeed = state.speed + Math.max(-VESSEL_ACCELERATION * dt, Math.min(VESSEL_ACCELERATION * dt, target - state.speed));
     let next = state.distance + (state.speed + nextSpeed) * .5 * dt;
@@ -166,7 +171,7 @@ export function stepVessel(state: VesselState, delta: number, time: number, traf
         writeVesselPose(state);
         return;
       }
-      if (next >= state.route.length) { next %= state.route.length; state.departed = false; }
+      if (next >= state.route.length) { next %= state.route.length; state.departed = false; state.crossing=false; }
       state.distance = next;
     }
     remaining -= dt;

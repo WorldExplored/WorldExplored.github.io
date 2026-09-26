@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Vector3,PointLight,Mesh,MeshBasicMaterial,MeshStandardMaterial,Raycaster,DoubleSide,ShaderLib,type BufferGeometry,type WebGLProgramParametersWithUniforms } from 'three';
+import { Vector3,PointLight,SpotLight,Mesh,MeshBasicMaterial,MeshStandardMaterial,Raycaster,DoubleSide,ShaderLib,type BufferGeometry,type WebGLProgramParametersWithUniforms } from 'three';
 import {createElement} from 'react';
 import {create} from '@react-three/test-renderer';
 import {EcoCity} from '../src/components/world/EcoCity';
@@ -19,12 +19,17 @@ test('all front buildings have contained fixtures and night light pools, with on
   try {
     assert.equal(lights.positions.length,mainRoomLamps.length);
     for(const site of world.landmarks.filter(site=>site.id!=='building'))assert.ok(mainRoomLamps.some(lamp=>Math.hypot(lamp.x-site.position[0],lamp.z-site.position[2])<6),site.id);
-    const local=lights.root.getObjectByName('nearest-room-light') as PointLight;
+    const local=lights.root.getObjectByName('nearest-room-light') as SpotLight;
     lights.update(0,new Vector3(0,2,0),0);assert.equal(local.intensity,0);
     const pool=lights.root.getObjectByName('interior-floor-light-pools') as Mesh;assert.equal(pool.visible,false);
     lights.update(1,new Vector3(0,2,0),1);assert.ok(local.intensity>0);assert.equal(pool.visible,true);
     for(const room of mainRoomLamps)assert.ok(room.ceiling-room.floor>1.6&&room.ceiling-room.floor<6);
-    assert.equal(lights.root.children.filter(item=>item instanceof PointLight).length,1);
+    assert.equal(lights.root.children.filter(item=>item instanceof PointLight).length,0);
+    assert.equal(lights.root.children.filter(item=>item instanceof SpotLight).length,1);
+    assert.equal(local.castShadow,false);
+    assert.ok(local.color.g>=local.color.r*.95&&local.color.b>=local.color.r*.80,'the actual fixture produces pearl light');
+    const selected=mainRoomLamps.find(room=>Math.abs(room.x-local.position.x)<.001&&Math.abs(room.z-local.position.z)<.001)!;
+    assert.ok(Math.tan(local.angle)*(selected.ceiling-selected.floor)<=Math.min(selected.width,selected.depth)*.41,'the cone stays inside its room');
   }finally{lights.dispose();}
 });
 

@@ -1,12 +1,12 @@
 import { Color, DynamicDrawUsage, Float32BufferAttribute, Group, InstancedBufferAttribute, InstancedBufferGeometry, Mesh, ShaderMaterial } from 'three';
-import { landDistance, terrainMeshHeight } from './terrain';
+import { rainSurfaceHeight } from './rainCatchments';
 
 export const RAIN_GRAVITY = 9.81;
 const FALL_SPEED = .65, WATER_SURFACE = .14;
 export interface RainSource { sample(output: Float64Array, serial: number): void }
 export interface RainOptions { capacity: number; impacts: number; sampleHeight?: (x: number, z: number) => number }
 const hash = (n: number) => { const value = Math.sin(n * 127.1 + 7) * 43758.5453; return value - Math.floor(value); };
-const groundHeight = (x: number, z: number) => landDistance(x, z) < -1 ? -1 : terrainMeshHeight(x, z);
+const groundHeight = rainSurfaceHeight;
 export function rainFallTime(height: number) { return (Math.sqrt(FALL_SPEED * FALL_SPEED + 2 * RAIN_GRAVITY * Math.max(0, height)) - FALL_SPEED) / RAIN_GRAVITY; }
 
 /** Fixed slots retain each drop's birth, wind and actual sampled landing. No full-column respawn. */
@@ -55,12 +55,20 @@ export class RainSimulation {
       source.sample(this.sample, serial);
       const x = this.sample[0], y = this.sample[1], z = this.sample[2], born = now - hash(serial + 81) * dt;
       const vx = wind[0] * (1.4 + hash(serial) * .3), vz = wind[2] * (1.4 + hash(serial + 1) * .3);
-      let flight = rainFallTime(y - WATER_SURFACE), floor = WATER_SURFACE;
-      // The wind shifts the landing; converge against the same rendered terrain triangles.
-      for (let step = 0; step < 6; step++) {
-        floor = Math.max(WATER_SURFACE, this.height(x + vx * flight, z + vz * flight));
-        flight = rainFallTime(y - floor);
+      const maximum = rainFallTime(y - WATER_SURFACE);
+      let low=0,high=maximum;
+      // Find the first surface reached along the wind-blown trajectory. A fixed
+      // endpoint iteration can oscillate between a roof edge and the ground below.
+      for(let step=1;step<=24;step++){
+        const t=maximum*step/24;
+        if(y-FALL_SPEED*t-RAIN_GRAVITY*.5*t*t<=Math.max(WATER_SURFACE,this.height(x+vx*t,z+vz*t))){high=t;break;}
+        low=t;
       }
+      for(let step=0;step<18;step++){
+        const t=(low+high)*.5;
+        if(y-FALL_SPEED*t-RAIN_GRAVITY*.5*t*t>Math.max(WATER_SURFACE,this.height(x+vx*t,z+vz*t)))low=t;else high=t;
+      }
+      const flight=(low+high)*.5,floor=Math.max(WATER_SURFACE,this.height(x+vx*flight,z+vz*flight));
       this.origins[offset] = x; this.origins[offset + 1] = y; this.origins[offset + 2] = z; this.origins[offset + 3] = born;
       this.motion[offset] = vx; this.motion[offset + 1] = vz; this.motion[offset + 2] = flight; this.motion[offset + 3] = hash(serial + 71);
       this.landing[offset] = x + vx * flight; this.landing[offset + 1] = floor; this.landing[offset + 2] = z + vz * flight; this.landing[offset + 3] = born + flight;
@@ -100,7 +108,7 @@ export class RainSimulation {
     if (!water && Math.hypot(sx, sz) > .46) return;
     this.impacts[offset] = x; this.impacts[offset + 1] = y + (water ? .065 : .025); this.impacts[offset + 2] = z; this.impacts[offset + 3] = born;
     this.shapes[offset] = water ? .24 + hash(drop + 8) * .24 : .17 + hash(drop + 11) * .12;
-    this.shapes[offset + 1] = water ? 1.45 : 11 + hash(drop + 7) * 9;
+    this.shapes[offset + 1] = water ? 1.45 : 7 + hash(drop + 7) * 6;
     this.shapes[offset + 2] = water ? 0 : 1; this.shapes[offset + 3] = hash(drop + 1);
     this.slopes[slot * 2] = sx; this.slopes[slot * 2 + 1] = sz;
     this.visibleUntil = Math.max(this.visibleUntil, born + this.shapes[offset + 1]);
@@ -133,10 +141,10 @@ export function createRain({ capacity, impacts, sampleHeight }: RainOptions) {
   const impactMaterial = new ShaderMaterial({ transparent: true, depthWrite: false, uniforms: { uTime: time, uDaylight: daylight },
     vertexShader: `attribute vec4 aImpact;attribute vec4 aShape;attribute vec2 aSlope;uniform float uTime;varying vec2 vUv;varying vec4 vShape;varying float vAge;
     void main(){float age=uTime-aImpact.w;if(age<0.||age>=aShape.y){gl_Position=vec4(2.,2.,2.,1.);vAge=-1.;return;}
-    float growth=aShape.z<.5?.25+age/aShape.y: .75+.25*smoothstep(0.,.3,age);vec2 offset=position.xz*aShape.x*growth;
+    float growth=aShape.z<.5?.25+age/aShape.y: (.75+.25*smoothstep(0.,.3,age))*(1.-.28*smoothstep(aShape.y*.25,aShape.y,age));vec2 offset=position.xz*aShape.x*growth;
     vec3 p=aImpact.xyz+vec3(offset.x,dot(offset,aSlope),offset.y);gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.);vUv=position.xz;vShape=aShape;vAge=age;}`,
     fragmentShader: `uniform float uDaylight;varying vec2 vUv;varying vec4 vShape;varying float vAge;
-    void main(){if(vAge<0.)discard;float r=length(vUv),angle=atan(vUv.y,vUv.x);float fade=1.-smoothstep(vShape.y*.65,vShape.y,vAge);float alpha;vec3 tint;
+    void main(){if(vAge<0.)discard;float r=length(vUv),angle=atan(vUv.y,vUv.x);float fade=1.-smoothstep(vShape.y*.25,vShape.y,vAge);float alpha;vec3 tint;
     if(vShape.z<.5){alpha=(1.-smoothstep(.035,.10,abs(r-.77)))*fade*.38;tint=vec3(.41,.78,.81);}
     else{float edge=.86+sin(angle*3.+vShape.w*6.28)*.055+cos(angle*5.-vShape.w*7.)*.03;alpha=(1.-smoothstep(edge-.09,edge,r))*fade*.27;tint=mix(vec3(.12,.30,.34),vec3(.45,.72,.73),smoothstep(.61,.68,r)*.42);}
     if(alpha<.003)discard;gl_FragColor=vec4(tint*(.32+.68*uDaylight),alpha);\n#include <colorspace_fragment>\n}` });

@@ -144,8 +144,7 @@ const cloudFragment = /* glsl */ `
     vec3 wetTop = mix(uWhite, mix(uWhite * .38, uShade * .62, .25), wet);
     // Moisture darkens the belly most strongly while retaining a lit, rounded crown.
     vec3 color = mix(wetShade, wetTop, light);
-    float relief = sin(vLocal.x * 5.1 + vLocal.y * 1.3) * sin(vLocal.z * 4.7 - vLocal.y * 3.8);
-    color += relief * .012 * topLight;
+    // Smooth volume normals keep the surface soft without a tiled micro-pattern.
     float rim = pow(1. - max(dot(n, normalize(vView)), 0.), 3.);
     color = mix(color, wetTop, rim * .09);
     color = mix(color, uFog, smoothstep(uFogRange.x, uFogRange.y, vDistance));
