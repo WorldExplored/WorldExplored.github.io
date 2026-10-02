@@ -16,6 +16,7 @@ import { makeExperienceStudio, makeHistoryMuseum } from '../src/components/world
 import { createArcadeHall } from '../src/components/world/ArcadeHall.tsx';
 import { makeCampusHall } from '../src/components/world/CampusHall.tsx';
 import { createSceneRuntime, motionPolicy, world } from '../src/content/world.ts';
+import { windDisplacement } from '../src/components/world/weatherState.ts';
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
@@ -261,10 +262,19 @@ test('organic shores and vegetation cover every suitable island without the form
 
 test('cloud drift remains continuous across long sessions and former wrap boundaries', () => {
   const position = new Vector3(); const next = new Vector3();
-  for (const cloud of createCloudClusters()) for (let time = 0; time <= 10000; time += 17) {
+  for (const cloud of createCloudClusters()) for (let time = 0; time <= 100000; time += 17) {
     cloudOrigin(cloud, time, position); cloudOrigin(cloud, time + .1, next);
     if (next.distanceTo(position) > .1) assert.ok(cloudVisibility(cloud, time) < .001 && cloudVisibility(cloud, time + .1) < .001);
-    else assert.ok(next.x > position.x);
-    assert.ok(Math.abs(position.x) <= 520);
+    else {
+      const expected = windDisplacement(time + .1).sub(windDisplacement(time)).multiplyScalar(cloud.speed / (world.environment.cloudSpeed * 2.1));
+      assert.ok(next.clone().sub(position).distanceTo(expected) < 1e-8, 'Visible motion follows the current wind, including westward and northward regimes.');
+    }
+    assert.ok(Math.abs(position.x) <= 520 && Math.abs(position.z + 35) <= 520);
+  }
+  for (const center of [[519.99, 37, -35], [0, 37, 484.99]]) {
+    const cloud = createCloudClusters(1)[0]; cloud.center = center;
+    cloudOrigin(cloud, 0, position); cloudOrigin(cloud, .1, next);
+    assert.ok(next.distanceTo(position) > 1000, 'Exercise actual recycling on each horizontal axis.');
+    assert.equal(cloudVisibility(cloud, 0), 0); assert.equal(cloudVisibility(cloud, .1), 0);
   }
 });

@@ -7,6 +7,8 @@ export const cityTurbines = Object.freeze([
   Object.freeze({ x: 16, z: -84, height: 7.5, phase: 1.9, rate: .57 }),
 ]);
 
+export const CITY_PIER_JUNCTION = Object.freeze({ x: -12, z: -52, y: 1.06, halfOpening: .84 });
+
 // Decks bridge the coast from dry land to navigable water, rather than floating inland.
 export const cityDocks = Object.freeze([
   Object.freeze({ id: 'city', x: -12, z: -53, length: 10, width: 1.3, y: 1.06 }),

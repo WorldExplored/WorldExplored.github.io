@@ -52,7 +52,7 @@ test('shared coast samples shelter a channel even when it faces the prevailing s
 test('impact sites follow exposed headlands, include the distant beacon and keep drop arcs in water', () => {
   const sites = createShoreImpactSites(); const drops = createShoreDrops(sites); const position = new Vector3();
   assert.deepEqual(createShoreImpactSites(), sites); assert.ok(sites.length >= 4 && sites.length <= 8);
-  assert.ok(sites.every(site=>site.rock.startsWith('coast-rock-')));
+  assert.ok(sites.every(site=>site.rock.startsWith('coast-rock-') || site.rock.startsWith('beacon-cliff-face-')));
   assert.ok(new Set(sites.map(site => site.start)).size === sites.length);
   sites.forEach(site => { assert.ok(landDistance(site.x, site.z) < .06); assert.ok(site.exposure > .28); assert.ok(site.period >= 7 && site.period < 25);assert.ok(site.energy>.6); });
   for (const drop of drops) {
@@ -65,7 +65,7 @@ test('impact sites follow exposed headlands, include the distant beacon and keep
         assert.ok(landDistance(position.x, position.z) < -.1, 'Rebounding droplets land back in the sea.');
       }
     }
-    assert.ok(peak > .35 && peak < 2.4); assert.ok(sawDescending);
+    assert.ok(peak > .35 && peak < 3.0); assert.ok(sawDescending);
     assert.equal(shoreDropPose(site, drop, 2, position), 0); assert.ok(position.y < 0);
   }
 });
@@ -78,7 +78,7 @@ test('pooled shore spray is substantial at crest arrivals and leaves calm interv
     counts.push(visible);
   }
   assert.ok(Math.max(...counts) >= 72, 'The exposed lighthouse has multiple detailed spray fans during the opening.');
-  assert.ok(counts.filter(count => count === 0).length > counts.length * .65, 'There is no continuous spray.');
+  assert.ok(counts.filter(count => count === 0).length > counts.length * .4, 'Even stronger headland surf leaves calm intervals between wave sets.');
   assert.ok(Math.max(...counts) <= SHORE_DROPS_PER_SITE * 4, 'Only local rock faces emit; there is no continuous island-wide spray.');
   assert.equal(system.mesh.raycast.length, 0);
   system.dispose();
@@ -129,6 +129,11 @@ test('water retains coast texture, geometry and material while quality changes, 
   const renderer = await create(render()); const water = renderer.scene.findByType('Mesh').instance as Mesh;
   const material = water.material as ShaderMaterial; const geometry = water.geometry; const texture = material.uniforms.uCoast.value;
   try {
+    const shore = createShoreImpactSystem();
+    try {
+      assert.ok(shore.mesh.renderOrder > water.renderOrder && shore.foam.renderOrder > water.renderOrder, 'Transparent ocean shading cannot paint over airborne spray or surface foam.');
+      assert.ok(shore.material.depthTest && shore.foamMaterial.depthTest, 'Cliffs still occlude droplets behind them.');
+    } finally { shore.dispose(); }
     const bounds = material.uniforms.uCoastBounds.value;
     assert.ok(-82 > bounds.x && -70 < bounds.x + bounds.z && -42 > bounds.y && -30 < bounds.y + bounds.w);
     for (const quality of ['low', 'medium', 'high'] as const) {
@@ -150,7 +155,7 @@ test('direct rock responses start in visible water beyond the modeled rock footp
 
 test('rock spray and wet sand share the actual advancing wave clock', () => {
   const sites=createShoreImpactSites();
-  assert.equal(sites.filter(site=>site.island==='beacon').length,3);
+  assert.equal(sites.filter(site=>site.island==='beacon').length,4);
   for(const site of sites){
     const distance=landDistance(site.x,site.z);
     for(let cycle=0;cycle<12;cycle++){
@@ -182,7 +187,18 @@ test('impact foam fans expand seaward with reusable geometry and no complete rin
     const frozen=Array.from(system.foam.instanceMatrix.array),fade=Array.from(system.foamFades.array);
     for(const quality of ['low','medium','high'] as const){updateShoreImpacts(system,200,quality,true);assert.deepEqual(Array.from(system.foam.instanceMatrix.array),frozen);assert.deepEqual(Array.from(system.foamFades.array),fade);}
     assert.equal(system.foam.geometry,geometry);assert.equal(system.foam.material,material);
-    assert.equal(system.mesh.geometry.index!.count/3*system.mesh.instanceMatrix.count+geometry.index!.count/3*system.foam.instanceMatrix.count,12744,'two pooled draws stay within their fixed triangle budget');
+    assert.ok(system.mesh.geometry.index!.count/3*system.mesh.instanceMatrix.count+geometry.index!.count/3*system.foam.instanceMatrix.count <= 17000,'two pooled draws stay within their bounded triangle budget');
   }finally{system.dispose();}
   assert.equal(geometryDisposals,1);assert.equal(materialDisposals,1);
+});
+
+
+test('lighthouse breakers reach separate cliff faces instead of clustering behind one rock', () => {
+  const sites = createShoreImpactSites().filter(site => site.island === 'beacon');
+  assert.equal(sites.length, 4);
+  for (let i = 0; i < sites.length; i++) for (let j = i + 1; j < sites.length; j++) {
+    assert.ok(Math.hypot(sites[i].x - sites[j].x, sites[i].z - sites[j].z) > 3);
+  }
+  assert.ok(sites.some(site => site.x > -74 && site.z > -33), 'A front-facing cliff gets visible incoming breakers.');
+  assert.ok(sites.some(site => site.x < -80), 'The exposed ocean side retains its stronger breakers.');
 });

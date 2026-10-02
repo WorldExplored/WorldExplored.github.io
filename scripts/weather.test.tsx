@@ -2,11 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { create } from '@react-three/test-renderer';
 import { Vector3, type Mesh } from 'three';
-import { advanceSceneTime, easternHour, daylightAt, daylightWeights, stormAt, stormSchedule, windAt, windDisplacement } from '../src/components/world/weatherState';
+import { advanceSceneTime, easternHour, daylightAt, daylightWeights, stormAt, stormSchedule, windAt, windDisplacement, WIND_HOLD_SECONDS, WIND_TURN_SECONDS, STORM_ALTITUDE } from '../src/components/world/weatherState';
 import { createSceneRuntime, world } from '../src/content/world';
 import { CloudSystem } from '../src/components/world/AmbientSystem';
 import { advanceCloudPress, cloudBounds, cloudOrigin, cloudVisibility, createCloudClusters } from '../src/components/world/clouds';
 import { createRain } from '../src/components/world/Rain';
+import { createStormBank } from '../src/components/world/StormSystem';
 import { makeClouds } from '../src/components/world/CloudSurface';
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
@@ -31,7 +32,7 @@ test('wind displacement differentiates to the same breeze used by rain', () => {
   for (let second = 0; second < 10000; second += 71) {
     const velocity = windDisplacement(second + .01).sub(windDisplacement(second)).multiplyScalar(100);
     assert.ok(velocity.distanceTo(new Vector3(...windAt(second))) < .0001);
-    assert.ok(velocity.x > 0 && velocity.z > 0);
+    assert.ok(velocity.length() > .25 && velocity.length() < .7);
     for (const cloud of createCloudClusters(3)) {
       const start = cloudOrigin(cloud, second, new Vector3());
       const end = cloudOrigin(cloud, second + .01, new Vector3());
@@ -52,7 +53,7 @@ test('storm fronts have 5–10 minutes of rain and gradual wind-driven arrival/d
     assert.equal(stormAt(end).cover, 0); assert.equal(stormAt(end + 1).rain, 0);
     for (let time = start + 1; time < end; time += 37) {
       const a = stormAt(time), b = stormAt(time + .1);
-      assert.ok(b.center[0] > a.center[0] && b.center[2] > a.center[2]);
+      assert.ok(new Vector3(...b.center).sub(new Vector3(...a.center)).dot(new Vector3(...windAt(time))) > 0);
       assert.ok(Math.abs(b.cover - a.cover) < .003);
     }
   }
@@ -125,7 +126,7 @@ test('rain duration is measured in active seconds at both 10 FPS and 60 FPS',()=
 test('every storm front follows the integrated wind rather than an independent linear heading',()=>{
   for(let index=0;index<8;index++){
     const schedule=stormSchedule(index),middle=schedule.arrival+schedule.approachSeconds+schedule.rainSeconds*.5;
-    assert.deepEqual(stormAt(middle).center,[-24,57,-42]);
+    assert.deepEqual(stormAt(middle).center,[-24,STORM_ALTITUDE,-42]);
     for(let seconds=schedule.arrival+1;seconds<schedule.arrival+schedule.approachSeconds+schedule.rainSeconds+schedule.departureSeconds-1;seconds+=39){
       const a=stormAt(seconds),b=stormAt(seconds+.01);
       const velocity=new Vector3(...b.center).sub(new Vector3(...a.center)).multiplyScalar(100);
@@ -143,4 +144,45 @@ test('single-bank storm material fills every declared vector uniform slot', () =
       for(let i=0;i<size;i++)assert.ok(values[i].toArray().every(Number.isFinite));
     }
   } finally {cloud.dispose();}
+});
+
+
+test('prevailing wind holds its heading, turns continuously, and reaches every compass quadrant', () => {
+  const period = WIND_HOLD_SECONDS + WIND_TURN_SECONDS, quadrants = new Set<string>();
+  for (let index = 0; index < 24; index++) {
+    const start = index * period, steady = windAt(start + 30);
+    quadrants.add(`${Math.sign(steady[0])},${Math.sign(steady[2])}`);
+    assert.deepEqual(windAt(start + WIND_HOLD_SECONDS - 1), steady, 'A new heading remains steady for the entire prevailing interval.');
+    const following = windAt(start + period + 1);
+    assert.ok(new Vector3(...steady).angleTo(new Vector3(...following)) > .9);
+    for (let age = WIND_HOLD_SECONDS - .1; age < period + .1; age += .2) {
+      const time = start + age;
+      assert.ok(new Vector3(...windAt(time)).distanceTo(new Vector3(...windAt(time + .01))) < .00015, 'Wind turns without a direction jump.');
+      const motion = windDisplacement(time + .01).sub(windDisplacement(time)).multiplyScalar(100);
+      assert.ok(motion.distanceTo(new Vector3(...windAt(time))) < .0001);
+    }
+  }
+  assert.equal(quadrants.size, 4);
+});
+
+test('larger cloud groups cover the surrounding sky without breaking their shared atmospheric shelf', () => {
+  const clouds = createCloudClusters(), groups = clouds.filter(cloud => cloud.layer === 0);
+  for (const cloud of groups) {
+    assert.ok(groups.some(other => other !== cloud && Math.hypot(other.center[0] - cloud.center[0], other.center[2] - cloud.center[2]) < 38));
+    assert.ok(cloud.center[1] > 35 && cloud.center[1] < 39);
+  }
+  for (const [dx, dz] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+    assert.ok(clouds.some(cloud => cloud.center[0] * dx > 20 && (cloud.center[2] + 35) * dz > 20));
+  }
+  assert.ok(STORM_ALTITUDE > 100);
+});
+
+
+test('rain-bearing bank is higher and several times wider than the city, with bounded geometry', () => {
+  const bank = createStormBank(), bounds = cloudBounds(bank), span = bounds.max.clone().sub(bounds.min);
+  assert.ok(span.x > 350 && span.z > 250);
+  assert.ok(bank.center[1] + bounds.min.y > 80, 'The dark underside remains high above every building.');
+  const resources = makeClouds(false, [bank]);
+  try { assert.ok(resources.geometry.index!.count / 3 < 18000); }
+  finally { resources.dispose(); }
 });

@@ -26,7 +26,7 @@ export function createCoastalFerry() {
     shell:new MeshPhysicalMaterial({color:'#edf6ef',roughness:.28,metalness:.18,clearcoat:.65}),
     trim:new MeshPhysicalMaterial({color:'#1262c4',roughness:.27,metalness:.35,clearcoat:.55}),
     solar:new MeshPhysicalMaterial({color:'#16375f',roughness:.3,metalness:.38,clearcoat:.45}),
-    deck:new MeshPhysicalMaterial({color:'#986345',roughness:.8}),
+    deck:new MeshPhysicalMaterial({color:'#b8d9d2',roughness:.8}),
     glass:new MeshPhysicalMaterial({color:'#124b62',roughness:.09,metalness:.12,transparent:true,opacity:.42,depthWrite:false,clearcoat:1}),
     rubber:new MeshPhysicalMaterial({color:'#233940',roughness:.91}),
     seats:new MeshPhysicalMaterial({color:'#06abc1',roughness:.65}),
@@ -99,10 +99,19 @@ export function createCoastalFerry() {
   add('ferry-aft-photovoltaic-cells',cells,materials.solar);
   add('ferry-solar-cell-busbars',conductors,materials.trim);
   add('ferry-solar-power-conduit',[strut(new Vector3(.48,1.06,-.54),new Vector3(.48,.31,-.54),.012),new BoxGeometry(.26,.13,.18).translate(.27,.36,-.56)],materials.rubber);
-  add('ferry-electric-drive-and-dock-cleats',[-1,1].flatMap(side=>[
-    new BoxGeometry(.12,.13,.25).translate(side*.43,-.15,-1.05),new CylinderGeometry(.047,.047,.08,12).rotateX(Math.PI/2).translate(side*.43,-.17,-1.19),
+  add('ferry-enclosed-waterjets-and-dock-cleats',[-1,1].flatMap(side=>[
+    new BoxGeometry(.12,.13,.25).translate(side*.43,-.15,-1.05),new CylinderGeometry(.057,.064,.16,12,1,true).rotateX(Math.PI/2).translate(side*.43,-.17,-1.19),
     new BoxGeometry(.12,.024,.04).translate(side*.42,.305,-.77),new BoxGeometry(.03,.05,.03).translate(side*.42,.28,-.77),
   ]),materials.trim);
+  add('ferry-recessed-jet-intakes',[-1,1].flatMap(side=>[
+    new CylinderGeometry(.040,.040,.012,10).rotateX(Math.PI/2).translate(side*.43,-.17,-1.12),
+    ...[-1,0,1].map(bar=>new BoxGeometry(.10,.013,.012).translate(side*.43,-.17+bar*.031,-1.27)),
+  ]),materials.rubber);
+  add('ferry-emergency-equipment-and-battery-locker',[
+    new BoxGeometry(.17,.32,.15).translate(.40,.43,-.56),
+    new BoxGeometry(.28,.13,.17).translate(-.32,.35,-.59),
+    ...[-1,1].map(side=>new BoxGeometry(.13,.04,.12).translate(side*.25,.64,-.36)),
+  ],materials.shell);
   const wakeRoot=new Group();wakeRoot.name='ferry-water-contact';root.add(wakeRoot);
   const wakePositions:number[]=[],wakeIndices:number[]=[];
   for(const side of [-1,1])for(let row=0;row<=28;row++){

@@ -185,7 +185,7 @@ test('every occupied upper floor connects to a served lift through a covered cor
       }
     } finally {meshes.forEach(mesh=>mesh.geometry.dispose());material.dispose();}
   }
-  assert.equal(checked,26,'Every occupied upper floor, including the conservatory, is audited');
+  assert.equal(checked,35,'Every occupied upper floor, including the conservatory, is audited');
 });
 
 test('balcony planting is integrated into reachable terraces and all room floors contain furnishings', () => {
@@ -275,7 +275,7 @@ test('rounded occupied floors are enclosed at all angles except their usable doo
       const room=mesh.geometry.userData.roomAccess;
       const shell=item.meshes.filter(part=>part.geometry.userData.roomWall?.room===room.room);
       const top=Math.max(...shell.map(part=>{part.geometry.computeBoundingBox();return part.geometry.boundingBox!.max.y;}));
-      const rx=building.width/2-level*.08-.1,rz=building.depth/2-.33;
+      const rx=building.width/2-level/(rooms.length-1)*.24-.1,rz=building.depth/2-.33;
       for(const fraction of [.025,.3,.68,.975])for(let sample=0;sample<256;sample++) {
         const angle=sample*Math.PI*2/256,x=Math.sin(angle)*rx,z=Math.cos(angle)*rz,y=room.floor+(top-room.floor)*fraction;
         const frontDoor=level===0&&z>0&&Math.abs(x)<.42,backDoor=z<0&&Math.abs(x)<.36;
@@ -386,7 +386,7 @@ test('every occupied room has actual weather enclosure on four walls and across 
       }
     } finally {item.dispose();}
   }
-  assert.equal(checked,40);assert.ok(wallRays>40000&&roofRays>15000);
+  assert.equal(checked,49);assert.ok(wallRays>40000&&roofRays>15000);
 });
 
 test('wall panes are single surfaces and structural ceilings meet rather than overlap adjacent room floors',()=>{

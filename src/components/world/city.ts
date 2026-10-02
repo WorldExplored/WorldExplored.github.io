@@ -17,10 +17,10 @@ export interface CityBuilding {
 
 export const CITY_BASE_Y = .8;
 const layouts: Array<[string, CityArchetype, number, number, number, number, number, number]> = [
-  ['residence-west', 'residential', -19, -83.5, 4.6, 3, 9.8, 0],
-  ['residence-garden', 'residential', -9, -87, 5, 3, 12, 0],
-  ['residence-east', 'residential', 2, -86, 4.1, 2.8, 10.4, 0],
-  ['residence-cove', 'residential', 12, -81.5, 4, 2.8, 8.6, 0],
+  ['residence-west', 'residential', -19, -83.5, 5.8, 3.5, 14.55, 0],
+  ['residence-garden', 'residential', -9, -87, 6.8, 3.6, 18.55, 0],
+  ['residence-east', 'residential', 2, -86, 5.7, 3.5, 14.5, 0],
+  ['residence-cove', 'residential', 12, -81.5, 5.2, 3.4, 12.6, 0],
   ['office-west', 'garden-office', -26, -84, 4.5, 3.8, 6.8, 0],
   ['office-courtyard', 'garden-office', -14, -77.75, 5, 4, 7.8, 0],
   ['office-park', 'garden-office', -3, -78, 5, 3.6, 8.8, 0],

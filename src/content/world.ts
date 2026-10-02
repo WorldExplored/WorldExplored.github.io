@@ -50,7 +50,7 @@ export const world = {
     { id: 'experience', rotationY: .12, position: [-27, 0, -2], label: [-27, 8.2, -2], color: '#77edc2' },
     { id: 'research', position: [4, 0, -7], label: [4, 9.2, -7], color: '#65edff' },
     { id: 'purdue', rotationY: -Math.PI / 2, position: [26, 0, -7], label: [26, 5.3, -7], color: '#ffe196' },
-    { id: 'history', rotationY: -.28, position: [21, 0, -72], label: [21, 9.2, -72], color: '#8ff0bc' },
+    { id: 'history', rotationY: -.28, position: [21, 0, -72], label: [21, 7.3, -72], color: '#8ff0bc' },
     { id: 'about', position: [-10, 0, 23], label: [-10, 5.6, 23], color: '#a6e65c' },
     { id: 'contact', position: [12, 0, 23], label: [12, 7, 23], color: '#72deff' },
     { id: 'arcade', position: [-28.8, 0, -74.5], label: [-28.8, 6, -74.5], color: '#b5f66d' },

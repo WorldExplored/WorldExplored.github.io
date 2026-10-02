@@ -212,24 +212,24 @@ export function buildCityArchitecture(building: Readonly<CityBuilding>, shellAdd
     }
   };
   if (family === 'terraced-apartments') {
-    const pitch = (h - .55) / 5;
-    for (let n = 0; n < 5; n++) { const width = w - n * .38; const x = -n * .105; room(x, .2 + n * pitch, -.18, width, d - .55, pitch, n, n < 2, true); if (n === 4) roof(x, .2 + (n + 1) * pitch + .02, -.18, width, d - .55); }
+    const levels = Math.round((h - .55) / 2), pitch = (h - .55) / levels;
+    for (let n = 0; n < levels; n++) { const setback = n / (levels - 1); const width = w - setback * 1.35; const x = -setback * .36; room(x, .2 + n * pitch, -.18, width, d - .55, pitch, n, n < 2, true); if (n === levels - 1) roof(x, .2 + (n + 1) * pitch + .02, -.18, width, d - .55); }
   } else if (family === 'narrow-mixed-use') {
-    const width = w * .64; const pitch = (h - .55) / 6;
+    const width = w * .74, levels = Math.round((h - .55) / 2), pitch = (h - .55) / levels;
     room(0, .2, 0, w - .2, d - .3, pitch, 0, true);
-    for (let n = 1; n < 6; n++) room(0, .2 + n * pitch, -.15, width, d - .5, pitch, n, n === 1, n % 2 === 0);
+    for (let n = 1; n < levels; n++) room(0, .2 + n * pitch, -.15, width, d - .5, pitch, n, n === 1, n % 2 === 0);
     roof(0, h - .35, -.15, width + .15, d - .45);
     for (const side of [-1, 1]) box(side * (width / 2 + .06), h / 2, -.65, .13, h - .6, .23, 'aqua');
     // The ground room ceiling is the continuous podium roof around the narrower tower.
   } else if (family === 'split-wings') {
-    const pitch=(h-.5)/5;
-    for(let n=0;n<5;n++)room(n===4?-.3:0,.2+n*pitch,0,n===4?w-1:w-.3,d-.6,pitch,n,true,n===1);
-    roof(-.3,.2+5*pitch,0,w-.95,d-.6);
+    const levels=Math.round((h-.5)/2),pitch=(h-.5)/levels;
+    for(let n=0;n<levels;n++)room(n===levels-1?-.3:0,.2+n*pitch,0,n===levels-1?w-1:w-.3,d-.6,pitch,n,true,n===1);
+    roof(-.3,.2+levels*pitch,0,w-.95,d-.6);
     // Full-width homes share the lower block; the upper wing steps back to a planted roof.
   } else if (family === 'rounded-housing') {
-    const pitch = (h - .6) / 4;
-    for (let n = 0; n < 4; n++) {
-      const y = .2 + n * pitch; const rx = w / 2 - n * .08; const rz = d / 2 - .23;
+    const levels = Math.round((h - .6) / 2), pitch = (h - .6) / levels;
+    for (let n = 0; n < levels; n++) {
+      const y = .2 + n * pitch; const rx = w / 2 - n / (levels - 1) * .24; const rz = d / 2 - .23;
       const roomId=`${building.id}-room-${roomIndex++}`;
       const floor=y+.14, roofY=y+pitch-.10, doorHeight=Math.min(1.42,pitch-.35), radiusX=rx-.1,radiusZ=rz-.1;
       const rearCut=-rz+.19;
@@ -360,7 +360,7 @@ export function buildCityArchitecture(building: Readonly<CityBuilding>, shellAdd
       // Broad rooted canopies occupy solid sidewalls. Curtain-wall homes retain
       // slender climbers so their windows and room views remain open.
       const spread=!glazed, width=spread?ground.depth*.82:Math.min(.8,ground.depth*(.19+(seed%3)*.035));
-      const garden=createFacadeGarden({width,height,seed,spread});
+      const garden=createFacadeGarden({width,height,seed,spread,branchSpacing:h>12?.34:undefined});
       const z=ground.z-(spread?0:ground.depth*.22);
       const outer=(face:typeof ground,pz:number,cap=false)=>{
         const margin=cap?0:family==='rounded-housing'?-.1:glazed?-.08:.03;

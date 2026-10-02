@@ -25,8 +25,8 @@ export function buildCityInterior(building: Readonly<CityBuilding>, add: CityAdd
     add(geometry, finish, x + px, y + py, z + pz);
   };
   const box = (name: string, finish: CityFinish, px: number, py: number, pz: number, sw: number, sh: number, sd: number) => emit(name, new BoxGeometry(sw, sh, sd), finish, px, py, pz);
-  const soft = (name: string, finish: CityFinish, px: number, py: number, pz: number, sw: number, sh: number, sd: number) => emit(name, name === 'conservatory-leaves' ? new SphereGeometry(1, 12, 7).scale(sw / 2, sh / 2, sd / 2) : new RoundedBoxGeometry(sw, sh, sd, name === 'mattress' || name === 'sofa-seat' ? 2 : 1, Math.min(sw, sh, sd) * .24), finish, px, py, pz);
-  const cylinder = (name: string, finish: CityFinish, px: number, py: number, pz: number, radius: number, sh: number, top = radius) => emit(name, new CylinderGeometry(top, radius, sh, 12), finish, px, py, pz);
+  const soft = (name: string, finish: CityFinish, px: number, py: number, pz: number, sw: number, sh: number, sd: number) => emit(name, name === 'conservatory-leaves' ? new SphereGeometry(1, 8, 5).scale(sw / 2, sh / 2, sd / 2) : new RoundedBoxGeometry(sw, sh, sd, 1, Math.min(sw, sh, sd) * .24), finish, px, py, pz);
+  const cylinder = (name: string, finish: CityFinish, px: number, py: number, pz: number, radius: number, sh: number, top = radius) => emit(name, new CylinderGeometry(top, radius, sh, 10), finish, px, py, pz);
   const book = (px: number, py: number, pz: number, sw: number, sd: number, index: number) => {
     const sh = .045 + (index % 3) * .012;
     box('book-pages', 'porcelain', px, py + sh / 2, pz, sw * .94, sh * .75, sd * .95);

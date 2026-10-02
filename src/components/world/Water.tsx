@@ -35,9 +35,9 @@ const vertexShader = /* glsl */ `
     vec2 headland=p.xz+vec2(76.,36.);
     float exposure=exp(-dot(headland,headland)/900.);
     float h1=p.x*.34+p.z*.21+uTime*.84,h2=p.x*-.22+p.z*.42-uTime*.66;
-    float swell=sin(h1)*.18+sin(h2)*.08;
+    float swell=sin(h1)*.31+sin(h2)*.13;
     p.y+=exposure*swell;
-    slope+=exposure*(cos(h1)*vec2(.34,.21)*.18+cos(h2)*vec2(-.22,.42)*.08-2.*headland/900.*swell);
+    slope+=exposure*(cos(h1)*vec2(.34,.21)*.31+cos(h2)*vec2(-.22,.42)*.13-2.*headland/900.*swell);
     if (uDetail > .5) {
       p.y += sin(c) * .013 * uDetail;
       slope += cos(c) * vec2(1.2,.71) * .013 * uDetail;
@@ -97,7 +97,7 @@ const fragmentShader = /* glsl */ `
     vec2 headland=p+vec2(76.,36.);
     float headlandExposure=exp(-dot(headland,headland)/900.);
     float h1=p.x*.34+p.y*.21+uTime*.84,h2=p.x*-.22+p.y*.42-uTime*.66;
-    slope+=headlandExposure*(cos(h1)*vec2(.34,.21)*.18+cos(h2)*vec2(-.22,.42)*.08-2.*headland/900.*(sin(h1)*.18+sin(h2)*.08));
+    slope+=headlandExposure*(cos(h1)*vec2(.34,.21)*.31+cos(h2)*vec2(-.22,.42)*.13-2.*headland/900.*(sin(h1)*.31+sin(h2)*.13));
     vec3 n = normalize(vec3(-slope.x, 1., -slope.y));
     float closeDetail=1.-smoothstep(35.,150.,length(cameraPosition-vWorld));
     float h=surfaceField(p);

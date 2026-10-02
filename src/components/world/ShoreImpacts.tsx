@@ -26,24 +26,27 @@ export function rockImpactPosition(rock: LandscapeRock, elapsed: number) {
 
 export function createShoreImpactSites() {
   const sites: ShoreImpactSite[] = [], wavePeriod = Math.PI * 2 / (1.45 * world.environment.waterSpeed);
-  const rocks = createLandscapePlan().rocks.toSorted((a, b) => {
-    const beaconA = islandAt(a.x, a.z).island.id === 'beacon', beaconB = islandAt(b.x, b.z).island.id === 'beacon';
-    return Number(beaconB) - Number(beaconA) || b.radius - a.radius;
-  });
+  // Separate rock faces around the exposed cliff remain legible from the main island.
+  for (const [index, angle] of [.95, 1.65, 2.45, 3.25].entries()) {
+    let radius = 3;
+    while (landDistance(-76 + Math.cos(angle) * radius, -36 + Math.sin(angle) * radius) > -.7 && radius < 10) radius += .08;
+    const x = -76 + Math.cos(angle) * radius, z = -36 + Math.sin(angle) * radius;
+    const normal = coastNormal(x, z), exposure = coastExposure(x, z);
+    const arrival = shorelineCrestTime(landDistance(x, z), x, z, 0) / world.environment.waterSpeed;
+    sites.push({ island: 'beacon', rock: `beacon-cliff-face-${index}`, x, z, nx: normal.x, nz: normal.z,
+      exposure, energy: 1.62 + index * .08, start: (arrival % wavePeriod + wavePeriod) % wavePeriod, period: wavePeriod * (index === 3 ? 2 : 1) });
+  }
+  const rocks = createLandscapePlan().rocks.toSorted((a, b) => b.radius - a.radius);
   for (const rock of rocks) {
-    const island = islandAt(rock.x, rock.z).island.id, normal = coastNormal(rock.x, rock.z);
-    // Spray rebounds from the seaward face, beyond the visible rock, instead of being hidden inside it.
-    for (const angle of island === 'beacon' ? [-.48, 0, .48] : [0]) {
-      if (island === 'beacon' && sites.filter(site => site.island === 'beacon').length >= 3) break;
-      const nx = normal.x * Math.cos(angle) - normal.z * Math.sin(angle), nz = normal.z * Math.cos(angle) + normal.x * Math.sin(angle);
-      const x = rock.x + nx * (rock.radius + .12), z = rock.z + nz * (rock.radius + .12), exposure = coastExposure(x, z);
-      if (exposure < .28 || landDistance(x, z) > -.3 || sites.some(site => Math.hypot(site.x - x, site.z - z) < .58)) continue;
-      const multiple = island === 'beacon' ? (sites.length === 2 ? 2 : 1) : 2 + sites.length % 2;
-      const arrival = shorelineCrestTime(landDistance(x, z), x, z, 0) / world.environment.waterSpeed;
-      const start = (arrival % wavePeriod + wavePeriod) % wavePeriod;
-      sites.push({ island, rock: rock.id, x, z, nx, nz, exposure, energy: island === 'beacon' ? 1.45 + rock.radius * .17 : .85 + rock.radius * .20, start, period: wavePeriod * multiple });
-      if (sites.length === 8) return sites;
-    }
+    const island = islandAt(rock.x, rock.z).island.id;
+    if (island === 'beacon') continue;
+    const normal = coastNormal(rock.x, rock.z), nx = normal.x, nz = normal.z;
+    const x = rock.x + nx * (rock.radius + .12), z = rock.z + nz * (rock.radius + .12), exposure = coastExposure(x, z);
+    if (exposure < .28 || landDistance(x, z) > -.3 || sites.some(site => Math.hypot(site.x - x, site.z - z) < .58)) continue;
+    const arrival = shorelineCrestTime(landDistance(x, z), x, z, 0) / world.environment.waterSpeed;
+    sites.push({ island, rock: rock.id, x, z, nx, nz, exposure, energy: .85 + rock.radius * .20,
+      start: (arrival % wavePeriod + wavePeriod) % wavePeriod, period: wavePeriod * (2 + sites.length % 2) });
+    if (sites.length === 8) return sites;
   }
   if (sites.length < 4) throw new Error(`Insufficient exposed shoreline rocks (${sites.length})`);
   return sites;
@@ -54,8 +57,8 @@ export function createShoreDrops(sites: readonly ShoreImpactSite[]) {
   return Array.from({ length: sites.length * SHORE_DROPS_PER_SITE }, (_, index): ShoreDrop => {
     const site = Math.floor(index / SHORE_DROPS_PER_SITE), beacon = sites[site].island === 'beacon';
     return { site, delay: (index % SHORE_DROPS_PER_SITE) * .010 + random() * .045,
-      lift: (beacon ? 3.4 : 2.7) + random() * (beacon ? 2.9 : 1.8), outward: .65 + random() * 1.1,
-      sideways: (random() - .5) * 2.1, size: .016 + random() ** 2 * .042 };
+      lift: (beacon ? 4.1 : 2.7) + random() * (beacon ? 2.6 : 1.8), outward: .65 + random() * 1.1,
+      sideways: (random() - .5) * 2.1, size: (beacon ? .024 : .016) + random() ** 2 * (beacon ? .055 : .042) };
   });
 }
 
@@ -79,7 +82,7 @@ export function createShoreImpactSystem() {
   const geometry = new SphereGeometry(1, 7, 5);
   const material = new MeshPhysicalMaterial({ color: '#d8ffff', roughness: .16, metalness: 0, clearcoat: 1, clearcoatRoughness: .1, transparent: true, opacity: .70, depthWrite: false });
   const mesh = new InstancedMesh(geometry, material, drops.length);
-  mesh.name = 'breaking-shore-droplets'; mesh.frustumCulled = false; mesh.renderOrder = 1; mesh.raycast = () => undefined;root.add(mesh);
+  mesh.name = 'breaking-shore-droplets'; mesh.frustumCulled = false; mesh.renderOrder = 4; mesh.raycast = () => undefined;root.add(mesh);
   drops.forEach((_, index) => mesh.setColorAt(index, new Color(index % 4 === 0 ? '#c1f0f3' : '#ffffff')));
   const foamGeometry = new RingGeometry(.78, 1, 18, 1, -.70, 1.40).rotateX(-Math.PI / 2);
   const foamMaterial = new MeshStandardMaterial({ color: '#e0ffff', roughness: .7, transparent: true, opacity: .64, depthWrite: false, side: DoubleSide });
@@ -88,7 +91,7 @@ export function createShoreImpactSystem() {
     shader.vertexShader = `attribute float aFoamFade; varying float vFoamFade;\n${shader.vertexShader}`.replace('#include <begin_vertex>', '#include <begin_vertex>\nvFoamFade=aFoamFade;');
     shader.fragmentShader = `varying float vFoamFade;\n${shader.fragmentShader}`.replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.a*=vFoamFade;');
   };foamMaterial.customProgramCacheKey = () => 'shore-impact-foam-fans-v1';
-  const foam = new InstancedMesh(foamGeometry, foamMaterial, sites.length * FOAM_PER_SITE);foam.name = 'rock-impact-foam-fans';foam.raycast = () => undefined;foam.frustumCulled = false;foam.renderOrder = 1;root.add(foam);
+  const foam = new InstancedMesh(foamGeometry, foamMaterial, sites.length * FOAM_PER_SITE);foam.name = 'rock-impact-foam-fans';foam.raycast = () => undefined;foam.frustumCulled = false;foam.renderOrder = 4;root.add(foam);
   const system = { root, sites, drops, geometry, material, mesh, foam, foamGeometry, foamMaterial, foamFades, phases: sites.map(site => shoreImpactPhase(site, 0)), elapsed: 0, transform: new Object3D(), position: new Vector3(), velocity: new Vector3(), up: new Vector3(0, 1, 0), disposeTimer: undefined as ReturnType<typeof setTimeout> | undefined,
     dispose() { geometry.dispose(); material.dispose(); mesh.dispose(); foamGeometry.dispose(); foamMaterial.dispose(); foam.dispose(); },
   };

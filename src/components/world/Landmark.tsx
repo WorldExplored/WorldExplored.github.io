@@ -16,7 +16,7 @@ export const LANDMARK_HIT_BOUNDS: Record<LandmarkId, { radius: number; floor: nu
   experience: { radius: FOOTPRINT_RADII.experience, floor: .8, top: 7.8 },
   research: { radius: FOOTPRINT_RADII.research, floor: .8, top: 8.5 },
   purdue: { radius: FOOTPRINT_RADII.purdue, floor: .8, top: 4.8 },
-  history: { radius: FOOTPRINT_RADII.history, floor: .8, top: 8.8 },
+  history: { radius: FOOTPRINT_RADII.history, floor: .8, top: 6.9 },
   about: { radius: FOOTPRINT_RADII.about, floor: .8, top: 5 },
   contact: { radius: FOOTPRINT_RADII.contact, floor: .8, top: 6.5 },
   arcade: { radius: FOOTPRINT_RADII.arcade, floor: .8, top: 5.6 },

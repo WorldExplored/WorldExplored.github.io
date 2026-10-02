@@ -1,4 +1,5 @@
 import { world, type LandmarkId } from '../../content/world';
+import { HISTORY_SCALE } from './historyDimensions';
 import { cityBuildings } from './city';
 
 interface PlantingObstacle {id:string;x:number;z:number;radius:number}
@@ -11,7 +12,7 @@ export const LANDMARK_PLANTING_SHAPES:Record<LandmarkId,readonly Shape[]>={
   experience:[box(0,0,8.45,6.12),box(0,3.075,2.3,.63)],
   research:[box(0,-.87,7.58,5.36),box(-1.33,1.8125,1.46,.495)],
   purdue:[box(0,-.895,6.88,4.99),box(0,1.73,1.45,.43)],
-  history:[box(0,0,11.2,7.7),box(0,3.82,3.58,.7),box(-1.96,4.42,.26,.26),box(1.96,4.42,.26,.26)],
+  history:[box(0,0,11.2,7.7),box(0,3.82,3.58,.7),box(-1.96,4.42,.26,.26),box(1.96,4.42,.26,.26)].map(shape => shape.kind === 'box' ? {...shape,x:shape.x*HISTORY_SCALE,z:shape.z*HISTORY_SCALE,width:shape.width*HISTORY_SCALE,depth:shape.depth*HISTORY_SCALE} : shape),
   about:[box(-.48,-2.09,6.16,1.78),box(-2.44,.12,2.34,2.86),box(-1.95,1.64,1.14,.4),box(1.195,-1.14,.88,.3),circle(0,0,.55),box(2.08,.2,.7,1.5)],
   contact:[circle(0,0,1.71),box(2.55,-.9,2.83,3.58),box(0,1.95,1.28,.61)],
   // The clipped arcade corner is small; a rectangle also protects its entry steps.

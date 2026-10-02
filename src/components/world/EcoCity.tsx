@@ -125,6 +125,7 @@ function makeStaticCity(route: CityTransitRoute, materials: ReturnType<typeof ma
       for(let i=0;i<colors.length;i+=3){colors[i]=tint.r;colors[i+1]=tint.g;colors[i+2]=tint.b;}
       plain.setAttribute('color',new Float32BufferAttribute(colors,3));
     }
+    plain.userData.ignoreRain = Boolean(geometry.userData.facadeGarden);
     parts[finish].push({ geometry: plain, building: owner });
   }
   const roomViews: CityRoomView[] = [];
@@ -169,9 +170,9 @@ function makeStaticCity(route: CityTransitRoute, materials: ReturnType<typeof ma
       const bucket = parts[finish].filter(part => part.building === building);
       if (!bucket.length) continue;
       const geometry = mergeGeometries(bucket.map(part => part.geometry))!;
-      const ranges: CityPartRange[] = []; let offset = 0;
-      for (const part of bucket) { const count = part.geometry.attributes.position.count; if (building) ranges.push({ building, start: offset, count }); offset += count; part.geometry.dispose(); }
-      geometry.userData.buildingRanges = ranges; geometry.userData.roomViews = roomViews;
+      const ranges: CityPartRange[] = [], rainExcluded: Array<{start:number;count:number}> = []; let offset = 0;
+      for (const part of bucket) { const count = part.geometry.attributes.position.count; if (building) ranges.push({ building, start: offset, count }); if(part.geometry.userData.ignoreRain)rainExcluded.push({start:offset,count}); offset += count; part.geometry.dispose(); }
+      geometry.userData.rainExcludedRanges = rainExcluded; geometry.userData.buildingRanges = ranges; geometry.userData.roomViews = roomViews;
       geometry.computeBoundingSphere();
       let group = groups.get(building);
       if (!group) { group = new Group(); group.name = building ? `city-building-${building}` : 'city-transit-structure'; group.userData.building = building; groups.set(building, group); }

@@ -5,7 +5,7 @@ import { visitorClear } from './marineVisitorState';
 
 export type ResidentKind='crawling-octopus'|'sea-snake'|'squid';
 export interface MarineResident {kind:ResidentKind;index:number;size:number;radius:number;position:Vector3;home:Vector3;target:Vector3;heading:number;pitch:number;time:number;moving:boolean;nextMove:number;jet:number;distance:number;strokePhase:number;swimSpeed:number;random:()=>number}
-export const RESIDENT_COUNTS={'crawling-octopus':4,'sea-snake':2,'squid':5} as const;
+export const RESIDENT_COUNTS={'crawling-octopus':4,'sea-snake':1,'squid':5} as const;
 const wrap=(a:number)=>Math.atan2(Math.sin(a),Math.cos(a));
 const centers=[[-8,-36],[-51,-33],[9,-43],[-60,-36],[-18,-45]];
 export function residentHeight(kind:ResidentKind,x:number,z:number,time:number,index:number){
@@ -78,23 +78,25 @@ export function stepMarineResidents(states:MarineResident[],delta:number,paused=
   }
 }
 
-export const WHALE_CYCLE=480;
+export const WHALE_CYCLE=600;
+export const WHALE_SCALE=2.35;
+export const WHALE_RADIUS=14;
 export const WHALE_BREACH_AT=222;
 export function whaleRoutePoint(elapsed:number,target=new Vector3()){
   const a=elapsed*.0039+.6;
-  return target.set(-163+Math.cos(a)*27,0,22+Math.sin(a)*23);
+  return target.set(-254+Math.cos(a)*38,0,-144+Math.sin(a)*32);
 }
-export function offshoreWhaleClear(x:number,z:number){return landDistance(x,z)<-38&&reefFloorHeight(x,z)<-20;}
+export function offshoreWhaleClear(x:number,z:number){return landDistance(x,z)<-95&&reefFloorHeight(x,z)<-20;}
 /** One rare offshore breach, with an independent slow surfacing/breathing rhythm. */
 export function sampleOffshoreWhale(elapsed:number){
   const time=Math.max(0,elapsed),cycle=Math.floor(time/WHALE_CYCLE),age=time%WHALE_CYCLE;
-  const breachAt=WHALE_BREACH_AT+(cycle%3)*31,breachAge=age-breachAt,breaching=breachAge>=0&&breachAge<=8;
+  const breachAt=WHALE_BREACH_AT+(cycle%3)*31,breachAge=age-breachAt,breaching=breachAge>=0&&breachAge<=10;
   const position=whaleRoutePoint(time),next=whaleRoutePoint(time+.1),heading=Math.atan2(-(next.z-position.z),next.x-position.x);
   const breathAge=(time+17)%73,breathing=breathAge>=0&&breathAge<14;
   const surface=breathing?Math.sin(Math.PI*breathAge/14)**2:0;
-  position.y=breaching?-4.4+7.7*Math.sin(Math.PI*breachAge/8):-4.8+4.15*surface;
-  const pitch=breaching?.30+.95*Math.sin(Math.PI*breachAge/8)-.60*(breachAge/8):.045*Math.sin(time*.28);
-  const splashAge=breachAge-6.8,spoutAge=breathAge-6.3;
-  const splashPoint=whaleRoutePoint(cycle*WHALE_CYCLE+breachAt+6.8);
+  position.y=breaching?-10.5+18.4*Math.sin(Math.PI*breachAge/10):-11+9.5*surface;
+  const pitch=breaching?.28+.92*Math.sin(Math.PI*breachAge/10)-.65*(breachAge/10):.045*Math.sin(time*.28);
+  const splashAge=breachAge-8.5,spoutAge=breathAge-6.3;
+  const splashPoint=whaleRoutePoint(cycle*WHALE_CYCLE+breachAt+8.5);
   return {position,heading,pitch,breaching,breachAge,splashAge,splashPoint,spoutAge,spouting:!breaching&&spoutAge>=0&&spoutAge<2.4,visible:breaching||breathing};
 }

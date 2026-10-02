@@ -28,7 +28,7 @@ export function createSeabedMeadowSites(habitat:ReefHabitatPlan=getReefHabitat()
   }
   const roots=new Map<string,SeabedMeadowSite[]>();
   for(let attempt=0;attempt<65000&&sites.length<6400;attempt++){
-    const cluster=Math.floor(random()*patches.length),patch=patches[cluster],scattered=attempt%7===0;
+    const cluster=Math.floor(random()*patches.length),patch=patches[cluster],scattered=attempt%9===0;
     const angle=random()*Math.PI*2,radial=Math.pow(random(),1.1),r=radial*patch.radius;
     const dx=Math.cos(angle)*r,dz=Math.sin(angle)*r*patch.aspect+Math.sin(dx*.7)*patch.radius*.08;
     const px=scattered?-102+random()*153:patch.x+Math.cos(patch.yaw)*dx-Math.sin(patch.yaw)*dz;

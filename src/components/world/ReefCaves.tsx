@@ -137,7 +137,7 @@ export function createReefCaves() {
   const eyeGeometry=new SphereGeometry(.012,6,4).translate(.128,.035,.05);
   geometries.push(bodyGeometry,headGeometry,eyeGeometry);
   const headMaterial=new MeshStandardMaterial({color:'#557e66',roughness:.63}),eyeMaterial=new MeshStandardMaterial({color:'#1a2724',roughness:.5});materials.push(headMaterial,eyeMaterial);
-  const eelBody=new InstancedMesh(bodyGeometry,eelMaterial,sites.length),eelHead=new InstancedMesh(headGeometry,headMaterial,sites.length),eelEye=new InstancedMesh(eyeGeometry,eyeMaterial,sites.length*2);
+  const eelBody=new InstancedMesh(bodyGeometry,eelMaterial,1),eelHead=new InstancedMesh(headGeometry,headMaterial,1),eelEye=new InstancedMesh(eyeGeometry,eyeMaterial,2);
   eelBody.name='cave-eel-tapered-bodies';eelHead.name='cave-eel-low-profile-heads';eelEye.name='cave-eel-small-eyes';
   const fishGeometry=new SphereGeometry(.11,7,5).scale(1.2,.72,.46);
   // Fish tails taper into a small fork, kept in the same instanced material batch.
@@ -152,8 +152,10 @@ export function createReefCaves() {
     time.value=elapsed;
     sites.forEach((site,index)=>{
       const pose=caveVisitorPose(site,0,elapsed);transform.position.set(pose.x,pose.y,pose.z);transform.rotation.set(0,pose.heading,pose.pitch,'YXZ');transform.scale.setScalar(site.scale);transform.updateMatrix();
-      eelBody.setMatrixAt(index,transform.matrix);eelHead.setMatrixAt(index,transform.matrix);eelEye.setMatrixAt(index*2,transform.matrix);
-      transform.scale.z*=-1;transform.updateMatrix();eelEye.setMatrixAt(index*2+1,transform.matrix);
+      if(index===0){
+        eelBody.setMatrixAt(0,transform.matrix);eelHead.setMatrixAt(0,transform.matrix);eelEye.setMatrixAt(0,transform.matrix);
+        transform.scale.z*=-1;transform.updateMatrix();eelEye.setMatrixAt(1,transform.matrix);
+      }
       for(let fish=1;fish<=3;fish++){
         const pose=caveVisitorPose(site,fish,elapsed);transform.position.set(pose.x,pose.y,pose.z);transform.rotation.set(0,pose.heading,pose.pitch,'YXZ');transform.scale.setScalar(site.scale*(.8+fish*.12));transform.updateMatrix();
         fishBody.setMatrixAt((fish-1)*sites.length+index,transform.matrix);fishTail.setMatrixAt((fish-1)*sites.length+index,transform.matrix);

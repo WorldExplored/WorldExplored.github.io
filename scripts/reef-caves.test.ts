@@ -14,7 +14,7 @@ test('coastal mouths reveal recessed interiors through the actual island and sea
   const sites=createReefCaveSites(),material=new MeshStandardMaterial({side:DoubleSide});
   const terrain=new Mesh(archipelagoGeometry(),material),floor=new Mesh(reefSeafloorGeometry(),material);
   terrain.updateMatrixWorld();floor.updateMatrixWorld();
-  assert.equal(sites.filter(site=>site.kind==='bank').length,4);
+  assert.equal(sites.filter(site=>site.kind==='bank').length,3);
   assert.equal(sites.filter(site=>site.kind==='overhang').length,0);
   try{
     for(const site of sites.filter(site=>site.kind==='bank')){
@@ -95,18 +95,18 @@ test('the animated eel body, including its turning tail, fits inside every coast
   }finally{eel.dispose();material.dispose();}
 });
 
-test('four embedded coastal banks retain nine draws, resources, and pause behavior',()=>{
+test('three embedded coastal banks retain eight draws, resources, and pause behavior',()=>{
   const caves=createReefCaves();
   try{
     const meshes:Mesh[]=[];caves.root.traverse(object=>{if(object instanceof Mesh)meshes.push(object);});
-    assert.equal(meshes.length,9);
+    assert.equal(meshes.length,8);
     const geometry=meshes.map(mesh=>mesh.geometry);let triangles=0;
     for(const mesh of meshes)triangles+=(mesh.geometry.index?.count??mesh.geometry.attributes.position.count)/3*(mesh instanceof InstancedMesh?mesh.count:1);
     assert.ok(triangles<14000,`${triangles} cave triangles`);
     const moving=meshes.filter(mesh=>mesh instanceof InstancedMesh) as InstancedMesh[];
     caves.update(32);const matrices=moving.map(mesh=>mesh.instanceMatrix.array.slice());
     caves.update(70,true);moving.forEach((mesh,index)=>assert.deepEqual(mesh.instanceMatrix.array,matrices[index]));
-    caves.setQuality('low');assert.equal((caves.root.getObjectByName('cave-minnow-bodies') as InstancedMesh).count,4);
+    caves.setQuality('low');assert.equal((caves.root.getObjectByName('cave-minnow-bodies') as InstancedMesh).count,3);
     assert.deepEqual(meshes.map(mesh=>mesh.geometry),geometry);
     caves.update(71);assert.notDeepEqual(moving[0].instanceMatrix.array,matrices[0]);
   }finally{caves.dispose();}
@@ -125,5 +125,11 @@ test('expanded cave entrances cut a local floor into the coast without moving th
     assert.equal(coastalCaveFloor(outside.x,outside.z,-1),-1,'surrounding coast remains unchanged');
     assert.ok(COASTAL_CAVE_LAYOUT.some(layout=>Math.hypot(site.x-layout.x,site.z-layout.z)<.001));
   }
-  assert.equal(widths.size,4,'each mouth has a distinct span and silhouette');
+  assert.equal(widths.size,3,'each mouth has a distinct span and silhouette');
+});
+
+
+test('the front garden beach has no cave bank or excavated floor',()=>{
+  assert.ok(COASTAL_CAVE_LAYOUT.every(site=>site.z<0));
+  assert.equal(coastalCaveFloor(-3.035,37.116,-1),-1);
 });

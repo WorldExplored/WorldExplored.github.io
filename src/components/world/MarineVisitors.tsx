@@ -7,6 +7,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { EnvironmentProps } from './Water';
 import { createMarineVisitor, sampleTurtleCycle, stepMarineVisitor, turtleHatchlingPose, type MarineVisitorState } from './marineVisitorState';
 import { terrainMeshHeight } from './terrain';
+import { octopusMantleGeometry } from './marineModels';
 import { createMarineResidents } from './MarineResidents';
 import { turtleCarapaceGeometry, turtlePlastronGeometry, turtleHeadGeometry, turtleFlipperGeometry, turtleScuteGeometry, turtleNestSandGeometry, TURTLE_VARIATIONS } from './turtleAnatomy';
 
@@ -21,12 +22,13 @@ export function createMarineVisitors(){
   const paint=(color:string,roughness=.78)=>{const material=new MeshStandardMaterial({color,roughness,side:DoubleSide});materials.add(material);return material;};
   const stoneMottles=[paint('#a2a98a'),paint('#525e50')],stoneEye=paint('#191e20');
   const octopusSkin=[paint('#c56e64',.58),paint('#8265a5',.57)],octopusUnderside=paint('#e8ad9e'),octopusEye=paint('#162a31');
+  octopusSkin.forEach(skin=>{skin.vertexColors=true;});
   const turtlePlates=paint('#6b8656'),turtleSkin=paint('#668a64'),egg=paint('#f3ead8'),nestSand=paint('#b5a17e'),nestWrack=paint('#72745a'),nestWood=paint('#988b6d');
   const shadowMaterial=new MeshStandardMaterial({color:'#263e30',transparent:true,opacity:.24,depthWrite:false,roughness:1,side:DoubleSide});materials.add(shadowMaterial);
   const bodyStone=shape(oval(0,.105,0,.43,.11,.30)),stoneFin=shape(new SphereGeometry(1,7,5).scale(.042,.084,.018));
   const stonePectoral=shape(oval(0,0,0,.22,.027,.13));
   const stoneSpot=shape(new SphereGeometry(1,6,4).scale(.032,.009,.026)),eye=shape(new SphereGeometry(1,7,5).scale(.018,.018,.014));
-  const mantle=shape(oval(.12,.24,0,.44,.145,.16)),head=shape(oval(-.24,.185,0,.17,.11,.125)),siphon=shape(new CylinderGeometry(.026,.038,.11,9).rotateX(Math.PI/2));
+  const mantle=shape(octopusMantleGeometry()),head=shape(oval(-.24,.185,0,.17,.11,.125)),siphon=shape(new CylinderGeometry(.026,.038,.11,9).rotateX(Math.PI/2));
   const armPath=new CatmullRomCurve3([new Vector3(0,0,0),new Vector3(.12,-.06,.025),new Vector3(.27,-.075,.055),new Vector3(.42,-.07,.10),new Vector3(.47,-.025,.17),new Vector3(.42,.03,.21)]);
   const octArm=shape(new TubeGeometry(armPath,18,.044,6,false));
   const armPositions=octArm.getAttribute('position'),armUV=octArm.getAttribute('uv');
@@ -45,7 +47,7 @@ export function createMarineVisitors(){
     return spot%2===tint?stoneSpot.clone().translate(Math.cos(a)*r,.192-Math.abs(Math.sin(a))*r*.13,Math.sin(a)*r*.62):null;
   }).filter((part):part is BufferGeometry=>part!==null)));
   const shellScutes=shape(turtleScuteGeometry());
-  const suckerCluster=combine(Array.from({length:3},(_,n)=>{const p=armPath.getPointAt(.39+n*.21);return suckers.clone().translate(p.x,p.y-.038,p.z);}));
+  const suckerCluster=combine(Array.from({length:6},(_,n)=>[-1,1].map(side=>{const t=.20+n*.12,p=armPath.getPointAt(t);return suckers.clone().scale(.62*(1-t*.4),.7,.62*(1-t*.4)).translate(p.x,p.y-.035*(1-t*.45),p.z+side*.017*(1-t));})).flat());
   const turtleTail=shape(new CylinderGeometry(.002,.067,.21,8).rotateZ(Math.PI/2).translate(-.68,.15,0));
   const turtleMarkings=combine([-1,1].map(side=>oval(.795,.215,side*.035,.012,.004,.006)));
   const nestDebris=combine([[.61,.03,-.24,-.6],[-.48,.016,-.38,.7],[.73,.025,.17,1.1]].map(([x,y,z,a])=>new CylinderGeometry(.005,.010,.22,5).rotateZ(Math.PI/2).rotateY(a).translate(x,y,z)));

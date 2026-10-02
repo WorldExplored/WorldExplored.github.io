@@ -3,11 +3,12 @@
 import { measureConstruction } from './renderDiagnostics';
 
 /* eslint-disable react-hooks/immutability */
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { BufferGeometry, CatmullRomCurve3, CircleGeometry, Color, CylinderGeometry, Float32BufferAttribute, Group, InstancedMesh, MeshStandardMaterial, Object3D, SphereGeometry, Vector3 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { EnvironmentProps } from './Water';
+import { FLYPAST_COUNT, sampleBirdFlypast } from './birdFlypast';
 import { crabVariation } from './crabVariation';
 import { terrainMeshHeight } from './terrain';
 import { createCrabStates, writeCrabPosition, createGullStates, stepCrab, stepGull, WILDLIFE_COUNTS, type GullState, type CrabState } from './wildlifeState';
@@ -111,6 +112,10 @@ export function createWildlife() {
     bone(new Vector3(side * .075, -.07, .07), new Vector3(side * .075, -.24, .10), .018),
     ...[-1, 0, 1].map(toe => bone(new Vector3(side * .075, -.24, .10), new Vector3(side * .075 + toe * .038, -.25, -.015), .012)),
   ])), 3, 18);
+  const flypastBody=instances('migrating-flock-bodies',merge([gullBodyGeometry(),ellipsoid(0,.15,-.34,.135,.14,.16),ellipsoid(0,.09,-.21,.125,.14,.20),new CylinderGeometry(.004,.034,.20,7).rotateX(-Math.PI/2).translate(0,.16,-.53)]),0,FLYPAST_COUNT);
+  const flypastRight=instances('migrating-flock-right-wings',merge([wing.geometry.clone(),primaries.geometry.clone().translate(.73,0,.06)]),1,FLYPAST_COUNT);
+  const flypastLeft=instances('migrating-flock-left-wings',mirrored(flypastRight.geometry),1,FLYPAST_COUNT);
+  for(const mesh of [flypastBody,flypastRight,flypastLeft])mesh.visible=false;
   const gulls=createGullStates();
   const nests=gulls.filter(bird=>bird.perch.nest).filter((bird,index,all)=>all.findIndex(other=>other.perch.id===bird.perch.id)===index);
   const nestGeometry=merge(Array.from({length:62},(_,index)=>{
@@ -161,7 +166,7 @@ export function createWildlife() {
     normal.set(-(terrainMeshHeight(x+.1,z)-terrainMeshHeight(x-.1,z))/.2,1,-(terrainMeshHeight(x,z+.1)-terrainMeshHeight(x,z-.1))/.2).normalize();
     burrowTransform.position.set(x,terrainMeshHeight(x,z)+.006,z);burrowTransform.quaternion.setFromUnitVectors(up,normal);burrowTransform.updateMatrix();crabBurrows.setMatrixAt(index*2+side,burrowTransform.matrix);
   }});
-  return { leftWing, leftPrimaries, leftCrabLegs, leftCrabClaws, group, meshes, materials, gullBody, gullHead, gullEyes, gullBill, wing, primaries, gullLegs, crabBody, crabEyes, crabLegs, crabClaws, gulls, gullPrey, preyEyes, crabs, crabBurrows, root: new Object3D(), hinge: new Object3D(), tip: new Object3D(), local: new Object3D(), timer: undefined as ReturnType<typeof setTimeout> | undefined };
+  return { flypastBody, flypastRight, flypastLeft, leftWing, leftPrimaries, leftCrabLegs, leftCrabClaws, group, meshes, materials, gullBody, gullHead, gullEyes, gullBill, wing, primaries, gullLegs, crabBody, crabEyes, crabLegs, crabClaws, gulls, gullPrey, preyEyes, crabs, crabBurrows, root: new Object3D(), hinge: new Object3D(), tip: new Object3D(), local: new Object3D(), timer: undefined as ReturnType<typeof setTimeout> | undefined };
 }
 
 export function writeGullPose(life: ReturnType<typeof createWildlife>, bird: GullState, index: number) {
@@ -172,7 +177,9 @@ export function writeGullPose(life: ReturnType<typeof createWildlife>, bird: Gul
   const wingAngle = (glideAngle * (1 - bird.flap) + pulse * .52 * bird.flap) * (1 - bird.fold) - .10 * bird.fold;
   const bank = bird.bank;
   root.position.copy(bird.position); root.rotation.set(bird.pitch+(perched?Math.sin(bird.time*.7+bird.phase)*.012:0), bird.heading, bank);
-  root.scale.setScalar(.91 + index % 4 * .075); root.updateMatrix();
+  const size=.60 + index % 4 * .038;
+  root.position.y-=.255*(1-size)*bird.legs;
+  root.scale.setScalar(size); root.updateMatrix();
   life.gullBody.setMatrixAt(index, root.matrix);
   local.position.set(0,.09,-.25); local.rotation.set(bird.mode==='preening'?.28+Math.sin(bird.time*2.1)*.09:perched?Math.sin(bird.time*.58+bird.phase)*.06:0, bird.mode==='preening'?.82*Math.sin(bird.time*.6+bird.phase):perched?Math.sin(bird.time*.37+bird.phase)*.22:0, 0); local.scale.set(1,1,1); local.updateMatrix(); local.matrix.premultiply(root.matrix);
   for (const mesh of [life.gullHead, life.gullEyes, life.gullBill]) mesh.setMatrixAt(index, local.matrix);
@@ -200,8 +207,30 @@ export function writeCrabPose(root:Object3D,crab:CrabState,index:number){
   return traits;
 }
 
+export function writeFlypastPose(life:ReturnType<typeof createWildlife>,elapsed:number,hour:number,quality:EnvironmentProps['quality']){
+  const flock=[life.flypastBody,life.flypastRight,life.flypastLeft],{root,local}=life;
+  const count=quality==='low'?12:FLYPAST_COUNT;
+  for(let index=0;index<count;index++){
+    const pose=sampleBirdFlypast(elapsed,hour,index,root.position);
+    if(index===0)for(const mesh of flock){mesh.visible=pose.active;mesh.count=count;}
+    if(!pose.active)break;
+    root.rotation.set(0,pose.heading,Math.sin(pose.age*.09+index)*.045);root.scale.setScalar(.58+(index%4)*.025);root.updateMatrix();life.flypastBody.setMatrixAt(index,root.matrix);
+    for(const side of [-1,1]){
+      local.position.set(side*.105,.035,.01);local.rotation.set(0,0,side*(.07+Math.sin(pose.phase)*.39));local.scale.set(1,1,1);local.updateMatrix();local.matrix.premultiply(root.matrix);
+      (side<0?life.flypastLeft:life.flypastRight).setMatrixAt(index,local.matrix);
+    }
+  }
+  flock.forEach(mesh=>{mesh.instanceMatrix.needsUpdate=true;});
+}
+
 export function Wildlife({ runtime, paused, quality }: EnvironmentProps) {
   const life = useMemo(() => measureConstruction('wildlife', () => createWildlife()), []);
+  const flypastOffset=useRef(0);
+  useEffect(()=>{
+    if(typeof window==='undefined'||!['localhost','127.0.0.1'].includes(window.location.hostname))return;
+    const time=new URLSearchParams(window.location.search).get('qaFlypastTime');
+    if(time!==null&&Number.isFinite(Number(time))){flypastOffset.current=Math.max(0,Number(time));writeFlypastPose(life,flypastOffset.current,runtime.current.weather.hour,'high');}
+  },[life,runtime]);
   useEffect(() => { clearTimeout(life.timer); return () => { life.timer = setTimeout(() => { life.meshes.forEach(mesh => { mesh.geometry.dispose(); mesh.dispose(); }); life.materials.forEach(material => material.dispose()); }, 0); }; }, [life]);
   useFrame(({ camera }, delta) => {
     const counts = WILDLIFE_COUNTS[quality]; const pointer = runtime.current.pointerActive ? runtime.current.pointerWorld : null;
@@ -227,6 +256,7 @@ export function Wildlife({ runtime, paused, quality }: EnvironmentProps) {
         local.position.set(side * .10, 0, -.065); local.rotation.set(0, side * -.25, side * crab.scuttle * -.20); const claw=side<0?traits.leftClaw:traits.rightClaw;local.scale.set(claw,claw,claw); local.updateMatrix(); local.matrix.premultiply(root.matrix); (side < 0 ? life.leftCrabClaws : life.crabClaws).setMatrixAt(index, local.matrix);
       }
     });
+    if(!paused)writeFlypastPose(life,runtime.current.activeElapsed+flypastOffset.current,runtime.current.weather.hour,quality);
     life.meshes.forEach(mesh => { mesh.instanceMatrix.needsUpdate = true; });
   });
   return <primitive object={life.group} dispose={null} />;

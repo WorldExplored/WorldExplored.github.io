@@ -1,3 +1,4 @@
+import { historyHeight } from '../src/components/world/historyDimensions';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Mesh, Vector3, Matrix4, InstancedMesh } from 'three';
@@ -20,7 +21,7 @@ test('ferry hull displaces water and fittings remain on one rigid vessel hierarc
     hull.geometry.computeBoundingBox();const bounds=hull.geometry.boundingBox!;
     assert.ok(bounds.min.y+ferry.root.position.y<-.08,'keel is immersed');
     assert.ok(bounds.max.y+ferry.root.position.y>.4,'hull meets deck underside');
-    const expected=['ferry-supported-curved-canopy','ferry-cabin-glazing','ferry-seats-and-helm','ferry-mounted-fenders','ferry-port-navigation-light','ferry-starboard-navigation-light','ferry-electric-drive-and-dock-cleats'];
+    const expected=['ferry-supported-curved-canopy','ferry-cabin-glazing','ferry-seats-and-helm','ferry-mounted-fenders','ferry-port-navigation-light','ferry-starboard-navigation-light','ferry-enclosed-waterjets-and-dock-cleats'];
     for(const name of expected){const mesh=ferry.root.getObjectByName(name);assert.ok(mesh);assert.equal(mesh.parent,ferry.root);}
     ferry.root.traverse(node=>{if(node instanceof Mesh){assert.notEqual(node.geometry.type,'SphereGeometry');for(const value of node.geometry.getAttribute('position').array)assert.ok(Number.isFinite(value));}});
     const origin=ferry.root.position.clone();for(let t=0;t<FERRY_DWELL;t+=.1){const pose=ferry.update(t);assert.ok(pose.position.distanceTo(origin)<1e-8);assert.equal(pose.speed,0);}
@@ -83,7 +84,7 @@ test('History detailing provides actual artifacts, drainage and grounded facade 
       triangles += (mesh.index?.count ?? mesh.attributes.position.count) / 3;
     }
     assert.ok(Math.abs(geometry.plantingBeds.boundingBox!.min.y - 1.01) < 1e-5);
-    assert.ok(geometry.exhibits.boundingBox!.min.y > 4.85, 'artifacts stand on gallery case plinths');
+    assert.ok(geometry.exhibits.boundingBox!.min.y > historyHeight(4.85), 'artifacts stand on gallery case plinths');
     assert.ok(triangles < 30000, `History added ${triangles} triangles`);
   } finally { Object.values(geometry).forEach(value => value.dispose()); }
 });

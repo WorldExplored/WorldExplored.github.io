@@ -1,3 +1,4 @@
+import { HISTORY_SCALE } from '../src/components/world/historyDimensions';
 import { BRIDGES, bridgeHeightAt } from '../src/components/world/bridgePlan';
 import { createBridges } from '../src/components/world/Bridges';
 import test from 'node:test';
@@ -222,13 +223,13 @@ test('history approaches stay outside its complete rotated foundation and meet i
       const p=geometry.attributes.position;
       for(let i=0;i<p.count;i++){
         const dx=p.getX(i)-museum.position[0],dz=p.getZ(i)-museum.position[2],x=dx*c-dz*s,z=dx*s+dz*c;
-        assert.ok(Math.abs(x)>=5.6||Math.abs(z)>=3.85,`${path.id} cuts beneath museum at ${x},${z}`);
+        assert.ok(Math.abs(x)>=5.6*HISTORY_SCALE||Math.abs(z)>=3.85*HISTORY_SCALE,`${path.id} cuts beneath museum at ${x},${z}`);
       }
     }finally{geometry.dispose();}
   }
   const entry=createCirculationGraph().nodes.find(n=>n.id==='history')!;
   const dx=entry.x-museum.position[0],dz=entry.z-museum.position[2];
-  assert.ok(Math.abs(dx*c-dz*s)<1e-6&&Math.abs(dx*s+dz*c-4.17)<1e-6,'Approach meets actual front edge of threshold');
+  assert.ok(Math.abs(dx*c-dz*s)<1e-6&&Math.abs(dx*s+dz*c-4.17*HISTORY_SCALE)<1e-6,'Approach meets actual front edge of threshold');
 });
 
 test('rendered paving stays continuous on narrow walks and never bleeds through foundations',()=>{
@@ -258,7 +259,7 @@ test('rendered paving stays continuous on narrow walks and never bleeds through 
       assert.ok(renderedDistance(point.x,point.z)<-.035,`${path.id}: broken rendered paving at ${point.x},${point.z}`);
     }
     const museum=world.landmarks.find(item=>item.id==='history')!,angle=museum.rotationY??0;
-    for(let z=-3.6;z<=3.6;z+=.3)for(let x=-5.4;x<=5.4;x+=.3){
+    for(let z=-3.6*HISTORY_SCALE;z<=3.6*HISTORY_SCALE;z+=.3)for(let x=-5.4*HISTORY_SCALE;x<=5.4*HISTORY_SCALE;x+=.3){
       const wx=museum.position[0]+x*Math.cos(angle)+z*Math.sin(angle),wz=museum.position[2]-x*Math.sin(angle)+z*Math.cos(angle);
       assert.ok(renderedDistance(wx,wz)>.02,'Paving spills into the museum interior');
     }

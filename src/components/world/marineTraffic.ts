@@ -52,8 +52,8 @@ export interface VesselState extends MarineOccupant {
 export function createVesselState(index: number): VesselState {
   const route = createVesselRoute(index);
   const state: VesselState = {
-    index, route, position: new Vector3(), radius: index === 2 ? 8.1 : 1.8,
-    hullHalfSpan:index===2?6.2:0,hullRadius:index===2?2.5:1.8,
+    index, route, position: new Vector3(), radius: index === 2 ? 8.1 : index===1 ? 2.65 : 1.8,
+    hullHalfSpan:index===2?6.2:0,hullRadius:index===2?2.5:index===1?2.65:1.8,
     distance: index === 2 ? route.berth - 110 : index === 1 ? route.length * .4 : route.length * .13,
     dwell: 0, departed: false, heading: 0, opacity: 1, speed: 0, checkIn: 0, yielding: false, crossing: false,
   };

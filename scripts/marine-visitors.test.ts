@@ -212,7 +212,7 @@ test('turtle shells are outward-facing, sealed to the plastron, with attached pa
 test('new marine residents forage with clear swept bodies, rests and distinct squid bursts',async()=>{
   const {createMarineResidentsState,stepMarineResidents,residentPositionClear}=await import('../src/components/world/marineResidentState');
   const states=createMarineResidentsState(),rested=new Set<string>(),moved=new Set<string>();let squidFast=0,squidSlow=Infinity;
-  assert.deepEqual(['crawling-octopus','sea-snake','squid'].map(kind=>states.filter(s=>s.kind===kind).length),[4,2,5]);
+  assert.deepEqual(['crawling-octopus','sea-snake','squid'].map(kind=>states.filter(s=>s.kind===kind).length),[4,1,5]);
   for(let frame=0;frame<3600;frame++){
     const before=states.map(s=>s.position.clone());stepMarineResidents(states,.05);
     states.forEach((state,index)=>{
@@ -222,18 +222,18 @@ test('new marine residents forage with clear swept bodies, rests and distinct sq
       if(frame%20===0){assert.ok(residentPositionClear(state.position.x,state.position.z,state.radius));assert.ok(state.position.y< -1.2,'residents stay below boat draft');}
     });
   }
-  assert.equal(moved.size,11);assert.equal(rested.size,11);assert.ok(squidFast>squidSlow*4);
+  assert.equal(moved.size,10);assert.equal(rested.size,10);assert.ok(squidFast>squidSlow*4);
   const snapshot=states.map(s=>[...s.position.toArray(),s.time]);stepMarineResidents(states,10,true);assert.deepEqual(states.map(s=>[...s.position.toArray(),s.time]),snapshot);
 });
 
 test('rare whale stays beyond islands and vessel routes, breaches and breathes through reusable pools',async()=>{
   const {createMarineResidents}=await import('../src/components/world/MarineResidents');
-  const {sampleOffshoreWhale,offshoreWhaleClear}=await import('../src/components/world/marineResidentState');
+  const {sampleOffshoreWhale,offshoreWhaleClear,WHALE_RADIUS}=await import('../src/components/world/marineResidentState');
   const {createVesselRoute,surfaceAnimals,vesselOccupants}=await import('../src/components/world/marineTraffic');
   const routes=[0,1,2].map(createVesselRoute),point=new Vector3();let breaches=0;
   for(let time=0;time<1800;time+=3){
     const pose=sampleOffshoreWhale(time);if(pose.breaching)breaches++;
-    for(let angle=0;angle<Math.PI*2;angle+=Math.PI/4)assert.ok(offshoreWhaleClear(pose.position.x+Math.cos(angle)*6,pose.position.z+Math.sin(angle)*6),'the complete animal stays in deep dark offshore water');
+    for(let angle=0;angle<Math.PI*2;angle+=Math.PI/4)assert.ok(offshoreWhaleClear(pose.position.x+Math.cos(angle)*WHALE_RADIUS,pose.position.z+Math.sin(angle)*WHALE_RADIUS),'the complete animal stays in deep dark offshore water');
     for(const route of routes)for(let step=0;step<=100;step++){route.curve.getPointAt(step/100,point);assert.ok(Math.hypot(point.x-pose.position.x,point.z-pose.position.z)>25,'whale never crosses the boat routes');}
   }
   assert.ok(breaches>5&&breaches<16,'breaches occupy a small fraction of the offshore cycle');
@@ -241,14 +241,15 @@ test('rare whale stays beyond islands and vessel routes, breaches and breathes t
   try{
     assert.equal(surfaceAnimals.length,count+1);
     life.update(0,false,226);assert.ok(life.whale.visible&&life.whale.position.y>3);
-    life.update(0,false,229.3);assert.ok(life.spray.count>60&&life.foam.visible,'large breach produces a pooled particle splash');
+    life.update(0,false,231.3);assert.ok(life.spray.count>60&&life.foam.visible,'large breach produces a pooled particle splash');
     life.update(0,false,62.8);assert.ok(life.spray.count>15&&!life.foam.visible,'blowhole produces its own mist plume');
+    assert.ok(life.spray.renderOrder>3&&life.foam.renderOrder>3,'surface particles remain visible above the transparent ocean');
     const before=life.whale.position.clone();life.update(15,true,400);assert.deepEqual(life.whale.position,before);
     vesselOccupants.push({position:life.whale.position.clone(),radius:3});life.update(0,false,62.8);assert.equal(life.whale.visible,false,'unexpected vessels suppress nearby surfacing');vesselOccupants.pop();
     for(const tier of ['low','medium','high']as const)life.setQuality(tier);
     assert.equal(life.spray.geometry,geometry);assert.equal(life.spray.instanceMatrix,matrix);
     const meshes:Mesh[]=[];life.root.traverse(object=>{if(object instanceof Mesh)meshes.push(object);});
-    assert.equal(meshes.length,10,'eleven residents and whale use ten shared draws');
+    assert.equal(meshes.length,10,'ten residents and whale use ten shared draws');
   }finally{life.dispose();}
   assert.equal(surfaceAnimals.length,count);
 });
@@ -287,12 +288,12 @@ test('turtles vary local shell and paddle proportions while keeping their shared
   }finally{life.dispose();}
 });
 
-test('two sea snakes swim above the floor in bursts, coast, then pause with restrained axial motion',async()=>{
+test('one scarce sea snake swims above the floor in bursts, coast, then pause with restrained axial motion',async()=>{
   const {createMarineResidents}=await import('../src/components/world/MarineResidents');
   const life=createMarineResidents(),snakes=life.states.filter(state=>state.kind==='sea-snake');
   const records=snakes.map(()=>({burst:0,coast:0,rest:0,fast:0,slow:Infinity}));
   try{
-    assert.equal(snakes.length,2);
+    assert.equal(snakes.length,1);
     for(let frame=0;frame<6000;frame++){
       const before=snakes.map(s=>s.position.clone());life.update(.05);
       snakes.forEach((state,i)=>{
@@ -304,7 +305,7 @@ test('two sea snakes swim above the floor in bursts, coast, then pause with rest
     }
     for(const r of records){assert.ok(r.burst>40&&r.coast>40&&r.rest>100);assert.ok(r.fast>r.slow*3);}
     const bodies=life.root.getObjectByName('banded-sea-snakes') as InstancedMesh;
-    assert.equal(bodies.geometry.getAttribute('aStroke').count,2);assert.equal(bodies.geometry.getAttribute('aPropulsion').count,2);
+    assert.equal(bodies.geometry.getAttribute('aStroke').count,1);assert.equal(bodies.geometry.getAttribute('aPropulsion').count,1);
     const geometry=bodies.geometry;for(const tier of ['low','medium','high']as const)life.setQuality(tier);assert.equal(bodies.geometry,geometry);
   }finally{life.dispose();}
 });

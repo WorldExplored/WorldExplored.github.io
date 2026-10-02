@@ -31,7 +31,7 @@ test('city exclusion footprints remain on the ungraded island bearing plateau', 
   assert.ok(Object.isFrozen(cityBuildings));
   for (const building of cityBuildings) {
     assert.ok(Object.isFrozen(building));
-    assert.ok(building.height >= 3 && building.height <= 12);
+    assert.ok(building.height >= 3 && building.height <= 19);
     assert.ok(building.x >= -27 && building.x <= 15 && building.z >= -88 && building.z <= -68);
     // Exclusion circles include graded approaches; actual foundation and floor
     // faces are checked against rendered ground in circulation.test.ts.

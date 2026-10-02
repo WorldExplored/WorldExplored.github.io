@@ -24,7 +24,9 @@ function worldPoint(site:ReefCaveSite,phase:number) {
   return {x:site.x+(p.x*c+p.z*s)*site.scale,z:site.z+(-p.x*s+p.z*c)*site.scale};
 }
 export function caveVisitorPose(site:ReefCaveSite,index:number,elapsed:number):CaveVisitorPose {
-  const period=site.period+(index?19+index*7:0),phase=((elapsed+site.offset+index*11)%period)/period;
+  const period=index?site.period+19+index*7:420+site.form*37;
+  const cycle=((elapsed+site.offset+index*11)%period)/period;
+  const phase=index?cycle:cycle<.26?cycle/.26*.88:.88+(cycle-.26)/.74*.12;
   const p=worldPoint(site,phase),next=worldPoint(site,Math.min(.8799,phase+.025)),previous=worldPoint(site,Math.max(0,phase-.025));
   // Turn within the recess before leaving again, instead of snapping 180 degrees at rest.
   const heading=phase>=.88?site.yaw+Math.PI/2+Math.PI*ease((phase-.88)/.12):Math.atan2(-(next.z-previous.z),next.x-previous.x);

@@ -2,7 +2,6 @@
 export const COASTAL_CAVE_LAYOUT = [
   {x:-65.8,z:-35.1,yaw:1.0131930074,scale:1,form:0,floor:-2.55},
   {x:-48,z:-62.4,yaw:-.7666186095,scale:1,form:1,floor:-2.55},
-  {x:-3.035,z:37.116,yaw:.0548991976,scale:1,form:3,floor:-2.55},
   {x:-39.288,z:-9.328,yaw:-1.5681753265,scale:.94,form:4,floor:-2.55},
 ] as const;
 

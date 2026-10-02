@@ -15,7 +15,9 @@ export function coastExposure(x: number, z: number, distance = landDistance(x, z
   const near = 1 - smooth(-5, -.5, landDistance(x + normal.x * 6, z + normal.z * 6));
   const far = 1 - smooth(-8, -1.5, landDistance(x + normal.x * 13, z + normal.z * 13));
   const approach = 1 - smooth(-7, -1, landDistance(x - .72 * 10, z + .69 * 10));
-  return .12 + .88 * Math.pow(facing, .8) * near * far * (.35 + approach * .65);
+  const swell = .12 + .88 * Math.pow(facing, .8) * near * far * (.35 + approach * .65);
+  // Ocean swell refracts around the small offshore cliff; channels remain sheltered.
+  return islandAt(x, z).island.id === 'beacon' ? Math.max(swell, .38 * near * far) : swell;
 }
 
 function waveHash(x: number, z: number) { const value = Math.sin(x * 127.1 + z * 311.7) * 43758.5453; return value - Math.floor(value); }

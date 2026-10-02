@@ -6,6 +6,7 @@ import { Group, Object3D, Ray, Vector3, type Mesh } from 'three';
 import { Landmark, LANDMARK_HOVER_GRACE_MS } from '../src/components/world/Landmark';
 import { cloudInstanceCount, cloudInstanceRanges, cloudOrigin, cloudVisibility, cloudDeformation, cloudDensity, cloudBounds, createCloudClusters, updateCloudResponses } from '../src/components/world/clouds';
 import { cloudSurfaceGeometry, makeClouds, writeCloudMatrices } from '../src/components/world/CloudSurface';
+import { windAt } from '../src/components/world/weatherState';
 import { createSceneRuntime, world, type LandmarkId, type SceneRuntime } from '../src/content/world';
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
@@ -20,7 +21,7 @@ test('the first ten clouds include five distinct graphs, profiles, depths and po
   assert.equal(new Set(first.map(cluster => cluster.speed)).size, 3, 'Three coherent wind layers.');
   assert.equal(new Set(first.map(cluster => cluster.density)).size, 10);
   assert.ok(Math.max(...first.map(cluster => cluster.center[2])) - Math.min(...first.map(cluster => cluster.center[2])) > 120);
-  for (const cluster of first) assert.ok(cluster.center[1] >= 20 && cluster.center[1] <= 70);
+  for (const cluster of first) assert.ok(cluster.center[1] >= 35 && cluster.center[1] <= 88);
   const profiles = first.slice(0, 5).map(cluster => {
     const width = Math.max(...cluster.puffs.map(puff => puff.offset[0] + puff.scale[0])) - Math.min(...cluster.puffs.map(puff => puff.offset[0] - puff.scale[0]));
     const height = Math.max(...cluster.puffs.map(puff => puff.offset[1] + puff.scale[1])) - Math.min(...cluster.puffs.map(puff => puff.offset[1] - puff.scale[1]));
@@ -76,6 +77,33 @@ test('implicit cloud surfaces are closed, connected volumes with rounded depth',
   geometry.dispose();
 });
 
+test('every high cloud has a consistently outward closed underside instead of alternating missing faces', () => {
+  const clouds = createCloudClusters(), geometry = cloudSurfaceGeometry(clouds);
+  try {
+    const indices = geometry.getIndex()!, positions = geometry.getAttribute('position');
+    const ranges = geometry.userData.cloudRanges as { start: number; count: number }[];
+    const a = new Vector3(), b = new Vector3(), c = new Vector3();
+    for (const [cloud, range] of ranges.entries()) {
+      if (clouds[cloud].archetype !== 'atmospheric') continue;
+      const edges = new Map<string, { count: number; orientation: number }>();
+      let volume = 0;
+      for (let face = range.start; face < range.start + range.count; face += 3) {
+        const triangle = [indices.getX(face), indices.getX(face + 1), indices.getX(face + 2)];
+        a.fromBufferAttribute(positions, triangle[0]); b.fromBufferAttribute(positions, triangle[1]); c.fromBufferAttribute(positions, triangle[2]);
+        volume += a.dot(b.cross(c)) / 6;
+        for (let side = 0; side < 3; side++) {
+          const first = triangle[side], second = triangle[(side + 1) % 3], key = `${Math.min(first, second)}:${Math.max(first, second)}`;
+          const edge = edges.get(key) ?? { count: 0, orientation: 0 };
+          edge.count++; edge.orientation += first < second ? 1 : -1; edges.set(key, edge);
+        }
+      }
+      assert.ok(volume > 100, `Cloud ${cloud} encloses a genuinely three-dimensional body.`);
+      assert.ok([...edges.values()].every(edge => edge.count === 2 && edge.orientation === 0), `Cloud ${cloud} has no reversed or missing underside triangles.`);
+    }
+    assert.ok(indices.count / 3 <= 136816, 'Resolving the shallow clouds retains the existing geometry budget.');
+  } finally { geometry.dispose(); }
+});
+
 test('density surface owns rays while only the contacted region deforms', () => {
   const cloud = createCloudClusters(1)[0];
   cloud.center = [0, 20, 0];
@@ -109,7 +137,7 @@ test('cloud field fills all compass directions and has coherent diagonal wind wi
     for (let elapsed = 0; elapsed < 100000; elapsed += 131) {
       cloudOrigin(cloud, elapsed, first); cloudOrigin(cloud, elapsed + .1, next);
       if (first.distanceTo(next) > .1) assert.ok(cloudVisibility(cloud, elapsed) < .001 && cloudVisibility(cloud, elapsed + .1) < .001, 'Any recycling happens only beyond the fully faded sky.');
-      else assert.ok(next.x > first.x, 'Visible clouds always advance with the wind.');
+      else assert.ok(next.clone().sub(first).dot(new Vector3(...windAt(elapsed))) > 0, 'Visible clouds advance with the current wind heading.');
       assert.ok(Math.abs(first.x) <= 520);
     }
   }

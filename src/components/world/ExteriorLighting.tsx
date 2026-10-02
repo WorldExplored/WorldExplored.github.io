@@ -1,5 +1,6 @@
 'use client';
 
+import { HISTORY_SCALE, historyHeight } from './historyDimensions';
 import { useEffect, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { AdditiveBlending, BoxGeometry, BufferGeometry, CylinderGeometry, Float32BufferAttribute, Group, Mesh, MeshStandardMaterial, ShaderMaterial } from 'three';
@@ -22,7 +23,7 @@ const mainEntries: ReadonlyArray<readonly [string, number, number, number, numbe
   ['experience', 0, 3.50, 3.01, 1.075, .8, 'canopy', 0],
   ['research', -1.33, 3.585, 1.80, 1.075, .62, 'canopy', 0],
   ['purdue', 0, 3.37, 1.66, 1.03, .62, 'wall', .13],
-  ['history', 0, 3.575, 3.70, 1.075, 1.1, 'canopy', 0],
+  ['history', 0, historyHeight(3.635)-.060, 3.70*HISTORY_SCALE, 1.075, 1.1*HISTORY_SCALE, 'canopy', 0],
   ['about', 1.195, 3.39, -1.12, 1.06, .45, 'wall', .15],
   ['about', -1.95, 3.39, 1.62, 1.06, .45, 'wall', .14],
   ['contact', 0, 2.925, 1.79, 1.06, .48, 'canopy', 0],
@@ -33,10 +34,10 @@ const mainEntries: ReadonlyArray<readonly [string, number, number, number, numbe
 // paths are farther forward, especially at recessed doors and split row houses.
 // Geometry tests below this system verify every attachment against its canopy.
 const cityCanopies: ReadonlyArray<readonly [string, number, number, number, number]> = [
-  ['residence-west', 0, 1.895, 1.270, .33],
-  ['residence-garden', 0, 1.895, 1.575, .33],
-  ['residence-east', 0, 1.895, 1.325, .33],
-  ['residence-cove', 0, 1.875, 1.295, .34],
+  ['residence-west', 0, 1.895, 1.520, .33],
+  ['residence-garden', 0, 1.895, 1.875, .33],
+  ['residence-east', 0, 1.895, 1.675, .33],
+  ['residence-cove', 0, 1.875, 1.595, .34],
   ['office-west', 0, 1.895, .719, .33],
   ['office-courtyard', 0, 1.895, 1.700, .33],
   ['office-park', 0, 1.895, 1.825, .33],

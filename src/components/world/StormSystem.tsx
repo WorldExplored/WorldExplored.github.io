@@ -6,17 +6,23 @@ import { useFrame } from '@react-three/fiber';
 import { makeClouds, writeCloudMatrices } from './CloudSurface';
 import { createCloudClusters, createCloudRainSource } from './clouds';
 import { createRain } from './Rain';
-import { createStormSample, stormAt, weatherQa } from './weatherState';
+import { createStormSample, STORM_ALTITUDE, stormAt, weatherQa } from './weatherState';
 import type { EnvironmentProps } from './Water';
+
+/** One broad rain-bearing front occupies a higher shelf than the fair-weather groups. */
+export function createStormBank() {
+  const cluster = createCloudClusters(4)[3];
+  cluster.center = [-300, STORM_ALTITUDE, -170]; cluster.speed = 0; cluster.moisture = .97;
+  for (const puff of cluster.puffs) {
+    puff.offset[0] *= 3.7; puff.offset[1] *= 2.4; puff.offset[2] *= 6.8;
+    puff.scale[0] *= 3.7; puff.scale[1] *= 2.4; puff.scale[2] *= 6.8;
+  }
+  return cluster;
+}
 
 export function StormSystem({ runtime, paused, quality }: EnvironmentProps) {
   const resources = useMemo(() => {
-    const cluster = createCloudClusters(4)[3];
-    cluster.center = [-300, 57, -170]; cluster.speed = 0; cluster.moisture = .97;
-    for (const puff of cluster.puffs) {
-      puff.offset[0] *= 11; puff.offset[1] *= 3.2; puff.offset[2] *= 8;
-      puff.scale[0] *= 11; puff.scale[1] *= 3.2; puff.scale[2] *= 8;
-    }
+    const cluster = createStormBank();
     const clouds = makeClouds(false, [cluster]);
     clouds.mesh.name = 'travelling-storm-bank'; clouds.mesh.raycast = () => undefined;
     clouds.mesh.userData.cameraInteraction = false;
@@ -30,7 +36,7 @@ export function StormSystem({ runtime, paused, quality }: EnvironmentProps) {
     resources.clouds.mesh.visible = storm.active;
     if (storm.active) {
       const cluster = resources.clouds.clusters[0]; cluster.center = storm.center;
-      cluster.moisture = .48 + storm.rain * .49;
+      cluster.moisture = .38 + storm.rain * .55;
       writeCloudMatrices(resources.clouds, 0, runtime.current);
       resources.clouds.visibility[0] = storm.cover;
       resources.source.origin.fromArray(storm.center);

@@ -26,7 +26,11 @@ export function createRainCatchments(roots: readonly Object3D[]) {
       if(materials.every(material=>!material.visible||material.opacity<.05||!material.colorWrite))return;
       const geometry=mesh.geometry,position=geometry.getAttribute('position'),indices=geometry.index,roomFill=geometry.getAttribute('aRoomFill');
       if(!position)return;
+      const excluded: Array<{start:number;count:number}> = geometry.userData.rainExcludedRanges??[];
+      let excludedIndex=0;
       for(let i=0;i<(indices?.count??position.count);i+=3){
+        while(excludedIndex<excluded.length&&i>=excluded[excludedIndex].start+excluded[excludedIndex].count)excludedIndex++;
+        if(excludedIndex<excluded.length&&i>=excluded[excludedIndex].start)continue;
         // The city batches identify interior floor faces independently of the
         // exterior ceilings and terraces sharing their material.
         const ia=indices?indices.getX(i):i,ib=indices?indices.getX(i+1):i+1,ic=indices?indices.getX(i+2):i+2;

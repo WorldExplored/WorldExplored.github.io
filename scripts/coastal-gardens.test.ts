@@ -103,12 +103,12 @@ test('seabed chunks retain density through LOD and cull the opposite coast in a 
 test('main building vines grow from the soil against measured walls with five distinct habits',()=>{
   const sites=frontVineSites(),scene=createFrontGardens();
   try{
-    assert.equal(sites.length,47);assert.equal(new Set(sites.map(site=>vineHabit(site.seed))).size,5);
+    assert.equal(sites.length,50);assert.equal(new Set(sites.map(site=>vineHabit(site.seed))).size,5);
     assert.equal(new Set(sites.map(site=>site.building)).size,10);assert.equal(scene.root.children.length,5);
     let triangles=0;scene.root.traverse(object=>{if(object instanceof Mesh)triangles+=triangleCount(object.geometry);});assert.ok(triangles<160000);
     const close=scene.root.children.map(object=>(object as Mesh).geometry);scene.setDetail(false);
     const far=scene.root.children.reduce((sum,object)=>sum+triangleCount((object as Mesh).geometry),0);
-    assert.ok(far<70000&&far<triangles*.45,'all 47 rooted climbers retain their leaf silhouettes with cheaper distant stems');
+    assert.ok(far<70000&&far<triangles*.45,'all rooted climbers retain their leaf silhouettes with cheaper distant stems');
     scene.setDetail(true);scene.root.children.forEach((object,i)=>assert.equal((object as Mesh).geometry,close[i]));
     for(const site of sites){
       assert.ok(Math.abs(site.y-terrainMeshHeight(site.x,site.z)+.015)<1e-8);
@@ -150,7 +150,7 @@ test('the fountain and waterfront retain layered mixed planting without increasi
 
 test('tower climbers conform to tapered masonry and turbine shafts rather than floating flat panels',()=>{
   const sites=frontVineSites().filter(site=>site.support);
-  assert.equal(sites.length,5);
+  assert.equal(sites.length,8);
   for(const site of sites){
     const support=site.support!,vine=createFacadeGarden(site),stem=placeFrontVineGeometry(vine.wood,site).attributes.position;
     let tested=0;
@@ -178,4 +178,46 @@ test('medium plant geometry remains below one million triangles without deleting
       +createIslandMeadowSites().reduce((sum,site)=>sum+triangleCount(geometry(`ground${site.form}`,()=>meadowGeometry(false,'far',site.form))),0)+100000+10000;
     assert.ok(triangles<1000000,`${triangles} medium foliage triangles including the main wall vines and dock growth`);
   }finally{shapes.forEach(geometry=>geometry.dispose());}
+});
+
+
+test('mature trees form irregular city groves with varied heights and clear crowns',()=>{
+  const plan=createLandscapePlan(),city=plan.trees.filter(tree=>tree.z< -58);
+  assert.ok(plan.trees.length>=24&&plan.trees.length<=46);
+  assert.ok(plan.trees.reduce((total,tree)=>total+tree.height,0)/plan.trees.length>4);
+  assert.ok(Math.max(...city.map(tree=>tree.height))-Math.min(...city.map(tree=>tree.height))>2);
+  assert.ok(city.filter(tree=>tree.z> -86&&tree.z< -64).length>=5,'groves occupy inner pockets as well as the rear coast');
+  for(const tree of plan.trees){
+    for(const item of plan.structures)assert.ok(structurePlantingClearance(tree.x,tree.z,item)>tree.radius+.24);
+    for(const path of plan.paths)for(let i=1;i<path.points.length;i++)assert.ok(distanceToSegment(tree.x,tree.z,path.points[i-1],path.points[i])>path.width/2+tree.radius+.29);
+  }
+});
+
+test('slender lighthouse leaders reach the lantern on all sides and wind around the shaft',()=>{
+  const sites=frontVineSites().filter(site=>site.support?.kind==='lighthouse');
+  assert.equal(sites.length,6);
+  const upperSides=new Set<number>();
+  for(const site of sites){
+    assert.ok(site.width<=.32&&site.stemRadius!<=.012&&site.branchSpacing!>=.90);
+    const vine=createFacadeGarden(site),stem=placeFrontVineGeometry(vine.wood,site).attributes.position,support=site.support!;
+    let top=0;
+    for(let i=0;i<18*4*6;i++){
+      const y=stem.getY(i)-support.floor;top=Math.max(top,y);
+      if(y>8){const angle=Math.atan2(stem.getX(i)-support.x,stem.getZ(i)-support.z);upperSides.add(Math.floor((angle+Math.PI)/(Math.PI/2))%4);}
+    }
+    assert.ok(top>11.7&&top<12.26,'leader ends below the balcony on the upper shaft');
+    Object.values(vine).forEach(geometry=>geometry.dispose());
+  }
+  assert.equal(upperSides.size,4,'sparse leaders remain visible around all four sides');
+});
+
+
+test('static landscape layout is shared without exposing mutable exclusion geometry',()=>{
+  const plan=createLandscapePlan();assert.equal(createLandscapePlan(),plan);
+  assert.ok(Object.isFrozen(plan));
+  for(const items of [plan.structures,plan.paths,plan.rocks,plan.trees]){
+    assert.ok(Object.isFrozen(items));items.forEach(item=>assert.ok(Object.isFrozen(item)));
+  }
+  for(const path of plan.paths){assert.ok(Object.isFrozen(path.points));path.points.forEach(point=>assert.ok(Object.isFrozen(point)));}
+  for(const rock of plan.rocks)assert.ok(Object.isFrozen(rock.scale));
 });

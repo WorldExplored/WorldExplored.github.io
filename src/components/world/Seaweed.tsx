@@ -42,11 +42,17 @@ export const SEAWEED_COVES = [
 export const SEAWEED_REACH = 0.62;
 export const SEAWEED_FORMS = ['strap-leaved eelgrass', 'ruffled broad kelp', 'paired branching algae', 'twisting ribbon kelp', 'pleated sea fan', 'low seagrass turf', 'forked bladderwrack', 'serrated red algae'] as const;
 
+/** Orbital water motion weakens at the rooted seabed, below the breaking crest. */
+export function seaweedWaveStress(x:number,z:number,seabed=terrainMeshHeight(x,z),distance=landDistance(x,z)){
+  const depth=Math.max(0,-seabed);
+  return coastExposure(x,z,distance)*Math.exp(-Math.max(0,depth-.7)*.44);
+}
+
 export function seaweedSiteClear(x: number, z: number, plan: LandscapePlan, sheltered = true) {
   if (coastalCaveClearance(x,z,SEAWEED_REACH) <= 0) return false;
   const distance = landDistance(x, z);
   const seabed = terrainMeshHeight(x, z);
-  if (distance > -1.6 || distance < -4.7 || seabed > -0.66 || seabed < -2.7 || coastExposure(x, z, distance) > (sheltered ? .3 : .7)) return false;
+  if (distance > -1.6 || distance < -4.7 || seabed > -0.66 || seabed < -2.7 || seaweedWaveStress(x,z,seabed,distance) > (sheltered ? .3 : .7)) return false;
   for (const item of [...plan.structures, ...plan.rocks]) {
     if (Math.hypot(x - item.x, z - item.z) < item.radius + SEAWEED_REACH + 0.6) return false;
   }

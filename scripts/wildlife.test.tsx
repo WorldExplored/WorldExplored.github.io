@@ -230,3 +230,56 @@ test('crabs reserve turtle lanes and burrow below the rendered beach before retu
   try{assert.equal(life.crabBurrows.count,20);assert.ok(life.crabBurrows.geometry.attributes.position.count<20,'all entrances use one small shared mesh');}
   finally{life.meshes.forEach(mesh=>{mesh.geometry.dispose();mesh.dispose();});life.materials.forEach(material=>material.dispose());}
 });
+
+
+test('migrating flocks cross continuously with wing clearance only during daylight, then leave for hours',async()=>{
+  const {sampleBirdFlypast,FLYPAST_INTERVAL,FLYPAST_FIRST,FLYPAST_DURATION,FLYPAST_COUNT}=await import('../src/components/world/birdFlypast');
+  assert.ok(FLYPAST_INTERVAL>=7200);
+  assert.equal(sampleBirdFlypast(FLYPAST_FIRST+60,23,0).active,false);
+  assert.equal(sampleBirdFlypast(FLYPAST_FIRST-1,12,0).active,false);
+  assert.equal(sampleBirdFlypast(FLYPAST_FIRST+FLYPAST_DURATION+1,12,0).active,false);
+  for(const cycle of [0,1,2])for(let age=0;age<=FLYPAST_DURATION;age+=.5){
+    const time=FLYPAST_FIRST+cycle*FLYPAST_INTERVAL+age;
+    const flock=Array.from({length:FLYPAST_COUNT},(_,i)=>sampleBirdFlypast(time,12,i));
+    for(const [i,bird] of flock.entries()){
+      assert.ok(bird.active&&bird.position.y>55,'migrants stay above buildings and local nesting birds');
+      const next=sampleBirdFlypast(time+.05,12,i);
+      assert.ok(bird.position.distanceTo(next.position)<.4,'flight speed stays continuous');
+      for(const other of flock.slice(i+1))assert.ok(bird.position.distanceTo(other.position)>6,'the complete wings clear other birds');
+    }
+  }
+  const before=sampleBirdFlypast(FLYPAST_FIRST,12,0),after=sampleBirdFlypast(FLYPAST_FIRST+FLYPAST_DURATION,12,0);
+  assert.ok(before.position.length()>450&&after.position.length()>450,'birds appear and vanish beyond the populated world');
+});
+
+
+test('migrating birds use three pooled draws and hide together outside a flypast',async()=>{
+  const {writeFlypastPose}=await import('../src/components/world/Wildlife');
+  const life=createWildlife(),meshes=[life.flypastBody,life.flypastRight,life.flypastLeft],geometry=meshes.map(mesh=>mesh.geometry),matrix=new Matrix4();
+  try{
+    writeFlypastPose(life,315,12,'high');
+    for(const mesh of meshes){assert.ok(mesh.visible);assert.equal(mesh.count,20);mesh.getMatrixAt(0,matrix);assert.ok(matrix.determinant()>.1);}
+    writeFlypastPose(life,315,12,'low');for(const mesh of meshes)assert.equal(mesh.count,12);
+    writeFlypastPose(life,315,23,'high');for(const mesh of meshes)assert.equal(mesh.visible,false);
+    writeFlypastPose(life,500,12,'high');for(const mesh of meshes)assert.equal(mesh.visible,false);
+    assert.deepEqual(meshes.map(mesh=>mesh.geometry),geometry);
+  }finally{life.meshes.forEach(mesh=>{mesh.geometry.dispose();mesh.dispose();});life.materials.forEach(material=>material.dispose());}
+});
+
+
+test('unavailable shore approaches receive distinct validated sky circuits instead of reused fallback homes',()=>{
+  for(const perches of [createGullPerches().slice(0,4),[]]){
+    const birds=createGullStates(perches),obstacles=cameraObstacles();
+    assert.equal(birds.length,18);
+    const airborne=birds.filter(bird=>bird.flight.airborne);
+    assert.ok(airborne.length>=10,'exercise more fallback birds than the original eight home sites');
+    for(let frame=0;frame<20*120;frame++){
+      birds.forEach(bird=>stepGull(bird,.05,distantCamera,null));
+      for(const bird of airborne){
+        assert.ok(bird.position.y>=gullFlightFloor(bird.position.x,bird.position.z,obstacles));
+        for(const other of birds)if(other!==bird)
+          assert.ok(bird.position.distanceTo(other.position)>GULL_SEPARATION,'full wings stay separate even without their usual shore sites');
+      }
+    }
+  }
+});

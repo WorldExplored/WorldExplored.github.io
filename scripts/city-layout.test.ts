@@ -25,7 +25,7 @@ test('city fronts and their longer entry walks align with the straight central s
   assert.ok(distance < 4, 'The fountain has a direct waterfront connection, without wrapping around the houses');
 });
 
-test('front-left arcade has dry shoreline clearance, grounded foundations and a separate visitor pier', () => {
+test('front-left arcade has dry shoreline clearance, grounded foundations and one connected city harbor', () => {
   assert.ok(arcade.position[0] < -24 && arcade.position[2] > -77, 'Arcade is visible ahead of the western city block');
   for (let i = 0; i < ARCADE_PLAN.length; i++) {
     const a = ARCADE_PLAN[i], b = ARCADE_PLAN[(i + 1) % ARCADE_PLAN.length];
@@ -42,8 +42,9 @@ test('front-left arcade has dry shoreline clearance, grounded foundations and a 
       assert.ok(ground > .76 && ground < 1.045, 'Ground meets the foundation without reaching the room floor');
     }
   } finally { Object.values(shell).forEach(geometry => geometry.dispose()); }
-  const graph = createCirculationGraph(), dock = graph.nodes.find(node => node.id === 'visitor-dock-shore')!;
-  assert.deepEqual([dock.x, dock.z], [VISITOR_PIER_SHORE.x, VISITOR_PIER_SHORE.z]);
+  const graph = createCirculationGraph();
+  assert.ok(!graph.nodes.some(node=>node.id==='visitor-dock-shore'),'No second independent dock approach');
+  assert.ok(graph.nodes.some(node=>node.id==='city-dock-land'),'Unified city harbor retains its land connection');
   for (const p of [VISITOR_PIER_SHORE, VISITOR_PIER_HEAD]) {
     const dx = Math.max(0, Math.abs(p.x - arcade.position[0]) - 3.48), dz = Math.max(0, Math.abs(p.z - (arcade.position[2] - .25)) - 2.78);
     assert.ok(Math.hypot(dx, dz) > 1.4, 'Pier clears the arcade shell and its threshold');

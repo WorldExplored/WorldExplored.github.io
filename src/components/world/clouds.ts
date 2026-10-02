@@ -36,42 +36,32 @@ const PUFF_GRAPHS: Record<CloudArchetype, [number, number, number, number, numbe
     [2.8, -.08, .1, 2.25, .3, 1.05], [4.8, -.12, .2, 1.8, .24, .8], [-.7, -.15, 1, 2.1, .25, 1.2],
   ],
 };
-const PROMINENT_CENTERS: Vec3[] = [
-  [-43, 23, -15], [25, 25, -49], [-8, 24, 38], [70, 27, 22], [-30, 34, -155],
-  [6, 24, -81], [-112, 28, -48], [22, 25, 84], [-95, 29, -112], [112, 35, -125],
+// Each family occupies one shelf; nearby cumulus forms travel as loose weather groups.
+const CLOUD_GROUPS: readonly [number, number][] = [
+  [-68, -8], [43, 108], [104, -111], [-118, -144], [-32, -236], [-189, 75], [177, 18],
 ];
 
 export function createCloudClusters(count = MAX_CLOUDS): CloudCluster[] {
   const random = seededRandom(119);
   return Array.from({ length: Math.min(MAX_CLOUDS, Math.max(0, Math.floor(count))) }, (_, index) => {
     const archetype = ARCHETYPES[index % ARCHETYPES.length];
-    const azimuth = (index % 2 ? -1 : 1) * (.15 + random() * .85);
+    const group = Math.min(6, Math.floor(index / 5)), member = index % 5, anchor = CLOUD_GROUPS[group];
+    const azimuth = .28 + Math.sin(group * 1.81) * .65 + (random() - .5) * .32;
     const density = 1.04 + random() * .12;
-    const size = (archetype === 'atmospheric' ? 1.7 : archetype === 'cauliflower' ? 1.18 : 1.4) + random() * .35;
-    const distantScale = index >= 8 && (archetype === 'bank' || archetype === 'atmospheric') ? 3.8 + random() * 2.4 : 1;
-    const stretch: Vec3 = [size * distantScale * (.92 + random() * .23), size * Math.sqrt(distantScale) * (.94 + random() * .16), size * Math.sqrt(distantScale) * (1.02 + random() * .3)];
-    const angle = index * 2.399;
-    const distance = 85 + random() * 55;
-    const center: Vec3 = index < PROMINENT_CENTERS.length ? [...PROMINENT_CENTERS[index]] : [Math.cos(angle) * distance - 15, 27 + random() * 9, Math.sin(angle) * distance - 35];
-    if (archetype === 'atmospheric') center[1] += 3;
-    if (distantScale > 1) { center[1] += 24; center[2] -= 90; }
-    // Dense low cumulus gives way to a few broad, thin high-altitude banks.
-    if (index >= 24) {
-      center[0] = -165 + (index - 24) % 6 * 62;
-      center[2] = index < 30 ? -70 + Math.sin(index * 1.73) * 48 : -200 + Math.cos(index) * 65;
-      center[1] = index < 30 ? 21 + index % 4 * 3 : 78 + index % 3 * 9;
-    }
-    const capacity = archetype === 'atmospheric' || index >= 30 ? .21 : archetype === 'cotton' ? .27 : .93;
-    const moisture = Math.min(capacity, [.78, .24, .10, .91, .13][index % 5] + Math.sin(index * 2.17) * .045);
-    const cosine = Math.cos(azimuth);
-    const sine = Math.sin(azimuth);
-    // Cloud family determines its atmospheric shelf, never an arbitrary instance index.
     const layer = archetype === 'atmospheric' ? 2 : archetype === 'bank' ? 1 : 0;
-    center[1] = [26, 45, 66][layer] + Math.sin(index * 1.71) * [1.2, 1.6, 1][layer];
+    const size = (archetype === 'atmospheric' ? 2.1 : archetype === 'cauliflower' ? 1.50 : 1.85) + random() * .42;
+    const distantScale = layer > 0 ? 3.0 + random() * 1.6 : 1;
+    const stretch: Vec3 = [size * distantScale * (.92 + random() * .23), size * Math.sqrt(distantScale) * (.94 + random() * .16) * (archetype === 'cauliflower' ? 1.25 : archetype === 'atmospheric' ? 1.35 : 1), size * Math.sqrt(distantScale) * (1.02 + random() * .3)];
+    const center: Vec3 = [anchor[0] + (member - 1) * 13 + (random() - .5) * 8,
+      [37, 64, 86][layer] + Math.sin(index * 1.71) * [1.2, 1.5, 1][layer],
+      anchor[1] + Math.sin(member * 2.3 + group) * 13 + (layer ? (anchor[1] + 35) * .24 : 0)];
+    const capacity = archetype === 'atmospheric' ? .21 : archetype === 'cotton' ? .27 : .93;
+    const moisture = Math.min(capacity, [.77, .40, .10, .61, .13][member] + Math.sin(index * 2.17) * .10);
+    const cosine = Math.cos(azimuth), sine = Math.sin(azimuth);
     return { moisture, capacity, recharge: .0012 + (index % 4) * .00035, archetype, center, azimuth, density, layer, speed: world.environment.cloudSpeed * [2.1, 1.55, 1.1][layer], response: 0, targeted: false, interaction: [0, 0, 0],
       puffs: PUFF_GRAPHS[archetype].map(([x, y, z, sx, sy, sz]) => {
-        const spreadX = (x + (random()-.5)*.3) * stretch[0] / density;
-        const spreadZ = (z + (random()-.5)*.3) * stretch[2] / density;
+        const spreadX = (x + (random() - .5) * .3) * stretch[0] / density;
+        const spreadZ = (z + (random() - .5) * .3) * stretch[2] / density;
         return { offset: [spreadX * cosine - spreadZ * sine, y * stretch[1], spreadX * sine + spreadZ * cosine], scale: [sx * stretch[0], sy * stretch[1], sz * stretch[2]] };
       }) };
   });
@@ -93,15 +83,14 @@ const travel = new Vector3();
 export function cloudOrigin(cluster: CloudCluster, elapsed: number, output: Vector3) {
   windDisplacement(elapsed, travel);
   const speed = cluster.speed / (world.environment.cloudSpeed * 2.1);
-  const unwrapped = cluster.center[0] + travel.x * speed;
-  const x = ((unwrapped + 520) % 1040 + 1040) % 1040 - 520;
-  const z = cluster.center[2] + travel.z * speed - (unwrapped - x) * (.23 / .48);
-  return output.set(x, cluster.center[1], z);
+  const x = cluster.center[0] + travel.x * speed, z = cluster.center[2] + travel.z * speed + 35;
+  return output.set(((x + 520) % 1040 + 1040) % 1040 - 520, cluster.center[1],
+    ((z + 520) % 1040 + 1040) % 1040 - 555);
 }
 
 export function cloudVisibility(cluster: CloudCluster, elapsed: number) {
   cloudOrigin(cluster, elapsed, travel);
-  const edge = Math.max(0, Math.min(1, (Math.abs(travel.x) - 400) / 120));
+  const edge = Math.max(0, Math.min(1, (Math.max(Math.abs(travel.x), Math.abs(travel.z + 35)) - 390) / 75));
   return 1 - edge * edge * (3 - 2 * edge);
 }
 

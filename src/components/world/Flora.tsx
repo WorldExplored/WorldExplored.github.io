@@ -64,7 +64,7 @@ export function createFloraSites() {
   }
   // The narrow stony ring around the beacon needs its own small-scale tufts.
   for(let attempt=0;attempt<1600;attempt++){
-    const x=-81+random()*10,z=-41+random()*10,kind:FloraKind=attempt%4===0?'flower':attempt%3===0?'beach':'sedge';
+    const x=-81+random()*10,z=-41+random()*10,kind:FloraKind=attempt%4===0?'flower':attempt%3===0&&landDistance(x,z)<3.8?'beach':'sedge';
     if(crowded(x,z,.25)||!beaconClear(x,z,.35))continue;
     plant({x,y:terrainHeight(x,z),z,kind,reach:.35,scale:.30+random()*.25,rotation:random()*Math.PI*2});
   }

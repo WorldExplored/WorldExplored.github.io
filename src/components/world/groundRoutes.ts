@@ -1,3 +1,4 @@
+import { HISTORY_SCALE } from './historyDimensions';
 import { architectureFootprints, type LandscapePath } from './terrain';
 import { cityBuildings } from './city';
 import { world } from '../../content/world';
@@ -35,7 +36,7 @@ export function createGroundRoutes(paths: readonly LandscapePath[], baseHeight:(
   const bearings=[...architectureFootprints(),...cityBuildings];
   const museum=world.landmarks.find(item=>item.id==='history')!,arcade=world.landmarks.find(item=>item.id==='arcade')!;
   const pavingExclusions=[...cityBuildings.map(b=>({x:b.x,z:b.z,rotation:b.rotation,halfX:b.width/2+.24,halfZ:b.depth/2+.24})),
-    {x:museum.position[0],z:museum.position[2],rotation:museum.rotationY??0,halfX:5.6,halfZ:3.85},
+    {x:museum.position[0],z:museum.position[2],rotation:museum.rotationY??0,halfX:5.6*HISTORY_SCALE,halfZ:3.85*HISTORY_SCALE},
     {x:arcade.position[0],z:arcade.position[2],rotation:0,halfX:2.7,halfZ:2.2}];
   const bridgeApproaches=BRIDGES.flatMap(bridge=>[false,true].map(end=>{
     const p=bridge.samples[end?bridge.samples.length-1:0].point,q=bridge.samples[end?bridge.samples.length-2:1].point;

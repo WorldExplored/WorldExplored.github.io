@@ -1,5 +1,6 @@
 'use client';
 
+import { HISTORY_SCALE, historyHeight } from './historyDimensions';
 import { useEffect, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { AdditiveBlending, BoxGeometry, BufferGeometry, Color, Float32BufferAttribute, Group, Mesh, MeshStandardMaterial, PlaneGeometry, SpotLight, ShaderMaterial, Vector3 } from 'three';
@@ -114,7 +115,7 @@ export const mainRooms: ReadonlyArray<readonly [string,number,number,number,numb
   ['experience',-2,0,1.075,4.857788,2.8,4],['experience',2,0,1.075,4.857788,2.8,4],
   ['research',-1.8,-.7,1.075,3.645,3,4],['research',-1.8,-.7,3.825,6.4,3,4],
   ['purdue',0,0,1.03,4.422954,3.7,2.6],['purdue',0,-2.1,1.03,4.303182,4.7,1.5],
-  ['history',-2,0,1.075,6.883586,3.4,5],['history',2,0,1.075,6.883586,3.4,5],
+  ['history',-2*HISTORY_SCALE,0,1.075,historyHeight(6.883586),3.4*HISTORY_SCALE,5*HISTORY_SCALE],['history',2*HISTORY_SCALE,0,1.075,historyHeight(6.883586),3.4*HISTORY_SCALE,5*HISTORY_SCALE],
   ['about',-.48,-2.075,1.078,4.03,5.5,1.25],['about',-2.42,0,1.078,4.393916,1.7,2.4],
   ['contact',0,0,1.086,3.35,2.2,2.2],['contact',2.58,-.91,1.086,3.375,2.1,2.7],
   ['arcade',-1,0,1.075,3.645,2.2,3.5],['arcade',1.5,0,1.075,3.645,2.2,3.5],

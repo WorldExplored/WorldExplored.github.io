@@ -81,9 +81,11 @@ function planCircuits(perches: GullPerch[], obstacles: CameraObstacle[]) {
   for (const perch of perches) {
     const island = ISLANDS.reduce((best,island)=>Math.hypot(perch.position.x-island.x,perch.position.z-island.z)<Math.hypot(perch.position.x-best.x,perch.position.z-best.z)?island:best,ISLANDS[0]);
     const outward = perch.id==='beacon-balcony-rail'?0:Math.atan2(perch.position.z-island.z,perch.position.x-island.x);
-    for (let attempt=0;attempt<72;attempt++) {
-      const radius=8+(perches.indexOf(perch)%3)*.65+(attempt%4)*2.4;
-      const flight:GullFlight={perch,outward:outward+([0,.24,-.24,.48,-.48,.72][Math.floor(attempt/4)%6]),radius,width:radius*(.70+(perches.indexOf(perch)%4)*.04+Math.floor(attempt/24)*.11),height:5.5+Math.floor(attempt/24)*2.2,duration:0,points:[],length:0};
+    for (let attempt=0;attempt<216;attempt++) {
+      // Narrower circuits can clear mature crowns beside an otherwise suitable rock.
+      const profile=attempt%72, taper=Math.floor(attempt/72)*.14;
+      const radius=8+(perches.indexOf(perch)%3)*.65+(profile%4)*2.4;
+      const flight:GullFlight={perch,outward:outward+([0,.24,-.24,.48,-.48,.72][Math.floor(profile/4)%6]),radius,width:radius*(.70+(perches.indexOf(perch)%4)*.04+Math.floor(profile/24)*.11-taper),height:5.5+Math.floor(profile/24)*2.2,duration:0,points:[],length:0};
       const points=routeSamples(flight);
       if(!points.every(point=>safePoint(point,perch,obstacles,false))||!separated(points,accepted))continue;
       flight.points=points;
@@ -92,6 +94,7 @@ function planCircuits(perches: GullPerch[], obstacles: CameraObstacle[]) {
       const huntPoints=routeSamples(flight,true);
       if(huntPoints.every((point,i)=>safePoint(point,perch,obstacles,true)&&(i===0||Math.abs(point.y-huntPoints[i-1].y)<.72*Math.hypot(point.x-huntPoints[i-1].x,point.z-huntPoints[i-1].z)))&&separated(huntPoints,accepted))flight.huntPoints=huntPoints;
       perch.heading=Math.atan2(Math.sin(flight.outward),-Math.cos(flight.outward));
+      if(perch.id!=='beacon-balcony-rail')perch.nest=accepted.filter(other=>other.perch.nest).length<3;
       accepted.push(flight);break;
     }
   }
@@ -105,12 +108,16 @@ export function createGullStates(perches = createGullPerches()): GullState[] {
   const obstacles=[...cameraObstacles(),...createLandscapePlan().trees.map(tree=>({x:tree.x,z:tree.z,radius:tree.radius,top:tree.y+tree.height}))],random=seededRandom(96213),flights=planCircuits(perches,obstacles);
   const shoreCount=flights.length;
   flights.push(...flights);
-  const homes=[[-12,20,7],[10,23,-4],[-24,26,-20],[22,29,15],[-14,32,29],[-3,25,-77],[17,28,-87],[-25,31,-75]];
-  // Widely separated sky lanes are the fallback for birds without a clear shore approach.
-  while(flights.length<18){
-    const i=flights.length,home=homes[i-shoreCount*2]??homes[0],perch:GullPerch={id:`sky-${i}`,position:new Vector3(...home),heading:0,capacity:1,owner:null};
+  const homes=[[-12,20,7],[10,23,-4],[-24,26,-20],[22,29,15],[-14,32,29],[-3,25,-77],[17,28,-87],[-25,31,-75],[-42,34,15],[36,34,-26],[-60,30,-62],[38,37,-86],[-50,37,-100],[4,40,42],[-80,34,5],[35,44,34],[-86,42,-93],[0,48,-40]];
+  // Validate each complete sky lane; unavailable shore sites must never duplicate a fallback.
+  for(let candidate=0;flights.length<18;candidate++){
+    const i=flights.length,home=homes[candidate%homes.length],position=new Vector3(...home);
+    position.y+=Math.floor(candidate/homes.length)*8;
+    const perch:GullPerch={id:`sky-${i}`,position,heading:0,capacity:1,owner:null};
     const flight:GullFlight={perch,outward:random()*TAU,radius:4.5+random()*2,width:4.5+random()*2,height:.4,duration:18+i*.45,points:[],length:0,airborne:true};
-    flight.points=routeSamples(flight);flight.length=flight.points.slice(1).reduce((sum,p,j)=>sum+p.distanceTo(flight.points[j]),0);flights.push(flight);
+    flight.points=routeSamples(flight);
+    if(!flight.points.every(point=>safePoint(point,perch,obstacles,false))||!separated(flight.points,flights))continue;
+    flight.length=flight.points.slice(1).reduce((sum,p,j)=>sum+p.distanceTo(flight.points[j]),0);flights.push(flight);
   }
   const birds=flights.map((flight,index)=>{
     const onPerch=index<shoreCount;

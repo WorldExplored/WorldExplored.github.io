@@ -8,14 +8,16 @@ import { cityBuildings, cityLocalToWorld, type CityPoint } from './city';
 import type { EnvironmentProps } from './Water';
 import type { QualityTier } from '@/content/world';
 
+const roofHeight = (id: string) => cityBuildings.find(building => building.id === id)!.height;
+
 // Flat, non-solar service roofs. Heights are finished roof surfaces in building coordinates.
 export const CITY_VENTILATION_MOUNTS: readonly { building: string; local: CityPoint }[] = [
   { building: 'waterfront-gallery', local: [1.45, 2.93, -.30] },
   { building: 'waterfront-east', local: [.55, 4.45, -.40] },
-  { building: 'residence-east', local: [-.95, 10.23, -.20] },
-  { building: 'residence-east', local: [.55, 10.23, -.20] },
-  { building: 'residence-cove', local: [-.70, 8.35, 0] },
-  { building: 'residence-cove', local: [.70, 8.35, 0] },
+  { building: 'residence-east', local: [-.95, roofHeight('residence-east')-.17, -.20] },
+  { building: 'residence-east', local: [.55, roofHeight('residence-east')-.17, -.20] },
+  { building: 'residence-cove', local: [-.70, roofHeight('residence-cove')-.25, 0] },
+  { building: 'residence-cove', local: [.70, roofHeight('residence-cove')-.25, 0] },
 ];
 
 function combine(parts: BufferGeometry[]) {

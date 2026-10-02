@@ -8,7 +8,7 @@ import { useFrame } from '@react-three/fiber';
 import { BoxGeometry, BufferGeometry, CylinderGeometry, ExtrudeGeometry, Float32BufferAttribute, Group, InstancedMesh, Mesh, MeshPhysicalMaterial, Object3D, Shape, SphereGeometry, Vector3 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { cityRoofMounts, cityStationActivity, type CityTransitRoute } from './city';
-import { cityDocks, cityTurbines, dockLandingLayout, createCityFerryRoute, FERRY_DWELL, writeCityFerryPose } from './cityInfrastructure';
+import { CITY_PIER_JUNCTION, cityDocks, cityTurbines, dockLandingLayout, createCityFerryRoute, FERRY_DWELL, writeCityFerryPose } from './cityInfrastructure';
 import { terrainHeight } from './terrain';
 import { GardenFountain } from './GardenFountain';
 import type { EnvironmentProps } from './Water';
@@ -159,11 +159,11 @@ export function createCityLife(stationRoute: CityTransitRoute) {
     for(const side of [-1,1]){
       const x=dock.x+side*.59;
       const breakpoints=[dryEnd,stairStart,stairEnd,landingEnd];
-      if(dock.id==='city'&&side===-1)breakpoints.push(boarding.start.z-.36,boarding.start.z+.36);
+      if(dock.id==='city'&&side===-1)breakpoints.push(boarding.start.z-.36,boarding.start.z+.36,CITY_PIER_JUNCTION.z-CITY_PIER_JUNCTION.halfOpening,CITY_PIER_JUNCTION.z+CITY_PIER_JUNCTION.halfOpening);
       breakpoints.sort((a,b)=>(a-b)*direction);
       for(let i=1;i<breakpoints.length;i++){
         const a=breakpoints[i-1],b=breakpoints[i],middle=(a+b)/2;
-        if(dock.id==='city'&&side===-1&&Math.abs(middle-boarding.start.z)<.36)continue;
+        if(dock.id==='city'&&side===-1&&(Math.abs(middle-boarding.start.z)<.36||Math.abs(middle-CITY_PIER_JUNCTION.z)<CITY_PIER_JUNCTION.halfOpening))continue;
         fixed.push(dockBeam(new Vector3(x,heightAt(a)+.42,a),new Vector3(x,heightAt(b)+.42,b)));
       }
       for(const z of breakpoints){

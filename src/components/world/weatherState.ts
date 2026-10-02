@@ -42,16 +42,46 @@ export function daylightWeights(hour: number) {
   return { daylight, dusk, night };
 }
 
-/** All cloud layers, rainfall and the storm front share this prevailing coastal wind. */
+export const WIND_HOLD_SECONDS = 600;
+export const WIND_TURN_SECONDS = 120;
+const WIND_PERIOD = WIND_HOLD_SECONDS + WIND_TURN_SECONDS;
+const windVelocities: Vec3[] = [];
+const windOffsets: Vec3[] = [[0, 0, 0]];
+
+function windVelocity(index: number) {
+  while (windVelocities.length <= index) {
+    const i = windVelocities.length;
+    const heading = .48 + i * 1.37 + Math.sin(i * 1.19) * .23;
+    const speed = .49 + random(i + 419) * .15;
+    windVelocities.push([Math.cos(heading) * speed, 0, Math.sin(heading) * speed]);
+  }
+  return windVelocities[index];
+}
+
+/** Ten-minute prevailing winds turn gradually over two minutes, then hold again. */
 export function windAt(seconds: number, output: Vec3 = [0, 0, 0]): Vec3 {
-  output[0] = .48 + Math.cos(seconds / 95) * .065;
+  const time = Math.max(0, seconds), index = Math.floor(time / WIND_PERIOD), age = time - index * WIND_PERIOD;
+  const current = windVelocity(index), next = windVelocity(index + 1);
+  const turn = smooth((age - WIND_HOLD_SECONDS) / WIND_TURN_SECONDS);
+  output[0] = current[0] + (next[0] - current[0]) * turn;
   output[1] = 0;
-  output[2] = .23 + Math.sin(seconds / 130) * .04;
+  output[2] = current[2] + (next[2] - current[2]) * turn;
   return output;
 }
 
+/** Exact integral of the shared breeze; changing its heading never resets a cloud. */
 export function windDisplacement(seconds: number, output = new Vector3()) {
-  return output.set(seconds * .48 + Math.sin(seconds / 95) * 6.175, 0, seconds * .23 + (1 - Math.cos(seconds / 130)) * 5.2);
+  const time = Math.max(0, seconds), index = Math.floor(time / WIND_PERIOD), age = time - index * WIND_PERIOD;
+  while (windOffsets.length <= index) {
+    const i = windOffsets.length - 1, start = windOffsets[i], current = windVelocity(i), next = windVelocity(i + 1);
+    windOffsets.push([start[0] + current[0] * WIND_PERIOD + (next[0] - current[0]) * WIND_TURN_SECONDS * .5, 0,
+      start[2] + current[2] * WIND_PERIOD + (next[2] - current[2]) * WIND_TURN_SECONDS * .5]);
+  }
+  const current = windVelocity(index), next = windVelocity(index + 1), start = windOffsets[index];
+  const t = clamp((age - WIND_HOLD_SECONDS) / WIND_TURN_SECONDS);
+  const integral = WIND_TURN_SECONDS * (t * t * t - .5 * t * t * t * t);
+  return output.set(start[0] + current[0] * age + (next[0] - current[0]) * integral, 0,
+    start[2] + current[2] * age + (next[2] - current[2]) * integral);
 }
 
 function random(seed: number) { const n = Math.sin(seed * 127.1 + 311.7) * 43758.5453; return n - Math.floor(n); }
@@ -60,7 +90,8 @@ export function stormSchedule(index: number) {
 }
 
 export interface StormSample { arrival: number; rainSeconds: number; approachSeconds: number; departureSeconds: number; active: boolean; age: number; cover: number; rain: number; center: Vec3 }
-export function createStormSample(): StormSample { return { arrival: 0, rainSeconds: 0, approachSeconds: 110, departureSeconds: 130, active: false, age: 0, cover: 0, rain: 0, center: [0, 57, 0] }; }
+export const STORM_ALTITUDE = 104;
+export function createStormSample(): StormSample { return { arrival: 0, rainSeconds: 0, approachSeconds: 110, departureSeconds: 130, active: false, age: 0, cover: 0, rain: 0, center: [0, STORM_ALTITUDE, 0] }; }
 const stormPosition=new Vector3(),stormAnchor=new Vector3();
 export function stormAt(seconds: number, output = createStormSample()) {
   const index = Math.max(0, Math.floor((seconds - 480) / 2400));
@@ -74,7 +105,7 @@ export function stormAt(seconds: number, output = createStormSample()) {
   output.arrival = arrival; output.rainSeconds = rainSeconds; output.age = age; output.active = active;
   output.cover = active ? entering * leaving : 0;
   output.rain = active ? smooth((age - 110) / 28) * (1 - smooth((age - 110 - rainSeconds + 28) / 28)) : 0;
-  output.center[0] = -24 + stormPosition.x; output.center[1] = 57; output.center[2] = -42 + stormPosition.z;
+  output.center[0] = -24 + stormPosition.x; output.center[1] = STORM_ALTITUDE; output.center[2] = -42 + stormPosition.z;
   return output;
 }
 

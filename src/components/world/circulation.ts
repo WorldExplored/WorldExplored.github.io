@@ -1,3 +1,4 @@
+import { HISTORY_SCALE } from './historyDimensions';
 import cityStreetRoutes from './cityStreetRoutes.json';
 import { world } from '../../content/world';
 import { BRIDGES } from './bridgePlan';
@@ -107,17 +108,16 @@ export function createCirculationGraph() {
   const cityWest=node('city-west-street',-19.5,-74.7),cityCenter=node('city-center-street',-5,-74.7),cityEast=node('city-east-street',13,-72);
   const museum=world.landmarks.find(item=>item.id==='history')!,angle=museum.rotationY??0;
   const museumPoint=(x:number,z:number)=>({x:museum.position[0]+x*Math.cos(angle)+z*Math.sin(angle),z:museum.position[2]-x*Math.sin(angle)+z*Math.cos(angle)});
-  const threshold=museumPoint(0,4.17),forecourt=museumPoint(0,5.7);
+  const threshold=museumPoint(0,4.17*HISTORY_SCALE),forecourt=museumPoint(0,5.7);
   const history=node('history',threshold.x,threshold.z,'entrance',1.07),historyCourt=node('history-court',forecourt.x,forecourt.z,'park');
   const waterfront=node('city-waterfront',-15.5,-65.4,'park'),cityDock=node('city-dock-land',-12,-58,'dock',1.06),cityBoat=node('city-dock-boarding',-12.7,-48.04,'dock',.4575);
   // These primary streets are authored town geometry. The router remains a
   // validator and supplies the short secondary building approaches below.
   edge('town-main-street-west',cityWest,cityCenter,[],1.12);
   edge('town-main-street-east',cityCenter,cityEast,[{x:0,z:-74.7},{x:0,z:-72}],1.22);
-  const visitorCourt=node('visitor-dock-plaza',-24.45,-69.25,'landing'),visitorDock=node('visitor-dock-shore',-24,-69,'dock',.84);
+  const visitorCourt=node('west-garden-court',-24.45,-69.25,'park');
   edge('town-waterfront-route',cityWest,visitorCourt,[{x:-24.45,z:-74.7}],1.05);
   edge('town-visitor-promenade',visitorCourt,waterfront,[{x:-20.5,z:-66.2}],1.05);
-  edge('visitor-dock-walk',visitorCourt,visitorDock,[],.95);
   edge('town-dock-walk',waterfront,cityDock,[],1.08);
   edge('town-south-promenade',waterfront,cityEast,[{x:-12,z:-64.7},{x:-5,z:-64.5},{x:3,z:-64.3},{x:8,z:-64.7},{x:10.7,z:-65.25},{x:12,z:-66.5}],1.05);
   edge('history-threshold',history,historyCourt,[],1.35);

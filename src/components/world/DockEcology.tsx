@@ -36,7 +36,7 @@ export function createDockWeedSites(poles = dockEcologyPoles()): DockWeedSite[] 
     const rows = Math.max(3, Math.ceil((top-bottom)/.18));
     for (let row=0;row<rows;row++) for(let side=0;side<3;side++) {
       const y = bottom+(top-bottom)*row/rows;
-      const height = Math.min(.36+random()*.48,-.15-y);
+      const height = Math.min(.15+random()*.20,-.15-y);
       if(height<.10)continue;
       const rotation = row*1.73+side*Math.PI*2/3+random()*.35;
       sites.push({pole:pole.id,x:pole.x+Math.sin(rotation)*pole.radius,y,
@@ -46,30 +46,33 @@ export function createDockWeedSites(poles = dockEcologyPoles()): DockWeedSite[] 
   return sites;
 }
 
-/** Local +Z points away from the timber face; every frond begins at the holdfast. */
+/** Short algae and encrusting barnacles follow the wet pile rather than branching like palms. */
 export function createDockWeedGeometry(variant: number) {
-  const positions: number[] = [], colors: number[] = [], indices: number[] = [];
-  const color = new Color(['#577849', '#7b874a', '#748054'][variant]);
-  for (let frond = 0; frond < (variant === 1 ? 7 : 5); frond++) {
-    const start = positions.length / 3, side = frond - 1.2;
-    for (let row = 0; row <= 3; row++) for (const rib of [-1, 0, 1]) {
-      const t = row / 3, spread = t * t * (.17 + frond * .045);
-      const breadth = Math.sin(Math.PI * t) * (variant === 1 ? .046 : .027) * (1 + .14 * Math.sin(t * 31 + frond));
-      positions.push(side * .018 * t + rib * breadth, t + .035 * Math.sin(t * 5 + frond) * t,
-        spread + (rib === 0 ? .009 * Math.sin(t * Math.PI) : 0));
-      const shade = .72 + .22 * t + (rib === 0 ? .11 : 0);
-      colors.push(color.r * shade, color.g * shade, color.b * shade);
-      if (row && rib > -1) {
-        const n = start + row * 3 + rib + 1;
-        indices.push(n, n - 3, n - 1, n - 1, n - 3, n - 4);
-      }
+  const positions:number[]=[],colors:number[]=[],indices:number[]=[];
+  const algae=new Color(['#485e39','#657343','#526441'][variant]),shell=new Color(['#aea590','#939684','#bdad8e'][variant]);
+  const vertex=(x:number,y:number,z:number,color:Color,shade=1)=>{positions.push(x,y,z);colors.push(color.r*shade,color.g*shade,color.b*shade);};
+  const fronds=variant===1?3:variant===0?7:4;
+  for(let frond=0;frond<fronds;frond++){
+    const start=positions.length/3,length=.52+(frond%3)*.19,side=(frond-(fronds-1)/2)*.022;
+    for(let row=0;row<=5;row++)for(const rib of [-1,1]){
+      const t=row/5,breadth=Math.sin(Math.PI*t)*(variant===1?.034:.006);
+      // Narrow filaments cling along the pile, with a small curled free tip.
+      vertex(side+Math.sin(t*5+frond)*.023*t+rib*breadth,t*length,.008+Math.pow(t,3)*.055,algae,.75+t*.23);
+      if(row&&rib===1){const n=start+row*2+1;indices.push(n,n-2,n-1,n-1,n-2,n-3);}
     }
   }
-  const geometry = new BufferGeometry();
-  geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
-  geometry.setAttribute('color', new Float32BufferAttribute(colors, 3));
-  geometry.setIndex(indices); geometry.computeVertexNormals(); geometry.computeBoundingSphere();
-  return geometry;
+  for(let barnacle=0;barnacle<5;barnacle++){
+    const start=positions.length/3,cx=Math.sin(barnacle*2.37+variant)*.052,cy=.07+barnacle*.17,r=.021+(barnacle%3)*.005;
+    for(const [radius,z]of [[r,.002],[r*.72,.035],[r*.30,.026]])for(let side=0;side<7;side++){
+      const angle=side/7*Math.PI*2;
+      vertex(cx+Math.cos(angle)*radius,cy+Math.sin(angle)*radius*2.2,z,shell,side%2?.8:1);
+    }
+    for(let ring=0;ring<2;ring++)for(let side=0;side<7;side++){
+      const a=start+ring*7+side,b=start+ring*7+(side+1)%7;
+      indices.push(a,b,a+7,b,b+7,a+7);
+    }
+  }
+  const geometry=new BufferGeometry();geometry.setAttribute('position',new Float32BufferAttribute(positions,3));geometry.setAttribute('color',new Float32BufferAttribute(colors,3));geometry.setIndex(indices);geometry.computeVertexNormals();geometry.computeBoundingSphere();return geometry;
 }
 
 export function DockEcology() {

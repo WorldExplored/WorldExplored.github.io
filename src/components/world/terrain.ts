@@ -29,7 +29,7 @@ export const ISLANDS: readonly Island[] = [
   { id: 'museum-meadow', x: 21, z: -72, rx: 14, rz: 12.5, phase: 5.2, beach: 3.8, hill: 1.35 },
 ];
 export const PLANT_REACH = .95;
-export const FOOTPRINT_RADII: Record<LandmarkId, number> = { work: 5.5, experience: 5.4, research: 5.3, purdue: 5.1, history: 7, about: 4.9, contact: 5.0, building: 2.4, arcade: 4.7 };
+export const FOOTPRINT_RADII: Record<LandmarkId, number> = { work: 5.5, experience: 5.4, research: 5.3, purdue: 5.1, history: 5.85, about: 4.9, contact: 5.0, building: 2.4, arcade: 4.7 };
 
 export function seededRandom(seed: number) {
   return () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
@@ -159,9 +159,11 @@ export function vegetationSuitability(x: number, z: number, reach: number, plan:
 }
 export function canPlacePlant(x: number, z: number, reach: number, plan: LandscapePlan) { return vegetationSuitability(x, z, reach, plan) > 0; }
 
+let landscapePlan:LandscapePlan|undefined;
 export function createLandscapePlan(): LandscapePlan {
-  const structures = [...architectureFootprints(), ...cityInfrastructureFootprints, ...cityBuildings.map(item => ({ id: item.id, x: item.x, z: item.z, radius: item.radius }))];
-  const paths: LandscapePath[] = circulationPaths();
+  if(landscapePlan)return landscapePlan;
+  const structures = [...architectureFootprints(), ...cityInfrastructureFootprints, ...cityBuildings.map(item => ({ id: item.id, x: item.x, z: item.z, radius: item.radius }))].map(item=>({...item}));
+  const paths: LandscapePath[] = circulationPaths().map(path=>({...path,points:path.points.map(point=>({...point}))}));
   paths.push({ width: 2.2, elevated: true, points: createCityTransitRoute().curve.getPoints(80).map(point => ({ x: point.x, z: point.z })) });
   const rocks: LandscapeRock[] = []; const trees: LandscapeTree[] = []; const random = seededRandom(627);
   // A few coastal outcrops, with adjacent fragments rather than a necklace of stones.
@@ -175,21 +177,32 @@ export function createLandscapePlan(): LandscapePlan {
       rocks.push({ id: `coast-rock-${rocks.length}`, x, z, y: terrainHeight(x, z) + .12, radius: size * 1.4, scale, rotation: random() * Math.PI });
     }
   }
-  for(const [x,z] of [[-4,-85],[6,-81],[-14,-84],[-25,-83],[8,-86],[2,-76],[-18,-88],[-22,-67],[13,-76]]) {
-    const height=2.5,radius=height*.63;
-    if(BEACH_PALMS.some(palm=>Math.hypot(x-palm.x,z-palm.z)<radius+1.85+.15)||circleClearance(x,z,[...structures,...rocks,...trees])<radius+.15||pathClearance(x,z,paths)<radius+.8)continue;
-    trees.push({id:`courtyard-tree-${trees.length}`,x,z,y:terrainHeight(x,z),radius,height,rotation:random()*Math.PI*2});
+  // Mature groves occupy pockets of varying depth, not a perimeter planting row.
+  const treePatches = [
+    {x:-28,z:-91,rx:9,rz:5}, {x:6,z:-88,rx:9,rz:8}, {x:24,z:-81,rx:8,rz:9},
+    {x:-12,z:-64,rx:12,rz:5}, {x:-34,z:-75,rx:6,rz:9},
+    {x:-25,z:-5,rx:8,rz:7}, {x:-5,z:-12,rx:12,rz:8}, {x:0,z:23,rx:17,rz:6},
+  ];
+  for (let attempt = 0; trees.length < 46 && attempt < 7200; attempt++) {
+    const patch=treePatches[attempt%treePatches.length],clustered=attempt%5!==0;
+    const island=ISLANDS[attempt%ISLANDS.length];if(island.id==='beacon')continue;
+    const angle=random()*Math.PI*2,r=Math.sqrt(random());
+    const x=clustered?patch.x+Math.cos(angle)*patch.rx*r:island.x+Math.cos(angle)*island.rx*r*islandContour(island,angle);
+    const z=clustered?patch.z+Math.sin(angle)*patch.rz*r:island.z+Math.sin(angle)*island.rz*r*islandContour(island,angle);
+    const mature=attempt<1800||random()>.32;
+    const height=mature?4.2+random()*2.1:3.15+random()*.75,radius=height*.63;
+    if(BEACH_PALMS.some(palm=>Math.hypot(x-palm.x,z-palm.z)<radius+1.85+.25)||landDistance(x,z)<1.8+radius||terrainSlope(x,z)>.6)continue;
+    if(structures.some(item=>structurePlantingClearance(x,z,item)<radius+.25)||circleClearance(x,z,[...rocks,...trees])<radius+.25||pathClearance(x,z,paths)<radius+.3)continue;
+    trees.push({id:`grove-tree-${trees.length}`,x,z,y:terrainHeight(x,z),radius,height,rotation:random()*Math.PI*2});
   }
-  for (let attempt = 0; trees.length < 54 && attempt < 7200; attempt++) {
-    const island = ISLANDS[attempt % ISLANDS.length];
-    if (island.id === 'beacon') continue;
-    const a = random() * Math.PI * 2; const r = Math.sqrt(random()) * islandContour(island, a);
-    const x = island.x + Math.cos(a) * island.rx * r; const z = island.z + Math.sin(a) * island.rz * r;
-    const height = 2.2 + random() * 1.9; const radius = height * .63;
-    if (BEACH_PALMS.some(palm=>Math.hypot(x-palm.x,z-palm.z)<radius+1.85+.25) || landDistance(x, z) < 1.8 + radius || terrainSlope(x, z) > .6 || circleClearance(x, z, [...structures, ...rocks, ...trees]) < radius + .25 || pathClearance(x, z, paths) < radius + .3) continue;
-    trees.push({ id: `grove-tree-${trees.length}`, x, z, y: terrainHeight(x, z), radius, height, rotation: random() * Math.PI * 2 });
-  }
-  return { structures, paths, rocks, trees };
+  // Ecology, wildlife and rendering share the same static exclusion field.
+  // Freeze owned copies so a consumer cannot invalidate another system's routes.
+  for(const path of paths){path.points.forEach(Object.freeze);Object.freeze(path.points);Object.freeze(path);}
+  for(const rock of rocks){Object.freeze(rock.scale);Object.freeze(rock);}
+  structures.forEach(Object.freeze);trees.forEach(Object.freeze);
+  [structures,paths,rocks,trees].forEach(Object.freeze);
+  landscapePlan=Object.freeze({structures,paths,rocks,trees});
+  return landscapePlan;
 }
 function* samplePlantPositions(count: number, plan: LandscapePlan, seed: number): Generator<void, PlantPosition[]> {
   const random = seededRandom(seed); const positions: PlantPosition[] = [];

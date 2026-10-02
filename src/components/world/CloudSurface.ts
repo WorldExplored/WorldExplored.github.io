@@ -14,8 +14,12 @@ export function cloudSurfaceGeometry(clusters: readonly CloudCluster[]) {
   clusters.forEach((cloud, cloudIndex) => {
     const bounds = cloudBounds(cloud);
     const size = bounds.max.clone().sub(bounds.min);
-    const step = Math.max(cloud.archetype === 'atmospheric' ? .72 : .61, size.x / 58, size.y / 30, size.z / 30);
-    const nx = Math.ceil(size.x / step) + 1; const ny = Math.ceil(size.y / step) + 1; const nz = Math.ceil(size.z / step) + 1;
+    const thin = cloud.archetype === 'atmospheric';
+    const step = Math.max(thin ? .82 : .76, size.x / (thin ? 44 : 46), size.y / 24, size.z / (thin ? 22 : 24));
+    const nx = Math.ceil(size.x / step) + 1;
+    // Broad, thin cloud layers still need enough vertical samples for both surfaces.
+    const ny = Math.max(thin ? 12 : 4, Math.ceil(size.y / step) + 1);
+    const nz = Math.ceil(size.z / step) + 1;
     const sx = size.x / (nx - 1); const sy = size.y / (ny - 1); const sz = size.z / (nz - 1);
     const stride = nx * ny; const total = stride * nz;
     const density = new Float32Array(total); const gradient = new Float32Array(total * 3);
@@ -59,9 +63,20 @@ export function cloudSurfaceGeometry(clusters: readonly CloudCluster[]) {
           if ((density[first] >= 0) !== (density[second] >= 0)) polygon.push(vertex(first, second));
         }
         if (polygon.length < 3) continue;
-        center.set(0, 0, 0); normal.set(0, 0, 0);
-        for (const index of polygon) { center.add(point.fromArray(positions, index * 3)); normal.add(point.fromArray(normals, index * 3)); }
-        center.multiplyScalar(1 / polygon.length); normal.normalize();
+        center.set(0, 0, 0);
+        for (const index of polygon) center.add(point.fromArray(positions, index * 3));
+        center.multiplyScalar(1 / polygon.length);
+        point.fromArray(positions, polygon[0] * 3);
+        edgeA.fromArray(positions, polygon[1] * 3).sub(point); edgeB.fromArray(positions, polygon[2] * 3).sub(point);
+        normal.crossVectors(edgeA, edgeB).normalize();
+        // Wind the tetrahedron's actual planar cut toward its empty corner. Smoothed
+        // shading normals can point across this plane on shallow cloud undersides.
+        const interior = corners[tetrahedron.find(corner => density[corners[corner]] >= 0)!];
+        const exterior = corners[tetrahedron.find(corner => density[corners[corner]] < 0)!];
+        edgeA.set((exterior % nx - interior % nx) * sx,
+          (Math.floor(exterior / nx) % ny - Math.floor(interior / nx) % ny) * sy,
+          (Math.floor(exterior / stride) - Math.floor(interior / stride)) * sz);
+        if (normal.dot(edgeA) < 0) normal.negate();
         tangent.fromArray(positions, polygon[0] * 3).sub(center).normalize(); bitangent.crossVectors(normal, tangent).normalize();
         polygon.sort((a, b) => {
           point.fromArray(positions, a * 3).sub(center); const first = Math.atan2(point.dot(bitangent), point.dot(tangent));
@@ -138,11 +153,11 @@ const cloudFragment = /* glsl */ `
     float topLight = smoothstep(-.65, .75, n.y);
     float sun = smoothstep(-.5, .9, dot(n, uSunDirection));
     float light = clamp(.10 + topLight * .57 + sun * .20 + vShading.x * .19 - vShading.y * .16, 0., 1.);
-    // The first usable moisture is already visibly gray; bright white means empty.
-    float wet = pow(clamp((vMoisture - ${CLOUD_WET_THRESHOLD}) / ${1 - CLOUD_WET_THRESHOLD}, 0., 1.), .35);
-    vec3 wetShade = uShade * mix(1., .30, wet);
-    vec3 wetTop = mix(uWhite, mix(uWhite * .38, uShade * .62, .25), wet);
-    // Moisture darkens the belly most strongly while retaining a lit, rounded crown.
+    // Water content tints the belly silver-gray while sunlit crowns remain luminous.
+    float wet = pow(clamp((vMoisture - ${CLOUD_WET_THRESHOLD}) / ${1 - CLOUD_WET_THRESHOLD}, 0., 1.), .70);
+    vec3 wetShade = uShade * mix(1., .70, wet);
+    vec3 wetTop = mix(uWhite, mix(uWhite * .82, uShade, .12), wet);
+    // Every cloud keeps a continuous underside-to-crown moisture gradient.
     vec3 color = mix(wetShade, wetTop, light);
     // Smooth volume normals keep the surface soft without a tiled micro-pattern.
     float rim = pow(1. - max(dot(n, normalize(vView)), 0.), 3.);
@@ -161,7 +176,7 @@ export function makeClouds(diagnostics: boolean, clusters = createCloudClusters(
   const visibility: number[] = Array.from({length:MAX_CLOUDS}, (_, index) => index < clusters.length ? 1 : 0);
   const material = new ShaderMaterial({ transparent: true, depthWrite: true, vertexShader: cloudVertex, fragmentShader: cloudFragment, uniforms: {
     uVisibility: { value: visibility }, uMoisture: { value: moisture }, uSunDirection: { value: new Vector3(-.4, .8, -.35).normalize() },
-    uOrigins: { value: origins }, uTouches: { value: touches }, uWhite: { value: new Color(world.lighting.cloudColor) }, uShade: { value: new Color('#8aabc9') },
+    uOrigins: { value: origins }, uTouches: { value: touches }, uWhite: { value: new Color(world.lighting.cloudColor) }, uShade: { value: new Color('#b7c8d7') },
     uFog: { value: new Color(world.lighting.fogColor) }, uFogRange: { value: new Vector2(world.lighting.fogNear, world.lighting.fogFar) },
   } });
   const mesh = new Mesh(geometry, material); mesh.name = 'environment-clouds'; mesh.frustumCulled = false;
@@ -183,8 +198,8 @@ export function makeClouds(diagnostics: boolean, clusters = createCloudClusters(
   };
 }
 
-const dayCloud = new Color('#ffffff'), duskCloud = new Color('#ffbda8'), stormCloud = new Color('#acb8c2');
-const dayShade = new Color('#8aabc9'), duskShade = new Color('#786180'), stormShade = new Color('#4d657d'), dayFog = new Color(world.lighting.fogColor);
+const dayCloud = new Color('#ffffff'), duskCloud = new Color('#ffbda8'), stormCloud = new Color('#dae1e5');
+const dayShade = new Color('#b7c8d7'), duskShade = new Color('#786180'), stormShade = new Color('#899da9'), dayFog = new Color(world.lighting.fogColor);
 
 export function writeCloudMatrices(clouds: ReturnType<typeof makeClouds>, elapsed: number, state?: SceneRuntime) {
   clouds.setPickTime(elapsed);

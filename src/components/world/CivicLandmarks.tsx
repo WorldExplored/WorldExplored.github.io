@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { DoubleSide, ExtrudeGeometry, Group, InstancedMesh, MeshPhysicalMaterial, Object3D, Shape, TorusGeometry, Vector3, type BufferGeometry } from 'three';
+import { CylinderGeometry, SphereGeometry, DoubleSide, ExtrudeGeometry, Group, InstancedMesh, MeshPhysicalMaterial, Object3D, Shape, TorusGeometry, Vector3, type BufferGeometry } from 'three';
 import { combine, roundedBox, stroke, usePalette, useResources, type ModelProps } from './BuildingKit';
+import { HISTORY_SCALE, sizeHistoryGeometry } from './historyDimensions';
 import { createFacadeGarden } from './FacadeGarden';
 import { floraGeometry, type FloraKind } from './Flora';
 import { circulationPaths } from './circulation';
@@ -90,8 +91,26 @@ function createHistoryInterior() {
     b.box('metal', 1.8, 1.15, .045, x, 2.1, -2.8);
   }
   for (const [x, z] of [[-3.6, 2.6], [3.6, 2.6], [-4.35, -.2], [4.35, -.2]] as const) b.plant(x, floor, z, 1.25);
-  b.table(-2.6, floor, .65, 1.4, .65, .7); b.table(2.6, floor, .65, 1.4, .65, .7);
-  for (const x of [-2.95, -2.25, 2.25, 2.95]) b.chair(x, floor, 1.35, Math.PI);
+  // A pair of low display islands keeps the entry and central stair clear.
+  for(const x of [-2.6,2.6]) {
+    b.box('paper',1.55,.68,1.05,x,floor+.34,.65);
+    b.box('metal',1.61,.05,1.11,x,floor+.705,.65);
+    b.box('paper',.52,.018,.18,x,floor+.744,1.03,-.08);
+  }
+  // Early desktop: deep CRT, sloped keyboard, disk slots and individual keys.
+  b.box('paper',.76,.65,.59,-2.6,floor+1.06,.49);
+  b.box('metal',.66,.47,.035,-2.6,floor+1.1,.799);
+  b.box('screen',.54,.36,.018,-2.6,floor+1.11,.824);
+  b.box('metal',.28,.026,.026,-2.46,floor+.80,.802);
+  b.box('paper',.86,.075,.26,-2.6,floor+.777,.93);
+  for(let row=0;row<3;row++)for(let key=0;key<11;key++)b.box('metal',.047,.014,.043,-2.94+key*.062,floor+.823,.85+row*.064);
+  // A cutaway processor board with socket, ceramic packages and copper bus traces.
+  b.box('leaf',1.15,.035,.66,2.6,floor+.76,.65);
+  b.box('metal',.4,.055,.4,2.48,floor+.80,.65);
+  b.box('paper',.29,.065,.29,2.48,floor+.86,.65);
+  for(let i=0;i<9;i++)for(const side of [-1,1])b.rod('pipe',[2.25+i*.057,floor+.806,.43],[2.25+i*.057,floor+.806,.43+side*.11],.008);
+  for(let i=0;i<4;i++){b.box('metal',.13,.04,.25,2.92,floor+.80,.43+i*.14);b.box('paper',.03,.012,.055,2.92,floor+.827,.43+i*.14);}
+  for(const x of [-2.6,2.6])b.box('light',.92,.012,.025,x,floor+.73,.14);
   for (const x of [-3.2, 0, 3.2]) b.lamp(x, 5.7, -.8, 1.25);
   // Framed gallery panels and picture lights sit against the solid rear wall.
   for (const x of [-3.8, -2.1, 2.1, 3.8]) {
@@ -101,7 +120,7 @@ function createHistoryInterior() {
     b.box('metal', .8, .055, .18, x, 5.75, -3.22);
     b.box('light', .67, .025, .12, x, 5.715, -3.22);
   }
-  return b.finish();
+  return sizeHistoryGeometry(b.finish());
 }
 
 export function createHistoryFlowerBorder(material: MeshPhysicalMaterial) {
@@ -117,7 +136,8 @@ export function createHistoryFlowerBorder(material: MeshPhysicalMaterial) {
   const entries: Record<FloraKind, Array<{ x: number; y: number; z: number; scale: number; rotation: number }>> = {
     reeds: [], beach: [], shrub: [], flower: [], broadleaf: [], sedge: [], clover: [], fern: [], foxglove: [], bluebell: [], poppy: [], allium: [], palm: [],
   };
-  for (const [localX, localZ] of borderSites) {
+  for (const [originalX, originalZ] of borderSites) {
+    const localX = originalX * HISTORY_SCALE, localZ = originalZ * HISTORY_SCALE;
     const x = landmark.position[0] + localX * Math.cos(heading) + localZ * Math.sin(heading);
     const z = landmark.position[2] - localX * Math.sin(heading) + localZ * Math.cos(heading);
     if (paths.some(path => path.points.slice(1).some((point, i) => distanceToSegment(x, z, path.points[i], point) < path.width / 2 + .45))) continue;
@@ -170,7 +190,7 @@ export function makeHistoryMuseum() {
     ribs.push(stroke(t => { const x = (t - .5) * 10.61; return new Vector3(x, archHeight(x) - .19, z); }, .075, 40));
     for (const x of [-5.21, 5.21]) ribs.push(box(.15, 4.85, .15, x, 3.5, z));
   }
-  const stair = stairFlight(0, 1.73, 1.38, floor, upper, 17, .24);
+  const stair = stairFlight(0, 1.73, 1.38, floor, upper, 14, .30);
   const gallery = floorSlab('history-upper-gallery-floor', [floorRectangle(-4.42, 0, 1.49, 6.72), floorRectangle(4.42, 0, 1.49, 6.72), floorRectangle(0, -2.69, 8.84, 1.34)], upper, .17);
   const rails = combine([stair.rails, guardRail(-3.68, 3.22, -3.68, -2.02, upper), guardRail(3.68, 3.22, 3.68, -2.02, upper), guardRail(-3.68, -2.02, -.73, -2.02, upper), guardRail(.73, -2.02, 3.68, -2.02, upper)]);
   const cases: BufferGeometry[] = [], caseGlass: BufferGeometry[] = [];
@@ -195,8 +215,33 @@ export function makeHistoryMuseum() {
     details.push(box(.035, .43, .045, side * .25, 2.13, 3.675));
   }
   for (const x of [-4.38, 4.38]) for (const z of [-.8, 1.42]) {
-    exhibits.push(new TorusGeometry(.19, .055, 6, 16).rotateY(x < 0 ? .35 : -.35).translate(x, upper + .88, z));
-    exhibits.push(box(.045, .24, .045, x, upper + .69, z));
+    const baseY=upper+.59;
+    if(x<0&&z<0) {
+      // Terrestrial globe with a tilted meridian and a cast pedestal.
+      exhibits.push(new SphereGeometry(.18,16,10).translate(x,baseY+.28,z));
+      exhibitFrames.push(new TorusGeometry(.225,.012,5,28).rotateZ(.3).translate(x,baseY+.28,z));
+      exhibits.push(new CylinderGeometry(.055,.115,.06,12).translate(x,baseY+.03,z),box(.035,.13,.035,x,baseY+.11,z));
+    } else if(x>0&&z<0) {
+      // Brass microscope: curved arm, objective, stage and focusing wheel.
+      exhibits.push(box(.3,.035,.29,x,baseY+.017,z),stroke(t=>new Vector3(x-.07+Math.sin(t*Math.PI)*.075,baseY+.06+t*.38,z-.07),.027,12));
+      exhibits.push(new CylinderGeometry(.042,.05,.2,12).rotateZ(-.18).translate(x+.035,baseY+.38,z+.02),box(.21,.025,.19,x,baseY+.17,z+.04));
+      exhibitFrames.push(new CylinderGeometry(.048,.048,.025,10).rotateZ(Math.PI/2).translate(x+.07,baseY+.3,z-.02));
+    } else if(x<0) {
+      // Small mechanical orrery with three distinct orbital tracks.
+      exhibits.push(new CylinderGeometry(.15,.18,.07,12).translate(x,baseY+.035,z),new SphereGeometry(.06,10,8).translate(x,baseY+.28,z));
+      for(let orbit=0;orbit<3;orbit++) {
+        const r=.10+orbit*.058,angle=orbit*2.1;
+        exhibitFrames.push(new TorusGeometry(r,.006,4,28).rotateX(Math.PI/2).translate(x,baseY+.28,z));
+        exhibits.push(new SphereGeometry(.022+orbit*.008,8,6).translate(x+Math.cos(angle)*r,baseY+.28,z+Math.sin(angle)*r));
+      }
+      exhibits.push(box(.025,.2,.025,x,baseY+.14,z));
+    } else {
+      // Bellows camera with lens barrel, viewfinder and tripod.
+      exhibits.push(box(.28,.20,.16,x,baseY+.3,z));
+      for(let rib=0;rib<6;rib++)exhibitFrames.push(box(.18+rib*.01,.14+rib*.008,.018,x,baseY+.30,z+.095+rib*.023));
+      exhibits.push(new CylinderGeometry(.063,.063,.10,12).rotateX(Math.PI/2).translate(x,baseY+.30,z+.28));
+      for(const angle of [0,2.1,4.2])exhibitFrames.push(stroke(t=>new Vector3(x+Math.sin(angle)*.12*t,baseY+.22*(1-t),z+Math.cos(angle)*.12*t),.013,2));
+    }
     exhibitFrames.push(box(.43, .03, .4, x, upper + .58, z));
     for (const side of [-1, 1]) exhibitFrames.push(box(.018, .62, .66, x + side * .36, upper + .88, z));
     exhibitFrames.push(box(.74, .02, .68, x, upper + 1.19, z));
@@ -209,7 +254,7 @@ export function makeHistoryMuseum() {
       (part === 'planter' ? plantingBeds : part === 'wood' || part === 'trellis' ? plantingWood : planting).push(geometry);
     }
   }
-  return {
+  return sizeHistoryGeometry({
     details: combine(details), exhibits: combine(exhibits), exhibitFrames: combine(exhibitFrames),
     planting: combine(planting), plantingWood: combine(plantingWood), plantingBeds: combine(plantingBeds),
     base: floorSlab('history-foundation', [floorRectangle(0, 0, 11.2, 7.7)], 1.01, .21, 'foundation'),
@@ -217,7 +262,7 @@ export function makeHistoryMuseum() {
     cases: combine(cases), caseGlass: combine(caseGlass),
     threshold: floorSlab('history-threshold', [floorRectangle(0, 3.82, 3.58, .7)], 1.08, .23, 'threshold'),
     canopy: combine([box(4.1, .15, 1.17, 0, 3.71, 3.95), box(.1, 2.61, .1, -1.96, 2.38, 4.42), box(.1, 2.61, .1, 1.96, 2.38, 4.42), box(.26, .32, .26, -1.96, .92, 4.42), box(.26, .32, .26, 1.96, .92, 4.42)]),
-  };
+  });
 }
 
 export function HistoryMuseum(props: ModelProps) {

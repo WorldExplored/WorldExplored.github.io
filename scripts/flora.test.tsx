@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { HISTORY_SCALE } from '../src/components/world/historyDimensions';
 import assert from 'node:assert/strict';
 import { create } from '@react-three/test-renderer';
 import { MeshPhysicalMaterial, PerspectiveCamera, Vector3, InstancedMesh, type WebGLProgramParametersWithUniforms, type WebGLRenderer } from 'three';
@@ -41,7 +42,7 @@ test('the beacon has rooted tufts and History keeps its flower border outside wa
     const landmark=world.landmarks.find(item=>item.id==='history')!,heading=landmark.rotationY??0;
     const paths=createLandscapePlan().paths.filter(path=>path.id?.startsWith('history-'));
     for(const site of entries){
-      assert.ok(Math.abs(site.x)>5.8||site.z<-4.1);
+      assert.ok(Math.abs(site.x)>5.8*HISTORY_SCALE||site.z<-4.1*HISTORY_SCALE);
       const x=landmark.position[0]+site.x*Math.cos(heading)+site.z*Math.sin(heading);
       const z=landmark.position[2]-site.x*Math.sin(heading)+site.z*Math.cos(heading);
       assert.ok(Math.abs(site.y-terrainHeight(x,z)+.02)<1e-9);

@@ -142,9 +142,9 @@ function makePlants(plan: LandscapePlan, flowers: boolean, prepared?: PlantPosit
   const colors = new Float32Array(maximum * 3);
   const transform = new Object3D();
   const tint = new Color();
-  const dark = new Color('#344e2b');
-  const light = new Color('#81935a');
-  const dry = new Color('#9c9266');
+  const dark = new Color('#3e5933');
+  const light = new Color('#7b9256');
+  const dry = new Color('#9b9465');
   const random = seededRandom(flowers ? 713 : 914);
   const occupied = new Uint16Array(160 * 160);
   for (let index = 0; index < maximum; index++) {
@@ -159,7 +159,7 @@ function makePlants(plan: LandscapePlan, flowers: boolean, prepared?: PlantPosit
     if (flowers) tint.set('#ffffff'); else {
       const patch = .5 + .5 * Math.sin(plant.x * .73 + Math.sin(plant.z * .31) * 2.3) * Math.cos(plant.z * .51);
       tint.copy(dark).lerp(light, .12 + patch * .58 + random() * .2);
-      if (random() < .13 + patch * .14) tint.lerp(dry, .25 + random() * .42);
+      if (random() < .08 + patch * .07) tint.lerp(dry, .25 + random() * .42);
       transform.scale.y *= .58 + patch * .5 + random() * .2;
       transform.updateMatrix();mesh.setMatrixAt(index, transform.matrix);
     }
@@ -263,13 +263,15 @@ function makeLandscape(plan: LandscapePlan) {
       float wash = shoreWave(coast,groundXZ,uShoreTime,shoreExposure).y;
       sand = mix(sand,vec3(.73,.84,.80),wash*.22);
       vec3 soil = mix(vec3(.22,.16,.095),vec3(.33,.25,.14),broad);
-      vec3 groundcover=mix(vec3(.045,.095,.024),vec3(.12,.20,.052),broad) * (.78+dot(forestScan,vec3(.333))*.82);
+      vec3 groundcover=mix(vec3(.048,.100,.033),vec3(.155,.228,.093),broad) * (.91+dot(forestScan,vec3(.333))*.23);
       float thatch=smoothstep(.58,.77,groundNoise(groundXZ*8.1));
-      groundcover=mix(groundcover,vec3(.19,.17,.075),thatch*.29);
+      groundcover=mix(groundcover,vec3(.21,.20,.105),thatch*.12);
       vec2 grassUv=mat2(.8,-.6,.6,.8)*groundXZ*.5;
       vec3 grassScan=texture2D(uGrassColor,grassUv).rgb;
       float grassAO=texture2D(uGrassArm,grassUv).r;
-      groundcover=mix(groundcover,grassScan*vec3(1.25,1.65,1.03),.67)*(.78+grassAO*.22);
+      // Keep scanned fibre relief while matching the living blades.
+      float grassRelief=dot(grassScan,vec3(.2126,.7152,.0722));
+      groundcover*=mix(.82,1.16,smoothstep(.02,.38,grassRelief))*(.87+grassAO*.13);
       vec3 inland=mix(soil,groundcover,grass);
       vec3 townGravel=mix(vec3(.055,.12,.068),vec3(.15,.22,.095),broad)*(.91+grain*.12);
       inland=mix(inland,mix(townGravel,groundcover,grass),ecology.z);
