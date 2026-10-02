@@ -1,4 +1,6 @@
-import { BoxGeometry, PlaneGeometry, BufferGeometry, CylinderGeometry, Float32BufferAttribute, ExtrudeGeometry, Shape, SphereGeometry, TubeGeometry, CatmullRomCurve3, Vector3 } from 'three';
+import { BoxGeometry, PlaneGeometry, BufferGeometry, Color, CylinderGeometry, Float32BufferAttribute, ExtrudeGeometry, Shape, SphereGeometry, TubeGeometry, CatmullRomCurve3, Vector3 } from 'three';
+import { strut } from './BuildingKit';
+import { seededRandom } from './terrain';
 import { floorSlab, floorRectangle, floorEllipse, type FloorPolygon } from './InteriorKit';
 import { buildCityInterior } from './CityInteriors';
 import { createFacadeGarden } from './FacadeGarden';
@@ -29,7 +31,7 @@ export function buildCityArchitecture(building: Readonly<CityBuilding>, shellAdd
   const sideFaces: { x: number; y: number; z: number; width: number; depth: number; height: number; room: string }[] = [];
   const { width: w, depth: d, height: h, family } = building;
   const glazed = ['terraced-apartments', 'narrow-mixed-use', 'rounded-housing', 'greenhouse-residences', 'winter-glasshouse'].includes(family);
-  const cladding: CityFinish = ['waterfront-rowhouses','split-level-homes','stacked-maisonettes'].includes(family) ? 'wood' : family === 'arched-apartments' ? 'metal' : 'stone';
+  const cladding: CityFinish = ['waterfront-rowhouses','split-level-homes','stacked-maisonettes'].includes(family) ? 'wood' : family === 'arched-apartments' ? 'metal' : 'porcelain';
   const box = (x: number, y: number, z: number, width: number, height: number, depth: number, finish: CityFinish = 'porcelain', yaw = 0) => {
     const pane=finish==='glass'&&Math.min(width,depth)<.04;
     const geometry=pane?(width<depth?new PlaneGeometry(depth,height).rotateY(Math.PI/2):new PlaneGeometry(width,height)):new BoxGeometry(width,height,depth);
@@ -87,7 +89,7 @@ export function buildCityArchitecture(building: Readonly<CityBuilding>, shellAdd
     part('head', opening + .11, .075, .17, x, floor + height + .025, z + .018, 'aqua');
     part('threshold', opening + .12, .025, .25, x, floor + .0125, z + .055, 'metal');
     // Public lobbies welcome visitors; residential and terrace doors rest closed.
-    // Glazed leaves retain views into furnished rooms behind their cedar panels.
+    // Glazed leaves retain views into furnished rooms behind molded kick panels.
     const yaw = open ? 110 * Math.PI / 180 : 0, leafWidth = opening - .01, hinge = x + opening / 2-.005;
     const leaf = (role: string, width: number, tall: number, depth: number, offset: number, py: number, finish: CityFinish, face = 0) => {
       part(role, width, tall, depth, hinge + offset * Math.cos(yaw) + face * Math.sin(yaw), py, z - offset * Math.sin(yaw) + face * Math.cos(yaw), finish, yaw);
@@ -168,7 +170,7 @@ export function buildCityArchitecture(building: Readonly<CityBuilding>, shellAdd
     roomViews.push({building:building.id,window:[viewX,y+.86,front+.018],target:[viewX,y+.70,z],floor,width:width-.24,height:height-.245,depth:depth-.24});
     if(balcony) {
       const balconyDepth=.72;
-      add(floorSlab(`${roomId}-balcony`,[floorRectangle(x,front+balconyDepth/2-.01,width+.03,balconyDepth+.02)],floor,.13,'balcony'),'stone');
+      add(floorSlab(`${roomId}-balcony`,[floorRectangle(x,front+balconyDepth/2-.01,width+.03,balconyDepth+.02)],floor,.13,'balcony'),'porcelain');
       if (y < .21) {
         const clear = opening + .16, railWidth = (width - clear) / 2;
         for (const side of [-1, 1]) {
@@ -323,20 +325,20 @@ export function buildCityArchitecture(building: Readonly<CityBuilding>, shellAdd
     // Transfer beams bear on the lower side walls and carry the offset upper wall.
     for(const z of [uz0+.07,uz1-.07]) {
       const beam=new BoxGeometry(upperW+.36,.20,.16);beam.userData.structuralSupport={role:'transfer-beam'};
-      add(beam,'metal',upperX,upperY,z);
-      const postX=ux1-.065,post=new BoxGeometry(.13,upperY-.10,.13);post.userData.structuralSupport={role:'column'};
-      add(post,'metal',postX,(upperY-.10)/2,z);
+      add(beam,'aqua',upperX,upperY-.10,z);
+      const postX=ux1-.065,post=new BoxGeometry(.18,upperY-.20,.18);post.userData.structuralSupport={role:'column'};
+      add(post,'aqua',postX,(upperY-.20)/2,z);
       foundationPolygons.push(floorRectangle(postX,z,.22,.22));
     }
     roof(upperX,upperY+pitch+.02,upperZ,w-.65,d-.75);
   } else {
     // Ground lobby is a furnished open-front room; the upper boarding path remains clear.
     room(-.82, .2, 0, 1.25, d - .35, 1.78, 0, true);
-    add(floorSlab('station-lobby-threshold',[floorRectangle(-.82,d/2-.27,1.05,.6)],.33,.33,'threshold'),'stone');
+    add(floorSlab('station-lobby-threshold',[floorRectangle(-.82,d/2-.27,1.05,.6)],.33,.33,'threshold'),'porcelain');
     // Twin platforms leave the guideway and undercarriage a real central slot.
     const platform = floorSlab('station-boarding-platform', [floorRectangle((-w / 2 - 1.12) / 2, 0, w / 2 - 1.12, 1.2), floorRectangle((w / 2 + .58) / 2, 0, w / 2 - .58, d)], 2.32, .18, 'threshold');
     platform.userData.floor.kind = 'platform';
-    add(platform, 'stone');
+    add(platform, 'porcelain');
     // Rear posts tuck between the curved arrivals; the roof cantilevers over the track ends.
     for (const side of [-1, 1]) for (const z of side < 0 ? [-.38, .38] : [-d * .43, d * .43]) {
       const x = side * w * .44;
@@ -351,6 +353,50 @@ export function buildCityArchitecture(building: Readonly<CityBuilding>, shellAdd
     for (const z of [-.20, .20]) box(-w * .42, 2.57, z, .08, .43, .08, 'metal');
     // Top landing is kept open around local [1.6, 2.32, 0].
     for (const z of [-d / 2 + .05, d / 2 - .05]) box(w * .38, 2.72, z, w * .18, .065, .065, 'metal');
+  }
+  for(const upper of sideFaces.filter(face=>face.y>.21)) {
+    const lower=sideFaces.filter(face=>face.y<upper.y-.1&&Math.abs(face.y+face.height-upper.y)<.03).sort((a,b)=>Math.abs(a.x-upper.x)-Math.abs(b.x-upper.x))[0];
+    if(!lower||family==='rounded-housing')continue;
+    for(const end of [-1,1]){
+      const upperEdge=upper.z+end*upper.depth/2,lowerEdge=lower.z+end*lower.depth/2;
+      if((upperEdge-lowerEdge)*end<.08)continue;
+      for(const side of [-1,1]){
+        const x=Math.max(lower.x-lower.width/2+.16,Math.min(lower.x+lower.width/2-.16,upper.x+side*(upper.width/2-.16))),a=new Vector3(x,upper.y-.57,lowerEdge-end*.06),b=new Vector3(x,upper.y-.07,upperEdge-end*.04);
+        const brace=strut(a,b,.060);brace.userData.structuralSupport={role:'cantilever-brace',room:upper.room,bearing:a.toArray(),seat:b.toArray()};add(brace,'aqua');
+        const shoe=new BoxGeometry(.20,.12,Math.abs(upperEdge-lowerEdge)+.18);shoe.userData.structuralSupport={role:'cantilever-seat',room:upper.room};add(shoe,'aqua',x,upper.y-.06,(lowerEdge+upperEdge)/2);
+        box(x,upper.y-.57,lowerEdge-end*.025,.22,.23,.09,'metal');
+      }
+    }
+  }
+  // Window troughs are carried by two wall brackets and contain individually
+  // seeded planting. Their roots share the soil surface rather than floating pots.
+  if(family!=='public-station')for(const [index,face]of sideFaces.entries()){
+    const side=index%2?1:-1,random=seededRandom([...building.id].reduce((n,c)=>n*17+c.charCodeAt(0),23)+index*701);
+    const length=.54+random()*.24,depth=.24,base=face.y+.22,cz=face.z+(random()-.5)*face.depth*.35;
+    const wallX=family==='rounded-housing'?face.x+side*(face.width/2-.10)*Math.sqrt(1-((cz-face.z)/(face.depth/2-.10))**2):face.x+side*(face.width/2-(glazed?.08:0));
+    const cx=wallX+side*(depth/2+.025),tag={building:building.id,room:face.room,side,wallX,base,center:[cx,base,cz],length,depth};
+    const trough=cityRoundedBox(depth,.23,length,.04);trough.userData.mountedPlanter={...tag,role:'vessel'};add(trough,index%3?'porcelain':'aqua',cx,base,cz);
+    const soil=new BoxGeometry(depth-.055,.012,length-.06);soil.userData.mountedPlanter={...tag,role:'soil'};add(soil,'stone',cx,base+.229,cz);
+    for(const end of [-1,1]){
+      const z=cz+end*(length/2-.10),anchorX=family==='rounded-housing'?face.x+side*(face.width/2-.10)*Math.sqrt(1-((z-face.z)/(face.depth/2-.10))**2):wallX;
+      const reach=Math.abs(cx+side*depth/2-anchorX)+.04,arm=new BoxGeometry(reach,.07,.065),plate=new BoxGeometry(.05,.25,.12);
+      arm.userData.mountedPlanter={...tag,role:'bracket-arm'};plate.userData.mountedPlanter={...tag,wallX:anchorX,role:'wall-anchor'};
+      add(arm,'metal',anchorX+side*(reach/2-.02),base-.035,z);add(plate,'metal',anchorX+side*.005,base-.15,z);
+    }
+    const leaves=10+Math.floor(random()*7),form=index%3;
+    for(let leaf=0;leaf<leaves;leaf++){
+      const rootZ=cz+(random()-.5)*(length-.14),yaw=random()*Math.PI*2,width=form===0?.018+random()*.012:.042+random()*.022,height=.15+random()*.22,reach=form===2?.18:.08+random()*.12;
+      const geometry=new BufferGeometry(),positions:number[]=[],indices:number[]=[];
+      for(let row=0;row<=5;row++){
+        const t=row/5,spread=Math.sin(Math.PI*t)*width,py=Math.sin(t*Math.PI*.72)*height,pz=t*reach;
+        for(const rib of [-1,1])positions.push(rib*spread,py,pz);
+        if(row){const k=row*2;indices.push(k-2,k-1,k,k-1,k+1,k);}
+      }
+      geometry.setAttribute('position',new Float32BufferAttribute(positions,3));geometry.setIndex(indices);geometry.computeVertexNormals();geometry.rotateY(yaw);
+      const tint=new Color(['#377d52','#4d925b','#78a258'][form]).multiplyScalar(.85+random()*.25),colors=new Float32Array(positions.length);
+      for(let n=0;n<colors.length;n+=3){colors[n]=tint.r;colors[n+1]=tint.g;colors[n+2]=tint.b;}geometry.setAttribute('color',new Float32BufferAttribute(colors,3));
+      geometry.userData.mountedPlanter={...tag,role:'foliage'};add(geometry,'garden',cx,base+.235,rootZ);
+    }
   }
   if(family!=='public-station'&&sideFaces.length) {
     for(const side of [-1,1]) {
@@ -419,7 +465,7 @@ export function buildCityArchitecture(building: Readonly<CityBuilding>, shellAdd
       const start=Math.max(...fronts.map(front=>front.z-.02)),end=entrance[2]+.12;
       thresholds.push(floorRectangle(0,(start+end)/2,w-.08,end-start));
     }
-    if(thresholds.length)add(floorSlab(`${building.id}-entry-porch`,thresholds,fronts[0].floor,.13,'threshold'),'stone');
+    if(thresholds.length)add(floorSlab(`${building.id}-entry-porch`,thresholds,fronts[0].floor,.13,'threshold'),'porcelain');
   }
   if (access.length) {
     const coreX = 0, coreZ = -d / 2 - .68;
@@ -441,7 +487,7 @@ export function buildCityArchitecture(building: Readonly<CityBuilding>, shellAdd
         }
         // One unioned walking surface prevents coincident landings for shared stops.
         const landing=floorSlab(`${building.id}-lift-landing-${floor}`,polygons,floor,.09,'threshold');
-        landing.userData.liftLanding={building:building.id,floor};add(landing,'stone');
+        landing.userData.liftLanding={building:building.id,floor};add(landing,'porcelain');
         const served=access.filter(room=>Math.abs(room.floor-floor)<.00001),front=coreZ+.46;
         const corridorHeight=Math.min(...served.map(room=>room.height));
         const cover=floorSlab(`${building.id}-corridor-cover-${floor}`,polygons,floor+corridorHeight+.09,.07,'threshold');

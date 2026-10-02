@@ -108,3 +108,16 @@ test('internal connections are genuine openings and gallery furniture preserves 
     }
   } finally { Object.values(gallery).forEach(geometry => geometry.dispose()); }
 });
+
+
+test('finished landmark floors and furniture share the smooth pearl resin material',async()=>{
+  for(const f of fixtures){
+    const renderer=await create(<f.Component active={false} paused quality="high" runtime={{current:createSceneRuntime()}}/>);
+    try{
+      const meshes=renderer.scene.findAll(node=>node.instance.type==='Mesh').map(node=>node.instance as Mesh);
+      const finished=meshes.filter(mesh=>!Array.isArray(mesh.material)&&mesh.material.name==='pearl-resin-interior');
+      assert.ok(finished.length>0);
+      for(const mesh of finished){const material=mesh.material as import('three').MeshPhysicalMaterial;assert.equal(material.map,null);assert.equal(material.normalMap,null);assert.ok(material.roughness<.35&&material.clearcoat>.5);}
+    }finally{await renderer.unmount();}
+  }
+});

@@ -227,23 +227,27 @@ test('landmarks fit their planting footprints and preserve the intended hierarch
   console.log(JSON.stringify({ landmarkBounds: bounds }));
 });
 
-test('architecture separates diffuse natural finishes, satin metal and clear glazing', async () => {
+test('architecture separates molded resin, diffuse natural finishes, satin metal and clear glazing', async () => {
   const runtime = { current: createSceneRuntime() };
   const renderer = await create(<group>{world.landmarks.map(({ id }) => <LandmarkModel key={id} id={id} runtime={runtime} active={false} paused={false} quality="low" />)}</group>);
   try {
-    let glass=0,wood=0,fabric=0,metal=0,stone=0;
+    let glass=0,resin=0,fabric=0,metal=0,stone=0;
     for(const node of renderer.scene.findAll(item=>item.instance.type==='Mesh')) {
       const mesh=node.instance as Mesh,material=mesh.material as MeshPhysicalMaterial;
       if(mesh.name==='signal-light-sweep')continue;
       assert.ok(Number.isFinite(material.roughness)&&material.roughness>=0&&material.roughness<=1);
-      if(mesh.name.endsWith('-wood')){wood++;assert.ok(material.roughness>=.7&&material.metalness===0);}
+      if(material.name==='pearl-resin-interior'){
+        resin++;
+        assert.ok(material.roughness>=.22&&material.roughness<=.35&&material.metalness<=.05&&material.clearcoat>=.5);
+        assert.equal(material.map,null);assert.equal(material.roughnessMap,null);assert.equal(material.normalMap,null);
+      }else if(mesh.name.endsWith('-wood')){assert.ok(material.roughness>=.7&&material.metalness===0);}
       if(mesh.name.endsWith('-fabric')){fabric++;assert.ok(material.roughness>=.9&&material.metalness===0);}
       if(material.name==='satin-aluminum-trim'||mesh.name.endsWith('-metal')){metal++;assert.ok(material.metalness>=.5&&material.roughness>=.35);}
       if(material.name==='limestone-foundation'){stone++;assert.ok(material.roughness>=.8&&material.clearcoat<=.1);}
       if(material.name==='matte-roof-planting')assert.ok(material.roughness>=.8&&material.clearcoat===0);
       if(material.transparent){glass++;assert.ok(material.opacity>=.15&&material.opacity<=.45);assert.equal(material.depthWrite,false);assert.equal(mesh.castShadow,false);}
     }
-    assert.ok(glass>=6&&wood>=5&&fabric>=5&&metal>=5&&stone>=5,'All five furnished landmarks preserve visibly different finish families.');
+    assert.ok(glass>=6&&resin>=5&&fabric>=5&&metal>=5&&stone>=5,'All five furnished landmarks preserve visibly different finish families.');
   } finally { await renderer.unmount(); }
 });
 

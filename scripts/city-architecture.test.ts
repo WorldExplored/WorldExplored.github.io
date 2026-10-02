@@ -438,3 +438,52 @@ test('continuous vine stems stay against real wall or setback roof surfaces and 
     } finally {item.dispose();}
   }
 });
+
+test('mounted city troughs bear on real brackets anchored into each room slab or side wall',()=>{
+  for(const building of cityBuildings.filter(item=>item.family!=='public-station')){
+    const city=fixture(building);
+    try{
+      const planters=city.meshes.filter(mesh=>mesh.geometry.userData.mountedPlanter?.role==='vessel');
+      assert.ok(planters.length>=city.rooms.length,'every occupied storey has an attached planted accent');
+      for(const planter of planters){
+        const tag=planter.geometry.userData.mountedPlanter;planter.geometry.computeBoundingBox();const box=planter.geometry.boundingBox!;
+        assert.ok(Math.abs(box.min.y-tag.base)<1e-5);
+        const brackets=city.meshes.filter(mesh=>mesh.geometry.userData.mountedPlanter?.room===tag.room&&mesh.geometry.userData.mountedPlanter?.role==='bracket-arm');
+        assert.equal(brackets.length,2);
+        for(const bracket of brackets){bracket.geometry.computeBoundingBox();const b=bracket.geometry.boundingBox!;assert.ok(Math.abs(b.max.y-box.min.y)<1e-5);assert.ok(b.max.z>box.min.z&&b.min.z<box.max.z);}
+        const roomSlab=city.meshes.find(mesh=>mesh.geometry.userData.roomAccess?.room===tag.room)!;
+        const anchors=city.meshes.filter(mesh=>mesh.geometry.userData.mountedPlanter?.room===tag.room&&mesh.geometry.userData.mountedPlanter?.role==='wall-anchor');
+        for(const anchor of anchors){
+          anchor.geometry.computeBoundingBox();const center=anchor.geometry.boundingBox!.getCenter(new Vector3());
+          const ray=new Raycaster(new Vector3(anchor.geometry.userData.mountedPlanter.wallX+tag.side*.3,center.y,center.z),new Vector3(-tag.side,0,0),0,.5);
+          const walls=city.meshes.filter(mesh=>mesh.geometry.userData.roomWall?.room===tag.room);
+          assert.ok(ray.intersectObjects([roomSlab,...walls],false).length,`${building.id}/${tag.room}: mounting plate meets real building structure at ${center.toArray()}`);
+        }
+        const foliage=city.meshes.filter(mesh=>mesh.geometry.userData.mountedPlanter?.room===tag.room&&mesh.geometry.userData.mountedPlanter?.role==='foliage');
+        assert.ok(foliage.length>=10);
+        for(const leaf of foliage){leaf.geometry.computeBoundingBox();assert.ok(Math.abs(leaf.geometry.boundingBox!.min.y-(tag.base+.235))<1e-5);}
+      }
+    }finally{city.dispose();}
+  }
+});
+
+test('offset floor beams bear below the slab and shifted split-level floors have anchored knee braces',()=>{
+  for(const family of ['stacked-maisonettes','split-level-homes']){
+    const building=cityBuildings.find(item=>item.family===family)!,city=fixture(building);
+    try{
+      const parts=city.meshes.filter(mesh=>mesh.geometry.userData.structuralSupport),braces=parts.filter(mesh=>mesh.geometry.userData.structuralSupport.role==='cantilever-brace');
+      assert.ok(braces.length>=2);
+      for(const brace of braces){
+        const tag=brace.geometry.userData.structuralSupport,seat=city.meshes.find(mesh=>mesh.geometry.userData.structuralSupport?.role==='cantilever-seat'&&mesh.geometry.userData.structuralSupport.room===tag.room)!;
+        const slab=city.meshes.find(mesh=>mesh.geometry.userData.roomAccess?.room===tag.room)!;
+        seat.geometry.computeBoundingBox();slab.geometry.computeBoundingBox();
+        assert.ok(Math.abs(seat.geometry.boundingBox!.max.y-slab.geometry.boundingBox!.min.y)<1e-5,'bearing shoe touches the underside without crossing the finished floor');
+      }
+      if(family==='stacked-maisonettes'){
+        const beams=parts.filter(mesh=>mesh.geometry.userData.structuralSupport.role==='transfer-beam'),columns=parts.filter(mesh=>mesh.geometry.userData.structuralSupport.role==='column');
+        beams.forEach(mesh=>mesh.geometry.computeBoundingBox());columns.forEach(mesh=>mesh.geometry.computeBoundingBox());
+        for(const column of columns)assert.ok(beams.some(beam=>Math.abs(beam.geometry.boundingBox!.min.y-column.geometry.boundingBox!.max.y)<1e-5));
+      }
+    }finally{city.dispose();}
+  }
+});

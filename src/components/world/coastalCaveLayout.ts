@@ -5,9 +5,9 @@ export const COASTAL_CAVE_LAYOUT = [
   {x:-39.288,z:-9.328,yaw:-1.5681753265,scale:.94,form:4,floor:-2.55},
 ] as const;
 
-export const MYTHIC_GROTTO = { x: -55, z: -20, floor: -5.12, width: 8.4, depth: 8.8 } as const;
+export const MYTHIC_GROTTO = { x: -55, z: -20, floor: -7.3, width: 6.05, depth: 6.34, scale: .72, heightScale: .78 } as const;
 export function mythicalCaveClearance(x:number,z:number,radius=0){
-  return (Math.hypot((x-MYTHIC_GROTTO.x)/8.8,(z-MYTHIC_GROTTO.z+2.5)/8)-1)*8-radius;
+  return (Math.hypot((x-MYTHIC_GROTTO.x)/6.8,(z-MYTHIC_GROTTO.z+1.8)/6)-1)*6-radius;
 }
 
 export function caveLocalXZ(site:{x:number;z:number;yaw:number;scale:number},x:number,z:number){
@@ -30,9 +30,17 @@ export function coastalCaveClearance(x:number,z:number,radius=0){
 
 
 const ease=(a:number,b:number,value:number)=>{const t=Math.max(0,Math.min(1,(value-a)/(b-a)));return t*t*(3-2*t);};
+/** Excavate a sloping entrance into the existing seabed, with an undisturbed outer bank. */
+export function mythicalCaveFloor(x:number,z:number,height:number) {
+  const lx=(x-MYTHIC_GROTTO.x)/MYTHIC_GROTTO.scale,lz=(z-MYTHIC_GROTTO.z)/MYTHIC_GROTTO.scale;
+  const across=1-ease(4.8,7.7,Math.abs(lx));
+  const depth=ease(-9.8,-6.8,lz)*(1-ease(3.0,8.0,lz));
+  return height+(Math.min(height,MYTHIC_GROTTO.floor-.22)-height)*across*depth;
+}
+
 /** Lower only the floor inside each bank. The same terrain triangles remain the actual cave floor. */
 export function coastalCaveFloor(x:number,z:number,height:number){
-  let result=height;
+  let result=mythicalCaveFloor(x,z,height);
   for(const site of COASTAL_CAVE_LAYOUT){
     const local=caveLocalXZ(site,x,z);
     const across=1-ease(1.80,2.65,Math.abs(local.x));

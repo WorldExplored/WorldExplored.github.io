@@ -34,11 +34,11 @@ const paneWeather = { value: 1 };
 const paneDusk = { value: 0 };
 
 function finishSurface(material: MeshPhysicalMaterial, finish: Finish) {
-  if (finish === 'stone' || finish === 'porcelain') applySurface(material, 'mineral', 1.5);
-  if (finish === 'wood') {
-    // Painted mineral composite retains a fine surface grain without brown timber cladding.
-    applySurface(material, 'mineral', 1.2); material.color.set('#ffffff');
-    material.roughness=.63; material.clearcoat=.16;
+  if (finish === 'stone') applySurface(material, 'mineral', 1.5);
+  if (finish === 'wood' || finish === 'porcelain') {
+    // Molded solid-surface resin uses the finish itself, without mineral relief.
+    material.roughness=finish==='wood'?.28:.25;material.clearcoat=.62;material.clearcoatRoughness=.24;
+    material.metalness=.025;
   }
   if (finish === 'window' || finish === 'glass') {
     // Sky reflectance grows at grazing angles, making the enclosure visible without hiding rooms.
@@ -73,13 +73,13 @@ function supplyFinishColors(geometry: BufferGeometry, finish: CityFinish) {
 
 function makeFinishes() {
   return {
-    porcelain: new MeshPhysicalMaterial({ color: '#edf6ef', roughness: .62, metalness: .025, clearcoat: .12, clearcoatRoughness: .3 }),
+    porcelain: new MeshPhysicalMaterial({ color: '#edf8f2', roughness: .25, metalness: .025, clearcoat: .62, clearcoatRoughness: .24 }),
     glass: new MeshPhysicalMaterial({ color: '#77b7c2', roughness: .10, metalness: .02, clearcoat: .4, envMapIntensity: 1.1, transparent: true, opacity: .30, depthWrite: false, side: DoubleSide, forceSinglePass: true }),
     aqua: new MeshPhysicalMaterial({ color: '#067eae', roughness: .25, metalness: .20, clearcoat: .65, clearcoatRoughness: .18 }),
     garden: new MeshPhysicalMaterial({ color: '#ffffff', vertexColors: true, side: DoubleSide, roughness: .93, metalness: 0, envMapIntensity: .15 }),
     window: new MeshPhysicalMaterial({ color: '#65a7b6', roughness: .09, metalness: .025, clearcoat: .45, envMapIntensity: 1.2, transparent: true, opacity: .34, depthWrite: false, side: DoubleSide, forceSinglePass: true }),
     stone: new MeshPhysicalMaterial({ color: '#a3b9b5', roughness: .91, metalness: 0 }),
-    wood: new MeshPhysicalMaterial({ color: '#ffffff', vertexColors: true, roughness: .63, metalness: .03 }),
+    wood: new MeshPhysicalMaterial({ color: '#ffffff', vertexColors: true, roughness: .28, metalness: .025, clearcoat: .62, clearcoatRoughness: .24 }),
     fabric: new MeshPhysicalMaterial({ color: '#ffffff', vertexColors: true, roughness: 1, metalness: 0 }),
     metal: new MeshPhysicalMaterial({ color: '#244f64', roughness: .46, metalness: .6 }),
   };
@@ -121,7 +121,7 @@ function makeStaticCity(route: CityTransitRoute, materials: ReturnType<typeof ma
     if (finish === 'garden' || finish === 'fabric') supplyFinishColors(plain, finish);
     if (finish === 'wood') {
       const index=cityBuildings.findIndex(building=>building.id===owner);
-      const tint=new Color(['#d6eee3','#79c3ce','#dee9cd','#8ebcb7','#a6cbdc'][Math.max(0,index)%5]);
+      const tint=new Color(['#d9f1e9','#b5e6ec','#e9f0dc','#c4e7db','#c3e3ef'][Math.max(0,index)%5]);
       const colors=new Float32Array(plain.attributes.position.count*3);
       for(let i=0;i<colors.length;i+=3){colors[i]=tint.r;colors[i+1]=tint.g;colors[i+2]=tint.b;}
       plain.setAttribute('color',new Float32BufferAttribute(colors,3));
@@ -219,7 +219,7 @@ function constructCityInterior(entry: DeferredCityInterior, materials: ReturnTyp
     if (finish === 'garden' || finish === 'fabric') supplyFinishColors(plain, finish);
     if (finish === 'wood') {
       const index=cityBuildings.findIndex(item=>item.id===building.id);
-      const tint=new Color(['#d6eee3','#79c3ce','#dee9cd','#8ebcb7','#a6cbdc'][Math.max(0,index)%5]);
+      const tint=new Color(['#d9f1e9','#b5e6ec','#e9f0dc','#c4e7db','#c3e3ef'][Math.max(0,index)%5]);
       const colors=new Float32Array(plain.attributes.position.count*3);
       for(let i=0;i<colors.length;i+=3){colors[i]=tint.r;colors[i+1]=tint.g;colors[i+2]=tint.b;}
       plain.setAttribute('color',new Float32BufferAttribute(colors,3));

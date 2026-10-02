@@ -6,7 +6,7 @@ import { create } from '@react-three/test-renderer';
 import { useThree } from '@react-three/fiber';
 import { Matrix4, Ray, SRGBColorSpace, Vector3 } from 'three';
 import { AmbientSystem } from '../src/components/world/AmbientSystem.tsx';
-import { architectureFootprints, canPlacePlant, createLandscapePlan, distanceToSegment, generatePlantPositions, archipelagoGeometry, ISLANDS, islandContour, islandDistance, landDistance, pathGeometry, pathHeight, terrainBaseHeight, terrainHeight } from '../src/components/world/terrain.ts';
+import { architectureFootprints, canPlacePlant, createLandscapePlan, distanceToSegment, generatePlantPositions, archipelagoGeometry, ISLANDS, islandContour, islandDistance, landDistance, pathGeometry, pathHeight, terrainBaseHeight, terrainHeight, vegetationSuitability } from '../src/components/world/terrain.ts';
 import { cloudOrigin, cloudVisibility, cloudPuffTransform, createCloudClusters, rayCloudDistance, updateCloudResponses } from '../src/components/world/clouds.ts';
 import { makeResearchBuilding } from '../src/components/world/ResearchInstitute.tsx';
 import { makeGardenGallery } from '../src/components/world/GardenGallery.tsx';
@@ -78,20 +78,36 @@ test('each curved path is one connected ribbon without separate segment seams', 
 test('deterministic plants clear actual structures, paths, rocks, trees and shore with motion margin', () => {
   const plan = createLandscapePlan();
   const grass = generatePlantPositions(world.quality.high.grass, plan, 41);
-  const flowers = generatePlantPositions(260, plan, 83);
+  const flowers = generatePlantPositions(260, plan, 83, 'flower');
   assert.deepEqual(grass, generatePlantPositions(world.quality.high.grass, plan, 41));
   assert.equal(grass.length, world.quality.high.grass);
   for (const plant of [...grass, ...flowers]) {
     assert.ok(canPlacePlant(plant.x, plant.z, plant.reach, plan));
-    assert.ok(plant.reach >= .95);
+    assert.ok(plant.reach >= (flowers.includes(plant) ? .95 : plant.scale*.74+.084),'clearance covers the actual blade mat and all wind/pointer motion');
     assert.ok(Math.abs(plant.y - terrainHeight(plant.x, plant.z) + .015) < 1e-9);
-    for (const circle of [...plan.structures, ...plan.rocks, ...plan.trees.map(tree => ({...tree, radius: tree.height * .15}))]) assert.ok(structurePlantingClearance(plant.x, plant.z, circle) > plant.reach, circle.id);
+    for (const circle of [...plan.structures, ...plan.rocks, ...plan.trees.map(tree => ({...tree, radius: tree.rootRadius}))]) assert.ok(structurePlantingClearance(plant.x, plant.z, circle) > plant.reach, circle.id);
     for (const path of plan.paths) for (let index = 1; index < path.points.length; index++) assert.ok(distanceToSegment(plant.x, plant.z, path.points[index - 1], path.points[index]) > path.width / 2 + plant.reach);
     assert.ok(landDistance(plant.x, plant.z) > plant.reach + 1.1);
   }
   for (const solid of [...plan.structures, ...plan.rocks, ...plan.trees]) assert.equal(canPlacePlant(solid.x, solid.z, .95, plan), false, solid.id);
   for (const path of plan.paths) assert.equal(canPlacePlant(path.points[0].x, path.points[0].z, .95, plan), false);
   assert.equal(canPlacePlant(0, -45, .95, plan), false);
+});
+
+test('fine grass fills city soil and narrow house margins within the existing instance budget',()=>{
+  const plan=createLandscapePlan(),grass=generatePlantPositions(world.quality.high.grass,plan),cells=new Map();
+  const city=grass.filter(plant=>plant.x>-30&&plant.x<18&&plant.z>-92&&plant.z<-61);
+  assert.ok(city.length>9500&&city.filter(plant=>plant.z>-75).length>2400);
+  assert.equal(grass.length,18000);
+  for(const plant of grass){const key=`${Math.floor(plant.x)},${Math.floor(plant.z)}`,cell=cells.get(key)??[];cell.push(plant);cells.set(key,cell);}
+  let suitable=0,covered=0;
+  for(let x=-27;x<15;x+=.5)for(let z=-91;z<-62;z+=.5){
+    if(vegetationSuitability(x,z,.32,plan)<.15)continue;
+    suitable++;let nearby=false;
+    for(let dx=-1;dx<=1;dx++)for(let dz=-1;dz<=1;dz++)if((cells.get(`${Math.floor(x)+dx},${Math.floor(z)+dz}`)??[]).some(plant=>Math.hypot(x-plant.x,z-plant.z)<.5))nearby=true;
+    if(nearby)covered++;
+  }
+  assert.ok(suitable>1800&&covered/suitable>.98,'low blades cover open soil instead of leaving lawn between isolated large tufts');
 });
 
 test('every cloud density nucleus remains ray-accessible through diagonal drift and deformation', () => {

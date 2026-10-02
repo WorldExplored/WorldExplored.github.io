@@ -26,7 +26,7 @@ test('clustered flora stays grounded and clears structures and circulation',()=>
   for(const site of sites){
     assert.ok(Math.abs(site.y-terrainHeight(site.x,site.z))<1e-9);
     const reach=site.reach;
-    for(const circle of [...plan.structures,...plan.rocks,...plan.trees.map(tree=>({...tree,radius:tree.height*.15}))])assert.ok(structurePlantingClearance(site.x,site.z,circle)>reach-.001,`${site.kind} at ${site.x},${site.z} overlaps ${circle.id}`);
+    for(const circle of [...plan.structures,...plan.rocks,...plan.trees.map(tree=>({...tree,radius:tree.rootRadius}))])assert.ok(structurePlantingClearance(site.x,site.z,circle)>reach-.001,`${site.kind} at ${site.x},${site.z} overlaps ${circle.id}`);
     for(const path of plan.paths)for(let i=1;i<path.points.length;i++)assert.ok(distanceToSegment(site.x,site.z,path.points[i-1],path.points[i])>path.width/2+reach-.001);
     if(site.kind==='reeds'||site.kind==='beach')assert.ok(landDistance(site.x,site.z)<3.81);
   }
@@ -154,7 +154,7 @@ test('distant high-quality foliage keeps every plant while reducing geometry and
   const runtime={current:createSceneRuntime()},camera=new PerspectiveCamera();camera.position.set(0,8,12);
   const renderer=await create(<Flora runtime={runtime} paused quality="high"/>,{camera});
   try{
-    const meshes:InstancedMesh[]=[];renderer.scene.instance.traverse(object=>{if(object instanceof InstancedMesh)meshes.push(object);});
+    const meshes:InstancedMesh[]=[];renderer.scene.instance.traverse(object=>{if(object instanceof InstancedMesh&&object.parent?.name!=='close-meadow-insects')meshes.push(object);});
     await renderer.advanceFrames(1,1/60);
     const original=meshes.map(mesh=>({geometry:mesh.geometry,count:mesh.count}));
     const triangles=()=>meshes.reduce((sum,mesh)=>sum+mesh.count*(mesh.geometry.index?.count??mesh.geometry.attributes.position.count)/3,0),close=triangles();

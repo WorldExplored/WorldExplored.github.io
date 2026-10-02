@@ -1,3 +1,4 @@
+import { mythicalCaveFloor } from './coastalCaveLayout';
 import { landDistance, smooth, terrainBaseHeight } from './terrain';
 
 /** The reef shelf spans the channel and both sheltered arms of the lighthouse triangle. */
@@ -35,7 +36,7 @@ export function reefFloorVertexHeight(x: number, z: number) {
   const forestHollows=(Math.exp(-(((x+13)/23)**2+((z+119)/8)**2))+Math.exp(-(((x-57)/9)**2+((z+83)/19)**2)))*1.25*smooth(8,13,-distance);
   const relief=shelf*smooth(7,12,-distance)*(terraces-hollow-trough);
   const floor = terrainBaseHeight(x, z) - .36 + smooth(6.9, 9, -distance) * (waves + ripples) - basin * 1.9 + fractures + relief - forestHollows;
-  const height = Math.min(-2.4, floor) - smooth(22, 75, -distance) * 35 * (1 - shelf);
+  const height = mythicalCaveFloor(x,z,Math.min(-2.4, floor) - smooth(22, 75, -distance) * 35 * (1 - shelf));
   floorVertices.set(key, height);
   return height;
 }

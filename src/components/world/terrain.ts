@@ -14,7 +14,7 @@ export interface Footprint { id: string; x: number; z: number; radius: number }
 export interface PathPoint { x: number; z: number }
 export interface LandscapePath { id?: string; startY?: number; endY?: number; bridgeId?: string; points: PathPoint[]; width: number; bridge?: boolean; elevated?: boolean }
 export interface LandscapeRock extends Footprint { y: number; scale: [number, number, number]; rotation: number }
-export interface LandscapeTree extends Footprint { y: number; height: number; canopyScale: number; rotation: number }
+export interface LandscapeTree extends Footprint { y: number; height: number; canopyScale: number; trunkRadius: number; rootRadius: number; form: number; tint: number; rotation: number }
 export interface LandscapePlan { structures: Footprint[]; paths: LandscapePath[]; rocks: LandscapeRock[]; trees: LandscapeTree[] }
 export interface PlantPosition { x: number; y: number; z: number; scale: number; rotation: number; phase: number; reach: number }
 export interface Island { id: string; x: number; z: number; rx: number; rz: number; phase: number; beach: number; hill: number }
@@ -129,7 +129,7 @@ function plantingIndex(plan: LandscapePlan) {
       insert(cell);
     }
   }
-  for (const circle of [...plan.structures, ...plan.rocks, ...plan.trees.map(tree => ({ ...tree, radius: tree.height * .15 }))]) {
+  for (const circle of [...plan.structures, ...plan.rocks, ...plan.trees.map(tree => ({ ...tree, radius: tree.rootRadius }))]) {
     const r = circle.radius + 3;
     add(circle.x - r, circle.z - r, circle.x + r, circle.z + r, cell => cell.circles.push(circle));
   }
@@ -149,8 +149,8 @@ export function vegetationSuitability(x: number, z: number, reach: number, plan:
     const cell=plantingIndex(plan).get(`${Math.floor(x/8)},${Math.floor(z/8)}`);
     if(cell){for(const obstacle of cell.circles){clearance=Math.min(clearance,structurePlantingClearance(x,z,obstacle));if(clearance<=reach)return 0;}
       for(const {a,b,halfWidth} of cell.segments){clearance=Math.min(clearance,distanceToSegment(x,z,a,b)-halfWidth);if(clearance<=reach)return 0;}}
-  }else clearance=Math.min(...plan.structures.map(obstacle=>structurePlantingClearance(x,z,obstacle)),circleClearance(x,z,plan.rocks),circleClearance(x,z,plan.trees.map(tree=>({...tree,radius:tree.height*.15}))),pathClearance(x,z,plan.paths));
-  const free=smooth(0,.75,clearance-reach);
+  }else clearance=Math.min(...plan.structures.map(obstacle=>structurePlantingClearance(x,z,obstacle)),circleClearance(x,z,plan.rocks),circleClearance(x,z,plan.trees.map(tree=>({...tree,radius:tree.rootRadius}))),pathClearance(x,z,plan.paths));
+  const free=smooth(0,reach<.45?.22:.75,clearance-reach);
   if(!free)return 0;
   const coast=coastalBiome(x,z,distance,terrainBaseHeight(x,z)).grass;
   if(coast<.025)return 0;
@@ -165,7 +165,7 @@ export function createLandscapePlan(): LandscapePlan {
   const structures = [...architectureFootprints(), ...cityInfrastructureFootprints, ...cityBuildings.map(item => ({ id: item.id, x: item.x, z: item.z, radius: item.radius }))].map(item=>({...item}));
   const paths: LandscapePath[] = circulationPaths().map(path=>({...path,points:path.points.map(point=>({...point}))}));
   paths.push({ width: 2.2, elevated: true, points: createCityTransitRoute().curve.getPoints(80).map(point => ({ x: point.x, z: point.z })) });
-  const rocks: LandscapeRock[] = []; const trees: LandscapeTree[] = []; const random = seededRandom(627);
+  const rocks: LandscapeRock[] = []; const trees: LandscapeTree[] = []; const random = seededRandom(627), traits = seededRandom(97348);
   // A few coastal outcrops, with adjacent fragments rather than a necklace of stones.
   for (const [islandId, angle] of [['main', 3.55], ['main', 5.15], ['garden', .55], ['beacon', 2.7], ['beacon', 4.1]] as const) {
     const island = ISLANDS.find(candidate => candidate.id === islandId)!;
@@ -191,10 +191,13 @@ export function createLandscapePlan(): LandscapePlan {
     const z=clustered?patch.z+Math.sin(angle)*patch.rz*r:island.z+Math.sin(angle)*island.rz*r*islandContour(island,angle);
     const mature=attempt<1800||random()>.32;
     const canopyScale=mature?4.2+random()*2.1:3.15+random()*.75;
-    const height=canopyScale*1.85,radius=canopyScale*.63;
+    const radius=canopyScale*.63;
     if(BEACH_PALMS.some(palm=>Math.hypot(x-palm.x,z-palm.z)<radius+1.85+.25)||landDistance(x,z)<1.8+radius||terrainSlope(x,z)>.6)continue;
     if(structures.some(item=>structurePlantingClearance(x,z,item)<radius+.25)||circleClearance(x,z,[...rocks,...trees])<radius+.25||pathClearance(x,z,paths)<radius+.3)continue;
-    trees.push({id:`grove-tree-${trees.length}`,x,z,y:terrainHeight(x,z),radius,height,canopyScale,rotation:random()*Math.PI*2});
+    const form=trees.length%3;
+    // Height varies independently of spread; understory clears real roots, not the crown.
+    const height=3.65+traits()*2.45+(form===1?.55:form===2?.15:0),trunkRadius=canopyScale*[.058,.035,.044][form];
+    trees.push({id:`grove-tree-${trees.length}`,x,z,y:terrainHeight(x,z),radius,height,canopyScale,trunkRadius,rootRadius:canopyScale*.115,form,tint:traits(),rotation:random()*Math.PI*2});
   }
   // Ecology, wildlife and rendering share the same static exclusion field.
   // Freeze owned copies so a consumer cannot invalidate another system's routes.
@@ -205,7 +208,7 @@ export function createLandscapePlan(): LandscapePlan {
   landscapePlan=Object.freeze({structures,paths,rocks,trees});
   return landscapePlan;
 }
-function* samplePlantPositions(count: number, plan: LandscapePlan, seed: number): Generator<void, PlantPosition[]> {
+function* samplePlantPositions(count: number, plan: LandscapePlan, seed: number, kind:'grass'|'flower'='grass'): Generator<void, PlantPosition[]> {
   const random = seededRandom(seed); const positions: PlantPosition[] = [];
   const area = ISLANDS.reduce((total, island) => total + island.rx * island.rz, 0);
   for (let attempt = 0; positions.length < count && attempt < count * 140; attempt++) {
@@ -213,17 +216,19 @@ function* samplePlantPositions(count: number, plan: LandscapePlan, seed: number)
     let choose = random() * area; let island = ISLANDS[0];
     for (const candidate of ISLANDS) { choose -= candidate.rx * candidate.rz; if (choose <= 0) { island = candidate; break; } }
     const angle = random() * Math.PI * 2; const radius = Math.sqrt(random()) * islandContour(island, angle);
-    const x = island.x + Math.cos(angle) * island.rx * radius; const z = island.z + Math.sin(angle) * island.rz * radius;
-    const reach = PLANT_REACH; const suitability = vegetationSuitability(x, z, reach, plan);
+    let x = island.x + Math.cos(angle) * island.rx * radius, z = island.z + Math.sin(angle) * island.rz * radius;
+    if(kind==='grass'&&attempt%2===0){x=-31+random()*49;z=-93+random()*33;}
+    const size=kind==='grass'?.30+random()*.34:.35+random()*.45;
+    const reach=kind==='grass'?size*.74+.085:PLANT_REACH; const suitability = vegetationSuitability(x, z, reach, plan);
     if (random() >= suitability) continue;
-    positions.push({ x, y: terrainHeight(x, z) - .015, z, scale: (.35 + random() * .45) * (.7 + .3 * suitability), rotation: random() * Math.PI * 2, phase: random() * Math.PI * 2, reach });
+    positions.push({ x, y: terrainHeight(x, z) - .015, z, scale: size * (.7 + .3 * suitability), rotation: random() * Math.PI * 2, phase: random() * Math.PI * 2, reach });
   }
   if (positions.length !== count) throw new Error('The islands have insufficient clear planting area.');
   return positions;
 }
 
-export function generatePlantPositions(count: number, plan: LandscapePlan, seed = 41) {
-  const sampler = samplePlantPositions(count, plan, seed);
+export function generatePlantPositions(count: number, plan: LandscapePlan, seed = 41, kind:'grass'|'flower'='grass') {
+  const sampler = samplePlantPositions(count, plan, seed, kind);
   let batch = sampler.next();
   while (!batch.done) batch = sampler.next();
   return batch.value;

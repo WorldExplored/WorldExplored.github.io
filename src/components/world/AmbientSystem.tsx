@@ -76,17 +76,18 @@ const plantFragment = /* glsl */ `
 export function tuftGeometry() {
   const positions: number[] = [];
   const indices: number[] = [];
-  for (let blade = 0; blade < 10; blade++) {
-    const angle = blade * 2.399;
-    const cx = Math.cos(angle) * (.08 + (blade % 4) * .057);
-    const cz = Math.sin(angle) * (.08 + (blade % 4) * .057);
-    const height = .17 + ((blade * 7) % 11) * .034;
-    const width = .008 + (blade % 3) * .004;
+  // Separate roots cover an irregular patch instead of radiating from one agave-like centre.
+  for (let blade = 0; blade < 16; blade++) {
+    const angle = blade * 2.399, spread=.08+.56*Math.sqrt((blade+.5)/16);
+    const cx = Math.cos(angle) * spread;
+    const cz = Math.sin(angle) * spread * (.72+.10*Math.sin(blade*1.7));
+    const height = .16 + ((blade * 7) % 11) * .019;
+    const width = .012 + (blade % 3) * .005;
     const start = positions.length / 3;
-    for (const [x, y, z] of [[-width, 0, 0], [width, 0, 0], [-width * .8, height * .48, .025], [width * .8, height * .48, .025], [-width * .4, height * .83, .08], [width * .4, height * .83, .08], [.04, height, .14]]) {
+    for (const [x, y, z] of [[-width, 0, 0], [width, 0, 0], [-width * .72, height * .56, .025], [width * .72, height * .56, .025], [.025, height, .085]]) {
       positions.push(cx + x * Math.cos(angle) - z * Math.sin(angle), y, cz + x * Math.sin(angle) + z * Math.cos(angle));
     }
-    indices.push(start, start + 1, start + 2, start + 1, start + 3, start + 2, start + 2, start + 3, start + 4, start + 3, start + 5, start + 4, start + 4, start + 5, start + 6);
+    indices.push(start, start + 1, start + 2, start + 1, start + 3, start + 2, start + 2, start + 3, start + 4);
   }
   const geometry = new BufferGeometry();
   geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
@@ -131,7 +132,7 @@ function daisyGeometry() {
 
 function makePlants(plan: LandscapePlan, flowers: boolean, prepared?: PlantPosition[]) {
   const maximum = flowers ? 260 : world.quality.high.grass;
-  const positions = prepared ?? generatePlantPositions(maximum, plan, flowers ? 83 : 41);
+  const positions = prepared ?? generatePlantPositions(maximum, plan, flowers ? 83 : 41, flowers ? 'flower' : 'grass');
   const geometry = flowers ? daisyGeometry() : tuftGeometry();
   const material = new ShaderMaterial({ vertexShader: flowers ? plantVertex.replace('vTint = aTint;', 'vTint = aTint * color;') : plantVertex, fragmentShader: plantFragment, vertexColors: flowers, side: DoubleSide,
     uniforms: { uDaylight: { value: 1 }, uStorm: { value: 0 }, uTime: { value: 0 }, uPointerStrength: { value: 0 }, uPointerWorld: { value: new Vector3() }, uFog: { value: new Color(world.lighting.fogColor) }, uFogRange: { value: new Vector2(world.lighting.fogNear, world.lighting.fogFar) } } });
@@ -362,16 +363,16 @@ function makeLandscape(plan: LandscapePlan) {
   const random = seededRandom(643);
   const tint = new Color();
   plan.trees.forEach((item, index) => {
-    tree.position.set(item.x, item.y, item.z); tree.scale.set(item.canopyScale, item.height, item.canopyScale); tree.rotation.set(0, item.rotation, 0); tree.updateMatrix(); const canopy = crownMeshes[index % 3]; const wood = woodMeshes[index % 3]; wood.userData.treeIndices.push(index); wood.setMatrixAt(wood.count++, tree.matrix);
+    tree.position.set(item.x, item.y, item.z); tree.scale.set(item.canopyScale, item.height, item.canopyScale); tree.rotation.set(0, item.rotation, 0); tree.updateMatrix(); const canopy = crownMeshes[item.form]; const wood = woodMeshes[item.form]; wood.userData.treeIndices.push(index); wood.setMatrixAt(wood.count++, tree.matrix);
     for (let cluster = 0; cluster < 9; cluster++) {
-      const limb = treeBranches(index % 3)[cluster];
+      const limb = treeBranches(item.form)[cluster];
       const angle = limb.angle;
       const size = limb.size + random() * .025;
       leaf.position.copy(limb.tip);
       leaf.scale.set(size * (1.05 + random() * .3), size * (1 + random() * .5), size);
       leaf.rotation.set(random() * .3, angle, (random() - .5) * .4);
       leaf.updateMatrix(); transform.matrix.multiplyMatrices(tree.matrix, leaf.matrix); canopy.userData.treeIndices.push(index); canopy.setMatrixAt(canopy.count, transform.matrix);
-      tint.setRGB(.78 + random() * .22, .88 + random() * .12, .68 + random() * .22); canopy.setColorAt(canopy.count++, tint);
+      tint.setHSL(.19 + item.tint * .15, .18 + item.tint * .30, .67 + random() * .19); canopy.setColorAt(canopy.count++, tint);
     }
   });
   [...woodMeshes, ...crownMeshes].forEach(mesh => mesh.computeBoundingSphere());

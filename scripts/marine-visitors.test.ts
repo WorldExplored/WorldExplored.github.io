@@ -223,6 +223,7 @@ test('new marine residents forage with clear swept bodies, rests and distinct sq
     });
   }
   assert.equal(moved.size,10);assert.equal(rested.size,10);assert.ok(squidFast>squidSlow*4);
+  for(const state of states)assert.ok(state.distance>.5,`${state.kind}-${state.index} needs an open home exit and actual horizontal travel.`);
   const snapshot=states.map(s=>[...s.position.toArray(),s.time]);stepMarineResidents(states,10,true);assert.deepEqual(states.map(s=>[...s.position.toArray(),s.time]),snapshot);
 });
 

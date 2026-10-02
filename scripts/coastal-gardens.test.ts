@@ -20,6 +20,7 @@ import { world } from '../src/content/world';
 import { lighthouseAccessClearance } from '../src/components/world/LighthouseAccess';
 import { treeBranches, treeFoliageGeometry, treeWoodGeometry } from '../src/components/world/TreeGeometry';
 import { meadowInsectPose, meadowInsectSites } from '../src/components/world/MeadowInsects';
+import { cityBuildings } from '../src/components/world/city';
 
 const triangleCount=(geometry:Mesh['geometry'])=>(geometry.index?.count??geometry.attributes.position.count)/3;
 
@@ -60,14 +61,31 @@ test('seabed growth forms uneven clumps with sparse recruits and genuinely diffe
 
 test('island understory follows actual ground and preserves complete walking clearance',()=>{
   const sites=createIslandMeadowSites(),plan=createLandscapePlan();assert.ok(sites.length>=5500&&sites.length<=5800);
-  assert.ok(sites.filter(site=>site.region==='city').length>800);
+  assert.ok(sites.filter(site=>site.region==='city').length>2500);
   assert.ok(sites.filter(site=>site.region==='main').length>750);
   for(const site of sites){
     if(site.region==='beacon')assert.ok(lighthouseAccessClearance(site.x,site.z)>=.42);
     assert.ok(Math.abs(site.y-terrainMeshHeight(site.x,site.z)+.015)<1e-8);
-    assert.ok(vegetationSuitability(site.x,site.z,.29,plan)>.069);
-    for(const path of plan.paths)for(let i=1;i<path.points.length;i++)assert.ok(distanceToSegment(site.x,site.z,path.points[i-1],path.points[i])>path.width/2+.29);
+    assert.ok(vegetationSuitability(site.x,site.z,site.reach,plan)>.069);
+    for(const path of plan.paths)for(let i=1;i<path.points.length;i++)assert.ok(distanceToSegment(site.x,site.z,path.points[i-1],path.points[i])>path.width/2+site.reach);
   }
+});
+
+test('city groundcover joins open soil, foundations and tree roots without circular bare halos',()=>{
+  const sites=createIslandMeadowSites(),plan=createLandscapePlan();
+  for(const tree of plan.trees){
+    const nearby=sites.filter(site=>Math.hypot(site.x-tree.x,site.z-tree.z)<tree.rootRadius+1);
+    assert.ok(nearby.length>=5,`${tree.id} has rooted understory within one metre of its visible roots`);
+    assert.ok(nearby.every(site=>Math.hypot(site.x-tree.x,site.z-tree.z)>tree.rootRadius+site.reach),'grass clears the physical root flare');
+  }
+  for(const building of cityBuildings){
+    const border=sites.filter(site=>structurePlantingClearance(site.x,site.z,building)<.8);
+    assert.ok(border.length>=20,`${building.id} has continuous planting at its foundation margins`);
+    assert.ok(border.every(site=>structurePlantingClearance(site.x,site.z,building)>site.reach),'even compact edge tufts clear the foundation');
+  }
+  const nearWalls=sites.filter(site=>cityBuildings.some(building=>structurePlantingClearance(site.x,site.z,building)<.65));
+  assert.ok(nearWalls.length>320,'compact plants fill the formerly bare wall setbacks');
+  assert.equal(sites.length,5800,'redistribute existing instances instead of increasing the total draw population');
 });
 
 test('distant meadow geometry retains broad crowns and real silhouettes with fewer distant blades',()=>{
@@ -188,7 +206,10 @@ test('medium plant geometry remains below one million triangles without deleting
 test('mature trees form irregular city groves with varied heights and clear crowns',()=>{
   const plan=createLandscapePlan(),city=plan.trees.filter(tree=>tree.z< -58);
   assert.ok(plan.trees.length>=24&&plan.trees.length<=46);
-  assert.ok(plan.trees.reduce((total,tree)=>total+tree.height,0)/plan.trees.length>7);
+  const mean=plan.trees.reduce((total,tree)=>total+tree.height,0)/plan.trees.length;
+  assert.ok(mean>4.7&&mean<5.7,'canopies sit between the previous sapling and oversized tree passes');
+  assert.ok(Math.max(...plan.trees.map(tree=>tree.trunkRadius))/Math.min(...plan.trees.map(tree=>tree.trunkRadius))>2.5,'trunk thickness changes independently between broad and slender species');
+  assert.ok(Math.max(...plan.trees.map(tree=>tree.height/tree.canopyScale))-Math.min(...plan.trees.map(tree=>tree.height/tree.canopyScale))>.65,'height is not a uniform stretch of the crown');
   assert.ok(Math.max(...city.map(tree=>tree.height))-Math.min(...city.map(tree=>tree.height))>2);
   assert.ok(city.filter(tree=>tree.z> -86&&tree.z< -64).length>=5,'groves occupy inner pockets as well as the rear coast');
   for(const tree of plan.trees){
@@ -237,7 +258,8 @@ test('mature trees change branch architecture and leaf anatomy, not just hue',()
     assert.ok(oak[0].tip.length()>alder[0].tip.length()*.9);
     assert.ok(willow[0].tip.y<alder[0].tip.y,'drooping limbs and ascending limbs have different growth angles');
     assert.ok(crowns.every(g=>triangleCount(g)<1100),'species do not multiply the canopy triangle budget');
-    for(const tree of createLandscapePlan().trees)assert.ok(tree.height>5.8&&tree.height<12,'trees are several storeys tall with a mature canopy');
+    for(const tree of createLandscapePlan().trees)assert.ok(tree.height>3.5&&tree.height<7,'trees stay above people and below the taller city homes');
+    assert.equal(new Set(crowns.map(g=>Array.from(g.attributes.color.array).join(','))).size,3,'oak, alder and willow leaves carry different natural palettes');
   }finally{[...crowns,...wood].forEach(g=>g.dispose());}
 });
 

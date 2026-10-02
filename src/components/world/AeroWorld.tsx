@@ -22,6 +22,7 @@ import { DolphinLife } from './DolphinLife';
 import { ReefHabitat } from './ReefHabitatScene';
 import { ReefCaves } from './ReefCaves';
 import { CoastalLife } from './CoastalLife';
+import { PelagicLife } from './PelagicLife';
 import { Flora } from './Flora';
 import { HistoryFlowerBorder } from './CivicLandmarks';
 import { Wildlife } from './Wildlife';
@@ -151,6 +152,7 @@ export function AeroWorld(props: WorldProps & { runtime: MutableRefObject<SceneR
     {stage >= 1 && <RoomLighting rooms={mainRoomLamps} runtime={runtime}/>}
     {stage >= 1 && <EcoCity runtime={runtime} paused={stopped} quality={tier} />}
     {stage >= 3 && <CoastalLife runtime={runtime} paused={stopped} quality={tier} />}
+    {stage >= 4 && <PelagicLife runtime={runtime} paused={stopped} quality={tier} />}
     {stage >= 3 && <ReefHabitat runtime={runtime} paused={stopped} quality={tier} />}
     {stage >= 3 && <ReefCaves runtime={runtime} paused={stopped} quality={tier} />}
     {stage >= 3 && <MythicGrotto runtime={runtime} paused={stopped} quality={tier} />}

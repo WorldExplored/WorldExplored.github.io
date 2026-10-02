@@ -208,3 +208,18 @@ test('city rooms prepare before entry and retain stable visibility without rebui
     assert.ok([...disposals.values()].every(count=>count===1),'Prepared furniture is disposed once with the city');
   } catch(error) {await renderer.unmount();throw error;}
 });
+
+test('city finished floors and shell panels use smooth pearl and cyan resin rather than mineral relief',async()=>{
+  const city=await fixture();
+  try{
+    const finishes=meshesIn(city.scene).filter(mesh=>/^eco-city-.+-(wood|porcelain)$/.test(mesh.name));
+    assert.ok(finishes.length>=cityBuildings.length);
+    for(const mesh of finishes){
+      const material=mesh.material as import('three').MeshPhysicalMaterial;
+      assert.ok(material.roughness>=.22&&material.roughness<=.32,`${mesh.name} retains a satin molded surface`);
+      assert.ok(material.clearcoat>=.6&&material.clearcoatRoughness>=.2);
+      assert.equal(material.normalMap,null);assert.equal(material.normalScale.x,1,'the surface has no stone bump treatment');
+      assert.equal(material.roughnessMap,null);
+    }
+  }finally{await city.renderer.unmount();}
+});

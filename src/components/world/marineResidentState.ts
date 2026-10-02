@@ -8,7 +8,7 @@ export type ResidentKind='crawling-octopus'|'sea-snake'|'squid';
 export interface MarineResident {kind:ResidentKind;index:number;size:number;radius:number;position:Vector3;home:Vector3;target:Vector3;heading:number;pitch:number;time:number;moving:boolean;nextMove:number;jet:number;distance:number;strokePhase:number;swimSpeed:number;random:()=>number}
 export const RESIDENT_COUNTS={'crawling-octopus':4,'sea-snake':1,'squid':5} as const;
 const wrap=(a:number)=>Math.atan2(Math.sin(a),Math.cos(a));
-const centers=[[-8,-36],[-51,-33],[9,-43],[-60,-36],[-18,-45]];
+const centers=[[-8,-36],[-51,-33],[9,-43],[-60,-36],[-18,-45],[-29,-47],[-41,-43],[-70,-35]];
 export function residentHeight(kind:ResidentKind,x:number,z:number,time:number,index:number){
   const floor=Math.max(marineFloorHeight(x,z),terrainMeshHeight(x,z));
   return kind==='squid'?Math.min(-1.35,floor+1.4+Math.sin(time*.31+index)*.20):kind==='sea-snake'?Math.min(-1.45,floor+.92+Math.sin(time*.18+index)*.05):floor+.055;
@@ -29,7 +29,13 @@ export function createMarineResidentsState(){
     for(let attempt=0;attempt<3000;attempt++){
       const [cx,cz]=centers[(index+Math.floor(attempt/300))%centers.length],x=cx+(random()-.5)*13,z=cz+(random()-.5)*11;
       if(!residentPositionClear(x,z,radius)||states.some(other=>Math.hypot(x-other.home.x,z-other.home.z)<radius+other.radius+1.3))continue;
-      if(kind==='sea-snake'&&!Array.from({length:12},(_,n)=>n*Math.PI/6).some(a=>residentSegmentClear(x,z,x+Math.cos(a)*2.5,z+Math.sin(a)*2.5,radius)))continue;
+      // A body-sized pocket is not a usable home unless a full travel stroke can leave it.
+      const exitLength=kind==='squid'?2.4:kind==='sea-snake'?2.5:1.0;
+      let exit=false;
+      for(let direction=0;direction<16&&!exit;direction++){
+        const a=direction*Math.PI/8;exit=residentSegmentClear(x,z,x+Math.cos(a)*exitLength,z+Math.sin(a)*exitLength,radius);
+      }
+      if(!exit)continue;
       position=new Vector3(x,residentHeight(kind,x,z,0,index),z);break;
     }
     if(!position)throw new Error(`No clear ${kind} home ${index}`);

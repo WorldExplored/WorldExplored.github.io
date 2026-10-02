@@ -31,7 +31,8 @@ export function treeFoliageGeometry(form = 0) {
       positions.push(point.x, point.y, point.z);uvs.push((v+1)/2,u);
       const vein = col === 1 || Math.abs(Math.sin(u * 25 - Math.abs(v) * 3)) < .24;
       const shade = .73 + .22 * t + (vein ? .12 : 0);
-      colors.push(shade * .77, shade, shade * .62);
+      const leafTint = form === 0 ? [.84, 1, .62] : form === 1 ? [.65, .96, .67] : [.89, 1, .81];
+      colors.push(shade * leafTint[0], shade * leafTint[1], shade * leafTint[2]);
       if (row && col) { const at = start + row * 3 + col; indices.push(at, at - 3, at - 1, at - 1, at - 3, at - 4); }
     }
   }
@@ -67,7 +68,7 @@ function branch(points: Vector3[], radius: number, endRadius: number) {
 
 export function treeWoodGeometry(form: number) {
   const wood: BufferGeometry[] = [];
-  wood.push(branch([new Vector3(0, -.02, 0), new Vector3(.018, .28, -.015), new Vector3(-.025, .58, .012), new Vector3(form === 2 ? .09 : .025, form === 1 ? 1.04 : .9, 0)], .047, .005));
+  wood.push(branch([new Vector3(0, -.02, 0), new Vector3(.018, .28, -.015), new Vector3(-.025, .58, .012), new Vector3(form === 2 ? .09 : .025, form === 1 ? 1.04 : .9, 0)], [.058,.035,.044][form], .005));
   for (let root = 0; root < 6; root++) {
     const a = root * Math.PI / 3 + .22;
     wood.push(branch([new Vector3(0, .10, 0), new Vector3(Math.cos(a) * .045, .014, Math.sin(a) * .045), new Vector3(Math.cos(a) * .10, -.018, Math.sin(a) * .10)], .023, .002));

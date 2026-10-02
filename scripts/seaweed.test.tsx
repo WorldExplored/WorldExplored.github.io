@@ -153,3 +153,21 @@ test('stray seaweed covers every island and remains represented in low quality p
     assert.ok(low.filter(site=>site.cove===-1-island).length>=15);
   }
 });
+
+test('dock colonies have seeded shell geometry and different arrangements on every pile',()=>{
+  const sites=createDockWeedSites(),poleSignatures=new Set<string>();
+  for(const pole of dockEcologyPoles()){
+    const entries=sites.filter(site=>site.pole===pole.id);
+    poleSignatures.add(entries.map(site=>`${site.variant}:${site.rotation.toFixed(2)}:${site.height.toFixed(2)}`).join('|'));
+  }
+  assert.equal(poleSignatures.size,dockEcologyPoles().length);
+  assert.equal(new Set(sites.map(site=>site.seed)).size,sites.length);
+  const shapes=sites.slice(0,24).map(site=>createDockWeedGeometry(site.variant,site.seed));
+  try{
+    const signatures=shapes.map(geometry=>Array.from(geometry.attributes.position.array).map(n=>n.toFixed(4)).join(','));
+    assert.equal(new Set(signatures).size,shapes.length,'shell size, orientation, count and profile vary beyond one instanced template');
+    const repeated=createDockWeedGeometry(sites[0].variant,sites[0].seed);
+    assert.deepEqual(repeated.attributes.position.array,shapes[0].attributes.position.array);repeated.dispose();
+    assert.ok(new Set(shapes.map(g=>g.attributes.position.count)).size>4,'colony populations vary as well as their scale');
+  }finally{shapes.forEach(geometry=>geometry.dispose());}
+});

@@ -286,7 +286,7 @@ test('unavailable shore approaches receive distinct validated sky circuits inste
 
 test('all gull circuits and hunting approaches clear the enlarged mature canopies',()=>{
   const plan=createLandscapePlan(),birds=createGullStates();
-  assert.ok(plan.trees.some(tree=>tree.height>9),'the regression uses the new mature trees');
+  assert.ok(plan.trees.some(tree=>tree.height>6),'the regression includes the tallest moderated trees');
   let checked=0;
   for(const bird of birds)for(const point of [...bird.flight.points,...(bird.flight.huntPoints??[])])for(const tree of plan.trees){
     if(Math.hypot(point.x-tree.x,point.z-tree.z)<tree.radius+1.35)assert.ok(point.y>tree.y+tree.height+1.09,'the full wing envelope clears canopy tops');

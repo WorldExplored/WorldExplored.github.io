@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import { BoxGeometry, BufferGeometry, CylinderGeometry, ExtrudeGeometry, Shape, MeshStandardMaterial, MeshPhysicalMaterial, SphereGeometry, Vector3 } from 'three';
 import { combine, strut, useResources } from './BuildingKit';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import { applySurface } from './surfaceMaterials';
 import { applyBakedRoomLighting, applyNightSource } from './RoomLighting';
 
 export type InteriorFinish = 'wood' | 'fabric' | 'metal' | 'paper' | 'screen' | 'light' | 'leaf' | 'soil' | 'coolant' | 'pipe';
@@ -146,7 +145,7 @@ export class InteriorBuilder {
 export function FurnishedInterior({ build, name }: { build: () => InteriorGeometry; name: string }) {
   const geometry = useResources(build);
   const [materials] = useState(() => {const result={
-    wood: applySurface(new MeshStandardMaterial({color:'#d1e5dd',roughness:.69}),'mineral',1.3),
+    wood: new MeshPhysicalMaterial({name:'pearl-resin-interior',color:'#d8eee5',roughness:.29,metalness:.025,clearcoat:.58,clearcoatRoughness:.25}),
     fabric: new MeshStandardMaterial({ color: '#1262c4', roughness: .98 }),
     metal: new MeshStandardMaterial({ color: '#244f64', roughness: .46, metalness: .65 }),
     paper: new MeshStandardMaterial({ color: '#edf6ef', roughness: .92 }),

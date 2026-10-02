@@ -2,12 +2,12 @@
 
 import { useEffect,useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { Box3, BoxGeometry, BufferGeometry, CylinderGeometry, DoubleSide, Float32BufferAttribute, Group, InstancedMesh, Mesh, MeshPhysicalMaterial, MeshStandardMaterial, Object3D, SphereGeometry, TorusGeometry, Vector3 } from 'three';
+import { Box3, BoxGeometry, BufferGeometry, CylinderGeometry, DoubleSide, Float32BufferAttribute, Group, Mesh, MeshPhysicalMaterial, MeshStandardMaterial, Object3D, SphereGeometry, TorusGeometry, Vector3 } from 'three';
 import { combine, strut } from './BuildingKit';
 import { createVesselState, stepVessel, vesselOccupants, SURVEY_BERTH, SURVEY_DWELL, VISITOR_BERTH, VISITOR_DWELL, writeVesselPose } from './marineTraffic';
 import { harborWaterHeight } from './waterSurface';
 import { seededRandom, terrainMeshHeight } from './terrain';
-import { createDockWeedGeometry } from './DockEcology';
+import { createDockGrowthGeometry } from './DockEcology';
 import { CITY_PIER_JUNCTION, VISITOR_PIER_HEAD } from './cityInfrastructure';
 import type { EnvironmentProps } from './Water';
 
@@ -242,20 +242,21 @@ export function createVisitorPier() {
   const head = VISITOR_PIER_HEAD, joint=CITY_PIER_JUNCTION;
   const rampStart=-51.16,rampEnd=head.z-.575;
   const grade=(z:number)=>z<=rampStart?joint.y:z>=rampEnd?.56:joint.y+(.56-joint.y)*(z-rampStart)/(rampEnd-rampStart);
-  const segments=[
-    {a:new Vector3(joint.x-.60,joint.y,joint.z),b:new Vector3(head.x+.84,joint.y,joint.z),width:1.68},
-    {a:new Vector3(head.x,joint.y,rampStart),b:new Vector3(head.x,.56,rampEnd),width:1.68},
-  ];
   const rail=(a:Vector3,b:Vector3)=>steel.push(strut(a,b,.031));
-  for(const {a,b,width} of segments){
-    const delta=b.clone().sub(a),length=delta.length(),yaw=Math.atan2(delta.x,delta.z),steps=Math.ceil(length/.24);
-    for(let i=0;i<steps;i++){
-      const center=a.clone().lerp(b,(i+.5)/steps);
-      pieces.push(new BoxGeometry(width,.12,length/steps*.97).rotateX(-Math.asin(delta.y/length)).rotateY(yaw).translate(center.x,center.y-.06,center.z));
-    }
-  }
-  pieces.push(new BoxGeometry(1.68,.12,1.68).translate(head.x,joint.y-.06,joint.z));
-  pieces.push(new BoxGeometry(6.6,.14,1.15).translate(head.x,head.y,head.z));
+  // Exact top/bottom corner prisms meet at shared edges. Rotated plank boxes
+  // used to overlap the flat decks and the city stem by several centimetres.
+  const deckPrism=(name:string,x0:number,x1:number,z0:number,z1:number,y0:number,y1:number,thickness:number)=>{
+    const geometry=new BufferGeometry(),positions:number[]=[];
+    for(const drop of [thickness,0])positions.push(x0,y0-drop,z0,x1,y0-drop,z0,x1,y1-drop,z1,x0,y1-drop,z1);
+    geometry.setAttribute('position',new Float32BufferAttribute(positions,3));
+    geometry.setIndex([4,7,6,4,6,5,0,1,2,0,2,3,0,4,5,0,5,1,1,5,6,1,6,2,2,6,7,2,7,3,3,7,4,3,4,0]);
+    const flat=geometry.toNonIndexed();geometry.dispose();flat.computeVertexNormals();flat.userData.deckPanel={name,x0,x1,z0,z1,y0,y1,thickness};pieces.push(flat);
+  };
+  deckPrism('city-branch',head.x+.84,joint.x-.65,joint.z-.84,joint.z+.84,joint.y,joint.y,.12);
+  deckPrism('elbow',head.x-.84,head.x+.84,joint.z-.84,rampStart,joint.y,joint.y,.12);
+  deckPrism('graded-ramp',head.x-.84,head.x+.84,rampStart,rampEnd,joint.y,.56,.12);
+  deckPrism('quay-head',head.x-3.3,head.x+3.3,rampEnd,head.z+.575,.56,.56,.14);
+  const deckPanels=pieces.map(piece=>piece.userData.deckPanel);
   // One outline owns every exposed edge, including both T shoulders and the elbow.
   // Only the shared city stem and the two interlocked boarding gates interrupt it.
   const perimeter=[[-12.60,-52.78],[-27.78,-52.78],[-27.78,rampStart],[-27.78,-46.365],[-30.24,-46.365],[-30.24,-45.335],[-28.57,-45.335],[-27.28,-45.335],[-23.76,-45.335],[-23.76,-46.365],[-26.22,-46.365],[-26.22,-51.22],[-12.60,-51.22]];
@@ -292,7 +293,7 @@ export function createVisitorPier() {
     steel.push(new CylinderGeometry(.08,.09,.22,10).translate(x,.67,head.z),new BoxGeometry(.30,.06,.10).translate(x,.78,head.z));
     rubber.push(new CylinderGeometry(.13,.13,.48,10).translate(head.x+side*2.6,.24,head.z+.61));
   }
-  const material=new MeshPhysicalMaterial({color:'#d3e7dc',roughness:.72}),metal=new MeshPhysicalMaterial({color:'#3a8093',metalness:.35,roughness:.43}),rubberMaterial=new MeshStandardMaterial({color:'#274e58',roughness:.95});
+  const material=new MeshPhysicalMaterial({color:'#e5f3e8',roughness:.34,clearcoat:.35,clearcoatRoughness:.24}),metal=new MeshPhysicalMaterial({color:'#3a8093',metalness:.35,roughness:.43}),rubberMaterial=new MeshStandardMaterial({color:'#274e58',roughness:.95});
   const deck=new Mesh(combine(pieces),material),piles=new Mesh(combine(steel),metal),fenders=new Mesh(combine(rubber),rubberMaterial);
   deck.name='visitor-pier-boardwalk';piles.name='visitor-pier-seabed-piles';fenders.name='quay-soft-fenders';
   for(const mesh of [deck,piles,fenders]){mesh.raycast=()=>{};mesh.castShadow=true;mesh.receiveShadow=true;root.add(mesh);}
@@ -311,34 +312,31 @@ export function createVisitorPier() {
     }
     const mesh=new Mesh(combine(parts),metal);mesh.raycast=()=>{};group.add(mesh);root.add(group);group.visible=false;return {group,mesh};
   });
-  const random=seededRandom(26891),placement=new Object3D();
-  const algaeSites:{x:number;y:number;z:number;height:number;width:number;rotation:number;variant:number;post:typeof wetPosts[number]}[]=[];
+  const random=seededRandom(26891);
+  const algaeSites:{x:number;y:number;z:number;height:number;width:number;rotation:number;variant:number;seed:number;post:typeof wetPosts[number]}[]=[];
   for(const post of wetPosts){
     const lower=Math.max(-2.6,post.bottom+.65),upper=-.26;
     if(lower>=upper)continue;
-    const rows=Math.max(3,Math.ceil((upper-lower)/.32));
+    const rows=Math.max(3,Math.ceil((upper-lower)/(.29+random()*.09))),phase=random()*Math.PI*2,twist=.45+random()*.65;
     for(let row=0;row<rows;row++)for(let side=0;side<2;side++){
       if(random()<.08)continue;
-      const y=lower+(upper-lower)*(row/rows+random()*.04),rotation=side*Math.PI+row*.73+random()*.24;
+      const y=lower+(upper-lower)*((row+random()*.32)/rows),rotation=phase+side*Math.PI+row*twist+random()*.45;
       const radius=post.bottomRadius+(post.topRadius-post.bottomRadius)*(y-post.bottom)/(post.top-post.bottom);
       if(y<=terrainMeshHeight(post.x+Math.sin(rotation)*radius,post.z+Math.cos(rotation)*radius)+.05)continue;
-      algaeSites.push({x:post.x+Math.sin(rotation)*radius,y,z:post.z+Math.cos(rotation)*radius,height:Math.min(.27+random()*.19,(-.25-y)/1.04),width:radius/.12,rotation,variant:(row+side)%3,post});
+      algaeSites.push({x:post.x+Math.sin(rotation)*radius,y,z:post.z+Math.cos(rotation)*radius,height:Math.min(.27+random()*.19,(-.25-y)/1.04),width:radius/.12,rotation,variant:Math.floor(random()*3),seed:Math.floor(random()*2147483647),post});
     }
   }
   const algaeMaterial=new MeshStandardMaterial({vertexColors:true,side:DoubleSide,roughness:.96});
-  const algae=[0,1,2].map(variant=>{
-    const geometry=createDockWeedGeometry(variant),sites=algaeSites.filter(site=>site.variant===variant),mesh=new InstancedMesh(geometry,algaeMaterial,sites.length);
-    mesh.name=`visitor-pier-attached-algae-${variant}`;mesh.raycast=()=>{};
-    for(let index=0;index<sites.length;index++){const site=sites[index];placement.position.set(site.x,site.y,site.z);placement.rotation.set(0,site.rotation,0);placement.scale.set(site.width,site.height,site.width);placement.updateMatrix();mesh.setMatrixAt(index,placement.matrix);}
-    mesh.computeBoundingSphere();root.add(mesh);return mesh;
-  });
+  const algaeGeometry=createDockGrowthGeometry(algaeSites.map(site=>({...site,radius:site.width*.12})));
+  const algaeMesh=new Mesh(algaeGeometry,algaeMaterial);algaeMesh.name='visitor-pier-attached-algae';algaeMesh.userData.dockGrowth=true;algaeMesh.raycast=()=>{};root.add(algaeMesh);
+  const algae=[algaeMesh];
   let disposed=false;
-  return {root,algaeSites,railingSegments,gateSegments:gates.map(({a,b})=>({a,b})),update(boarding:number,surveyBoarding=0){
+  return {root,deckPanels,algaeSites,railingSegments,gateSegments:gates.map(({a,b})=>({a,b})),update(boarding:number,surveyBoarding=0){
     for(const [index,amount]of [boarding,surveyBoarding].entries()){bridges[index].group.visible=amount>.02;bridges[index].group.scale.z=Math.max(.02,amount);gates[index].group.rotation.y=gates[index].closedYaw+amount*Math.PI/2;}
   },dispose(){
     if(disposed)return;disposed=true;
     for(const mesh of [deck,piles,fenders,...bridges.map(bridge=>bridge.mesh)])mesh.geometry.dispose();for(const gate of gates)gate.geometry.dispose();material.dispose();metal.dispose();rubberMaterial.dispose();
-    for(const mesh of algae){mesh.geometry.dispose();mesh.dispose();}algaeMaterial.dispose();
+    for(const mesh of algae){mesh.geometry.dispose();}algaeMaterial.dispose();
   }};
 }
 

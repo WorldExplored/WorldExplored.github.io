@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Box3, InstancedMesh, Mesh, Raycaster, Vector3 } from 'three';
+import { Box3, Mesh, Raycaster, Vector3 } from 'three';
 import { createAeroBoat, createCoastalTraffic, createVisitorPier, VISITOR_PIER_HEAD, VISITOR_PIER_SHORE } from '../src/components/world/CoastalTraffic';
 import { createVesselState, stepVessel, vesselHullClearance, vesselPointClearance, vesselCoastClearance, vesselDockClearance, vesselOccupants, writeVesselPose, SURVEY_BERTH, SURVEY_DWELL, VISITOR_BERTH, VISITOR_DWELL, type MarineOccupant } from '../src/components/world/marineTraffic';
 import { HARBOR_OBSTACLES, CITY_PIER_JUNCTION, createCityFerryRoute, writeCityFerryPose } from '../src/components/world/cityInfrastructure';
@@ -222,11 +222,11 @@ test('visitor pier algae stays attached to wet post faces within a small instanc
     assert.ok(pier.algaeSites.length >= 300 && pier.algaeSites.length <= 500);
     let triangles = 0, batches = 0;
     pier.root.traverse(object => {
-      if (object instanceof InstancedMesh) {
-        batches++; triangles += object.geometry.index!.count / 3 * object.count;
+      if (object instanceof Mesh && object.userData.dockGrowth) {
+        batches++; triangles += (object.geometry.index?.count ?? object.geometry.attributes.position.count) / 3;
       }
     });
-    assert.equal(batches, 3); assert.ok(triangles < 150000);
+    assert.equal(batches, 1); assert.ok(triangles < 150000);
     for (const site of pier.algaeSites) {
       const { post } = site;
       const face = post.bottomRadius + (post.topRadius - post.bottomRadius) * (site.y - post.bottom) / (post.top - post.bottom);
@@ -396,4 +396,26 @@ test('survey launch has a usable cabin opening, a matched level gangway and genu
     assert.ok(Math.abs(step.max.y-.56)<1e-6);
     for(const name of ['helm-wheel-throttle-and-controls','helm-dial-and-map-screen','survey-chart-table-and-instruments'])assert.ok(boat.root.getObjectByName(name));
   }finally{boat.dispose();pier.dispose();}
+});
+
+test('city quay decks have one exact walking face across the stem, elbow and sloped joints',async()=>{
+  const {createCityLife}=await import('../src/components/world/CityLife');
+  const {createCityTransitRoute}=await import('../src/components/world/city');
+  const pier=createVisitorPier(),city=createCityLife(createCityTransitRoute());
+  try{
+    const decks=[pier.root.getObjectByName('visitor-pier-boardwalk') as Mesh,city.root.getObjectByName('city-public-infrastructure') as Mesh];
+    for(const mesh of decks){mesh.raycast=Mesh.prototype.raycast;mesh.updateMatrixWorld(true);}
+    const probe=(x:number,z:number,top:number)=>{
+      const hits=new Raycaster(new Vector3(x,4,z),new Vector3(0,-1,0)).intersectObjects(decks,false).filter(hit=>Math.abs(hit.point.y-top)<1e-5);
+      assert.equal(hits.length,1,`one walking surface at ${x}/${z}, without duplicate coplanar deck faces`);
+    };
+    for(const x of [-12.68,-12.66,-12.64,-12.62,-12.59])probe(x,-52.137,1.06);
+    for(const x of [-26.20,-26.17,-26.15,-26.12])probe(x,-52.213,1.06);
+    for(const z of [-51.18,-51.165,-51.155,-51.13,-46.46,-46.43,-46.42,-46.40]){
+      const top=z<=-51.16?1.06:z>=-46.425?.56:1.06+(z+51.16)/4.735*(.56-1.06);probe(-27.117,z,top);
+    }
+    const geometry=decks[0].geometry,p=geometry.attributes.position,n=geometry.attributes.normal;
+    for(let i=0;i<n.count;i++)if(n.getY(i)>.7)assert.ok(n.getY(i)>.99,'deck normals remain planar across each molded panel');
+    assert.ok(p.count<200,'joined continuous panels replace dozens of overlapping plank boxes');
+  }finally{pier.dispose();city.retain()();}
 });

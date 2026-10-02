@@ -109,10 +109,11 @@ test('vine seeds vary canopy outlines and stems begin at the actual planting gro
 test('fine grass tufts have mixed blade heights and retain their reserved footprint',()=>{
   const geometry=tuftGeometry(),vertices=geometry.attributes.position;
   try {
-    assert.equal(vertices.count,70);const heights=[];
-    for(let blade=0;blade<10;blade++)heights.push(vertices.getY(blade*7+6));
-    assert.equal(new Set(heights).size,10);assert.ok(Math.max(...heights)-Math.min(...heights)>.28);
-    for(let i=0;i<vertices.count;i++)assert.ok(Math.hypot(vertices.getX(i),vertices.getZ(i))<.5);
+    assert.equal(vertices.count,80);const heights=[],roots=[];
+    for(let blade=0;blade<16;blade++){heights.push(vertices.getY(blade*5+4));roots.push(Math.hypot(vertices.getX(blade*5),vertices.getZ(blade*5)));}
+    assert.equal(new Set(heights).size,11);assert.ok(Math.max(...heights)-Math.min(...heights)>.18);
+    assert.ok(Math.max(...roots)-Math.min(...roots)>.38,'separate roots cover an irregular mat rather than one radial tuft');
+    for(let i=0;i<vertices.count;i++)assert.ok(Math.hypot(vertices.getX(i),vertices.getZ(i))<.74);
     assert.ok(geometry.index!.count/3<=50);
   } finally {geometry.dispose();}
 });
