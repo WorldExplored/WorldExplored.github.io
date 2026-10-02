@@ -15,7 +15,7 @@ export function cloudSurfaceGeometry(clusters: readonly CloudCluster[]) {
     const bounds = cloudBounds(cloud);
     const size = bounds.max.clone().sub(bounds.min);
     const thin = cloud.archetype === 'atmospheric';
-    const step = Math.max(thin ? .82 : .76, size.x / (thin ? 44 : 46), size.y / 24, size.z / (thin ? 22 : 24));
+    const step = Math.max(thin ? 1.0168 : .9424, size.x / (thin ? 44 : 46), size.y / 24, size.z / (thin ? 22 : 24));
     const nx = Math.ceil(size.x / step) + 1;
     // Broad, thin cloud layers still need enough vertical samples for both surfaces.
     const ny = Math.max(thin ? 12 : 4, Math.ceil(size.y / step) + 1);

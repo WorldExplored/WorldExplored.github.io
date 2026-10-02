@@ -1,6 +1,6 @@
 import { marineFloorHeight, reefFloorHeight } from './reefHabitat';
 import { terrainMeshHeight } from './terrain';
-import { COASTAL_CAVE_LAYOUT, caveLocalXZ } from './coastalCaveLayout';
+import { COASTAL_CAVE_LAYOUT, caveLocalXZ, mythicalCaveClearance } from './coastalCaveLayout';
 
 export interface ReefCaveSite {x:number;y:number;z:number;scale:number;yaw:number;form:number;period:number;offset:number;kind:'bank'|'overhang'}
 export interface CaveVisitorPose {x:number;y:number;z:number;heading:number;pitch:number;swimming:boolean;phase:number}
@@ -55,7 +55,7 @@ export function caveGroundLocal(site:ReefCaveSite,x:number,z:number){
   return (marineFloorHeight(point.x,point.z)-site.y)/site.scale;
 }
 export function reefCaveClearance(x:number,z:number,radius=0){
-  let distance=Infinity;
+  let distance=mythicalCaveClearance(x,z,radius);
   for(const site of createReefCaveSites()){
     const local=caveLocalXZ(site,x,z);
     const dx=Math.abs(local.x)-4.5,dz=Math.abs(local.z+2.7)-2.7;

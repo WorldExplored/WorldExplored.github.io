@@ -45,6 +45,8 @@ import { FrontGardens } from './FrontGardens';
 import { StormSystem } from './StormSystem';
 import { RainRoofRegistry } from './RainRoofRegistry';
 import { ExteriorLighting } from './ExteriorLighting';
+import { SolarFlyover } from './SolarFlyover';
+import { MythicGrotto } from './MythicGrotto';
 
 function SceneClock({ runtime, paused }: { runtime: MutableRefObject<SceneRuntime>; paused: boolean }) {
   const firstFrame=useRef(true);
@@ -151,6 +153,7 @@ export function AeroWorld(props: WorldProps & { runtime: MutableRefObject<SceneR
     {stage >= 3 && <CoastalLife runtime={runtime} paused={stopped} quality={tier} />}
     {stage >= 3 && <ReefHabitat runtime={runtime} paused={stopped} quality={tier} />}
     {stage >= 3 && <ReefCaves runtime={runtime} paused={stopped} quality={tier} />}
+    {stage >= 3 && <MythicGrotto runtime={runtime} paused={stopped} quality={tier} />}
     {stage >= 4 && <MarineVisitors runtime={runtime} paused={stopped} quality={tier} />}
     {stage >= 3 && <CoastalTraffic runtime={runtime} paused={stopped} quality={tier}/>}
     {stage >= 3 && <DolphinLife runtime={runtime} paused={stopped} quality={tier} />}
@@ -164,6 +167,7 @@ export function AeroWorld(props: WorldProps & { runtime: MutableRefObject<SceneR
     {stage >= 4 && <FrontGardens/>}
     {stage >= 4 && <Flora runtime={runtime} paused={stopped} quality={tier} />}
     {stage >= 4 && <Wildlife runtime={runtime} paused={stopped} quality={tier} />}
+    {stage >= 4 && <SolarFlyover runtime={runtime} paused={stopped} quality={tier} />}
     {stage >= 5 && <GardenRover runtime={runtime} paused={stopped} quality={tier} active={false} />}
     {stage >= 5 && <ShoreImpacts runtime={runtime} paused={stopped} quality={tier} />}
     {stage >= 5 && <NatureResponses runtime={runtime} paused={stopped}/>}

@@ -35,12 +35,12 @@ test('the relocated city dock joins dry land and its low landing supports both g
     for(const side of [-1,1]){
       const point=plan.start.clone().addScaledVector(plan.across,side*plan.width/2);point.x+=.03;
       const ray=new Raycaster(new Vector3(point.x,3,point.z),new Vector3(0,-1,0)),hits=ray.intersectObject(pier);
-      assert.ok(hits.length&&Math.abs(hits[0].point.y-DOCK_BOARDING_HEIGHT)<1e-5,'the boarding edge meets a solid low dock landing');
+      assert.ok(hits.some(hit=>Math.abs(hit.point.y-DOCK_BOARDING_HEIGHT)<1e-5),'the guarded boarding edge meets a solid low dock landing');
     }
   }finally{city.retain()();}
 });
 
-test('deployed gangways join both aft thresholds and retract before vessel movement',()=>{
+test('deployed gangways join both side thresholds and retract before vessel movement',()=>{
   const city=createCityLife(createCityTransitRoute()),route=createCityFerryRoute();
   try{
     for(const plan of dockBoardingPlan()){
@@ -52,12 +52,35 @@ test('deployed gangways join both aft thresholds and retract before vessel movem
       for(const index of [2,3]){
         const world=new Vector3().fromBufferAttribute(vertices,index),local=ferry.worldToLocal(world.clone());
         assert.ok(Math.abs(world.y-DOCK_BOARDING_HEIGHT)<1e-6);
-        assert.ok(Math.abs(local.z+1.04)<1e-5,'boarding edge is 2cm aft of the threshold');
-        assert.ok(Math.abs(local.x)<=.251);assert.ok(Math.abs(local.y-(.26+.055/2))<1e-5);
+        assert.ok(Math.abs(local.x-plan.side*.58)<1e-5,'boarding edge lands on the matching port or starboard threshold');
+        assert.ok(Math.abs(local.z+.70)<=.251);assert.ok(Math.abs(local.y-(.26+.055/2))<1e-5);
       }
       const paused=gangway.morphTargetInfluences![0];city.update(arrival+3.6,createCityTransitRoute(),undefined,true);assert.equal(gangway.morphTargetInfluences![0],paused);
       for(const elapsed of [arrival,arrival+FERRY_DWELL-.15,arrival+FERRY_DWELL,arrival+FERRY_DWELL+1])assert.equal(dockBoardingExtension(elapsed,plan.index,route.duration,route.firstDuration),0);
       city.update(arrival+FERRY_DWELL,createCityTransitRoute());assert.equal(gangway.visible,false);
     }
+  }finally{city.retain()();}
+});
+
+
+test('taxi doors and both pier gates interlock with the guarded boarding surface',()=>{
+  const city=createCityLife(createCityTransitRoute()),route=createCityFerryRoute();
+  try{
+    for(const plan of dockBoardingPlan()){
+      const arrival=plan.index===0?0:route.firstDuration;
+      const side=plan.side===1?'starboard':'port',ferryGate=city.root.getObjectByName(`ferry-${side}-boarding-gate`)!;
+      const pierGate=city.root.getObjectByName(`${plan.dock.id}-taxi-pier-gate`)!;
+      city.update(arrival,createCityTransitRoute());const closed=pierGate.rotation.y;
+      assert.equal(ferryGate.position.z,0);
+      city.update(arrival+2,createCityTransitRoute());city.root.updateMatrixWorld(true);
+      assert.ok(ferryGate.position.z>.5);assert.ok(Math.abs(pierGate.rotation.y-closed-Math.PI/2)<1e-5);
+      const guards=city.root.getObjectByName(`${plan.dock.id}-taxi-gangway-guards`)!;assert.ok(guards.visible);
+      const ferry=city.root.getObjectByName('city-water-taxi')!,start=new Vector3(plan.side*.9,.525,-.70);ferry.localToWorld(start);
+      const direction=new Vector3(-plan.side,0,0).transformDirection(ferry.matrixWorld),ray=new Raycaster(start,direction,0,.7);
+      assert.equal(ray.intersectObject(ferry,true).filter(hit=>!hit.object.name.includes('wake')).length,0,'the open side gate reaches the clear aft cabin aisle');
+      city.update(arrival+FERRY_DWELL,createCityTransitRoute());assert.equal(ferryGate.position.z,0);assert.equal(pierGate.rotation.y,closed);assert.equal(guards.visible,false);
+    }
+    assert.ok(city.root.getObjectByName('ferry-steering-wheel-and-throttle'));
+    assert.ok(city.root.getObjectByName('ferry-map-and-gauges'));
   }finally{city.retain()();}
 });

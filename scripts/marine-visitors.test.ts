@@ -76,7 +76,7 @@ test('detailed animals and natural nests use shared geometry and release every r
     const residentMeshes:Mesh[]=[];life.residents.root.traverse(object=>{if(object instanceof Mesh)residentMeshes.push(object);});
     assert.ok(meshes.length-residentMeshes.length<150,'hatchlings retain their existing batched draw budget');
     assert.equal(residentMeshes.length,10,'new residents, offshore whale and particles share ten draws');
-    assert.ok(geometries.size<=42,'marine geometry remains shared across individual animals');
+    assert.ok(geometries.size<=43,'marine geometry remains shared across individual animals');
     for(const state of life.states){
       const animal=life.root.getObjectByName(`${state.kind}-${state.index}`)!;
       const size=new Box3().setFromObject(animal).getSize(new Vector3());
@@ -86,7 +86,7 @@ test('detailed animals and natural nests use shared geometry and release every r
         assert.equal(animal.children.filter(child=>child.name==='inset-octopus-eye').length,2);
         assert.equal(animal.getObjectByName('octopus-eye-rim'),undefined);
         const mantle=(animal.getObjectByName('octopus-mantle') as Mesh).geometry;mantle.computeBoundingBox();
-        const dimensions=mantle.boundingBox!.getSize(new Vector3());assert.ok(dimensions.x>dimensions.y*2.8);
+        const dimensions=mantle.boundingBox!.getSize(new Vector3());assert.ok(dimensions.x>dimensions.y*1.7&&dimensions.x<dimensions.y*2.6);
       }
       if(state.kind==='turtle'){
         const nest=life.root.getObjectByName(`guarded-turtle-nest-${state.index}`)!;
@@ -234,14 +234,14 @@ test('rare whale stays beyond islands and vessel routes, breaches and breathes t
   for(let time=0;time<1800;time+=3){
     const pose=sampleOffshoreWhale(time);if(pose.breaching)breaches++;
     for(let angle=0;angle<Math.PI*2;angle+=Math.PI/4)assert.ok(offshoreWhaleClear(pose.position.x+Math.cos(angle)*WHALE_RADIUS,pose.position.z+Math.sin(angle)*WHALE_RADIUS),'the complete animal stays in deep dark offshore water');
-    for(const route of routes)for(let step=0;step<=100;step++){route.curve.getPointAt(step/100,point);assert.ok(Math.hypot(point.x-pose.position.x,point.z-pose.position.z)>25,'whale never crosses the boat routes');}
+    for(const route of routes)for(let step=0;step<=100;step++){route.curve.getPointAt(step/100,point);if(pose.visible)assert.ok(Math.hypot(point.x-pose.position.x,point.z-pose.position.z)>25,'the complete whale only surfaces clear of the outbound shipping lane');}
   }
-  assert.ok(breaches>5&&breaches<16,'breaches occupy a small fraction of the offshore cycle');
+  assert.ok(breaches>=3&&breaches<9,'breaches occupy a small fraction of the offshore cycle');
   const count=surfaceAnimals.length,life=createMarineResidents(),geometry=life.spray.geometry,matrix=life.spray.instanceMatrix;
   try{
     assert.equal(surfaceAnimals.length,count+1);
-    life.update(0,false,226);assert.ok(life.whale.visible&&life.whale.position.y>3);
-    life.update(0,false,231.3);assert.ok(life.spray.count>60&&life.foam.visible,'large breach produces a pooled particle splash');
+    life.update(0,false,223.85);assert.ok(life.whale.visible&&life.whale.position.y>3);
+    life.update(0,false,225.7);assert.ok(life.spray.count>60&&life.foam.visible,'large breach produces a pooled particle splash');
     life.update(0,false,62.8);assert.ok(life.spray.count>15&&!life.foam.visible,'blowhole produces its own mist plume');
     assert.ok(life.spray.renderOrder>3&&life.foam.renderOrder>3,'surface particles remain visible above the transparent ocean');
     const before=life.whale.position.clone();life.update(15,true,400);assert.deepEqual(life.whale.position,before);
@@ -307,5 +307,53 @@ test('one scarce sea snake swims above the floor in bursts, coast, then pause wi
     const bodies=life.root.getObjectByName('banded-sea-snakes') as InstancedMesh;
     assert.equal(bodies.geometry.getAttribute('aStroke').count,1);assert.equal(bodies.geometry.getAttribute('aPropulsion').count,1);
     const geometry=bodies.geometry;for(const tier of ['low','medium','high']as const)life.setQuality(tier);assert.equal(bodies.geometry,geometry);
+  }finally{life.dispose();}
+});
+
+test('whale anatomy has a broad head, long pectorals, horizontal notched flukes and a conservative body envelope',async()=>{
+  const {createMarineResidents}=await import('../src/components/world/MarineResidents');
+  const {WHALE_RADIUS}=await import('../src/components/world/marineResidentState');
+  const life=createMarineResidents(),point=new Vector3();
+  try{
+    life.whale.position.set(0,0,0);life.whale.rotation.set(0,0,0);life.whale.updateMatrixWorld(true);
+    const body=life.whale.getObjectByName('humpback-streamlined-body') as Mesh;
+    const vertices=body.geometry.getAttribute('position');let headWidth=0,headHeight=0;
+    for(let i=0;i<vertices.count;i++)if(vertices.getX(i)>2.6&&vertices.getX(i)<2.9){headWidth=Math.max(headWidth,Math.abs(vertices.getZ(i)));headHeight=Math.max(headHeight,Math.abs(vertices.getY(i)));}
+    assert.ok(headWidth>headHeight*1.25,'rostrum stays broad and flattened instead of a pointed fish snout');
+    const fin=life.whale.getObjectByName('whale-left-pectoral') as Mesh;fin.geometry.computeBoundingBox();
+    assert.ok(fin.geometry.boundingBox!.max.z>3,'long pectoral fins distinguish the humpback');
+    const fluke=life.whale.getObjectByName('whale-horizontal-flukes') as Mesh;fluke.geometry.computeBoundingBox();
+    const span=fluke.geometry.boundingBox!.getSize(new Vector3());assert.ok(span.z>4.5&&span.y<.3);
+    life.whale.traverse(object=>{if(object instanceof Mesh){const p=object.geometry.getAttribute('position');for(let i=0;i<p.count;i++){point.fromBufferAttribute(p,i).applyMatrix4(object.matrixWorld);assert.ok(point.length()<WHALE_RADIUS,'every body, flipper and fluke vertex fits the collision sphere');}}});
+  }finally{life.dispose();}
+});
+
+test('offshore breaches accelerate downward under gravity and roam every side of the islands',async()=>{
+  const {sampleOffshoreWhale,WHALE_BREACH_AT,WHALE_GRAVITY,whaleRoutePoint,whaleLaneClearance,WHALE_RADIUS}=await import('../src/components/world/marineResidentState');
+  const quadrants=new Set<string>(),events:Vector3[]=[];
+  for(let time=0;time<3600;time+=7){const p=whaleRoutePoint(time);quadrants.add(`${p.x>-25}:${p.z>-40}`);const pose=sampleOffshoreWhale(time);if(pose.visible)assert.ok(whaleLaneClearance(p.x,p.z)>WHALE_RADIUS+20);}
+  assert.equal(quadrants.size,4);
+  for(let cycle=0;cycle<6;cycle++){const t=cycle*600+WHALE_BREACH_AT+(cycle%3)*31+1.85;events.push(sampleOffshoreWhale(t).position);}
+  for(let i=1;i<events.length;i++)assert.ok(events[i].distanceTo(events[i-1])>100,'successive breaches are not anchored to one patch of water');
+  const h=.01;
+  for(let age=.1;age<4.3;age+=.1){const t=WHALE_BREACH_AT+age,a=sampleOffshoreWhale(t-h),b=sampleOffshoreWhale(t),c=sampleOffshoreWhale(t+h);assert.ok(Math.abs((c.position.y-2*b.position.y+a.position.y)/(h*h)+WHALE_GRAVITY)<1e-5);}
+});
+
+test('cephalopods have species-specific limbs and independent mantle, arm and skin variation',async()=>{
+  const {createMarineResidents,OCTOPUS_VARIATIONS,SQUID_VARIATIONS}=await import('../src/components/world/MarineResidents');
+  const life=createMarineResidents();
+  try{
+    for(const variations of [OCTOPUS_VARIATIONS,SQUID_VARIATIONS]){
+      assert.equal(new Set(variations.map(v=>v.color)).size,variations.length);
+      assert.equal(new Set(variations.map(v=>v.arms)).size,variations.length);
+      assert.equal(new Set(variations.map(v=>v.mantle.join(','))).size,variations.length);
+    }
+    const squid=life.root.getObjectByName('reef-darting-squid') as InstancedMesh;
+    assert.equal(squid.geometry.userData.armCount,8);assert.equal(squid.geometry.userData.feedingTentacles,2);
+    assert.equal(squid.geometry.getAttribute('aMorph').count,5);
+    const body=life.root.getObjectByName('resident-octopus-bodies') as InstancedMesh;
+    assert.equal(body.geometry.getAttribute('aMorph').count,4);assert.equal(body.geometry.getAttribute('aPattern').count,4);
+    const snake=life.states.find(state=>state.kind==='sea-snake')!;assert.ok(snake.size>1,'the one scarce snake has a readable two-metre body');
+    for(const state of life.states)if(state.kind==='squid')assert.ok(state.radius>=state.size*1.3,'elongated squid tentacles participate in route clearance');
   }finally{life.dispose();}
 });

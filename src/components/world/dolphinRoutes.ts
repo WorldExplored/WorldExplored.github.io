@@ -1,10 +1,12 @@
 import { CatmullRomCurve3, Vector3 } from 'three';
-import { cityDocks, createCityFerryRoute } from './cityInfrastructure';
+import { cityDocks, HARBOR_OBSTACLES, createCityFerryRoute } from './cityInfrastructure';
 import { landDistance, seededRandom } from './terrain';
 import { harborWaterHeight } from './waterSurface';
 
 import { vesselClearance } from './marineTraffic';
 
+export const DOLPHIN_SCALES=[.70,.64,.76,.68] as const;
+export const dolphinBodyRadius=(index:number)=>DOLPHIN_SCALES[index%4]*1.98;
 const TAU = Math.PI * 2;
 // Both lobes return through the channel, then take different coasts of each island group.
 const anchors = [[12,-42],[30,-47],[46,-58],[51,-79],[34,-104],[5,-114],[-27,-111],[-50,-97],[-56,-74],[-46,-51],[-28,-42],[-8,-39],[10,-34],[25,-33],[39,-24],[42,-5],[39,18],[27,36],[0,43],[-25,39],[-32,24],[-47,9],[-46,-14],[-32,-25],[-20,-33],[-4,-43]];
@@ -15,7 +17,10 @@ export function dolphinFerryClearance(x: number, z: number) {
   return distance;
 }
 export function dolphinCoastClearance(x: number, z: number) {
-  return Math.min(-landDistance(x, z), ...cityDocks.map(dock => {
+  return Math.min(-landDistance(x, z), ...HARBOR_OBSTACLES.map(box=>{
+    const dx=Math.max(box.minX-x,0,x-box.maxX),dz=Math.max(box.minZ-z,0,z-box.maxZ);
+    return Math.hypot(dx,dz);
+  }), ...cityDocks.map(dock => {
     const dx=Math.abs(x-dock.x)-dock.width/2,dz=Math.abs(z-dock.z)-dock.length/2;
     return Math.hypot(Math.max(dx,0),Math.max(dz,0))+Math.min(Math.max(dx,dz),0);
   }));
@@ -36,7 +41,7 @@ export function createDolphinCourse(index: number, lap = 0) {
     });
     const curve = new CatmullRomCurve3(points, true, 'centripetal');
     curve.arcLengthDivisions = 1200; curve.updateArcLengths();
-    if (curve.getPoints(1200).every(point => dolphinCoastClearance(point.x, point.z) > 2.3)) return { curve, length: curve.getLength() };
+    if (curve.getPoints(1200).every(point => dolphinCoastClearance(point.x, point.z) > Math.max(2.3,dolphinBodyRadius(index)+.6))) return { curve, length: curve.getLength() };
   }
   throw new Error('Dolphin course must clear the complete coastline and piers.');
 }
@@ -98,7 +103,7 @@ export function stepDolphin(state: DolphinState, delta: number, paused = false, 
   }
   writePose(state, waterTime);
   // Dive below the hull envelope before crossing a live vessel lane.
-  const clearance=vesselClearance(state.position.x,state.position.z);
+  const clearance=vesselClearance(state.position.x,state.position.z,state.shark?1.3:dolphinBodyRadius(state.index));
   if(clearance<7) {
     const yieldDepth=Math.max(0,Math.min(1,(7-clearance)/4));
     state.position.y-=yieldDepth*(state.shark?1.8:2.4);

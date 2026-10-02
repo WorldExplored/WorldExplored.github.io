@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { create, act } from '@react-three/test-renderer';
 import { Matrix4, Vector3, type InstancedMesh, type Mesh, type ShaderMaterial } from 'three';
 import { coastExposure, coastNormal, shoreAlong, shoreBreakup, shorelineCrestTime, shorelinePhase, shorelineWash, shorelineWave } from '../src/components/world/waves';
-import { rockImpactPosition, createShoreDrops, createShoreImpactSites, createShoreImpactSystem, shoreDropPose, ShoreImpacts, SHORE_DROPS_PER_SITE, updateShoreImpacts } from '../src/components/world/ShoreImpacts';
+import { breakerPose, rockImpactPosition, createShoreDrops, createShoreImpactSites, createShoreImpactSystem, shoreDropPose, ShoreImpacts, SHORE_DROPS_PER_SITE, updateShoreImpacts } from '../src/components/world/ShoreImpacts';
+import { harborWaterHeight } from '../src/components/world/waterSurface';
 import { Water } from '../src/components/world/Water';
 import { createSceneRuntime, world, type QualityTier } from '../src/content/world';
 import { createLandscapePlan, landDistance } from '../src/components/world/terrain';
@@ -201,4 +202,53 @@ test('lighthouse breakers reach separate cliff faces instead of clustering behin
   }
   assert.ok(sites.some(site => site.x > -74 && site.z > -33), 'A front-facing cliff gets visible incoming breakers.');
   assert.ok(sites.some(site => site.x < -80), 'The exposed ocean side retains its stronger breakers.');
+});
+
+test('visible crest geometry travels into the lighthouse, rolls over, then sheds a broad low spray', () => {
+  const system = createShoreImpactSystem(), site = system.sites[0], positions = system.breakers.geometry.getAttribute('position');
+  const crestIndex = 12 * 11 + 5, p = new Vector3(), q = new Vector3();
+  let arrival = site.start;
+  while (breakerPose(site, arrival).visibility < .1) arrival += site.period;
+  try {
+    updateShoreImpacts(system, arrival - 3, 'high'); p.fromBufferAttribute(positions, crestIndex);
+    updateShoreImpacts(system, arrival - .2, 'high'); q.fromBufferAttribute(positions, crestIndex);
+    assert.ok((p.x - q.x) * site.nx + (p.z - q.z) * site.nz > 2.5, 'The actual crest advances several metres toward the cliff.');
+    assert.ok(q.y - harborWaterHeight(q.x, q.z, arrival - .2) > .7, 'The near-shore wave has an actual rising face.');
+    for (const row of [0, 10]) {
+      p.fromBufferAttribute(positions, 12 * 11 + row);
+      assert.ok(Math.abs(p.y - harborWaterHeight(p.x, p.z, arrival - .2) - .018) < .00001, 'Wave bases meet the same moving water surface as boats and foam.');
+    }
+    p.fromBufferAttribute(positions, 12 * 11 + 8); q.fromBufferAttribute(positions, 12 * 11 + 10);
+    assert.ok((q.x - p.x) * site.nx + (q.z - p.z) * site.nz > .1, 'The lip turns back over the face instead of forming a stationary vertical spout.');
+    const drops = system.drops.filter(drop => drop.site === 0);
+    const along = drops.map(drop => -site.nz * drop.x + site.nx * drop.z);
+    assert.ok(Math.max(...along) - Math.min(...along) > 3.3, 'Impact droplets shed across the breaking front, not one point.');
+    assert.ok(drops.every(drop => drop.delay >= .1 && drop.lift < 3.7));
+    assert.ok(system.breakers.geometry.index!.count / 3 < 4000, 'One retained draw contains the entire travelling crest field.');
+    const frozen = Array.from(positions.array); updateShoreImpacts(system, arrival + 100, 'high', true);
+    assert.deepEqual(Array.from(positions.array), frozen);
+  } finally { system.dispose(); }
+});
+
+
+test('low quality retains visible travelling lighthouse crests and foam without allocating spray',()=>{
+  const system=createShoreImpactSystem();
+  try {
+    let time=system.sites[0].start-.2;
+    while(breakerPose(system.sites[0],time).visibility<.1)time+=system.sites[0].period;
+    updateShoreImpacts(system,time,'low');
+    const fades=system.breakers.geometry.getAttribute('aBreakerFade'),lipFades=system.breakers.lipGeometry.getAttribute('aBreakerFade');
+    assert.ok(Array.from(fades.array).some(value=>value>.5),'Low tier keeps the visible wave front.');
+    assert.ok(Array.from(lipFades.array).some(value=>value>.4),'White foam identifies the moving crest.');
+    assert.equal(system.mesh.count,0);assert.equal(system.foam.count,0);
+    assert.equal(system.breakers.mesh.renderOrder,4);assert.equal(system.breakers.lip.renderOrder,5);
+    const triangles=(system.breakers.geometry.index!.count+system.breakers.lipGeometry.index!.count)/3;
+    assert.ok(triangles<4500,'Both retained wave surfaces have a bounded budget.');
+    const positions=system.breakers.geometry.getAttribute('position'),lip=system.breakers.lipGeometry.getAttribute('position');
+    for(let site=0;site<system.sites.length;site++)for(let column=1;column<24;column++){
+      const source=(site*25+column)*11+5,index=(site*25+column)*2;
+      const minimum=Math.min(positions.getY(source),positions.getY(source+1)),maximum=Math.max(positions.getY(source),positions.getY(source+1));
+      assert.ok(lip.getY(index)>minimum&&lip.getY(index)<maximum+.010,'Foam lies on the crest instead of floating above it.');
+    }
+  }finally{system.dispose();}
 });

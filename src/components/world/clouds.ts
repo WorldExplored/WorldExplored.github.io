@@ -49,7 +49,7 @@ export function createCloudClusters(count = MAX_CLOUDS): CloudCluster[] {
     const azimuth = .28 + Math.sin(group * 1.81) * .65 + (random() - .5) * .32;
     const density = 1.04 + random() * .12;
     const layer = archetype === 'atmospheric' ? 2 : archetype === 'bank' ? 1 : 0;
-    const size = (archetype === 'atmospheric' ? 2.1 : archetype === 'cauliflower' ? 1.50 : 1.85) + random() * .42;
+    const size = ((archetype === 'atmospheric' ? 2.1 : archetype === 'cauliflower' ? 1.50 : 1.85) + random() * .42) * 1.24;
     const distantScale = layer > 0 ? 3.0 + random() * 1.6 : 1;
     const stretch: Vec3 = [size * distantScale * (.92 + random() * .23), size * Math.sqrt(distantScale) * (.94 + random() * .16) * (archetype === 'cauliflower' ? 1.25 : archetype === 'atmospheric' ? 1.35 : 1), size * Math.sqrt(distantScale) * (1.02 + random() * .3)];
     const center: Vec3 = [anchor[0] + (member - 1) * 13 + (random() - .5) * 8,

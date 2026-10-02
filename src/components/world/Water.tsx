@@ -216,6 +216,11 @@ export function oceanDiskGeometry() {
 
 export function Water({ runtime, paused, quality }: EnvironmentProps) {
   const detail = world.quality[quality].waterDetail;
+  const inspection = useMemo(() => {
+    if (typeof window === 'undefined' || !['localhost', '127.0.0.1'].includes(window.location.hostname)) return null;
+    const value = new URLSearchParams(window.location.search).get('qaSurfTime');
+    return value !== null && Number.isFinite(Number(value)) ? Math.max(0, Number(value)) : null;
+  }, []);
   const invalidate = useThree(state => state.invalidate);
   const geometry = useMemo(() => oceanDiskGeometry(), []);
   const material = useMemo(() => new ShaderMaterial({
@@ -261,6 +266,7 @@ export function Water({ runtime, paused, quality }: EnvironmentProps) {
   useEffect(() => { material.uniforms.uDetail.value = detail; }, [material, detail]);
   useFrame(() => {
     updateWater(material, runtime.current, paused);
+    if (inspection !== null) material.uniforms.uTime.value = inspection * world.environment.waterSpeed;
   });
   function ripple(event: ThreeEvent<MouseEvent>) {
     if (paused || event.delta > 5) return;

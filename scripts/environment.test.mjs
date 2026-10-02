@@ -152,10 +152,12 @@ async function fixture(quality = 'high') {
 test('fine foliage stays inside the same exclusion footprints used for planting', async () => {
   const item = await fixture();
   try {
-    const foliage = item.scene.getObjectByName('grove-foliage');
+    const foliageMeshes = item.scene.getObjectByName('grove-foliage').children;
+    assert.equal(foliageMeshes.length,3);
     const plan = createLandscapePlan();
     const matrix = new Matrix4();
     const vertex = new Vector3();
+    for (const foliage of foliageMeshes) {
     const positions = foliage.geometry.attributes.position;
     for (let instance = 0; instance < foliage.count; instance++) {
       foliage.getMatrixAt(instance, matrix);
@@ -163,6 +165,7 @@ test('fine foliage stays inside the same exclusion footprints used for planting'
         vertex.fromBufferAttribute(positions, index).applyMatrix4(matrix);
         assert.ok(plan.trees.some(tree => Math.hypot(vertex.x - tree.x, vertex.z - tree.z) <= tree.radius), 'A visible leaf must remain inside an excluded tree footprint.');
       }
+    }
     }
     const ground = item.scene.getObjectByName('archipelago-land');
     assert.equal(ground.material.map.colorSpace, SRGBColorSpace);
@@ -187,7 +190,7 @@ test('tier changes retain all mounted geometry, materials and textures without d
     assert.equal(item.scene.getObjectByName('environment-grass'), grass);
     assert.equal(item.scene.getObjectByName('environment-clouds'), clouds);
     assert.equal(grass.count, world.quality[tier].grass);
-    assert.equal(item.scene.getObjectByName('grove-foliage').material.userData.canopyWind.strength.value, tier === 'low' ? 0 : 1);
+    assert.equal(item.scene.getObjectByName('grove-foliage-0').material.userData.canopyWind.strength.value, tier === 'low' ? 0 : 1);
     assert.equal(clouds.geometry.drawRange.count, clouds.geometry.userData.cloudRanges[world.quality[tier].clouds - 1].start + clouds.geometry.userData.cloudRanges[world.quality[tier].clouds - 1].count);
     item.scene.traverse(object => {
       if (object.geometry) assert.ok(resources.has(object.geometry.uuid));
@@ -219,7 +222,7 @@ for (const quality of ['high', 'medium', 'low']) test(`local pointer and pause b
     await item.frames(10);
     assert.equal(item.runtime.current.plantInteraction, 1);
     assert.ok(grass.material.uniforms.uPointerStrength.value > .5);
-    const canopyWind = item.scene.getObjectByName('grove-foliage').material.userData.canopyWind;
+    const canopyWind = item.scene.getObjectByName('grove-foliage-0').material.userData.canopyWind;
     const frozenCanopy = canopyWind.time.value;
     const frozen = grass.material.uniforms.uPointerStrength.value;
     const frozenClouds = clouds.material.uniforms.uOrigins.value.map(origin => origin.toArray());

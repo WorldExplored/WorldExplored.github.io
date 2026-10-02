@@ -2,6 +2,7 @@ import { Vector3 } from 'three';
 import { seededRandom, landDistance, terrainMeshHeight } from './terrain';
 import { marineFloorHeight, reefFloorHeight } from './reefHabitat';
 import { visitorClear } from './marineVisitorState';
+import { createVesselRoute } from './marineTraffic';
 
 export type ResidentKind='crawling-octopus'|'sea-snake'|'squid';
 export interface MarineResident {kind:ResidentKind;index:number;size:number;radius:number;position:Vector3;home:Vector3;target:Vector3;heading:number;pitch:number;time:number;moving:boolean;nextMove:number;jet:number;distance:number;strokePhase:number;swimSpeed:number;random:()=>number}
@@ -22,8 +23,8 @@ export function createMarineResidentsState(){
   const states:MarineResident[]=[];
   for(const kind of Object.keys(RESIDENT_COUNTS) as ResidentKind[])for(let index=0;index<RESIDENT_COUNTS[kind];index++){
     const seed=27133+index*9331+(kind==='squid'?71209:kind==='sea-snake'?31177:0),random=seededRandom(seed);
-    const size=kind==='crawling-octopus'?.78+index*.10:kind==='sea-snake'?.73+index*.17:.62+index*.095;
-    const radius=kind==='crawling-octopus'?size*.91:kind==='sea-snake'?size*1.36:size*.75;
+    const size=kind==='crawling-octopus'?.78+index*.10:kind==='sea-snake'?1.03+index*.17:.62+index*.095;
+    const radius=kind==='crawling-octopus'?size*.91:kind==='sea-snake'?size*1.36:size*1.34;
     let position:Vector3|undefined;
     for(let attempt=0;attempt<3000;attempt++){
       const [cx,cz]=centers[(index+Math.floor(attempt/300))%centers.length],x=cx+(random()-.5)*13,z=cz+(random()-.5)*11;
@@ -80,23 +81,40 @@ export function stepMarineResidents(states:MarineResident[],delta:number,paused=
 
 export const WHALE_CYCLE=600;
 export const WHALE_SCALE=2.35;
-export const WHALE_RADIUS=14;
+export const WHALE_RADIUS=16;
 export const WHALE_BREACH_AT=222;
+export const WHALE_GRAVITY=9.81;
+export const WHALE_LAUNCH_SPEED=18;
+export const WHALE_BREACH_DURATION=4.4;
 export function whaleRoutePoint(elapsed:number,target=new Vector3()){
-  const a=elapsed*.0039+.6;
-  return target.set(-254+Math.cos(a)*38,0,-144+Math.sin(a)*32);
+  // Different orbit and event periods put successive breaches on different coasts.
+  const a=elapsed*.0051+2.55;
+  return target.set(-25+Math.cos(a)*300,0,-40+Math.sin(a)*278);
+}
+const whaleBoatLanes=[0,1,2].map(index=>createVesselRoute(index).curve.getSpacedPoints(180));
+export function whaleLaneClearance(x:number,z:number){
+  let clearance=Infinity;
+  for(const lane of whaleBoatLanes)for(let i=1;i<lane.length;i++){
+    const a=lane[i-1],b=lane[i],dx=b.x-a.x,dz=b.z-a.z;
+    const t=Math.max(0,Math.min(1,((x-a.x)*dx+(z-a.z)*dz)/(dx*dx+dz*dz)));
+    clearance=Math.min(clearance,Math.hypot(x-a.x-dx*t,z-a.z-dz*t));
+  }
+  return clearance;
 }
 export function offshoreWhaleClear(x:number,z:number){return landDistance(x,z)<-95&&reefFloorHeight(x,z)<-20;}
-/** One rare offshore breach, with an independent slow surfacing/breathing rhythm. */
+/** The exposed breach follows constant downward acceleration, including re-entry. */
 export function sampleOffshoreWhale(elapsed:number){
   const time=Math.max(0,elapsed),cycle=Math.floor(time/WHALE_CYCLE),age=time%WHALE_CYCLE;
-  const breachAt=WHALE_BREACH_AT+(cycle%3)*31,breachAge=age-breachAt,breaching=breachAge>=0&&breachAge<=10;
+  const breachAt=WHALE_BREACH_AT+(cycle%3)*31,breachAge=age-breachAt,breaching=breachAge>=0&&breachAge<=WHALE_BREACH_DURATION;
   const position=whaleRoutePoint(time),next=whaleRoutePoint(time+.1),heading=Math.atan2(-(next.z-position.z),next.x-position.x);
   const breathAge=(time+17)%73,breathing=breathAge>=0&&breathAge<14;
+  const laneClear=whaleLaneClearance(position.x,position.z)>WHALE_RADIUS+20;
   const surface=breathing?Math.sin(Math.PI*breathAge/14)**2:0;
-  position.y=breaching?-10.5+18.4*Math.sin(Math.PI*breachAge/10):-11+9.5*surface;
-  const pitch=breaching?.28+.92*Math.sin(Math.PI*breachAge/10)-.65*(breachAge/10):.045*Math.sin(time*.28);
-  const splashAge=breachAge-8.5,spoutAge=breathAge-6.3;
-  const splashPoint=whaleRoutePoint(cycle*WHALE_CYCLE+breachAt+8.5);
-  return {position,heading,pitch,breaching,breachAge,splashAge,splashPoint,spoutAge,spouting:!breaching&&spoutAge>=0&&spoutAge<2.4,visible:breaching||breathing};
+  position.y=breaching?-8+WHALE_LAUNCH_SPEED*breachAge-.5*WHALE_GRAVITY*breachAge*breachAge:-11+9.5*surface;
+  const velocityY=WHALE_LAUNCH_SPEED-WHALE_GRAVITY*breachAge;
+  const pitch=breaching?Math.atan2(velocityY,7.8):.045*Math.sin(time*.28);
+  const impact=(WHALE_LAUNCH_SPEED+Math.sqrt(WHALE_LAUNCH_SPEED**2-16*WHALE_GRAVITY))/WHALE_GRAVITY;
+  const splashAge=laneClear?breachAge-impact:-100,spoutAge=breathAge-6.3;
+  const splashPoint=whaleRoutePoint(cycle*WHALE_CYCLE+breachAt+impact);
+  return {position,heading,pitch,roll:breaching?-.38*Math.sin(Math.PI*breachAge/WHALE_BREACH_DURATION):0,breaching,breachAge,splashAge,splashPoint,spoutAge,spouting:laneClear&&!breaching&&spoutAge>=0&&spoutAge<2.4,visible:laneClear&&(breaching||breathing)};
 }

@@ -6,7 +6,7 @@ import { LIGHTHOUSE_RISE, LIGHTHOUSE_LANTERN_Y, setLighthouseMode, lighthouseBri
 import { createLighthouseGeometry, CoastalLighthouse, LIGHTHOUSE_OPENINGS, lighthouseRadius } from '../src/components/world/CoastalLighthouse';
 import { createLighthouseActivation, lighthouseSignal, stepLighthouseSignal } from '../src/components/world/lighthouseSignal';
 import { createLandmarkMechanism, LandmarkMechanisms } from '../src/components/world/LandmarkMechanisms';
-import { createLighthouseAccess, lighthouseAccessCurve, LIGHTHOUSE_LANDING } from '../src/components/world/LighthouseAccess';
+import { createLighthouseAccess, lighthouseAccessCurve, lighthouseRailLines, LIGHTHOUSE_COURT_POINTS, LIGHTHOUSE_LANDING } from '../src/components/world/LighthouseAccess';
 import { terrainMeshHeight } from '../src/components/world/terrain';
 import { createSceneRuntime, world } from '../src/content/world';
 import { Landmark } from '../src/components/world/Landmark';
@@ -130,6 +130,37 @@ test('water landing, actual stair faces and the stone court form a continuous su
     }
     for(const name of ['lighthouse-boat-fenders','lighthouse-mooring-hardware-and-ladder','lighthouse-stair-stringer','lighthouse-under-stair-cross-braces'])assert.ok(access.root.getObjectByName(name));
   }finally{access.dispose();material.dispose();}
+});
+
+test('straight lighthouse guardrails meet at every joint and leave the full court-to-door route open', () => {
+  const access = createLighthouseAccess(), material = new MeshBasicMaterial({ side: DoubleSide });
+  const rail = new Mesh((access.root.getObjectByName('lighthouse-continuous-handrail') as Mesh).geometry, material);
+  const court = new Mesh((access.root.getObjectByName('lighthouse-upper-court-steps') as Mesh).geometry, material);
+  const stair = new Mesh((access.root.getObjectByName('lighthouse-graded-treads') as Mesh).geometry, material);
+  rail.updateMatrixWorld(); court.updateMatrixWorld(); stair.updateMatrixWorld();
+  const ray = new Raycaster();
+  try {
+    for (const line of lighthouseRailLines()) for (let span = 1; span < line.length; span++) for (let sample = 0; sample <= 10; sample++) {
+      const p = line[span - 1].clone().lerp(line[span], sample / 10);
+      ray.set(p.clone().add(new Vector3(0, .15, 0)), new Vector3(0, -1, 0));
+      const hit = ray.intersectObject(rail, false)[0];
+      assert.ok(hit && Math.abs(hit.point.y - p.y) < .05, 'Every actual handrail span and shared miter joint has continuous geometry.');
+    }
+    for (let span = 1; span < LIGHTHOUSE_COURT_POINTS.length; span++) for (let sample = 0; sample <= 16; sample++) {
+      const p = new Vector3(...LIGHTHOUSE_COURT_POINTS[span - 1]).lerp(new Vector3(...LIGHTHOUSE_COURT_POINTS[span]), sample / 16);
+      const start = LIGHTHOUSE_COURT_POINTS[span - 1], end = LIGHTHOUSE_COURT_POINTS[span];
+      const across = new Vector3(end[2] - start[2], 0, start[0] - end[0]).normalize();
+      for (const offset of [-.27, 0, .27]) {
+        ray.set(p.clone().addScaledVector(across, offset).setY(6), new Vector3(0, -1, 0));
+        const hit = ray.intersectObjects([court, stair], false)[0];
+        assert.ok(hit && Math.abs(hit.point.y - p.y) < .07, 'The rendered upper approach has continuous finished flooring into the door threshold.');
+      }
+      ray.set(p.clone().add(new Vector3(0, .7, 0)), new Vector3(-1, 0, 0)); ray.far = .35;
+      assert.equal(ray.intersectObject(rail, false).length, 0, 'No end rail closes off the court exit.'); ray.far = Infinity;
+    }
+    const triangles = access.root.children.reduce((sum, object) => { const geometry = (object as Mesh).geometry; return sum + (geometry.index?.count ?? geometry.getAttribute('position').count) / 3; }, 0);
+    assert.ok(triangles < 6000, 'Straight joined spans replace the dense looping rail tubes.');
+  } finally { access.dispose(); material.dispose(); }
 });
 
 test('tower service details retain openings, beacon clearance and a bounded geometry cost',()=>{

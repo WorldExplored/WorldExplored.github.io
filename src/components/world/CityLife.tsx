@@ -26,11 +26,12 @@ export function dockBoardingPlan() {
   return cityDocks.map((dock,index)=>{
     const position=new Vector3(),tangent=new Vector3();writeCityFerryPose(route,index===0?0:route.firstDuration,position,tangent);
     const right=new Vector3(tangent.z,0,-tangent.x);
-    // The gangway stops 2cm behind the actual aft deck edge, leaving room for a fender.
-    const end=position.clone().addScaledVector(tangent,-1.04);end.y=DOCK_BOARDING_HEIGHT;
-    const start=dock.id==='city'?new Vector3(dock.x-dock.width/2,DOCK_BOARDING_HEIGHT,end.z):new Vector3(-8.40,DOCK_BOARDING_HEIGHT,dock.z-dock.length/2);
+    // Each pier meets a side gate in the taxi's unobstructed aft quarter.
+    const side=dock.id==='city'?1:-1;
+    const end=position.clone().addScaledVector(right,side*.58).addScaledVector(tangent,-.70);end.y=DOCK_BOARDING_HEIGHT;
+    const start=dock.id==='city'?new Vector3(dock.x-dock.width/2,DOCK_BOARDING_HEIGHT,end.z-.35):new Vector3(-8.40,DOCK_BOARDING_HEIGHT,dock.z-dock.length/2);
     const across=dock.id==='city'?new Vector3(0,0,1):new Vector3(1,0,0);
-    return {dock,index,start,end,right,across,...dockLandingLayout(dock),width:.50};
+    return {dock,index,start,end,right:tangent.clone(),across,side,...dockLandingLayout(dock),width:.50};
   });
 }
 
@@ -140,7 +141,7 @@ export function createCityLife(stationRoute: CityTransitRoute) {
   rotorGeometry.userData.parts = ['three-blade rotor', 'hub', 'rotor shaft coupling'];
   add('city-wind-turbine-static-hardware', merged(turbineHardware), materials.turbineSteel);
   const boardings=dockBoardingPlan();
-  const gangways:Array<{mesh:Mesh;index:number}>=[];
+  const gangways:Array<{mesh:Mesh;index:number;gate:Group;closedYaw:number;guard:Group}>=[];
   const dockBeam=(a:Vector3,b:Vector3,radius=.025)=>{
     const direction=b.clone().sub(a),transform=new Object3D();transform.position.copy(a).add(b).multiplyScalar(.5);transform.quaternion.setFromUnitVectors(new Vector3(0,1,0),direction.clone().normalize());transform.updateMatrix();
     return new CylinderGeometry(radius,radius,direction.length(),10).applyMatrix4(transform.matrix);
@@ -159,18 +160,21 @@ export function createCityLife(stationRoute: CityTransitRoute) {
     for(const side of [-1,1]){
       const x=dock.x+side*.59;
       const breakpoints=[dryEnd,stairStart,stairEnd,landingEnd];
-      if(dock.id==='city'&&side===-1)breakpoints.push(boarding.start.z-.36,boarding.start.z+.36,CITY_PIER_JUNCTION.z-CITY_PIER_JUNCTION.halfOpening,CITY_PIER_JUNCTION.z+CITY_PIER_JUNCTION.halfOpening);
+      if(dock.id==='city'&&side===-1)breakpoints.push(boarding.start.z-boarding.width/2,boarding.start.z+boarding.width/2,CITY_PIER_JUNCTION.z-CITY_PIER_JUNCTION.halfOpening,CITY_PIER_JUNCTION.z+CITY_PIER_JUNCTION.halfOpening);
       breakpoints.sort((a,b)=>(a-b)*direction);
       for(let i=1;i<breakpoints.length;i++){
         const a=breakpoints[i-1],b=breakpoints[i],middle=(a+b)/2;
-        if(dock.id==='city'&&side===-1&&(Math.abs(middle-boarding.start.z)<.36||Math.abs(middle-CITY_PIER_JUNCTION.z)<CITY_PIER_JUNCTION.halfOpening))continue;
-        fixed.push(dockBeam(new Vector3(x,heightAt(a)+.42,a),new Vector3(x,heightAt(b)+.42,b)));
+        if(dock.id==='city'&&side===-1&&(Math.abs(middle-boarding.start.z)<boarding.width/2||Math.abs(middle-CITY_PIER_JUNCTION.z)<CITY_PIER_JUNCTION.halfOpening))continue;
+        for(const height of [.5,1])fixed.push(dockBeam(new Vector3(x,heightAt(a)+height,a),new Vector3(x,heightAt(b)+height,b)));
       }
       for(const z of breakpoints){
-        const floor=Math.min(terrainHeight(x,z),.1),top=heightAt(z)+.42;
+        const floor=Math.min(terrainHeight(x,z),.1),top=heightAt(z)+1;
         fixed.push(new CylinderGeometry(.035,.055,top-floor,10).translate(x,(top+floor)/2,z));
       }
     }
+    // Guard every wet end; only the garden taxi doorway interrupts its end rail.
+    const railSections=dock.id==='garden'?[[boarding.start.x+boarding.width/2,dock.x+dock.width/2-.06]]:[[dock.x-dock.width/2+.06,dock.x+dock.width/2-.06]];
+    for(const [a,b]of railSections)for(const height of [.5,1])fixed.push(dockBeam(new Vector3(a,DOCK_BOARDING_HEIGHT+height,landingEnd),new Vector3(b,DOCK_BOARDING_HEIGHT+height,landingEnd)));
     // Closed solid gangway, morphing into its pier-mounted cassette before the taxi moves.
     const half=boarding.width/2;
     const corners=[boarding.start.clone().addScaledVector(boarding.across,-half),boarding.start.clone().addScaledVector(boarding.across,half),boarding.end.clone().addScaledVector(boarding.right,half),boarding.end.clone().addScaledVector(boarding.right,-half)];
@@ -182,7 +186,30 @@ export function createCityLife(stationRoute: CityTransitRoute) {
       const target=i>1?boarding.start.clone().addScaledVector(boarding.across,i===2?half:-half):corners[i].clone();target.y-=bottom;retracted.push(...target.toArray());
     }
     const geometry=new BufferGeometry();geometry.setAttribute('position',new Float32BufferAttribute(positions,3));geometry.setAttribute('uv',new Float32BufferAttribute(uvs,2));geometry.setIndex([0,2,1,0,3,2,4,5,6,4,6,7,0,1,5,0,5,4,1,2,6,1,6,5,2,3,7,2,7,6,3,0,4,3,4,7]);geometry.computeVertexNormals();if(geometry.getAttribute('normal').getY(0)<0){const index=geometry.index!;for(let i=0;i<index.count;i+=3){const a=index.getX(i);index.setX(i,index.getX(i+2));index.setX(i+2,a);}geometry.computeVertexNormals();}geometry.morphAttributes.position=[new Float32BufferAttribute(retracted,3)];
-    const mesh=add(`city-${dock.id}-boarding-gangway`,geometry,materials.aqua);mesh.userData.boarding=boarding;gangways.push({mesh,index:boarding.index});
+    const mesh=add(`city-${dock.id}-boarding-gangway`,geometry,materials.aqua);mesh.userData.boarding=boarding;
+    const gate=new Group();gate.name=`${dock.id}-taxi-pier-gate`;gate.position.copy(boarding.start).addScaledVector(boarding.across,-half);root.add(gate);
+    const closedYaw=Math.atan2(-boarding.across.z,boarding.across.x);gate.rotation.y=closedYaw;
+    add(`${dock.id}-taxi-pier-gate-rails`,merged([
+      ...[.5,1].map(y=>new BoxGeometry(boarding.width,.04,.04).translate(half,y,0)),
+      ...[0,half,boarding.width].map(x=>new BoxGeometry(.04,1,.04).translate(x,.5,0)),
+    ]),materials.white,gate);
+    const guard=new Group();guard.name=`${dock.id}-taxi-gangway-guards`;root.add(guard);
+    const guardParts:BufferGeometry[]=[],guardRetracted:BufferGeometry[]=[];
+    for(const [near,far]of [[0,3],[1,2]]){
+      for(const height of [.5,1]){
+        const a=corners[near].clone().add(new Vector3(0,height,0)),b=corners[far].clone().add(new Vector3(0,height,0));
+        const rail=dockBeam(a,b,.018),collapsed=rail.clone(),points=collapsed.getAttribute('position');
+        for(let i=0;i<points.count;i++)points.setXYZ(i,corners[near].x,points.getY(i),corners[near].z);
+        guardParts.push(rail);guardRetracted.push(collapsed);
+      }
+      for(const point of [corners[near],corners[far]]){
+        guardParts.push(dockBeam(point,point.clone().add(new Vector3(0,1,0)),.018));
+        guardRetracted.push(dockBeam(corners[near],corners[near].clone().add(new Vector3(0,1,0)),.018));
+      }
+    }
+    const guardGeometry=merged(guardParts),folded=merged(guardRetracted);guardGeometry.morphAttributes.position=[folded.getAttribute('position').clone()];folded.dispose();
+    add(`${dock.id}-taxi-gangway-handrails`,guardGeometry,materials.white,guard);
+    guard.visible=false;gangways.push({mesh,index:boarding.index,gate,closedYaw,guard});
     fixed.push(new BoxGeometry(dock.id==='city'?.035:.62,.10,dock.id==='city'?.62:.035).translate(boarding.start.x,DOCK_BOARDING_HEIGHT-.10,boarding.start.z));
   }
   // Public station rail and canopy lights align with the existing transit hall.
@@ -223,7 +250,7 @@ export function createCityLife(stationRoute: CityTransitRoute) {
   const update = (elapsed: number, stationRoute: CityTransitRoute, controls: TownInteractionState = idleControls, paused = false, sunDirection:readonly number[]=world.lighting.sunPosition) => {
     if (!paused) displayedTime = elapsed;
     const time = displayedTime;
-    if(!paused)for(const gangway of gangways){const extension=dockBoardingExtension(time,gangway.index,coastalFerry.route.duration,coastalFerry.route.firstDuration);gangway.mesh.morphTargetInfluences![0]=1-extension;gangway.mesh.visible=extension>.005;}
+    if(!paused)for(const gangway of gangways){const extension=dockBoardingExtension(time,gangway.index,coastalFerry.route.duration,coastalFerry.route.firstDuration);gangway.mesh.morphTargetInfluences![0]=1-extension;gangway.mesh.visible=extension>.005;gangway.guard.visible=extension>.005;(gangway.guard.children[0] as Mesh).morphTargetInfluences![0]=1-extension;gangway.gate.rotation.y=gangway.closedYaw+extension*Math.PI/2;}
     mechanisms.update(time, controls, paused, detail);
     for (let index = 0; index < rotors.length; index++) {
       const yaw = index === 0 ? controls.states.wind.amount * .32 : 0;

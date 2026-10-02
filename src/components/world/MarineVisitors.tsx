@@ -28,7 +28,7 @@ export function createMarineVisitors(){
   const bodyStone=shape(oval(0,.105,0,.43,.11,.30)),stoneFin=shape(new SphereGeometry(1,7,5).scale(.042,.084,.018));
   const stonePectoral=shape(oval(0,0,0,.22,.027,.13));
   const stoneSpot=shape(new SphereGeometry(1,6,4).scale(.032,.009,.026)),eye=shape(new SphereGeometry(1,7,5).scale(.018,.018,.014));
-  const mantle=shape(octopusMantleGeometry()),head=shape(oval(-.24,.185,0,.17,.11,.125)),siphon=shape(new CylinderGeometry(.026,.038,.11,9).rotateX(Math.PI/2));
+  const mantles=[shape(octopusMantleGeometry(0)),shape(octopusMantleGeometry(1))],head=shape(oval(-.24,.185,0,.17,.11,.125)),siphon=shape(new CylinderGeometry(.026,.038,.11,9).rotateX(Math.PI/2));
   const armPath=new CatmullRomCurve3([new Vector3(0,0,0),new Vector3(.12,-.06,.025),new Vector3(.27,-.075,.055),new Vector3(.42,-.07,.10),new Vector3(.47,-.025,.17),new Vector3(.42,.03,.21)]);
   const octArm=shape(new TubeGeometry(armPath,18,.044,6,false));
   const armPositions=octArm.getAttribute('position'),armUV=octArm.getAttribute('uv');
@@ -75,12 +75,12 @@ export function createMarineVisitors(){
       stoneMarkings.forEach((geometry,tint)=>add(animal,'reef-stone-mottling',geometry,stoneMottles[tint]));
       for(const side of [-1,1])add(animal,'stonefish-eyes',eye,stoneEye,.27,.17,side*.14);
     }else if(kind==='octopus'){
-      const skin=octopusSkin[index%2];actor.mantle=add(animal,'octopus-mantle',mantle,skin);add(animal,'octopus-head',head,skin);
+      const skin=octopusSkin[index%2];actor.mantle=add(animal,'octopus-mantle',mantles[index],skin);add(animal,'octopus-head',head,skin);
       add(animal,'octopus-siphon',siphon,skin,-.17,.155,.115);
       for(const side of [-1,1])add(animal,'inset-octopus-eye',eye,octopusEye,-.255,.222,side*.116).scale.set(.75,.62,.4);
       actor.arms=[];
       for(let arm=0;arm<8;arm++){
-        const pivot=new Group();pivot.name=`octopus-arm-${arm+1}`;pivot.position.set(-.29,.15,0);pivot.rotation.y=Math.PI+(arm-3.5)*.24;pivot.scale.setScalar(.86+(arm%3)*.055);animal.add(pivot);actor.arms.push(pivot);
+        const pivot=new Group();pivot.name=`octopus-arm-${arm+1}`;pivot.position.set(-.29+Math.cos((arm-3.5)*.40)*.025,.125,Math.sin((arm-3.5)*.40)*.10);pivot.rotation.y=Math.PI+(arm-3.5)*.40;pivot.scale.set(.84+(arm%3)*.062+index*.055,1,.97-index*.12);animal.add(pivot);actor.arms.push(pivot);
         add(pivot,'tapered-tendril',octArm,skin);
         add(pivot,'sucker-row',suckerCluster,octopusUnderside);
       }
@@ -129,7 +129,7 @@ export function createMarineVisitors(){
       animal.position.y+=state.moving?.09+state.jet*.055:0;
       if(mantle){mantle.scale.y=1-state.jet*.17;mantle.scale.z=1-state.jet*.16;}
       arms?.forEach((arm,index)=>{
-        arm.rotation.y=Math.PI+(index-3.5)*.24*(1-state.jet*.54)+Math.sin(state.time*1.1+index*.8)*.035;
+        arm.rotation.y=Math.PI+(index-3.5)*.40*(1-state.jet*.54)+Math.sin(state.time*1.1+index*.8)*.035;
         arm.rotation.x=Math.sin(state.time*1.45+index*.72)*.055;
         arm.rotation.z=Math.sin(state.time*1.55+index*.65)*.045-state.jet*.08;
       });

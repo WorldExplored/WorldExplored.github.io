@@ -6,27 +6,27 @@ export function treeBranches(form: number) {
   return Array.from({ length: 9 }, (_, index) => {
     const angle = index * 2.399 + form * .37;
     const tier = Math.floor(index / 3);
-    const level = (form === 1 ? .29 : .32) + tier * .16 + index % 3 * .035;
-    const spread = (form === 0 ? .31 - tier * .055 : form === 1 ? .19 - tier * .025 : .27 - tier * .045);
-    const tip = new Vector3(Math.cos(angle) * spread + (form === 2 ? .065 : 0), level + .18 + (form === 1 ? .075 : 0), Math.sin(angle) * spread);
-    return { angle, level, tip, size: form === 0 ? .205 : form === 1 ? .17 : .19 };
+    const level = (form === 1 ? .34 : form === 2 ? .42 : .36) + tier * (form === 2 ? .12 : .16) + index % 3 * .025;
+    const spread = (form === 0 ? .31 - tier * .035 : form === 1 ? .21 - tier * .05 : .26 - tier * .05);
+    const tip = new Vector3(Math.cos(angle) * spread + (form === 2 ? .085 : 0), level + (form === 2 ? .08 : .18) + (form === 1 ? .075 : 0), Math.sin(angle) * spread);
+    return { angle, level, tip, size: form === 0 ? .205 : form === 1 ? .175 : .19 };
   });
 }
 
 /** Cupped leaves with a raised midrib, alternating venation and a connected twig skeleton. */
-export function treeFoliageGeometry() {
+export function treeFoliageGeometry(form = 0) {
   const positions: number[] = [], colors: number[] = [], indices: number[] = [], uvs: number[] = [];
   const transform = new Object3D(), point = new Vector3();
   for (let index = 0; index < 64; index++) {
     const t = (index + .5) / 64, a = index * 2.399;
     const r = Math.sqrt(1 - (t * 2 - 1) ** 2);
-    transform.position.set(Math.cos(a) * r * .9, (t * 2 - 1) * .68, Math.sin(a) * r * .85);
+    transform.position.set(Math.cos(a) * r * (form === 1 ? .71 : .9), (t * 2 - 1) * (form === 2 ? 1.12 : form === 1 ? .9 : .68), Math.sin(a) * r * (form === 1 ? .7 : .85));
     transform.rotation.set(Math.sin(a * 1.7) * .5, a, Math.cos(a) * .45); transform.updateMatrix();
-    const length = .25 + .08 * Math.sin(index * 17.3), breadth = .105 + .025 * Math.cos(index * 3.7);
+    const length = (form === 2 ? .46 : form === 1 ? .23 : .29) + .07 * Math.sin(index * 17.3), breadth = (form === 2 ? .036 : form === 1 ? .125 : .105) + .018 * Math.cos(index * 3.7);
     const start = positions.length / 3;
     for (let row = 0; row <= 4; row++) for (let col = 0; col <= 2; col++) {
       const u = row / 4, v = col - 1;
-      const width = Math.pow(Math.sin(Math.PI * u), .8) * breadth * (1 + .055 * Math.sin(u * 35));
+      const width = Math.pow(Math.sin(Math.PI * u), form === 1 ? .58 : .8) * breadth * (1 + (form === 0 ? .24 : .055) * Math.cos(u * (form === 0 ? 6 : 11) * Math.PI));
       point.set(v * width, Math.sin(Math.PI * u) * (.027 * (1 - Math.abs(v)) - .02 * v * v), (u - .2) * length).applyMatrix4(transform.matrix);
       positions.push(point.x, point.y, point.z);uvs.push((v+1)/2,u);
       const vein = col === 1 || Math.abs(Math.sin(u * 25 - Math.abs(v) * 3)) < .24;
@@ -36,6 +36,7 @@ export function treeFoliageGeometry() {
     }
   }
   const geometry = new BufferGeometry(); geometry.setAttribute('position', new Float32BufferAttribute(positions, 3)); geometry.setAttribute('color', new Float32BufferAttribute(colors, 3)); geometry.setAttribute('uv',new Float32BufferAttribute(uvs,2));geometry.setIndex(indices); geometry.computeVertexNormals();
+  geometry.userData.treeHabit = ['broad lobed oak', 'upright round-leaved alder', 'weeping narrow-leaved willow'][form];
   return geometry;
 }
 

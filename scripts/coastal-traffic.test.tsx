@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Box3, InstancedMesh, Mesh, Vector3 } from 'three';
+import { Box3, InstancedMesh, Mesh, Raycaster, Vector3 } from 'three';
 import { createAeroBoat, createCoastalTraffic, createVisitorPier, VISITOR_PIER_HEAD, VISITOR_PIER_SHORE } from '../src/components/world/CoastalTraffic';
-import { createVesselState, stepVessel, vesselHullClearance, vesselPointClearance, vesselCoastClearance, vesselOccupants, writeVesselPose, VISITOR_BERTH, VISITOR_DWELL, type MarineOccupant } from '../src/components/world/marineTraffic';
-import { CITY_PIER_JUNCTION, createCityFerryRoute, writeCityFerryPose } from '../src/components/world/cityInfrastructure';
+import { createVesselState, stepVessel, vesselHullClearance, vesselPointClearance, vesselCoastClearance, vesselDockClearance, vesselOccupants, writeVesselPose, SURVEY_BERTH, SURVEY_DWELL, VISITOR_BERTH, VISITOR_DWELL, type MarineOccupant } from '../src/components/world/marineTraffic';
+import { HARBOR_OBSTACLES, CITY_PIER_JUNCTION, createCityFerryRoute, writeCityFerryPose } from '../src/components/world/cityInfrastructure';
 import { createDolphinState, stepDolphin } from '../src/components/world/dolphinRoutes';
 import { landDistance, terrainMeshHeight } from '../src/components/world/terrain';
 
@@ -36,7 +36,7 @@ test('fleet and scheduled ferry remain separated over repeated visits and lower 
   const ferry = createCityFerryRoute(), position = new Vector3(), tangent = new Vector3();
   for (const dt of [.05, .1]) {
     const fleet = [1, 2].map(createVesselState), travel = [0, 0, 0];
-    let visits = 0, priorDwell = 0;
+    let visits = 0, surveyVisits = 0, priorDwell = 0, priorSurveyDwell = 0;
     for (let frame = 0; frame < 1200 / dt; frame++) {
       const time = frame * dt + (dt === .1 ? 31 : 0);
       for (const boat of fleet) {
@@ -51,10 +51,14 @@ test('fleet and scheduled ferry remain separated over repeated visits and lower 
           assert.ok(vesselHullClearance(fleet[i],fleet[j])>.5);
         }
       }
+      for(const boat of fleet)assert.ok(vesselDockClearance(boat)>.025,'every moving hull clears all permanent piers, fenders and piles');
+      assert.ok(!(fleet[0].dwell&&fleet[1].dwell),'adjacent visitor and survey boarding berths are reserved exclusively');
+      if(!priorSurveyDwell&&fleet[0].dwell)surveyVisits++;
+      priorSurveyDwell=fleet[0].dwell;
       if (!priorDwell && fleet[1].dwell) visits++;
       priorDwell = fleet[1].dwell;
     }
-    assert.ok(visits >= 2, 'yielding never deadlocks a visitor before its landing');
+    assert.ok(visits >= 2 && surveyVisits >= 2, 'yielding never deadlocks either boat before its landing');
     for (const boat of fleet) assert.ok(travel[boat.index] > boat.route.length * 2);
   }
 });
@@ -144,15 +148,15 @@ test('the enlarged visitor boarding step meets the pier deck and fades only far 
     const deck=(pier.root.getObjectByName('visitor-pier-boardwalk') as Mesh).geometry.attributes.position;
     let edge=-Infinity,top=-Infinity;
     for(let i=0;i<deck.count;i++)if(deck.getX(i)<VISITOR_PIER_HEAD.x-2&&deck.getZ(i)>VISITOR_PIER_HEAD.z){edge=Math.max(edge,deck.getZ(i));top=Math.max(top,deck.getY(i));}
-    assert.ok(step.min.z<edge&&edge-step.min.z<.2,'the step overlaps the dock edge by a small physical landing allowance');
+    assert.ok(step.min.z>edge+.15&&step.min.z<edge+.4,'the boat landing clears the fixed quay, with the telescoping gangway spanning the gap');
     assert.ok(Math.abs(step.max.y-top)<1e-5,'boat and pier boarding floors have equal height');
     assert.ok(step.min.x>VISITOR_PIER_HEAD.x-3.3&&step.max.x<VISITOR_PIER_HEAD.x+3.3);
     for(const distance of [10,visitor.route.length-10]){visitor.distance=distance;writeVesselPose(visitor);assert.ok(Math.abs(visitor.position.x)>300&&visitor.opacity<.25,'fade occurs well beyond the islands and harbor');}
   }finally{boat.dispose();pier.dispose();}
 });
 
-test('one connected city pier joins the existing shore stem and clears the complete ferry route', () => {
-  const pier=createVisitorPier(),ferry=createCityFerryRoute(),point=new Vector3();
+test('one connected city pier joins the existing shore stem without a second shore boardwalk', () => {
+  const pier=createVisitorPier(),point=new Vector3();
   try{
     assert.ok(landDistance(VISITOR_PIER_SHORE.x,VISITOR_PIER_SHORE.z)>1.5);
     const deck=pier.root.getObjectByName('visitor-pier-boardwalk') as Mesh,vertices=deck.geometry.getAttribute('position');
@@ -164,13 +168,6 @@ test('one connected city pier joins the existing shore stem and clears the compl
     }
     assert.ok(connects,'the west berth shares the taxi pier and its shore access');
     assert.equal(oldStem,false,'the obsolete second city shore boardwalk is removed');
-    for(let i=0;i<=2000;i++){
-      ferry.curve.getPointAt(i/2000,point);
-      for(const [left,right,back,front]of [[-30.3,-23.7,-46.425,-45.275],[-27.84,-26.16,-52,-45.85],[-27,-12.6,-52.84,-51.16]]){
-        const x=Math.max(left,Math.min(right,point.x)),z=Math.max(back,Math.min(front,point.z));
-        assert.ok(Math.hypot(point.x-x,point.z-z)>1.55,'taxi hull does not cross a quay, gangway or pile');
-      }
-    }
   }finally{pier.dispose();}
 });
 
@@ -212,6 +209,9 @@ test('the berth inspection hook is local only and uses the real docking state', 
     }
     traffic.detach();
   }
+  const surveyTraffic=createCoastalTraffic({hostname:'localhost',search:'?qaVessel=survey-berth'});
+  const survey=surveyTraffic.fleet.find(item=>item.state.index===1)!.state;
+  assert.equal(survey.dwell,SURVEY_DWELL);assert.ok(survey.position.distanceTo(SURVEY_BERTH)<1e-5);surveyTraffic.detach();
   await new Promise(resolve => setTimeout(resolve, 5));
 });
 
@@ -219,14 +219,14 @@ test('the berth inspection hook is local only and uses the real docking state', 
 test('visitor pier algae stays attached to wet post faces within a small instance budget', () => {
   const pier = createVisitorPier();
   try {
-    assert.ok(pier.algaeSites.length >= 60 && pier.algaeSites.length <= 200);
+    assert.ok(pier.algaeSites.length >= 300 && pier.algaeSites.length <= 500);
     let triangles = 0, batches = 0;
     pier.root.traverse(object => {
       if (object instanceof InstancedMesh) {
         batches++; triangles += object.geometry.index!.count / 3 * object.count;
       }
     });
-    assert.equal(batches, 3); assert.ok(triangles < 42000);
+    assert.equal(batches, 3); assert.ok(triangles < 150000);
     for (const site of pier.algaeSites) {
       const { post } = site;
       const face = post.bottomRadius + (post.topRadius - post.bottomRadius) * (site.y - post.bottom) / (post.top - post.bottom);
@@ -302,4 +302,98 @@ test('the consolidated visitor and taxi pier decks intercept rain through the sc
     }
     assert.equal(catches.height(-24,-55),-Infinity,'there is no invisible remnant of the removed visitor boardwalk');
   }finally{pier.dispose();city.retain()();}
+});
+
+
+test('static navigation envelopes contain the rendered dock, pile, fender and lighthouse access geometry',async()=>{
+  const {createCityLife}=await import('../src/components/world/CityLife');
+  const {createCityTransitRoute}=await import('../src/components/world/city');
+  const {createLighthouseAccess}=await import('../src/components/world/LighthouseAccess');
+  const pier=createVisitorPier(),city=createCityLife(createCityTransitRoute()),lighthouse=createLighthouseAccess(),point=new Vector3();
+  try{
+    const meshes=[...['visitor-pier-boardwalk','visitor-pier-seabed-piles','quay-soft-fenders'].map(name=>pier.root.getObjectByName(name) as Mesh),...lighthouse.root.children as Mesh[],city.root.getObjectByName('city-public-infrastructure') as Mesh];
+    for(const mesh of meshes){
+      const positions=mesh.geometry.getAttribute('position');
+      for(let i=0;i<positions.count;i++){
+        point.fromBufferAttribute(positions,i);
+        if(mesh.name==='city-public-infrastructure'&&point.z<-58.1)continue;
+        assert.ok(HARBOR_OBSTACLES.some(box=>point.x>=box.minX-1e-5&&point.x<=box.maxX+1e-5&&point.z>=box.minZ-1e-5&&point.z<=box.maxZ+1e-5),`${mesh.name} ${point.toArray()} must be inside a real static navigation obstacle`);
+      }
+    }
+  }finally{pier.dispose();lighthouse.dispose();city.retain()();}
+});
+
+test('complete hulls clear all piers along every approach, turn and departure, including the ferry transom',async()=>{
+  const {createCoastalFerry}=await import('../src/components/world/CoastalFerry');
+  const ferry=createCoastalFerry(),point=new Vector3(),tangent=new Vector3();
+  const taxi:MarineOccupant={position:new Vector3(),heading:0,radius:1.5,hullHalfSpan:.75,hullRadius:.72};
+  try{
+    ferry.root.position.set(0,0,0);ferry.root.rotation.set(0,0,0);ferry.root.updateMatrixWorld(true);
+    ferry.root.traverse(object=>{
+      if(!(object instanceof Mesh)||object.name.includes('wake'))return;
+      const positions=object.geometry.getAttribute('position');
+      for(let i=0;i<positions.count;i++){
+        point.fromBufferAttribute(positions,i).applyMatrix4(object.matrixWorld);
+        assert.ok(vesselPointClearance(taxi,point.x,point.z)<.001,`${object.name} is contained by the ferry navigation envelope`);
+      }
+    });
+    for(let i=0;i<=8000;i++){
+      ferry.route.curve.getPointAt(i/8000,taxi.position);ferry.route.curve.getTangentAt(i/8000,tangent);taxi.heading=Math.atan2(tangent.x,tangent.z);
+      assert.ok(vesselDockClearance(taxi)>.04,'the taxi keeps its entire transom and bow clear around the stem');
+    }
+    for(const index of [1,2]){
+      const boat=createVesselState(index);
+      for(let i=0;i<=8000;i++){
+        boat.distance=boat.route.length*i/8000;writeVesselPose(boat);
+        assert.ok(vesselDockClearance(boat)>.04,`vessel ${index} clears the fixed harbor along the complete swept route`);
+        if(index===2&&Math.abs(boat.distance-boat.route.berth)<8.5)assert.ok(Math.abs(boat.heading-Math.PI/2)<.002,'visitor stays parallel until its entire stern passes the pier');
+      }
+    }
+  }finally{ferry.dispose();}
+});
+
+test('quay rails meet through the elbow and both shoulders, and only occupied berths open their gates',()=>{
+  const pier=createVisitorPier(),ray=new Raycaster();
+  try{
+    pier.root.traverse(object=>{if(object instanceof Mesh)object.raycast=Mesh.prototype.raycast;});
+    pier.update(0,0);pier.root.updateMatrixWorld(true);
+    const segments=[...pier.railingSegments,...pier.gateSegments];
+    for(const segment of segments)for(const endpoint of [segment.a,segment.b]){
+      const neighbors=segments.filter(other=>other.a.distanceTo(endpoint)<.001||other.b.distanceTo(endpoint)<.001).length;
+      assert.equal(neighbors,Math.abs(endpoint.x+12.60)<.001?1:2,'only the joined city stem has open perimeter endpoints');
+    }
+    for(const {a,b}of pier.railingSegments){
+      const tangent=b.clone().sub(a).setY(0).normalize(),normal=new Vector3(tangent.z,0,-tangent.x);
+      for(const t of [.02,.5,.98]){
+        const point=a.clone().lerp(b,t).add(new Vector3(0,1,0));ray.set(point.clone().addScaledVector(normal,.16),normal.clone().negate());ray.far=.32;
+        assert.ok(ray.intersectObject(pier.root,true).length,'actual top rail remains continuous near each corner, not only in metadata');
+      }
+    }
+    for(const [index,name]of ['visitor-quay-gate','survey-quay-gate'].entries()){
+      const {a,b}=pier.gateSegments[index],normal=new Vector3(b.z-a.z,0,a.x-b.x).normalize(),point=a.clone().lerp(b,.5).add(new Vector3(0,1,0));
+      pier.update(0,0);pier.root.updateMatrixWorld(true);ray.set(point.clone().addScaledVector(normal,.2),normal.clone().negate());ray.far=.4;
+      assert.ok(ray.intersectObject(pier.root.getObjectByName(name)!,true).length,'empty quay gate closes the walking edge');
+      pier.update(index===0?1:0,index===1?1:0);pier.root.updateMatrixWorld(true);
+      assert.equal(ray.intersectObject(pier.root.getObjectByName(name)!,true).length,0,'boarding gate folds clear only for its own berth');
+    }
+  }finally{pier.dispose();}
+});
+
+test('survey launch has a usable cabin opening, a matched level gangway and genuine helm controls',()=>{
+  const boat=createAeroBoat(1),pier=createVisitorPier(),survey=createVesselState(1);
+  try{
+    boat.root.traverse(object=>{if(object instanceof Mesh)object.raycast=Mesh.prototype.raycast;});
+    const ray=new Raycaster(new Vector3(1.6,1.1,0),new Vector3(-1,0,0),0,1.55);
+    boat.update(0,1,0,0,'high',0);boat.root.updateMatrixWorld(true);
+    assert.ok(ray.intersectObject(boat.root,true).length,'closed cabin door secures the survey launch');
+    boat.update(0,1,0,0,'high',1);boat.root.updateMatrixWorld(true);
+    assert.equal(ray.intersectObject(boat.root,true).length,0,'doorway reaches the cabin aisle without crossing seats or posts');
+    survey.distance=survey.route.berth;survey.dwell=SURVEY_DWELL;writeVesselPose(survey);
+    assert.ok(survey.position.distanceTo(SURVEY_BERTH)<1e-5);assert.ok(Math.abs(survey.heading)<.002);
+    boat.root.position.copy(survey.position).setY(.08);boat.root.rotation.y=survey.heading;boat.root.updateMatrixWorld(true);pier.update(0,1);pier.root.updateMatrixWorld(true);
+    const step=boat.partBounds['survey-boarding-threshold'].clone().applyMatrix4(boat.root.matrixWorld),bridge=new Box3().setFromObject(pier.root.getObjectByName('survey-telescoping-gangway')!);
+    assert.ok(bridge.intersectsBox(step));assert.ok(bridge.min.z>=step.min.z-.02&&bridge.max.z<=step.max.z+.02);
+    assert.ok(Math.abs(step.max.y-.56)<1e-6);
+    for(const name of ['helm-wheel-throttle-and-controls','helm-dial-and-map-screen','survey-chart-table-and-instruments'])assert.ok(boat.root.getObjectByName(name));
+  }finally{boat.dispose();pier.dispose();}
 });

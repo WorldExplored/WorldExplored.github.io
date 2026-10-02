@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Box3, InstancedMesh, Mesh, Vector3 } from 'three';
-import { createDolphinCourse, createDolphinState, dolphinCoastClearance, dolphinFerryClearance, stepDolphin } from '../src/components/world/dolphinRoutes';
+import { createDolphinCourse, createDolphinState, dolphinCoastClearance, dolphinFerryClearance, stepDolphin, DOLPHIN_SCALES, dolphinBodyRadius } from '../src/components/world/dolphinRoutes';
 import { createDolphinLife, dolphinBodyGeometry } from '../src/components/world/DolphinLife';
 import { TOWN_BUOY_SITE } from '../src/components/world/TownInteractions';
 import { harborWaterHeight } from '../src/components/world/waterSurface';
@@ -48,7 +48,7 @@ test('successive seeded courses differ while their join and tangent stay continu
   const clockwise=createDolphinCourse(0).curve.getTangent(0),anticlockwise=createDolphinCourse(1).curve.getTangent(0);
   assert.ok(clockwise.dot(anticlockwise)<-.95,'neighbours do not form a same-direction parade');
 });
-test('dolphin anatomy is smaller than the two-unit ferry and uses outward normals with bounded resources',()=>{
+test('dolphins are larger than reef fish, below ferry length and retain full swept collision envelopes',()=>{
   const geometry=dolphinBodyGeometry(),positions=geometry.getAttribute('position'),normals=geometry.getAttribute('normal');
   let outward=0;
   for(let i=21;i<positions.count-21;i++)outward+=positions.getY(i)*normals.getY(i)+positions.getZ(i)*normals.getZ(i);
@@ -59,7 +59,7 @@ test('dolphin anatomy is smaller than the two-unit ferry and uses outward normal
     assert.ok(draws<=36,`${draws} draws`);assert.ok(triangles<30000,`${triangles} triangles`);
     const dolphins=life.root.children.filter(o=>o.name==='bottlenose-dolphin');assert.equal(dolphins.length,4);
     for(const animal of dolphins){
-      const size=new Box3().setFromObject(animal).getSize(new Vector3());assert.ok(Math.max(size.x,size.z)<1.23);
+      const size=new Box3().setFromObject(animal).getSize(new Vector3());assert.ok(Math.max(size.x,size.z)>1.7&&Math.max(size.x,size.z)<2.6);
       for(const name of ['horizontal-tail-flukes','eyes-mouth-and-blowhole','separated-lower-jaw'])assert.ok(animal.getObjectByName(name));
     }
     life.setQuality('low');assert.equal(life.root.children.filter(o=>o.name==='offshore-shark'&&o.visible).length,1);
@@ -101,4 +101,16 @@ test('all roaming variants retain whole-body clearance around the relocated harb
   for(let index=0;index<4;index++)for(let lap=0;lap<12;lap++)
     for(const point of createDolphinCourse(index,lap).curve.getPoints(1500))
       assert.ok(Math.hypot(point.x-TOWN_BUOY_SITE.x,point.z-TOWN_BUOY_SITE.z)>1.1,'dolphin nose, tail and buoy float remain separated');
+});
+
+test('dolphin collision radii contain the complete scaled snout, flukes and flippers',()=>{
+  const life=createDolphinLife(),point=new Vector3();
+  try{
+    const dolphins=life.root.children.filter(child=>child.name==='bottlenose-dolphin');
+    dolphins.forEach((animal,index)=>{
+      animal.position.set(0,0,0);animal.rotation.set(0,0,0);animal.updateMatrixWorld(true);
+      assert.equal(animal.scale.x,DOLPHIN_SCALES[index]);
+      animal.traverse(object=>{if(object instanceof Mesh){const vertices=object.geometry.getAttribute('position');for(let i=0;i<vertices.count;i++){point.fromBufferAttribute(vertices,i).applyMatrix4(object.matrixWorld);assert.ok(point.length()<=dolphinBodyRadius(index),`${object.name} extends outside the scaled collision radius`);}}});
+    });
+  }finally{life.dispose();}
 });

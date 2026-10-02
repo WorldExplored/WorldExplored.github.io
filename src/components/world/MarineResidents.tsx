@@ -7,6 +7,20 @@ import { surfaceAnimals, vesselClearance } from './marineTraffic';
 import { marineFloorHeight } from './reefHabitat';
 import type { EnvironmentProps } from './Water';
 
+export const OCTOPUS_VARIATIONS=[
+  {mantle:[1,1,1],arms:.97,color:'#d79a80'},
+  {mantle:[.84,1.18,1.16],arms:1.08,color:'#a785aa'},
+  {mantle:[1.07,.89,.91],arms:.86,color:'#cbb37d'},
+  {mantle:[.92,1.10,1.13],arms:1.02,color:'#809c8a'},
+] as const;
+export const SQUID_VARIATIONS=[
+  {mantle:[1,1,1],arms:1,color:'#d6a8b6'},
+  {mantle:[.82,1.23,1.18],arms:.9,color:'#b58d6e'},
+  {mantle:[1.12,.81,.89],arms:1.11,color:'#85aab8'},
+  {mantle:[.94,1.12,1.22],arms:.95,color:'#b4a9cf'},
+  {mantle:[1.06,.93,.90],arms:1.04,color:'#c6cda1'},
+] as const;
+
 /** Shared anatomy and fixed pools keep the residents and rare whale independent of React renders. */
 export function createMarineResidents(){
   const root=new Group();root.name='resident-marine-life';
@@ -23,10 +37,22 @@ export function createMarineResidents(){
     transformed.z+=sin(position.x*10.-aArmPhase)*reach*.04*aArmActivity;
     transformed.y+=(.5+.5*sin(position.x*12.-aArmPhase))*reach*.025*aArmActivity;
   `);};armMaterial.customProgramCacheKey=()=> 'octopus-flexible-arm-v1';
-  const octopusBodies=batch('resident-octopus-bodies',crawlingOctopusBodyGeometry(),octopus.length),octopusArms=batch('resident-octopus-articulated-arms',crawlingOctopusArmGeometry(),octopus.length*8,armMaterial);
+  const octopusMaterial=material.clone();materials.push(octopusMaterial);
+  octopusMaterial.onBeforeCompile=shader=>{shader.vertexShader=`attribute vec3 aMorph; attribute float aPattern;\n${shader.vertexShader}`.replace('#include <begin_vertex>',`#include <begin_vertex>
+    float mantle=1.-smoothstep(-.10,.16,position.x);
+    transformed.x*=mix(1.,aMorph.x,mantle);
+    transformed.y=.11+(position.y-.11)*mix(1.,aMorph.y,mantle);
+    transformed.z*=mix(1.,aMorph.z,mantle);
+  `).replace('#include <color_vertex>',`#include <color_vertex>
+    float freckle=sin(position.x*(55.+aPattern*7.)+sin(position.z*28.))*cos(position.z*69.+aPattern*3.);
+    vColor.rgb*=mix(.74,1.10,smoothstep(-.18,.42,freckle));
+  `);};octopusMaterial.customProgramCacheKey=()=> 'octopus-mantle-variation-v1';
+  const octopusBodies=batch('resident-octopus-bodies',crawlingOctopusBodyGeometry(),octopus.length,octopusMaterial),octopusArms=batch('resident-octopus-articulated-arms',crawlingOctopusArmGeometry(),octopus.length*8,armMaterial);
   const armPhases=new InstancedBufferAttribute(new Float32Array(octopus.length*8),1),armActivity=new InstancedBufferAttribute(new Float32Array(octopus.length*8),1);
   octopusArms.geometry.setAttribute('aArmPhase',armPhases);octopusArms.geometry.setAttribute('aArmActivity',armActivity);
-  octopus.forEach((_,i)=>{const color=new Color(['#d99178','#9c7fab','#c99665','#95a681'][i]);octopusBodies.setColorAt(i,color);for(let arm=0;arm<8;arm++)octopusArms.setColorAt(i*8+arm,color);});
+  octopusBodies.geometry.setAttribute('aMorph',new InstancedBufferAttribute(new Float32Array(OCTOPUS_VARIATIONS.flatMap(v=>[...v.mantle])),3));
+  octopusBodies.geometry.setAttribute('aPattern',new InstancedBufferAttribute(new Float32Array([0,1,2,3]),1));
+  octopus.forEach((_,i)=>{const color=new Color(OCTOPUS_VARIATIONS[i].color);octopusBodies.setColorAt(i,color);for(let arm=0;arm<8;arm++)octopusArms.setColorAt(i*8+arm,color);});
   const snakeMaterial=material.clone();materials.push(snakeMaterial);
   snakeMaterial.onBeforeCompile=shader=>{shader.vertexShader=`attribute float aStroke; attribute float aPropulsion;\n${shader.vertexShader}`.replace('#include <begin_vertex>',`#include <begin_vertex>
     float tail=clamp((.80-position.x)/1.85,0.,1.);
@@ -36,18 +62,24 @@ export function createMarineResidents(){
   const strokes=new InstancedBufferAttribute(new Float32Array(snakes.length),1),propulsion=new InstancedBufferAttribute(new Float32Array(snakes.length),1);
   snakeBodies.geometry.setAttribute('aStroke',strokes);snakeBodies.geometry.setAttribute('aPropulsion',propulsion);
   const squidMaterial=material.clone();materials.push(squidMaterial);
-  squidMaterial.onBeforeCompile=shader=>{shader.vertexShader=`attribute float aJet;\n${shader.vertexShader}`.replace('#include <begin_vertex>',`#include <begin_vertex>
+  squidMaterial.onBeforeCompile=shader=>{shader.vertexShader=`attribute float aJet; attribute vec3 aMorph; attribute float aArms;\n${shader.vertexShader}`.replace('#include <begin_vertex>',`#include <begin_vertex>
     float mantle=smoothstep(-.34,-.10,position.x);
+    transformed.x=-.34+(transformed.x+.34)*mix(aArms,aMorph.x,mantle);
+    transformed.y*=mix(1.,aMorph.y,mantle);
+    transformed.z*=mix(1.,aMorph.z,mantle);
     transformed.y*=1.-aJet*.11*mantle;
     transformed.z*=1.-aJet*.11*mantle;
     transformed.z+=sin(position.x*21.+aJet*5.)*.011*step(position.x,-.5);
-  `);};squidMaterial.customProgramCacheKey=()=> 'resident-squid-mantle-v1';
+  `);};squidMaterial.customProgramCacheKey=()=> 'resident-squid-mantle-v2';
   const squidBodies=batch('reef-darting-squid',squidGeometry(),squid.length,squidMaterial),jets=new InstancedBufferAttribute(new Float32Array(squid.length),1);squidBodies.geometry.setAttribute('aJet',jets);
+  squidBodies.geometry.setAttribute('aMorph',new InstancedBufferAttribute(new Float32Array(SQUID_VARIATIONS.flatMap(v=>[...v.mantle])),3));
+  squidBodies.geometry.setAttribute('aArms',new InstancedBufferAttribute(new Float32Array(SQUID_VARIATIONS.map(v=>v.arms)),1));
+  squid.forEach((_,i)=>squidBodies.setColorAt(i,new Color(SQUID_VARIATIONS[i].color)));
   const whale=new Group();whale.name='rare-offshore-whale';whale.scale.setScalar(WHALE_SCALE);root.add(whale);
   const whalePart=(name:string,geometry:BufferGeometry)=>{geometries.push(geometry);const mesh=new Mesh(geometry,material);mesh.name=name;mesh.raycast=()=>{};whale.add(mesh);return mesh;};
   whalePart('humpback-streamlined-body',whaleBodyGeometry());
   const pectoralGeometry=whalePectoralGeometry(),left=whalePart('whale-left-pectoral',pectoralGeometry),right=whalePart('whale-right-pectoral',pectoralGeometry);
-  left.position.set(.1,-.18,.84);right.position.set(.1,-.18,-.84);right.scale.z=-1;
+  left.position.set(.5,-.20,.89);right.position.set(.5,-.20,-.89);right.scale.z=-1;
   const fluke=whalePart('whale-horizontal-flukes',whaleFlukeGeometry());fluke.position.set(-4.46,0,0);
   const sprayMaterial=new MeshStandardMaterial({color:'#f0ffff',roughness:.35,transparent:true,opacity:.78,depthWrite:false});materials.push(sprayMaterial);
   const spray=batch('whale-splash-and-breath-pool',new SphereGeometry(1,6,4),224,sprayMaterial);
@@ -70,14 +102,14 @@ export function createMarineResidents(){
         const angle=arm*Math.PI/4,phase=state.time*2.6+arm*Math.PI*.7;
         limb.position.set(.20+Math.cos(angle)*.075,.098,Math.sin(angle)*.075);limb.rotation.set(0,angle+Math.sin(phase)*(state.moving?.14:.035),Math.sin(phase)*(state.moving?.045:.009));
         armPhases.setX(i*8+arm,phase);armActivity.setX(i*8+arm,state.moving?1:.18);
-        limb.scale.setScalar(.88+(arm%3)*.085);limb.updateMatrix();limb.matrix.premultiply(dummy.matrix);octopusArms.setMatrixAt(i*8+arm,limb.matrix);
+        limb.scale.set(OCTOPUS_VARIATIONS[i].arms*(.88+(arm%3)*.085),1,1);limb.updateMatrix();limb.matrix.premultiply(dummy.matrix);octopusArms.setMatrixAt(i*8+arm,limb.matrix);
       }
     });
     armPhases.needsUpdate=true;armActivity.needsUpdate=true;
     snakes.forEach((state,i)=>{poseResident(snakeBodies,i,state,quality==='high'||i===0);strokes.setX(i,state.strokePhase);propulsion.setX(i,state.moving?.18+state.jet*.82:0);});strokes.needsUpdate=true;propulsion.needsUpdate=true;
     squid.forEach((state,i)=>{poseResident(squidBodies,i,state,quality==='high'||i<(quality==='medium'?3:2));jets.setX(i,state.jet);});jets.needsUpdate=true;
     const pose=sampleOffshoreWhale(elapsed),safe=offshoreWhaleClear(pose.position.x,pose.position.z)&&vesselClearance(pose.position.x,pose.position.z,WHALE_RADIUS)>18;
-    whale.position.copy(pose.position);whale.rotation.set(0,pose.heading,pose.pitch,'YXZ');whale.visible=pose.visible&&safe;whale.updateMatrix();
+    whale.position.copy(pose.position);whale.rotation.set(pose.roll,pose.heading,pose.pitch,'YXZ');whale.visible=pose.visible&&safe;whale.updateMatrix();
     whaleOccupant.position.copy(pose.position);if(!whale.visible)whaleOccupant.position.y=-10;
     left.rotation.x=.12+Math.sin(elapsed*.7)*.13;right.rotation.x=-left.rotation.x;fluke.rotation.z=Math.sin(elapsed*1.05)*.12;
     let particles=0;
@@ -96,7 +128,7 @@ export function createMarineResidents(){
     }
     foam.visible=splash;
     if(pose.spouting&&safe){
-      point.set(1.60,1.03,0).applyMatrix4(whale.matrix);
+      point.set(1.48,1.085,0).applyMatrix4(whale.matrix);
       const count=quality==='low'?24:48;
       for(let i=0;i<count;i++){
         const age=pose.spoutAge-(i%12)*.035;if(age<0||age>1.8)continue;

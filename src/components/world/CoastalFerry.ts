@@ -1,6 +1,6 @@
-import { BoxGeometry, BufferGeometry, CatmullRomCurve3, CylinderGeometry, DoubleSide, Float32BufferAttribute, Group, Mesh, MeshPhysicalMaterial, Object3D, TubeGeometry, Vector3 } from 'three';
+import { BoxGeometry, BufferGeometry, CatmullRomCurve3, CylinderGeometry, DoubleSide, Float32BufferAttribute, Group, Mesh, MeshPhysicalMaterial, Object3D, TorusGeometry, SphereGeometry, TubeGeometry, Vector3 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { cityFerryDistance, createCityFerryRoute, writeCityFerryPose } from './cityInfrastructure';
+import { cityFerryDistance, createCityFerryRoute, writeCityFerryPose, FERRY_DWELL } from './cityInfrastructure';
 
 /** Fine bow, immersed keel and displaced-water sections replace the capsule hull. */
 export function ferryPontoonGeometry() {
@@ -57,7 +57,7 @@ export function createCoastalFerry() {
   const underside=canopy.clone().translate(0,-.045,0);const undersideIndex=underside.index!;for(let i=0;i<undersideIndex.count;i+=3){const a=undersideIndex.getX(i);undersideIndex.setX(i,undersideIndex.getX(i+2));undersideIndex.setX(i+2,a);}underside.computeVertexNormals();
   const frames:BufferGeometry[]=[];const glazing:BufferGeometry[]=[];
   for(const side of [-1,1]){
-    for(const z of [-.69,.67])frames.push(strut(new Vector3(side*.48,.28,z),new Vector3(side*.5,.98,z-.035),.026));
+    for(const z of [-.99,.67])frames.push(strut(new Vector3(side*.48,.28,z),new Vector3(side*.5,.98,z<0?-.76:z-.035),.026));
     frames.push(strut(new Vector3(side*.5,.975,-.76),new Vector3(side*.5,.975,.79),.023));
     // The aft quarter remains open for boarding, with an actual threshold and handrail.
     glazing.push(new BoxGeometry(.014,.54,.58).translate(side*.49,.65,.39),new BoxGeometry(.014,.54,.43).translate(side*.49,.65,-.16));
@@ -75,9 +75,10 @@ export function createCoastalFerry() {
   add('ferry-seats-and-helm',cabin,materials.seats);add('ferry-seat-pedestals-and-controls',steel,materials.trim);
   const rails:BufferGeometry[]=[];
   for(const side of [-1,1]){
-    const rail=new CatmullRomCurve3([new Vector3(side*.56,.47,-.9),new Vector3(side*.56,.47,-.5),new Vector3(side*.56,.47,.70),new Vector3(side*.38,.47,.91)]);
+    const rail=new CatmullRomCurve3([new Vector3(side*.56,.47,-.43),new Vector3(side*.56,.47,.15),new Vector3(side*.56,.47,.70),new Vector3(side*.38,.47,.91)]);
     rails.push(new TubeGeometry(rail,24,.014,8,false));
-    for(const z of [-.9,-.5,.65])rails.push(strut(new Vector3(side*.56,.27,z),new Vector3(side*.56,.47,z),.014));
+    for(const z of [-.97,-.43,.65])rails.push(strut(new Vector3(side*.56,.27,z),new Vector3(side*.56,.47,z),.014));
+    rails.push(strut(new Vector3(side*.56,.47,-.97),new Vector3(side*.26,.47,-1.015),.014));
   }
   add('ferry-deck-rails',rails,materials.shell);
   add('ferry-mounted-fenders',[-1,1].flatMap(side=>[-.60,.54].map(z=>new CylinderGeometry(.045,.045,.19,12).rotateZ(Math.PI/2).translate(side*.57,.27,z))),materials.rubber);
@@ -98,7 +99,7 @@ export function createCoastalFerry() {
   add('ferry-aft-solar-supports',panelFrames,materials.shell);
   add('ferry-aft-photovoltaic-cells',cells,materials.solar);
   add('ferry-solar-cell-busbars',conductors,materials.trim);
-  add('ferry-solar-power-conduit',[strut(new Vector3(.48,1.06,-.54),new Vector3(.48,.31,-.54),.012),new BoxGeometry(.26,.13,.18).translate(.27,.36,-.56)],materials.rubber);
+  add('ferry-solar-power-conduit',[strut(new Vector3(.48,1.06,-.54),new Vector3(.48,.31,-.54),.012),new BoxGeometry(.26,.13,.18).translate(.27,.36,.23)],materials.rubber);
   add('ferry-enclosed-waterjets-and-dock-cleats',[-1,1].flatMap(side=>[
     new BoxGeometry(.12,.13,.25).translate(side*.43,-.15,-1.05),new CylinderGeometry(.057,.064,.16,12,1,true).rotateX(Math.PI/2).translate(side*.43,-.17,-1.19),
     new BoxGeometry(.12,.024,.04).translate(side*.42,.305,-.77),new BoxGeometry(.03,.05,.03).translate(side*.42,.28,-.77),
@@ -108,10 +109,30 @@ export function createCoastalFerry() {
     ...[-1,0,1].map(bar=>new BoxGeometry(.10,.013,.012).translate(side*.43,-.17+bar*.031,-1.27)),
   ]),materials.rubber);
   add('ferry-emergency-equipment-and-battery-locker',[
-    new BoxGeometry(.17,.32,.15).translate(.40,.43,-.56),
-    new BoxGeometry(.28,.13,.17).translate(-.32,.35,-.59),
+    new BoxGeometry(.17,.32,.15).translate(.40,.43,.49),
+    new BoxGeometry(.28,.13,.17).translate(-.32,.35,-.89),
     ...[-1,1].map(side=>new BoxGeometry(.13,.04,.12).translate(side*.25,.64,-.36)),
   ],materials.shell);
+  add('ferry-steering-wheel-and-throttle',[
+    new TorusGeometry(.091,.009,6,16).rotateX(-.28).translate(-.25,.72,.40),
+    ...[0,Math.PI*2/3,Math.PI*4/3].map(angle=>strut(new Vector3(-.25,.72,.40),new Vector3(-.25+Math.sin(angle)*.088,.72+Math.cos(angle)*.088,.40),.006)),
+    strut(new Vector3(-.08,.66,.47),new Vector3(-.08,.77,.44),.009),
+    new SphereGeometry(.018,6,5).translate(-.08,.77,.44),
+  ],materials.trim);
+  add('ferry-map-and-gauges',[new BoxGeometry(.145,.082,.012).rotateX(-.25).translate(-.25,.80,.50)],materials.solar);
+  add('ferry-aft-fixed-safety-rail',[
+    ...[.12,.25].map(y=>new BoxGeometry(.53,.023,.022).translate(0,.275+y,-1.015)),
+    ...[-.265,0,.265].map(x=>new BoxGeometry(.022,.27,.022).translate(x,.410,-1.015)),
+  ],materials.shell);
+  const boardingGates=[-1,1].map(side=>{
+    const gate=new Group();gate.name=side===1?'ferry-starboard-boarding-gate':'ferry-port-boarding-gate';root.add(gate);
+    add(`${gate.name}-rails`,[
+      ...[.12,.25].map(y=>new BoxGeometry(.022,.023,.54).translate(side*.56,.275+y,-.70)),
+      ...[-.97,-.70,-.43].map(z=>new BoxGeometry(.022,.27,.022).translate(side*.56,.410,z)),
+    ],materials.shell,gate);
+    add(`${gate.name}-threshold`,[new BoxGeometry(.15,.055,.54).translate(side*.555,.26,-.70)],materials.deck);
+    return {gate,side};
+  });
   const wakeRoot=new Group();wakeRoot.name='ferry-water-contact';root.add(wakeRoot);
   const wakePositions:number[]=[],wakeIndices:number[]=[];
   for(const side of [-1,1])for(let row=0;row<=28;row++){
@@ -121,6 +142,22 @@ export function createCoastalFerry() {
   }
   const wakeGeometry=new BufferGeometry();wakeGeometry.setAttribute('position',new Float32BufferAttribute(wakePositions,3));wakeGeometry.setIndex(wakeIndices);wakeGeometry.computeVertexNormals();
   const wake=add('ferry-speed-driven-wake',[wakeGeometry],materials.wake,wakeRoot);wake.castShadow=false;
+  // The moving gates remain separate; fixed fittings share their material draw.
+  const staticBatches=new Map<MeshPhysicalMaterial,Mesh[]>();
+  for(const child of [...root.children]){
+    if(!(child instanceof Mesh)||child.name==='ferry-twin-displacement-hulls'||child.name==='ferry-aft-photovoltaic-cells')continue;
+    const material=child.material as MeshPhysicalMaterial;
+    if(!staticBatches.has(material))staticBatches.set(material,[]);staticBatches.get(material)!.push(child);
+  }
+  for(const [material,meshes]of staticBatches){
+    if(meshes.length<2)continue;
+    const geometry=mergeGeometries(meshes.map(mesh=>mesh.geometry))!;resources.push(geometry);
+    const batch=new Mesh(geometry,material);batch.name=`ferry-fixed-${Object.entries(materials).find(([,value])=>value===material)![0]}`;batch.castShadow=!material.transparent;batch.receiveShadow=true;root.add(batch);
+    for(const mesh of meshes){
+      mesh.geometry.computeBoundingBox();const marker=new Object3D();marker.name=mesh.name;marker.userData.bounds=mesh.geometry.boundingBox!.clone();root.add(marker);root.remove(mesh);
+      resources.splice(resources.indexOf(mesh.geometry),1);mesh.geometry.dispose();
+    }
+  }
   const position=new Vector3(),tangent=new Vector3();let lastTime=0;
   function update(time:number,paused=false){
     const next=paused?lastTime:time;lastTime=next;
@@ -129,6 +166,10 @@ export function createCoastalFerry() {
     const speed=paused?0:((ahead-current+route.length)%route.length)/.01;
     const strength=Math.min(1,speed/route.speed);
     wakeRoot.position.y=.025-position.y;wake.visible=strength>.025;if(!paused)wakeRoot.scale.set(1,1,.5+strength*.5);materials.wake.opacity=.36*strength;
+    const phase=((next%route.duration)+route.duration)%route.duration,age=phase<route.firstDuration?phase:phase-route.firstDuration;
+    const smooth=(value:number)=>{const t=Math.max(0,Math.min(1,value));return t*t*(3-2*t);};
+    const boarding=age>0&&age<FERRY_DWELL-.15?smooth(age/.65)*smooth((FERRY_DWELL-.3-age)/.65):0;
+    for(const {gate,side}of boardingGates)gate.position.z=(side===(phase<route.firstDuration?1:-1)?boarding:0)*.56;
     root.userData.speed=speed;root.userData.docked=speed<.025;
     return {position,speed};
   }

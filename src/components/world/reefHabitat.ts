@@ -76,6 +76,8 @@ export function reefRockMesh(form: number) {
 /** Barycentric sampling places every colony on the actual rock triangles, including tilted ledges. */
 export function reefRockSurfaceHeight(rock: ReefObstacle, x: number, z: number) {
   const dx = (x - rock.x) / rock.radius, dz = (z - rock.z) / rock.radius;
+  // Every rock triangle lies inside this unit footprint; distant samples need no triangle scan.
+  if(dx*dx+dz*dz>1.0001)return -Infinity;
   const c = Math.cos(rock.rotation), s = Math.sin(rock.rotation), px = c * dx - s * dz, pz = s * dx + c * dz;
   const { positions: p, indices } = reefRockMesh(rock.form);
   for (let i = 0; i < indices.length; i += 3) {
@@ -203,9 +205,11 @@ export function getReefHabitat(): ReefHabitatPlan {
   for (let i = 0; i < 1750; i++) for (let attempt = 0; attempt < 25; attempt++) {
     const host = ridgeHosts[Math.floor(random() * ridgeHosts.length)], a = random() * Math.PI * 2, r = host.radius * (.8 + random() * .75);
     const x = host.x + Math.cos(a) * r, z = host.z + Math.sin(a) * r;
-    if (!reefHabitatContains(x, z, .25) || rocks.some(rock => reefRockSurfaceHeight(rock,x,z) > reefFloorHeight(x,z) + .15) || plants.some(plant => Math.hypot(x-plant.x,z-plant.z)<.23)) continue;
+    if (!reefHabitatContains(x, z, .25)) continue;
+    const floor=reefFloorHeight(x,z);
+    if(rocks.some(rock => reefRockSurfaceHeight(rock,x,z) > floor + .15) || plants.some(plant => Math.hypot(x-plant.x,z-plant.z)<.23)) continue;
     const height = .3 + random() * .85, width = .36 + random() * .65;
-    plants.push({ x, z, y: reefFloorHeight(x,z)-.035, radius:width*.55, height, width, rotation: random()*Math.PI*2, form:Math.floor(random()*3), color:0, patch:host.patch });
+    plants.push({ x, z, y: floor-.035, radius:width*.55, height, width, rotation: random()*Math.PI*2, form:Math.floor(random()*3), color:0, patch:host.patch });
     break;
   }
   // Short grass fans colonize the open sand as asymmetric pockets, with sparse outliers.
@@ -242,8 +246,29 @@ export function getReefHabitat(): ReefHabitatPlan {
     const j = Math.floor(random() * (i + 1)); [entries[i], entries[j]] = [entries[j], entries[i]];
   }
   const retainedRocks=rocks.filter(site=>coastalCaveClearance(site.x,site.z,site.radius)>0);
+  const retainedPlants=plants.filter(site=>coastalCaveClearance(site.x,site.z,site.radius)>0);
+  // A new cave displaces plants rather than erasing a whole canyon-floor meadow.
+  // Recruits keep their anatomy and settle on clear sand in the same basin.
+  const recruitment=seededRandom(103981);
+  for(let basin=0;basin<REEF_BASINS.length;basin++){
+    const patch=100+basin,removed=plants.filter(site=>site.patch===patch&&coastalCaveClearance(site.x,site.z,site.radius)<=0);
+    let count=retainedPlants.filter(site=>site.patch===patch).length;
+    for(const parent of removed){
+      if(count>=90)break;
+      for(let attempt=0;attempt<160;attempt++){
+        const region=REEF_BASINS[basin],angle=recruitment()*Math.PI*2,r=Math.sqrt(recruitment());
+        const x=region.x+Math.cos(angle)*region.rx*r,z=region.z+Math.sin(angle)*region.rz*r;
+        if(!reefHabitatContains(x,z,.35)||coastalCaveClearance(x,z,parent.radius)<=0)continue;
+        const floor=reefFloorHeight(x,z);
+        if(retainedRocks.some(rock=>Math.hypot(x-rock.x,z-rock.z)<rock.radius+parent.width*.3&&reefRockSurfaceHeight(rock,x,z)>floor+.1)
+          ||colonies.some(coral=>Math.hypot(x-coral.x,z-coral.z)<coral.radius+parent.width*.35)
+          ||retainedPlants.some(plant=>Math.hypot(x-plant.x,z-plant.z)<.22))continue;
+        retainedPlants.push({...parent,x,z,y:floor-.035});count++;break;
+      }
+    }
+  }
   cached = {colonies:colonies.filter(site=>coastalCaveClearance(site.x,site.z,site.radius)>0&&retainedRocks.some(rock=>Math.abs(reefRockSurfaceHeight(rock,site.x,site.z)-site.y-.055)<.01)),
     rocks:retainedRocks,
-    plants:plants.filter(site=>coastalCaveClearance(site.x,site.z,site.radius)>0),
+    plants:retainedPlants,
     kelp:kelp.filter(site=>coastalCaveClearance(site.x,site.z,site.radius)>0)}; return cached;
 }

@@ -5,6 +5,11 @@ export const COASTAL_CAVE_LAYOUT = [
   {x:-39.288,z:-9.328,yaw:-1.5681753265,scale:.94,form:4,floor:-2.55},
 ] as const;
 
+export const MYTHIC_GROTTO = { x: -55, z: -20, floor: -5.12, width: 8.4, depth: 8.8 } as const;
+export function mythicalCaveClearance(x:number,z:number,radius=0){
+  return (Math.hypot((x-MYTHIC_GROTTO.x)/8.8,(z-MYTHIC_GROTTO.z+2.5)/8)-1)*8-radius;
+}
+
 export function caveLocalXZ(site:{x:number;z:number;yaw:number;scale:number},x:number,z:number){
   const dx=(x-site.x)/site.scale,dz=(z-site.z)/site.scale,c=Math.cos(site.yaw),s=Math.sin(site.yaw);
   return {x:dx*c-dz*s,z:dx*s+dz*c};
@@ -12,7 +17,7 @@ export function caveLocalXZ(site:{x:number;z:number;yaw:number;scale:number},x:n
 
 /** Keep planted geometry outside the buried bank and its open swimming approach. */
 export function coastalCaveClearance(x:number,z:number,radius=0){
-  let distance=Infinity;
+  let distance=mythicalCaveClearance(x,z,radius);
   for(const site of COASTAL_CAVE_LAYOUT){
     const local=caveLocalXZ(site,x,z);
     const dx=Math.abs(local.x)-4.5,dz=Math.abs(local.z+2.7)-2.7;

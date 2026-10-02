@@ -7,6 +7,7 @@ import { createLandscapePlan, ISLANDS, islandAt, islandContour, seededRandom, te
 import { lighthouseEscarpmentSites } from './LighthouseEscarpment';
 import { BEACH_PALMS } from './coastalBiome';
 import { meadowGeometry } from './MeadowGeometry';
+import { lighthouseAccessClearance } from './LighthouseAccess';
 import type { EnvironmentProps } from './Water';
 
 export interface MeadowSite {x:number;y:number;z:number;height:number;width:number;rotation:number;region:string;form:number;tint:number}
@@ -21,19 +22,20 @@ export function createIslandMeadowSites():MeadowSite[]{
       if(vegetationSuitability(x,z,.34,plan)>.09)break;}
     return {island,x,z,radius:.65+random()*2.7,aspect:.4+random()*.65,form:Math.floor(random()*3)};
   }));
-  for(let attempt=0;attempt<65000&&sites.length<4700;attempt++){
+  for(let attempt=0;attempt<82000&&sites.length<5800;attempt++){
     const patch=patches[Math.floor(random()*patches.length)],angle=random()*Math.PI*2,r=Math.pow(random(),.85)*patch.radius;
     const px=patch.x+Math.cos(angle)*r,pz=patch.z+Math.sin(angle)*r*patch.aspect,island=patch.island;
     if(islandAt(px,pz).island!==island||vegetationSuitability(px,pz,.34,plan)<.07)continue;
+    if(island.id==='beacon'&&lighthouseAccessClearance(px,pz)<.42)continue;
     if(island.id==='beacon'&&lighthouseEscarpmentSites().some(rock=>Math.hypot(px-rock.x,pz-rock.z)<rock.radius+.34))continue;
     if(BEACH_PALMS.some(palm=>Math.hypot(px-palm.x,pz-palm.z)<.35))continue;
-    const ix=Math.floor(px),iz=Math.floor(pz),spacing=.12+random()*.13;
+    const ix=Math.floor(px),iz=Math.floor(pz),spacing=.10+random()*.13;
     let near=false;
     for(let x=ix-1;x<=ix+1&&!near;x++)for(let z=iz-1;z<=iz+1&&!near;z++)near=(occupied.get(`${x},${z}`)??[]).some(site=>Math.hypot(px-site.x,pz-site.z)<spacing);
     if(near)continue;
     const form=random()<.65?patch.form:Math.floor(random()*3),height=(form===1?.28:.20)+random()*(form===1?.60:.46);
     const layeredHeight=island.id==='city'&&pz>-74&&form===1?height*(.85+random()*.55):height;
-    const site={x:px,y:terrainMeshHeight(px,pz)-.015,z:pz,height:layeredHeight,width:.51+random()*.28,rotation:random()*Math.PI*2,region:island.id,form,tint:random()};
+    const site={x:px,y:terrainMeshHeight(px,pz)-.015,z:pz,height:layeredHeight,width:.64+random()*.25,rotation:random()*Math.PI*2,region:island.id,form,tint:random()};
     sites.push(site);const key=`${ix},${iz}`,cell=occupied.get(key)??[];cell.push(site);occupied.set(key,cell);
   }
   meadowSiteCache=sites;return sites;
@@ -55,7 +57,7 @@ export function IslandMeadows({runtime,paused,quality}:EnvironmentProps){
     const batches=ISLANDS.flatMap(island=>[0,1,2].map(form=>{
       const entries=sites.filter(site=>site.region===island.id&&site.form===form),mesh=new InstancedMesh(near[form],material,entries.length);
       mesh.name=`groundcover-${island.id}-${form}`;mesh.userData.form=form;mesh.raycast=()=>{};
-      entries.forEach((site,i)=>{transform.position.set(site.x,site.y,site.z);transform.rotation.set(0,site.rotation,0);transform.scale.set(site.width,site.height,site.width);transform.updateMatrix();mesh.setMatrixAt(i,transform.matrix);mesh.setColorAt(i,color.setHSL(.19+site.tint*.13,.10+site.tint*.08,.77+site.tint*.20));});
+      entries.forEach((site,i)=>{transform.position.set(site.x,site.y,site.z);transform.rotation.set(0,site.rotation,0);transform.scale.set(site.width,site.height,site.width);transform.updateMatrix();mesh.setMatrixAt(i,transform.matrix);mesh.setColorAt(i,color.setHSL(.16+site.tint*.12,.11+site.tint*.16,.72+site.tint*.25));});
       mesh.computeBoundingSphere();if(mesh.boundingSphere)mesh.boundingSphere.radius+=.25;return mesh;
     }));
     return {batches,near,far,material,time,timer:undefined as ReturnType<typeof setTimeout>|undefined};

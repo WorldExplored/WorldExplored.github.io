@@ -114,12 +114,12 @@ test('jagged beacon ledges embed their full bases without obstructing the landin
 test('beach palms have curved trunks and attached feather crowns with camera clearance',()=>{
   const sites=createFloraSites().filter(site=>site.kind==='palm'),geometry=floraGeometry('palm');
   try{
-    assert.equal(sites.length,3);const p=geometry.attributes.position;
+    assert.equal(sites.length,3);assert.ok(sites.every(site=>site.scale>=1.7),'mature palms stand above five metres');const p=geometry.attributes.position;
     assert.ok(Math.max(...Array.from({length:p.count},(_,i)=>p.getY(i)))>3,'palms include a full trunk and arching crown');
     assert.ok(geometry.index!.count/3<1600,'three palms share one compact leaf-and-trunk mesh');
     const colors=geometry.attributes.color;
     for(let i=0;i<13*7;i++)assert.ok(colors.getX(i)>colors.getY(i)*1.3,'fibrous trunks are brown rather than green');
-    const coconuts=Array.from({length:p.count-13*7},(_,i)=>i+13*7).filter(i=>p.getY(i)>2.4&&p.getY(i)<2.79&&colors.getX(i)>colors.getY(i)*1.3);
+    const coconuts=Array.from({length:p.count-13*7},(_,i)=>i+13*7).filter(i=>p.getY(i)>2.35&&p.getY(i)<2.83&&colors.getX(i)>colors.getY(i)*1.3);
     assert.ok(coconuts.length>=140,'five brown coconut shells attach under the crown');
     for(const site of sites){
       assert.ok(BEACH_PALMS.some(palm=>palm.x===site.x&&palm.z===site.z));

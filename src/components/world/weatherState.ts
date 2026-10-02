@@ -90,7 +90,7 @@ export function stormSchedule(index: number) {
 }
 
 export interface StormSample { arrival: number; rainSeconds: number; approachSeconds: number; departureSeconds: number; active: boolean; age: number; cover: number; rain: number; center: Vec3 }
-export const STORM_ALTITUDE = 104;
+export const STORM_ALTITUDE = 112;
 export function createStormSample(): StormSample { return { arrival: 0, rainSeconds: 0, approachSeconds: 110, departureSeconds: 130, active: false, age: 0, cover: 0, rain: 0, center: [0, STORM_ALTITUDE, 0] }; }
 const stormPosition=new Vector3(),stormAnchor=new Vector3();
 export function stormAt(seconds: number, output = createStormSample()) {

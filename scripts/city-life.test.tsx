@@ -48,7 +48,7 @@ test('water taxi follows a continuous navigable loop with two actual dock dwells
     assert.equal(cityFerryDistance(route, route.firstDuration + second), route.firstLength);
   }
   writeCityFerryPose(route, 0, point, tangent); assert.ok(point.distanceTo(new Vector3(-14, .17, -47)) < .01);
-  writeCityFerryPose(route, route.firstDuration, point, tangent); assert.ok(point.distanceTo(new Vector3(-8, .17, -25.5)) < .06);
+  writeCityFerryPose(route, route.firstDuration, point, tangent); assert.ok(point.distanceTo(new Vector3(-8, .17, -25.68)) < .06);
   writeCityFerryPose(route, Number.NaN, point, tangent); assert.ok(point.toArray().every(Number.isFinite));
   for (const dock of cityDocks) {
     assert.ok(landDistance(dock.x, dock.z + (dock.id === 'city' ? -1 : 1) * dock.length / 2) > 0, 'A dock connects to real dry land.');

@@ -7,7 +7,24 @@ export const cityTurbines = Object.freeze([
   Object.freeze({ x: 16, z: -84, height: 7.5, phase: 1.9, rate: .57 }),
 ]);
 
-export const CITY_PIER_JUNCTION = Object.freeze({ x: -12, z: -52, y: 1.06, halfOpening: .84 });
+export const VISITOR_PIER_HEAD = Object.freeze({ x: -27, z: -45.85, y: .49 });
+export const SURVEY_BERTH = new Vector3(-31.9, 0, -45.85);
+export const VISITOR_BERTH = new Vector3(-27, 0, -42.55);
+
+export interface HarborObstacle { id:string; minX:number; maxX:number; minZ:number; maxZ:number }
+/** Solid deck/pile/fender envelopes. Retracting gangways are not solid navigation space. */
+export const HARBOR_OBSTACLES:readonly HarborObstacle[]=Object.freeze([
+  {id:'lighthouse-access',minX:-76.6,maxX:-66.77,minZ:-36.57,maxZ:-33.15},
+  {id:'city-stem',minX:-12.68,maxX:-11.34,minZ:-58.07,maxZ:-47.63},
+  {id:'garden-stem',minX:-8.73,maxX:-7.34,minZ:-24.57,maxZ:-18.43},
+  {id:'west-quay-arm',minX:-27.92,maxX:-12.60,minZ:-52.92,maxZ:-51.08},
+  {id:'west-quay-ramp',minX:-27.92,maxX:-26.08,minZ:-51.30,maxZ:-46.23},
+  {id:'visitor-quay',minX:-30.38,maxX:-23.62,minZ:-46.505,maxZ:-45.205},
+  {id:'west-fender',minX:-29.74,maxX:-29.46,minZ:-45.38,maxZ:-45.10},
+  {id:'east-fender',minX:-24.54,maxX:-24.26,minZ:-45.38,maxZ:-45.10},
+]);
+
+export const CITY_PIER_JUNCTION = Object.freeze({ x: -12, z: -52, y: 1.06, halfOpening: .78 });
 
 // Decks bridge the coast from dry land to navigable water, rather than floating inland.
 export const cityDocks = Object.freeze([
@@ -42,13 +59,13 @@ export const FERRY_RAMP = 3;
 let ferryRouteCache:CityFerryRoute|undefined;
 export function createCityFerryRoute(): CityFerryRoute {
   if(ferryRouteCache)return ferryRouteCache;
-  const points = [[-14, -47], [-14, -45], [-16, -43], [-16, -39], [-11, -27], [-8, -25.5], [-5.5, -28], [-9, -42], [-11, -48], [-14, -49]];
+  const points = [[-14, -47], [-14, -45], [-16, -43], [-16, -39], [-11, -27], [-8, -25.68], [-5.5, -28], [-6, -38], [-8, -43], [-14.8, -44], [-16.5, -46], [-16.5, -49.5], [-14.5, -49.7], [-14, -48.6]];
   const curve = new CatmullRomCurve3(points.map(([x, z]) => new Vector3(x, .17, z)), true, 'centripetal');
-  curve.arcLengthDivisions = 2400; curve.updateArcLengths();
+  curve.arcLengthDivisions = 10000; curve.updateArcLengths();
   const point = new Vector3(); let station = 0; let nearest = Infinity;
   for (let index = 0; index < 1000; index++) {
     curve.getPointAt(index / 1000, point);
-    const distance = Math.hypot(point.x + 8, point.z + 25.5);
+    const distance = Math.hypot(point.x + 8, point.z + 25.68);
     if (distance < nearest) { station = index / 1000; nearest = distance; }
   }
   const length = curve.getLength(); const speed = 1.8; const firstLength = length * station;

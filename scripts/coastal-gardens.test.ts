@@ -17,12 +17,15 @@ import { makeReceptionTerminal } from '../src/components/world/ReceptionTerminal
 import { makeGardenGallery } from '../src/components/world/GardenGallery';
 import { lighthouseRadius } from '../src/components/world/CoastalLighthouse';
 import { world } from '../src/content/world';
+import { lighthouseAccessClearance } from '../src/components/world/LighthouseAccess';
+import { treeBranches, treeFoliageGeometry, treeWoodGeometry } from '../src/components/world/TreeGeometry';
+import { meadowInsectPose, meadowInsectSites } from '../src/components/world/MeadowInsects';
 
 const triangleCount=(geometry:Mesh['geometry'])=>(geometry.index?.count??geometry.attributes.position.count)/3;
 
 test('meadows form broad continuous beds around both cities and keep cave approaches open',()=>{
   const sites=createSeabedMeadowSites(),habitat=getReefHabitat();
-  assert.ok(sites.length>6000&&sites.length<6800);
+  assert.ok(sites.length>=8200&&sites.length<=8500);
   assert.ok(Array.from({length:16},(_,region)=>sites.filter(site=>site.region===region).length).filter(count=>count>100).length>=12);
   for(const site of sites){
     assert.ok(Math.abs(site.y-marineFloorHeight(site.x,site.z)+.03)<1e-8);
@@ -56,22 +59,23 @@ test('seabed growth forms uneven clumps with sparse recruits and genuinely diffe
 });
 
 test('island understory follows actual ground and preserves complete walking clearance',()=>{
-  const sites=createIslandMeadowSites(),plan=createLandscapePlan();assert.ok(sites.length>4500&&sites.length<4800);
+  const sites=createIslandMeadowSites(),plan=createLandscapePlan();assert.ok(sites.length>=5500&&sites.length<=5800);
   assert.ok(sites.filter(site=>site.region==='city').length>800);
   assert.ok(sites.filter(site=>site.region==='main').length>750);
   for(const site of sites){
+    if(site.region==='beacon')assert.ok(lighthouseAccessClearance(site.x,site.z)>=.42);
     assert.ok(Math.abs(site.y-terrainMeshHeight(site.x,site.z)+.015)<1e-8);
     assert.ok(vegetationSuitability(site.x,site.z,.29,plan)>.069);
     for(const path of plan.paths)for(let i=1;i<path.points.length;i++)assert.ok(distanceToSegment(site.x,site.z,path.points[i-1],path.points[i])>path.width/2+.29);
   }
 });
 
-test('distant meadow geometry retains every blade and a real silhouette at half the triangles',()=>{
+test('distant meadow geometry retains broad crowns and real silhouettes with fewer distant blades',()=>{
   for(const water of [false,true]){
     const near=meadowGeometry(water),far=meadowGeometry(water,'far');
     try{
-      assert.equal(near.userData.blades,far.userData.blades);
-      assert.equal(triangleCount(far),triangleCount(near)/2);
+      assert.ok(far.userData.blades>=near.userData.blades*.45);
+      assert.ok(triangleCount(far)<triangleCount(near)*.40);
       for(const geometry of [near,far]){
         const p=geometry.attributes.position,index=geometry.index!,a=new Vector3(),b=new Vector3(),c=new Vector3();
         for(let i=0;i<index.count;i+=3){a.fromBufferAttribute(p,index.getX(i));b.fromBufferAttribute(p,index.getX(i+1));c.fromBufferAttribute(p,index.getX(i+2));assert.ok(b.sub(a).cross(c.sub(a)).length()>.00001,'far ribbons must not collapse to zero-width lines');}
@@ -139,10 +143,10 @@ test('Purdue, Contact and About planting follows actual foundation triangles and
   assert.equal(createIslandMeadowSites(),meadows);
 });
 
-test('the fountain and waterfront retain layered mixed planting without increasing the total population',()=>{
+test('the fountain and waterfront retain layered mixed planting with dense mixed grass and a bounded total population',()=>{
   const front=(site:{x:number;z:number})=>site.z>-74&&site.z<-60&&site.x>-28&&site.x<16;
   const flora=createFloraSites(),meadows=createIslandMeadowSites(),garden=flora.filter(front),grasses=meadows.filter(front);
-  assert.equal(flora.length,2103);assert.equal(meadows.length,4700);
+  assert.equal(flora.length,2103);assert.equal(meadows.length,5800);
   assert.ok(garden.length>260&&grasses.length>430,'redistribute growth to the visible waterfront and fountain margins');
   assert.ok(new Set(garden.map(site=>site.kind)).size>=9);assert.equal(new Set(grasses.map(site=>site.form)).size,3);
   assert.ok(grasses.some(site=>site.height>1)&&grasses.some(site=>site.height<.3),'tall sedges and low young tufts form separate layers');
@@ -184,7 +188,7 @@ test('medium plant geometry remains below one million triangles without deleting
 test('mature trees form irregular city groves with varied heights and clear crowns',()=>{
   const plan=createLandscapePlan(),city=plan.trees.filter(tree=>tree.z< -58);
   assert.ok(plan.trees.length>=24&&plan.trees.length<=46);
-  assert.ok(plan.trees.reduce((total,tree)=>total+tree.height,0)/plan.trees.length>4);
+  assert.ok(plan.trees.reduce((total,tree)=>total+tree.height,0)/plan.trees.length>7);
   assert.ok(Math.max(...city.map(tree=>tree.height))-Math.min(...city.map(tree=>tree.height))>2);
   assert.ok(city.filter(tree=>tree.z> -86&&tree.z< -64).length>=5,'groves occupy inner pockets as well as the rear coast');
   for(const tree of plan.trees){
@@ -198,7 +202,7 @@ test('slender lighthouse leaders reach the lantern on all sides and wind around 
   assert.equal(sites.length,6);
   const upperSides=new Set<number>();
   for(const site of sites){
-    assert.ok(site.width<=.32&&site.stemRadius!<=.012&&site.branchSpacing!>=.90);
+    assert.ok(site.width<=.75&&site.stemRadius!<=.008&&site.branching,'fine rooted leaders fork into unequal climbing shoots');
     const vine=createFacadeGarden(site),stem=placeFrontVineGeometry(vine.wood,site).attributes.position,support=site.support!;
     let top=0;
     for(let i=0;i<18*4*6;i++){
@@ -220,4 +224,34 @@ test('static landscape layout is shared without exposing mutable exclusion geome
   }
   for(const path of plan.paths){assert.ok(Object.isFrozen(path.points));path.points.forEach(point=>assert.ok(Object.isFrozen(point)));}
   for(const rock of plan.rocks)assert.ok(Object.isFrozen(rock.scale));
+});
+
+
+test('mature trees change branch architecture and leaf anatomy, not just hue',()=>{
+  const crowns=[0,1,2].map(treeFoliageGeometry),wood=[0,1,2].map(treeWoodGeometry);
+  try{
+    assert.equal(new Set(crowns.map(g=>g.userData.treeHabit)).size,3);
+    assert.equal(new Set(crowns.map(g=>Array.from(g.attributes.position.array).join(','))).size,3);
+    assert.equal(new Set(wood.map(g=>Array.from(g.attributes.position.array).join(','))).size,3);
+    const oak=treeBranches(0),alder=treeBranches(1),willow=treeBranches(2);
+    assert.ok(oak[0].tip.length()>alder[0].tip.length()*.9);
+    assert.ok(willow[0].tip.y<alder[0].tip.y,'drooping limbs and ascending limbs have different growth angles');
+    assert.ok(crowns.every(g=>triangleCount(g)<1100),'species do not multiply the canopy triangle budget');
+    for(const tree of createLandscapePlan().trees)assert.ok(tree.height>5.8&&tree.height<12,'trees are several storeys tall with a mature canopy');
+  }finally{[...crowns,...wood].forEach(g=>g.dispose());}
+});
+
+test('small meadow insects complete grounded walks and brief low flights within their planted patch',()=>{
+  const sites=meadowInsectSites();assert.equal(sites.length,8);
+  assert.equal(new Set(sites.map(site=>site.kind)).size,2);
+  sites.forEach((site,index)=>{
+    let airborne=0;
+    for(let elapsed=0;elapsed<344;elapsed+=.5){
+      const pose=meadowInsectPose(elapsed,index),ground=terrainMeshHeight(pose.x,pose.z);
+      assert.ok(Math.hypot(pose.x-site.x,pose.z-site.z)<.18);
+      assert.ok(pose.y>=ground+.024&&pose.y<ground+.46);
+      if(pose.y>ground+.04)airborne++;
+    }
+    assert.ok(airborne>0&&airborne<65,'each insect returns to the meadow and rests most of the time');
+  });
 });

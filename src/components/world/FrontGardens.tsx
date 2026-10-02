@@ -10,7 +10,7 @@ import { HISTORY_SCALE } from './historyDimensions';
 import { cityTurbines } from './cityInfrastructure';
 import { lighthouseRadius, LIGHTHOUSE_OPENINGS } from './CoastalLighthouse';
 
-export interface FrontVineSite {building:LandmarkId|'turbine-west'|'turbine-east';x:number;y:number;z:number;yaw:number;width:number;height:number;seed:number;branchSpacing?:number;stemRadius?:number;support?:{kind:'lighthouse'|'turbine';x:number;z:number;floor:number;height:number}}
+export interface FrontVineSite {building:LandmarkId|'turbine-west'|'turbine-east';x:number;y:number;z:number;yaw:number;width:number;height:number;seed:number;branchSpacing?:number;stemRadius?:number;branching?:boolean;support?:{kind:'lighthouse'|'turbine';x:number;z:number;floor:number;height:number}}
 /** Wall faces are measured from their enclosing shells; entrances and lift bays stay clear. */
 export function frontVineSites():FrontVineSite[]{
   const walls:Array<[LandmarkId,number,number,number,number,number]>=[
@@ -47,11 +47,11 @@ export function frontVineSites():FrontVineSite[]{
   const beacon=world.landmarks.find(item=>item.id==='building')!;
   for(const [index,angle] of [-2.8,-1.75,-.78,.62,1.67,2.7].entries()){
     const x=beacon.position[0]+Math.sin(angle)*1.395,z=beacon.position[2]+Math.cos(angle)*1.395,y=terrainMeshHeight(x,z)-.015;
-    sites.push({building:'building',x,y,z,yaw:angle,width:.23+(index%3)*.045,height:beacon.position[1]+11.92-y+(index%3)*.05,seed:3414+index*7,branchSpacing:.90+(index%2)*.12,stemRadius:.012,support:{kind:'lighthouse',x:beacon.position[0],z:beacon.position[2],floor:beacon.position[1],height:11.24}});
+    sites.push({building:'building',x,y,z,yaw:angle,width:.48+(index%3)*.12,height:beacon.position[1]+11.92-y+(index%3)*.05,seed:3414+index*7,branchSpacing:.45+(index%2)*.11,stemRadius:.008,branching:true,support:{kind:'lighthouse',x:beacon.position[0],z:beacon.position[2],floor:beacon.position[1],height:11.24}});
   }
   for(const [index,turbine] of cityTurbines.entries()){
     const angle=index?1.28:-1.45,x=turbine.x+Math.sin(angle)*.66,z=turbine.z+Math.cos(angle)*.66;
-    sites.push({building:index?'turbine-east':'turbine-west',x,y:terrainMeshHeight(x,z)-.015,z,yaw:angle,width:.44,height:2.85+index*.44,seed:4021+index*3,support:{kind:'turbine',x:turbine.x,z:turbine.z,floor:terrainHeight(turbine.x,turbine.z),height:turbine.height}});
+    sites.push({building:index?'turbine-east':'turbine-west',x,y:terrainMeshHeight(x,z)-.015,z,yaw:angle,width:.40,height:3.9+index*.66,seed:4021+index*3,stemRadius:.007,branchSpacing:.38,branching:true,support:{kind:'turbine',x:turbine.x,z:turbine.z,floor:terrainHeight(turbine.x,turbine.z),height:turbine.height}});
   }
   return sites;
 }
@@ -65,14 +65,15 @@ export function placeFrontVineGeometry(geometry:BufferGeometry,site:FrontVineSit
     const footing=support.kind==='lighthouse'?1.16*1.18:.61;
     const shaft=support.kind==='lighthouse'?lighthouseRadius(Math.max(1.02,localY)):.27-.14*Math.max(0,localY)/support.height;
     const transition=support.kind==='lighthouse'?Math.max(0,Math.min(1,(localY-.99)/.21)):Math.max(0,Math.min(1,(localY-.16)/.15));
-    const radius=footing+(shaft-footing)*transition;
-    const winding=support.kind==='turbine'?y*.58:y*.49+Math.sin(y*.79+site.seed)*.10;
+    const radius=support.kind==='turbine'?(localY<=.16?.61-.03*Math.max(0,localY)/.16:localY<=.28?.35:shaft):footing+(shaft-footing)*transition;
+    // Unequal climbing runs change direction as shoots follow masonry joints.
+    const winding=y*(support.kind==='turbine'?.29:.17)+(Math.sin(y*.73+site.seed)-Math.sin(site.seed))*.22+(Math.sin(y*1.91+site.seed*.37)-Math.sin(site.seed*.37))*.08;
     let angle=site.yaw+positions.getX(i)/Math.max(.20,radius)+winding;
     if(support.kind==='lighthouse'){
       const opening=LIGHTHOUSE_OPENINGS.find(item=>localY>item.bottom-.12&&localY<item.top+.12),signed=Math.atan2(Math.sin(angle),Math.cos(angle));
       if(opening&&Math.abs(signed)<opening.halfAngle+.12)angle+=Math.sign(signed||1)*(opening.halfAngle+.12)-signed;
     }
-    const offset=Math.max(.008,positions.getZ(i));
+    const offset=.008+Math.max(0,positions.getZ(i))*.24;
     positions.setXYZ(i,support.x+Math.sin(angle)*(radius+offset),worldY,support.z+Math.cos(angle)*(radius+offset));
   }
   geometry.computeVertexNormals();return geometry;

@@ -21,22 +21,22 @@ export function createSeabedMeadowSites(habitat:ReefHabitatPlan=getReefHabitat()
   // Random parent patches have unequal radii, eccentricity and orientation. Each
   // contains close siblings, young edge growth and a few detached outliers.
   const patches:{x:number;z:number;radius:number;aspect:number;yaw:number;form:number;tint:number}[]=[];
-  for(let attempt=0;attempt<7000&&patches.length<420;attempt++){
+  for(let attempt=0;attempt<7000&&patches.length<480;attempt++){
     const x=-102+random()*153,z=-118+random()*160;
     if(floorAt(x,z)===undefined)continue;
     patches.push({x,z,radius:2+random()*5.2,aspect:.30+random()*.65,yaw:random()*Math.PI*2,form:Math.floor(random()*4),tint:random()});
   }
   const roots=new Map<string,SeabedMeadowSite[]>();
-  for(let attempt=0;attempt<65000&&sites.length<6400;attempt++){
+  for(let attempt=0;attempt<95000&&sites.length<8500;attempt++){
     const cluster=Math.floor(random()*patches.length),patch=patches[cluster],scattered=attempt%9===0;
     const angle=random()*Math.PI*2,radial=Math.pow(random(),1.1),r=radial*patch.radius;
     const dx=Math.cos(angle)*r,dz=Math.sin(angle)*r*patch.aspect+Math.sin(dx*.7)*patch.radius*.08;
     const px=scattered?-102+random()*153:patch.x+Math.cos(patch.yaw)*dx-Math.sin(patch.yaw)*dz;
     const pz=scattered?-118+random()*160:patch.z+Math.sin(patch.yaw)*dx+Math.cos(patch.yaw)*dz;
-    const y=floorAt(px,pz);if(y===undefined||coastalCaveClearance(px,pz,.8)<=0)continue;
-    if((cells.get(`${Math.floor(px/8)},${Math.floor(pz/8)}`)??[]).some(item=>Math.hypot(px-item.x,pz-item.z)<item.radius+.65))continue;
-    if(plan.paths.some(path=>path.bridge&&path.points.slice(1).some((p,i)=>distanceToSegment(px,pz,path.points[i],p)<path.width/2+.9)))continue;
-    if(plan.structures.some(item=>Math.hypot(px-item.x,pz-item.z)<item.radius+.8))continue;
+    const y=floorAt(px,pz);if(y===undefined||coastalCaveClearance(px,pz,1.1)<=0)continue;
+    if((cells.get(`${Math.floor(px/8)},${Math.floor(pz/8)}`)??[]).some(item=>Math.hypot(px-item.x,pz-item.z)<item.radius+1.05))continue;
+    if(plan.paths.some(path=>path.bridge&&path.points.slice(1).some((p,i)=>distanceToSegment(px,pz,path.points[i],p)<path.width/2+1.2)))continue;
+    if(plan.structures.some(item=>Math.hypot(px-item.x,pz-item.z)<item.radius+1.15))continue;
     const cellX=Math.floor(px),cellZ=Math.floor(pz),spacing=.12+random()*.19;
     let crowded=false;
     for(let x=cellX-1;x<=cellX+1&&!crowded;x++)for(let z=cellZ-1;z<=cellZ+1&&!crowded;z++)
@@ -44,7 +44,7 @@ export function createSeabedMeadowSites(habitat:ReefHabitatPlan=getReefHabitat()
     if(crowded)continue;
     const form=random()<.52&&!scattered?patch.form:Math.floor(random()*4);
     const maturity=(scattered?.25:.45+(1-radial)*.55)*(.5+random()*.9);
-    const width=.42+random()*.68,height=Math.min(.16+maturity*[1.20,1.65,.98,.58][form],-.4-y);
+    const width=.96+random()*.70,height=Math.min(.25+maturity*[1.42,1.90,1.32,.81][form],-.4-y);
     const region=Math.min(3,Math.max(0,Math.floor((px+102)/38.5)))+Math.min(3,Math.max(0,Math.floor((pz+118)/40)))*4;
     const site={x:px,y,z:pz,width,height,rotation:random()*Math.PI*2,region,form,tint:patch.tint*.45+random()*.55,cluster:scattered?-1:cluster};
     sites.push(site);const key=`${cellX},${cellZ}`,cell=roots.get(key)??[];cell.push(site);roots.set(key,cell);

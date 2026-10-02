@@ -14,7 +14,7 @@ export interface Footprint { id: string; x: number; z: number; radius: number }
 export interface PathPoint { x: number; z: number }
 export interface LandscapePath { id?: string; startY?: number; endY?: number; bridgeId?: string; points: PathPoint[]; width: number; bridge?: boolean; elevated?: boolean }
 export interface LandscapeRock extends Footprint { y: number; scale: [number, number, number]; rotation: number }
-export interface LandscapeTree extends Footprint { y: number; height: number; rotation: number }
+export interface LandscapeTree extends Footprint { y: number; height: number; canopyScale: number; rotation: number }
 export interface LandscapePlan { structures: Footprint[]; paths: LandscapePath[]; rocks: LandscapeRock[]; trees: LandscapeTree[] }
 export interface PlantPosition { x: number; y: number; z: number; scale: number; rotation: number; phase: number; reach: number }
 export interface Island { id: string; x: number; z: number; rx: number; rz: number; phase: number; beach: number; hill: number }
@@ -190,10 +190,11 @@ export function createLandscapePlan(): LandscapePlan {
     const x=clustered?patch.x+Math.cos(angle)*patch.rx*r:island.x+Math.cos(angle)*island.rx*r*islandContour(island,angle);
     const z=clustered?patch.z+Math.sin(angle)*patch.rz*r:island.z+Math.sin(angle)*island.rz*r*islandContour(island,angle);
     const mature=attempt<1800||random()>.32;
-    const height=mature?4.2+random()*2.1:3.15+random()*.75,radius=height*.63;
+    const canopyScale=mature?4.2+random()*2.1:3.15+random()*.75;
+    const height=canopyScale*1.85,radius=canopyScale*.63;
     if(BEACH_PALMS.some(palm=>Math.hypot(x-palm.x,z-palm.z)<radius+1.85+.25)||landDistance(x,z)<1.8+radius||terrainSlope(x,z)>.6)continue;
     if(structures.some(item=>structurePlantingClearance(x,z,item)<radius+.25)||circleClearance(x,z,[...rocks,...trees])<radius+.25||pathClearance(x,z,paths)<radius+.3)continue;
-    trees.push({id:`grove-tree-${trees.length}`,x,z,y:terrainHeight(x,z),radius,height,rotation:random()*Math.PI*2});
+    trees.push({id:`grove-tree-${trees.length}`,x,z,y:terrainHeight(x,z),radius,height,canopyScale,rotation:random()*Math.PI*2});
   }
   // Ecology, wildlife and rendering share the same static exclusion field.
   // Freeze owned copies so a consumer cannot invalidate another system's routes.

@@ -5,7 +5,7 @@ import { measureConstruction } from './renderDiagnostics';
 /* eslint-disable react-hooks/immutability */
 import { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { BufferGeometry, CatmullRomCurve3, CircleGeometry, Color, CylinderGeometry, Float32BufferAttribute, Group, InstancedMesh, MeshStandardMaterial, Object3D, SphereGeometry, Vector3 } from 'three';
+import { BufferGeometry, CatmullRomCurve3, CircleGeometry, Color, CylinderGeometry, Float32BufferAttribute, Group, InstancedBufferAttribute, InstancedMesh, MeshStandardMaterial, Object3D, SphereGeometry, Vector3 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { EnvironmentProps } from './Water';
 import { FLYPAST_COUNT, sampleBirdFlypast } from './birdFlypast';
@@ -143,7 +143,19 @@ export function createWildlife() {
   });
   const gullPrey=instances('gull-hunt-silver-fish',merge([ellipsoid(0,0,0,.045,.058,.17),feather(.13,.052,.002).rotateY(-Math.PI/2).translate(0,0,.12)]),7,18);
   const preyEyes=instances('gull-hunt-fish-eyes',merge([-1,1].map(side=>ellipsoid(side*.034,.017,-.11,.009,.011,.012))),2,18);
-  const crabBody = instances('crab-shells', crabCarapaceGeometry(), 4, 10);
+  const shellMaterial=materials[4].clone();materials.push(shellMaterial);
+  shellMaterial.onBeforeCompile=shader=>{shader.vertexShader=`attribute vec2 aShellTrait;\n${shader.vertexShader}`.replace('#include <begin_vertex>',`#include <begin_vertex>
+    float rim=clamp(length(vec2(position.x/.178,position.z/.125)),0.,1.);
+    float angle=atan(position.z,position.x);
+    float form=aShellTrait.x;
+    transformed.x*=1.+step(.5,form)*.06*pow(rim,4.)*sin(angle*10.);
+    transformed.y*=1.-step(1.5,form)*.24;
+  `).replace('#include <color_vertex>',`#include <color_vertex>
+    float speckle=sin(position.x*340.+aShellTrait.y*5.)*sin(position.z*410.);
+    vColor.rgb*=mix(.64,1.13,smoothstep(-.2,.4,speckle+aShellTrait.y*.2));
+  `);};shellMaterial.customProgramCacheKey=()=> 'shore-crab-carapace-forms-v1';
+  const crabBody = instances('crab-shells', crabCarapaceGeometry(), materials.length-1, 10);
+  crabBody.geometry.setAttribute('aShellTrait',new InstancedBufferAttribute(new Float32Array(Array.from({length:10},(_,i)=>{const v=crabVariation(i);return[v.shellForm,v.mottling];}).flat()),2));
   const crabEyes = instances('crab-eyes', merge([-1, 1].flatMap(side => [bone(new Vector3(side * .07, .045, -.07), new Vector3(side * .085, .14, -.11), .012), ellipsoid(side * .085, .14, -.11, .026, .027, .023)])), 2, 10);
   const crabLegs = instances('crab-jointed-legs', merge([bone(new Vector3(), new Vector3(.13, .055, .02), .017), bone(new Vector3(.13, .055, .02), new Vector3(.24, -.08, .06), .012)]), 5, 40);
   const crabClaws = instances('crab-claws', merge([
@@ -250,7 +262,7 @@ export function Wildlife({ runtime, paused, quality }: EnvironmentProps) {
         const side = sideIndex === 0 ? -1 : 1;
         for (let leg = 0; leg < 4; leg++) {
           const phase = crab.gait + leg * Math.PI + sideIndex * Math.PI;
-          local.position.set(side * .12, 0, (leg - 1.5) * .053); local.rotation.set(0, side * ((leg - 1.5) * -.36 + Math.sin(phase) * .15), side * Math.max(0, Math.cos(phase)) * .16); local.scale.set(1, 1, 1); local.updateMatrix(); local.matrix.premultiply(root.matrix);
+          local.position.set(side * .12, 0, (leg - 1.5) * .053); local.rotation.set(0, side * ((leg - 1.5) * -.36 + Math.sin(phase) * .15), side * Math.max(0, Math.cos(phase)) * .16); local.scale.set(traits.legReach,1,1); local.updateMatrix(); local.matrix.premultiply(root.matrix);
           (side < 0 ? life.leftCrabLegs : life.crabLegs).setMatrixAt(index * 4 + leg, local.matrix);
         }
         local.position.set(side * .10, 0, -.065); local.rotation.set(0, side * -.25, side * crab.scuttle * -.20); const claw=side<0?traits.leftClaw:traits.rightClaw;local.scale.set(claw,claw,claw); local.updateMatrix(); local.matrix.premultiply(root.matrix); (side < 0 ? life.leftCrabClaws : life.crabClaws).setMatrixAt(index, local.matrix);

@@ -16,19 +16,20 @@ interface PointerSample { x: number; y: number; startX: number; startY: number; 
 export function CameraDirector({ destination, flight, mobile, onArrive, paused, runtime }: Props) {
   const { camera, gl, scene, invalidate, size, get, set } = useThree();
   const obstacles = useMemo(() => cameraObstacles(), []);
+  // Local inspection poses can approach distant wildlife; production navigation keeps its bounds.
+  const qaView = useMemo(() => readQaView(), []);
   const vectors = useMemo(() => ({ start: new Vector3(), startLook: new Vector3(), end: new Vector3(), endLook: new Vector3(), previous: new Vector3(), motionFrom: new Vector3(), parallaxMotion: new Vector2(), saved: new Vector3(), parallax: new Vector3(), desired: new Vector3(), right: new Vector3(), up: new Vector3(), hit: new Vector3(), zoomAnchor: new Vector3(), pointer: new Vector2(), raycaster: new Raycaster(), plane: new Plane() }), []);
   const controls = useMemo(() => {
     const target = new Vector3();
     return {
       target, enabled: true, touches: { ONE: TOUCH.ROTATE, TWO: TOUCH.DOLLY_PAN },
       getDistance: () => camera.position.distanceTo(target),
-      update: () => { constrainCameraPose(camera.position, target, obstacles); camera.up.set(0, 1, 0); camera.lookAt(target); camera.updateMatrixWorld(); },
+      update: () => { if (!qaView) constrainCameraPose(camera.position, target, obstacles); camera.up.set(0, 1, 0); camera.lookAt(target); camera.updateMatrixWorld(); },
     };
-  }, [camera, obstacles]);
+  }, [camera, obstacles, qaView]);
   const transition = useRef({ elapsed: 0, active: false, id: destination, serial: flight });
   const input = useRef({ moved: false, active: false, blocked: false, pointers: new Map<number, PointerSample>(), orbitX: 0, orbitY: 0, panX: 0, panY: 0, zoom: 0, wheelGestureAt: -Infinity });
   const latest = useRef({ mobile, paused, aspect: size.width / size.height, onArrive });
-  const qaView = useMemo(() => readQaView(), []);
   const poseFor = useMemo(() => (id: typeof destination, compact: boolean, aspect: number) => !id && qaView ? qaView : focusPose(id, compact, aspect), [qaView]);
   useEffect(() => { latest.current = { mobile, paused, aspect: size.width / size.height, onArrive }; }, [mobile, paused, size.width, size.height, onArrive]);
 

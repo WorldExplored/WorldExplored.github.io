@@ -13,6 +13,8 @@ import { coastalBiome, TOWN_BEDS, BEACH_PALMS } from './coastalBiome';
 import { structurePlantingClearance } from './plantingFootprints';
 import { createLighthouseEscarpment, lighthouseEscarpmentSites } from './LighthouseEscarpment';
 import { IslandMeadows } from './IslandMeadows';
+import { MeadowInsects } from './MeadowInsects';
+import { lighthouseAccessClearance } from './LighthouseAccess';
 import type { EnvironmentProps } from './Water';
 
 export type FloraKind = 'reeds' | 'beach' | 'shrub' | 'flower' | 'broadleaf' | 'sedge' | 'clover' | 'fern' | 'foxglove' | 'bluebell' | 'poppy' | 'allium' | 'palm';
@@ -32,6 +34,7 @@ export function createFloraSites() {
   const plant=(site:FloraSite)=>{sites.push(site);const key=`${Math.floor(site.x)},${Math.floor(site.z)}`,cell=cells.get(key)??[];cell.push(site);cells.set(key,cell);};
   const beaconClear=(x:number,z:number,reach:number)=>{
     const distance=landDistance(x,z);
+    if(lighthouseAccessClearance(x,z)<reach+.08)return false;
     if(beaconRocks.some(rock=>Math.hypot(x-rock.x,z-rock.z)<rock.radius+reach))return false;
     if(distance<reach+.45||terrainSlope(x,z)>.62||coastalBiome(x,z,distance,terrainHeight(x,z)).grass<.12)return false;
     if([...plan.structures,...plan.rocks,...plan.trees].some(item=>structurePlantingClearance(x,z,item)<reach))return false;
@@ -218,14 +221,14 @@ export function floraGeometry(kind:FloraKind, detail:'near'|'far'='near') {
     for(let ring=0;ring<=rings;ring++)for(let side=0;side<sides;side++){
       const t=ring/rings,a=side/sides*Math.PI*2,radius=(.12-t*.047)*(ring%2?.93:1);
       positions.push(.17*t*t+Math.cos(a)*radius,t*2.8,Math.sin(a)*radius);
-      tint.set(ring%2?'#987049':'#725036');colors.push(tint.r,tint.g,tint.b);
+      tint.set(ring%2?'#b77a4e':'#985830');colors.push(tint.r,tint.g,tint.b);
       if(ring){const i=start+ring*sides+side,next=start+ring*sides+(side+1)%sides;indices.push(i,next,i-sides,next,next-sides,i-sides);}
     }
     for(let nut=0;nut<5;nut++){
       const a=nut*2.399,start=positions.length/3,sides=6,rings=4,cx=.17+Math.sin(a)*.12,cz=Math.cos(a)*.12,cy=2.65-(nut%2)*.10;
       for(let ring=0;ring<=rings;ring++)for(let side=0;side<sides;side++){
-        const t=ring/rings,angle=side/sides*Math.PI*2,r=Math.sin(t*Math.PI)*.095;
-        positions.push(cx+Math.cos(angle)*r,cy+(t-.5)*.24,cz+Math.sin(angle)*r);
+        const t=ring/rings,angle=side/sides*Math.PI*2,r=Math.sin(t*Math.PI)*.13;
+        positions.push(cx+Math.cos(angle)*r,cy+(t-.5)*.31,cz+Math.sin(angle)*r);
         tint.set(side%2?'#82603d':'#68472f');colors.push(tint.r,tint.g,tint.b);
         if(ring){const i=start+ring*sides+side,next=start+ring*sides+(side+1)%sides;if(ring<rings)indices.push(i,next,i-sides);if(ring>1)indices.push(next,next-sides,i-sides);}
       }
@@ -259,7 +262,7 @@ export function Flora({runtime,paused,quality}:EnvironmentProps) {
       };
       material.customProgramCacheKey=()=>`coastal-flora-${kind}`;
       const mesh=new InstancedMesh(geometry,material,entries.length);mesh.name=`flora-${kind}`;mesh.frustumCulled=true;mesh.receiveShadow=true;mesh.castShadow=kind==='palm';
-      entries.forEach((site,i)=>{transform.position.set(site.x,site.y,site.z);transform.rotation.set(0,site.rotation,0);transform.scale.setScalar(site.scale);transform.updateMatrix();mesh.setMatrixAt(i,transform.matrix);const shade=.72+.22*(Math.sin(site.x*11.37+site.z*7.91)*.5+.5);mesh.setColorAt(i,new Color().setRGB(shade,Math.min(1,shade+.06),shade));});
+      entries.forEach((site,i)=>{transform.position.set(site.x,site.y,site.z);transform.rotation.set(0,site.rotation,0);transform.scale.setScalar(site.scale);transform.updateMatrix();mesh.setMatrixAt(i,transform.matrix);const shade=.72+.22*(Math.sin(site.x*11.37+site.z*7.91)*.5+.5);mesh.setColorAt(i,new Color().setRGB(shade,kind==='palm'?shade*.91:Math.min(1,shade+.06),kind==='palm'?shade*.86:shade));});
       mesh.computeBoundingSphere(); if(mesh.boundingSphere)mesh.boundingSphere.radius+=.4;
       return {mesh,geometry,farGeometry:floraGeometry(kind,'far'),material,maximum:entries.length};
     });
@@ -271,5 +274,5 @@ export function Flora({runtime,paused,quality}:EnvironmentProps) {
     flora.batches.forEach(batch=>{batch.mesh.count=Math.ceil(batch.maximum*(quality==='high'?1:quality==='medium'?.7:.4)*detail);batch.mesh.geometry=quality==='high'&&detail===1&&camera.position.y<22?batch.geometry:batch.farGeometry;});
     if(paused)return;flora.uniforms.time.value=runtime.current.elapsed;flora.uniforms.pointer.value.fromArray(runtime.current.pointerWorld);flora.uniforms.strength.value=runtime.current.pointerActive?1:0;
   });
-  return <><group name="coastal-flora" dispose={null}>{flora.batches.map(batch=><primitive key={batch.mesh.uuid} object={batch.mesh}/>)}</group><primitive object={flora.escarpment.root} dispose={null}/><IslandMeadows runtime={runtime} paused={paused} quality={quality}/></>;
+  return <><group name="coastal-flora" dispose={null}>{flora.batches.map(batch=><primitive key={batch.mesh.uuid} object={batch.mesh}/>)}</group><primitive object={flora.escarpment.root} dispose={null}/><IslandMeadows runtime={runtime} paused={paused} quality={quality}/><MeadowInsects runtime={runtime} paused={paused} quality={quality}/></>;
 }

@@ -17,6 +17,7 @@ import { createCityLift } from './CityLift';
 import { applySurface } from './surfaceMaterials';
 import { emitTechnologySound } from './coastalAudio';
 import { makeCityCarriage } from './CityMonorail';
+import { addGuidewayHardware } from './CityGuideway';
 
 import { RoomLighting, applyBakedRoomLighting, applyNightSource, type RoomLamp } from './RoomLighting';
 
@@ -155,6 +156,7 @@ function makeStaticCity(route: CityTransitRoute, materials: ReturnType<typeof ma
   const deckGeometry = new BufferGeometry(); deckGeometry.setAttribute('position', new Float32BufferAttribute(deck, 3)); deckGeometry.setIndex(indices); deckGeometry.computeVertexNormals(); add(deckGeometry, 'porcelain');
   // Guide strips follow the beam sides below running tyres.
   for (const rail of rails) { for (const point of rail) point.y -= .07; add(arch(rail, .022, 768), 'aqua'); }
+  addGuidewayHardware(route, add);
   for (let support = 0; support < 32; support++) {
     route.curve.getPointAt(support / 32, center); route.curve.getPointAt((support / 32 + .001) % 1, ahead); tangent.subVectors(ahead, center).normalize();
     if (Math.abs(center.x + 5) < 2.5 && Math.abs(center.z + 68) < 2.8) continue;

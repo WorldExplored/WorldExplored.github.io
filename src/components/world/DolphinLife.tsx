@@ -5,7 +5,7 @@ import { useFrame } from '@react-three/fiber';
 import { BufferGeometry, CatmullRomCurve3, Color, CylinderGeometry, DoubleSide, Float32BufferAttribute, Group, InstancedMesh, Mesh, MeshStandardMaterial, Object3D, SphereGeometry, TorusGeometry, Vector3 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { EnvironmentProps } from './Water';
-import { createDolphinState, stepDolphin } from './dolphinRoutes';
+import { createDolphinState, stepDolphin, DOLPHIN_SCALES, dolphinBodyRadius } from './dolphinRoutes';
 import { surfaceAnimals } from './marineTraffic';
 import { harborWaterHeight } from './waterSurface';
 
@@ -73,7 +73,7 @@ export function createDolphinLife() {
   });
   shared.forEach(parts => Object.values(parts).forEach(geometry => geometries.add(geometry)));
   const creatures = states.map(state => {
-    const animal = new Group(); animal.name = state.shark ? 'offshore-shark' : 'bottlenose-dolphin'; animal.scale.setScalar(state.shark ? .68 : [ .34, .31, .36, .32 ][state.index % 4]); root.add(animal);
+    const animal = new Group(); animal.name = state.shark ? 'offshore-shark' : 'bottlenose-dolphin'; animal.scale.setScalar(state.shark ? .68 : DOLPHIN_SCALES[state.index % 4]); root.add(animal);
     const geometry = shared[Number(state.shark)], skin = skins[Number(state.shark)];
     add(animal,'countershaded-fusiform-body',geometry.body,bodyMaterial);
     add(animal,'rostrum-dorsal-and-paired-flippers',geometry.details,skin);
@@ -122,7 +122,7 @@ export function DolphinLife({runtime,paused,quality}: EnvironmentProps) {
   const life = useMemo(()=>createDolphinLife(),[]);
   useEffect(()=>life.retain(),[life]);
   useEffect(()=>{
-    const occupants=life.states.map(state=>({position:state.position,radius:state.shark?1.1:.65}));
+    const occupants=life.states.map(state=>({position:state.position,radius:state.shark?1.3:dolphinBodyRadius(state.index)}));
     surfaceAnimals.push(...occupants);
     return()=>{occupants.forEach(item=>{const i=surfaceAnimals.indexOf(item);if(i>=0)surfaceAnimals.splice(i,1);});};
   },[life]);

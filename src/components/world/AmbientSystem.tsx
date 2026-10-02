@@ -264,6 +264,9 @@ function makeLandscape(plan: LandscapePlan) {
       sand = mix(sand,vec3(.73,.84,.80),wash*.22);
       vec3 soil = mix(vec3(.22,.16,.095),vec3(.33,.25,.14),broad);
       vec3 groundcover=mix(vec3(.048,.100,.033),vec3(.155,.228,.093),broad) * (.91+dot(forestScan,vec3(.333))*.23);
+      float moisture=groundNoise(groundXZ*.27+vec2(7.,13.));
+      groundcover=mix(groundcover,groundcover*vec3(.77,1.12,.86),smoothstep(.32,.74,moisture)*.55);
+      groundcover=mix(groundcover,vec3(.18,.22,.082),smoothstep(.67,.91,groundNoise(groundXZ*.93))*.25);
       float thatch=smoothstep(.58,.77,groundNoise(groundXZ*8.1));
       groundcover=mix(groundcover,vec3(.21,.20,.105),thatch*.12);
       vec2 grassUv=mat2(.8,-.6,.6,.8)*groundXZ*.5;
@@ -317,7 +320,7 @@ function makeLandscape(plan: LandscapePlan) {
   shells.count = shellCount; shells.computeBoundingSphere();
   const trunkGeometries = [0, 1, 2].map(treeWoodGeometry);
   const bark = barkTexture();
-  const crownGeometry = treeFoliageGeometry();
+  const crownGeometries = [0, 1, 2].map(treeFoliageGeometry);
   const leafVeins = leafVeinTexture();
   const trunkMaterial = new MeshPhysicalMaterial({ color: '#8c7055', vertexColors: true, bumpMap: bark, bumpScale: .028, roughness: .93, envMapIntensity: .13 });
   const crownMaterial = new MeshPhysicalMaterial({ color: '#438d36', bumpMap: leafVeins, bumpScale: .007, roughnessMap: leafVeins, vertexColors: true, side: DoubleSide, roughness: .73, clearcoat: .08, clearcoatRoughness: .4, envMapIntensity: .15 });
@@ -343,7 +346,12 @@ function makeLandscape(plan: LandscapePlan) {
     const mesh = new InstancedMesh(geometry, trunkMaterial, plan.trees.length);
     mesh.count = 0; mesh.castShadow = true; mesh.receiveShadow = true; mesh.name = `tree-wood-${form}`; mesh.userData.treeIndices = []; trunks.add(mesh); return mesh;
   });
-  const crowns = new InstancedMesh(crownGeometry, crownMaterial, plan.trees.length * 9);
+  const crowns = new Group();
+  const crownMeshes = crownGeometries.map((geometry, form) => {
+    const mesh = new InstancedMesh(geometry, crownMaterial, plan.trees.length * 9);
+    mesh.count = 0; mesh.name = `grove-foliage-${form}`; mesh.userData.treeIndices = [];
+    mesh.castShadow = true; mesh.receiveShadow = true; crowns.add(mesh); return mesh;
+  });
   trunks.name = 'grove-trunks';
   crowns.name = 'grove-foliage';
 
@@ -354,7 +362,7 @@ function makeLandscape(plan: LandscapePlan) {
   const random = seededRandom(643);
   const tint = new Color();
   plan.trees.forEach((item, index) => {
-    tree.position.set(item.x, item.y, item.z); tree.scale.setScalar(item.height); tree.rotation.set(0, item.rotation, 0); tree.updateMatrix(); const wood = woodMeshes[index % 3]; wood.userData.treeIndices.push(index); wood.setMatrixAt(wood.count++, tree.matrix);
+    tree.position.set(item.x, item.y, item.z); tree.scale.set(item.canopyScale, item.height, item.canopyScale); tree.rotation.set(0, item.rotation, 0); tree.updateMatrix(); const canopy = crownMeshes[index % 3]; const wood = woodMeshes[index % 3]; wood.userData.treeIndices.push(index); wood.setMatrixAt(wood.count++, tree.matrix);
     for (let cluster = 0; cluster < 9; cluster++) {
       const limb = treeBranches(index % 3)[cluster];
       const angle = limb.angle;
@@ -362,15 +370,15 @@ function makeLandscape(plan: LandscapePlan) {
       leaf.position.copy(limb.tip);
       leaf.scale.set(size * (1.05 + random() * .3), size * (1 + random() * .5), size);
       leaf.rotation.set(random() * .3, angle, (random() - .5) * .4);
-      leaf.updateMatrix(); transform.matrix.multiplyMatrices(tree.matrix, leaf.matrix); crowns.setMatrixAt(index * 9 + cluster, transform.matrix);
-      tint.setRGB(.78 + random() * .22, .88 + random() * .12, .68 + random() * .22); crowns.setColorAt(index * 9 + cluster, tint);
+      leaf.updateMatrix(); transform.matrix.multiplyMatrices(tree.matrix, leaf.matrix); canopy.userData.treeIndices.push(index); canopy.setMatrixAt(canopy.count, transform.matrix);
+      tint.setRGB(.78 + random() * .22, .88 + random() * .12, .68 + random() * .22); canopy.setColorAt(canopy.count++, tint);
     }
   });
-  woodMeshes.forEach(mesh => mesh.computeBoundingSphere()); crowns.computeBoundingSphere();
+  [...woodMeshes, ...crownMeshes].forEach(mesh => mesh.computeBoundingSphere());
   return { ground, material, rocks, trunks, crowns, shells, shoreDetails, townLandscape, canopyWind, shoreTime, plan, dispose() {
-    [ground, ...trunkGeometries, crownGeometry, shellGeometry].forEach(geometry => geometry.dispose());
+    [ground, ...trunkGeometries, ...crownGeometries, shellGeometry].forEach(geometry => geometry.dispose());
     [material, trunkMaterial, crownMaterial, shellMaterial].forEach(value => value.dispose());
-    bark.dispose(); leafVeins.dispose(); texture.dispose(); groundNormal.dispose(); shoreDetails.dispose(); townLandscape.dispose(); shells.dispose(); rockResources.dispose(); woodMeshes.forEach(mesh => mesh.dispose()); crowns.dispose();
+    bark.dispose(); leafVeins.dispose(); texture.dispose(); groundNormal.dispose(); shoreDetails.dispose(); townLandscape.dispose(); shells.dispose(); rockResources.dispose(); [...woodMeshes, ...crownMeshes].forEach(mesh => mesh.dispose());
   } };
 }
 
@@ -421,7 +429,7 @@ function TerrainSystem({ runtime, paused, quality }: EnvironmentProps) {
   useFrame(() => { const state=runtime.current;coastalSoundScene.foliageDistance = Math.min(...landscape.plan.trees.map(tree => Math.hypot(tree.x-coastalSoundScene.listener[0], tree.z-coastalSoundScene.listener[2])));landscape.canopyWind.pointer.value.fromArray(state.pointerWorld);landscape.canopyWind.pointerStrength.value=state.pointerActive ? (paused ? .22 : 1) : 0;const treeAge=state.elapsed-state.nature.time;if(state.nature.kind==='tree'&&treeAge>=0&&treeAge<2){landscape.canopyWind.pointer.value.set(state.nature.x+.25,state.nature.y,state.nature.z);landscape.canopyWind.pointerStrength.value=paused?.22:Math.sin(Math.min(1,treeAge/.18)*Math.PI/2)*Math.exp(-treeAge*1.5);}if (!paused) { landscape.canopyWind.time.value = state.elapsed; landscape.shoreTime.value = state.elapsed * world.environment.waterSpeed; } });
   useEffect(() => { landscape.canopyWind.strength.value = quality === 'low' ? 0 : 1; }, [landscape, quality]);
   const nature=(kind:'tree'|'rock',x:number,y:number,z:number)=>{const state=runtime.current;state.nature={x,y,z,kind,time:state.elapsed,serial:state.nature.serial+1};if(kind==='rock')state.ripple={x,z,time:state.elapsed,serial:state.ripple.serial+1};invalidate();};
-  const treeClick=(event:ThreeEvent<MouseEvent>)=>{event.stopPropagation();if(event.delta>6||runtime.current.dragging||event.instanceId===undefined)return;const index = event.object.name === 'grove-foliage' ? Math.floor(event.instanceId / 9) : event.object.userData.treeIndices?.[event.instanceId]; const tree=landscape.plan.trees[index];if(tree)nature('tree',tree.x,tree.y+tree.height*.72,tree.z);};
+  const treeClick=(event:ThreeEvent<MouseEvent>)=>{event.stopPropagation();if(event.delta>6||runtime.current.dragging||event.instanceId===undefined)return;const index = event.object.userData.treeIndices?.[event.instanceId]; const tree=landscape.plan.trees[index];if(tree)nature('tree',tree.x,tree.y+tree.height*.72,tree.z);};
   const rockClick=(event:ThreeEvent<MouseEvent>)=>{event.stopPropagation();if(event.delta>6||runtime.current.dragging||event.instanceId===undefined)return;const entries=event.object.userData.entries as LandscapePlan['rocks']|undefined;const rock=entries?.[event.instanceId];if(rock){const impact=rockImpactPosition(rock,runtime.current.elapsed);nature('rock',impact.x,impact.y,impact.z);}};
   return <group dispose={null}>
     <mesh geometry={landscape.ground} material={landscape.material} receiveShadow name="archipelago-land" />

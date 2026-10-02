@@ -1,17 +1,18 @@
 import { CatmullRomCurve3, Vector3 } from 'three';
-import { createCityFerryRoute, writeCityFerryPose } from './cityInfrastructure';
+import { HARBOR_OBSTACLES, SURVEY_BERTH, VISITOR_BERTH, createCityFerryRoute, writeCityFerryPose } from './cityInfrastructure';
 import { landDistance } from './terrain';
 
 export interface MarineOccupant { position: Vector3; radius: number; heading?:number; hullHalfSpan?:number; hullRadius?:number }
 export const surfaceAnimals: MarineOccupant[] = [];
 export const vesselOccupants: MarineOccupant[] = [];
-export const VISITOR_BERTH = new Vector3(-27, 0, -43);
+export { VISITOR_BERTH, SURVEY_BERTH } from './cityInfrastructure';
+export const SURVEY_DWELL = 18;
 export const VISITOR_DWELL = 32;
 export const VESSEL_ACCELERATION = .42;
 const points = [
   [[-54, -19], [-46, 18], [-20, 49], [23, 47], [49, 10], [51, -25], [22, -29], [-18, -29]],
-  [[-76, -14], [-91, -20], [-97, -42], [-85, -60], [-66, -58], [-59, -38], [-65, -19]],
-  [[-360, -53], [-130, -53], [-76, -65], [-48, -44], [-37, -43], [-27, -43], [-17, -43], [-3, -40], [37, -40], [100, -50], [360, -49]],
+  [[-76,-14],[-91,-20],[-97,-42],[-85,-60],[-66,-62],[-49,-59],[-42,-53],[-31.9,-52],[-31.9,-49],[-31.9,-45.85],[-31.9,-40],[-31.9,-35],[-40,-31],[-59,-26],[-65,-19]],
+  [[-360,-53],[-130,-53],[-76,-65],[-55,-42.55],[-46,-42.55],[-37,-42.55],[-27,-42.55],[-17,-42.55],[-7,-42.55],[3,-42.55],[18,-38],[48,-39],[100,-50],[360,-49]],
 ];
 
 export function createVesselRoute(index: number) {
@@ -20,19 +21,15 @@ export function createVesselRoute(index: number) {
   curve.updateArcLengths();
   const length = curve.getLength(), point = new Vector3();
   let berth = 0;
-  if (index === 2) {
-    // Refine the arc distance to the actual control point, rather than snapping
-    // to a nearby sample and leaving a gap at the boarding platform.
-    let low = 0, high = 1;
-    for (let i = 0; i < 45; i++) {
-      const a = low + (high - low) / 3, b = high - (high - low) / 3;
-      const da = curve.getPointAt(a, point).distanceToSquared(VISITOR_BERTH);
-      const db = curve.getPointAt(b, point).distanceToSquared(VISITOR_BERTH);
-      if (da < db) high = b; else low = a;
-    }
-    berth = (low + high) * .5 * length;
+  if (index > 0) {
+    const target=index===2?VISITOR_BERTH:SURVEY_BERTH;
+    let nearest=Infinity,progress=0;
+    for(let i=0;i<=1600;i++){const u=i/1600,d=curve.getPointAt(u,point).distanceToSquared(target);if(d<nearest){nearest=d;progress=u;}}
+    let low=Math.max(0,progress-1/1600),high=Math.min(1,progress+1/1600);
+    for(let i=0;i<40;i++){const a=low+(high-low)/3,b=high-(high-low)/3;if(curve.getPointAt(a,point).distanceToSquared(target)<curve.getPointAt(b,point).distanceToSquared(target))high=b;else low=a;}
+    berth=(low+high)*.5*length;
   }
-  return { curve, length, berth, speed: index === 2 ? 4.2 : index === 1 ? .75 : 1.05 };
+  return { curve, length, berth, speed: index === 2 ? 4.2 : index === 1 ? 1.15 : 1.05 };
 }
 
 export interface VesselState extends MarineOccupant {
@@ -52,9 +49,9 @@ export interface VesselState extends MarineOccupant {
 export function createVesselState(index: number): VesselState {
   const route = createVesselRoute(index);
   const state: VesselState = {
-    index, route, position: new Vector3(), radius: index === 2 ? 8.1 : index===1 ? 2.65 : 1.8,
-    hullHalfSpan:index===2?6.2:0,hullRadius:index===2?2.5:index===1?2.65:1.8,
-    distance: index === 2 ? route.berth - 110 : index === 1 ? route.length * .4 : route.length * .13,
+    index, route, position: new Vector3(), radius: index === 2 ? 8.1 : index===1 ? 2.8 : 1.8,
+    hullHalfSpan:index===2?6.2:index===1?1.48:0,hullRadius:index===2?2.5:index===1?1.3:1.8,
+    distance: index === 2 ? route.berth - 110 : index === 1 ? route.berth - 72 : route.length * .13,
     dwell: 0, departed: false, heading: 0, opacity: 1, speed: 0, checkIn: 0, yielding: false, crossing: false,
   };
   writeVesselPose(state);
@@ -106,6 +103,20 @@ export function vesselCoastClearance(boat:MarineOccupant,position=boat.position,
   // Half a sampling interval protects the unsampled span between centreline probes.
   return clearance-radius-half/samples;
 }
+const harborEdges:MarineOccupant[]=HARBOR_OBSTACLES.flatMap(box=>[
+  [box.minX,box.minZ,box.maxX,box.minZ],[box.maxX,box.minZ,box.maxX,box.maxZ],
+  [box.maxX,box.maxZ,box.minX,box.maxZ],[box.minX,box.maxZ,box.minX,box.minZ],
+].map(([x0,z0,x1,z1])=>({position:new Vector3((x0+x1)/2,0,(z0+z1)/2),radius:0,hullRadius:0,hullHalfSpan:Math.hypot(x1-x0,z1-z0)/2,heading:Math.atan2(x1-x0,z1-z0)})));
+/** Conservative distance from the whole oriented hull to every permanent harbor structure. */
+export function vesselDockClearance(boat:MarineOccupant,position=boat.position,heading=boat.heading??0){
+  const half=boat.hullHalfSpan??0,radius=boat.hullRadius??boat.radius;
+  const ax=position.x-Math.sin(heading)*half,az=position.z-Math.cos(heading)*half,bx=position.x+Math.sin(heading)*half,bz=position.z+Math.cos(heading)*half;
+  let clearance=Infinity;
+  for(const box of HARBOR_OBSTACLES)if((ax>=box.minX&&ax<=box.maxX&&az>=box.minZ&&az<=box.maxZ)||(bx>=box.minX&&bx<=box.maxX&&bz>=box.minZ&&bz<=box.maxZ))return -radius;
+  for(const edge of harborEdges)clearance=Math.min(clearance,vesselHullClearance(boat,edge,position,edge.position,heading,edge.heading));
+  return clearance;
+}
+
 export function vesselClearance(x: number, z: number, radius = 0) {
   let clear = Infinity;
   for (const boat of vesselOccupants) {
@@ -125,7 +136,7 @@ function cruiseSpeed(state: VesselState) {
 function futurePose(state: VesselState, seconds: number, output: Vector3) {
   const duration = Math.max(0, seconds - state.dwell);
   let distance = state.distance + travelAt(state.speed, cruiseSpeed(state), duration);
-  if (state.index === 2 && !state.departed && state.dwell === 0) distance = Math.min(distance, state.route.berth);
+  if (state.index > 0 && !state.departed && state.dwell === 0) distance = Math.min(distance, state.route.berth);
   const progress=routeProgress(state,distance);state.route.curve.getPointAt(progress,output);state.route.curve.getTangentAt(progress,tangent);
   return Math.atan2(tangent.x,tangent.z);
 }
@@ -140,7 +151,7 @@ function crossingOccupied(state: VesselState, time: number, traffic: readonly Ma
     if (!state.crossing && vesselHullClearance(state,ferryOccupant,future,ferryPosition,heading)<1.3) return true;
     for (const other of traffic) {
       if (other === state || other.position.y < -.8) continue;
-      if (isVessel(other) && other.index > state.index) continue;
+      if (isVessel(other) && other.index > state.index && !other.dwell && !other.crossing) continue;
       const otherHeading=isVessel(other)?futurePose(other,seconds,otherFuture):other.heading??0;
       const position=isVessel(other)?otherFuture:other.position;
       if(vesselHullClearance(state,other,future,position,heading,otherHeading)<1.1)return true;
@@ -179,14 +190,14 @@ export function stepVessel(state: VesselState, delta: number, time: number, traf
       state.checkIn = .25;
     }
     const toBerth = state.route.berth - state.distance;
-    const braking = state.index === 2 && !state.departed ? Math.sqrt(Math.max(0, 1.3 * VESSEL_ACCELERATION * toBerth)) : state.route.speed;
+    const braking = state.index > 0 && !state.departed ? Math.sqrt(Math.max(0, 1.3 * VESSEL_ACCELERATION * toBerth)) : state.route.speed;
     const harborSpeed = cruiseSpeed(state);
     const target = state.yielding ? 0 : Math.min(harborSpeed, braking);
     const nextSpeed = state.speed + Math.max(-VESSEL_ACCELERATION * dt, Math.min(VESSEL_ACCELERATION * dt, target - state.speed));
     let next = state.distance + (state.speed + nextSpeed) * .5 * dt;
     state.route.curve.getPointAt(routeProgress(state, next), candidate);
     state.route.curve.getTangentAt(routeProgress(state,next),tangent);const candidateHeading=Math.atan2(tangent.x,tangent.z);
-    let blocked = vesselCoastClearance(state,candidate,candidateHeading)<.5;
+    let blocked = vesselCoastClearance(state,candidate,candidateHeading)<.5||vesselDockClearance(state,candidate,candidateHeading)<.025;
     writeCityFerryPose(ferryRoute, clock, ferryPosition, ferryTangent);
     if (vesselHullClearance(state,ferryOccupant,candidate,ferryPosition,candidateHeading)<.65) blocked = true;
     for (const other of traffic) {
@@ -197,9 +208,9 @@ export function stepVessel(state: VesselState, delta: number, time: number, traf
     }
     state.speed = blocked ? 0 : nextSpeed;
     if (!blocked) {
-      if (state.index === 2 && !state.departed && next >= state.route.berth) {
+      if (state.index > 0 && !state.departed && next >= state.route.berth) {
         state.distance = state.route.berth;
-        state.dwell = VISITOR_DWELL;
+        state.dwell = state.index===2?VISITOR_DWELL:SURVEY_DWELL;
         state.speed = 0;
         writeVesselPose(state);
         return;

@@ -29,6 +29,7 @@ export function createBenthicLayout(): BenthicSite[] {
         || plan.colonies.some(coral => Math.hypot(x - coral.x, z - coral.z) < coral.radius + reach && Math.abs(y - coral.y) < .5)
         || sites.some(site => Math.hypot(x - site.x, z - site.z) < .45 && Math.abs(y - site.y) < .4)) continue;
       const normal = new Vector3(heights[0] - heights[1], .24, heights[2] - heights[3]).normalize();
+      if(normal.y<=.62)continue; // Shellfish and resting stars need a stable ledge, not a steep face.
       sites.push({ kind, x, y: y + .012, z, normal, yaw: random() * Math.PI * 2, scale: .65 + random() * .3, tint: random(), host });
       break;
     }

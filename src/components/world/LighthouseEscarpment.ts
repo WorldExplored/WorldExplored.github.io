@@ -1,3 +1,4 @@
+import { lighthouseAccessClearance } from './LighthouseAccess';
 import { createCoastalRocks, coastalRockGeometry } from './coastalRocks';
 import { createLandscapePlan, distanceToSegment, ISLANDS, islandContour, landDistance, seededRandom, terrainMeshHeight, type LandscapeRock } from './terrain';
 
@@ -14,6 +15,7 @@ export function lighthouseEscarpmentSites() {
     const x=island.x+Math.cos(angle)*(island.rx*edge+offset),z=island.z+Math.sin(angle)*(island.rz*edge+offset);
     const size=.42+random()*.57,radius=size*1.55;
     if (landDistance(x,z)>2.5||landDistance(x,z)<-1.2)continue;
+    if (lighthouseAccessClearance(x,z)<radius+.18)continue;
     if (plan.structures.some(item=>Math.hypot(item.x-x,item.z-z)<item.radius+radius+.2))continue;
     if (plan.paths.some(path=>path.points.slice(1).some((point,i)=>distanceToSegment(x,z,path.points[i],point)<path.width/2+radius+.28)))continue;
     if (sites.some(item=>Math.hypot(item.x-x,item.z-z)<(item.radius+radius)*.42))continue;

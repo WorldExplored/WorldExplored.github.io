@@ -1,12 +1,12 @@
 import { BufferGeometry, CatmullRomCurve3, Color, CylinderGeometry, Float32BufferAttribute, SphereGeometry, TubeGeometry, Vector3 } from 'three';
 import { combine } from './BuildingKit';
 
-export interface FacadeGardenOptions { width: number; height: number; seed: number; detail?:'near'|'far'; spread?:boolean; branchSpacing?:number; stemRadius?:number }
+export interface FacadeGardenOptions { width: number; height: number; seed: number; detail?:'near'|'far'; spread?:boolean; branchSpacing?:number; stemRadius?:number; branching?:boolean }
 export const VINE_HABITS = ['twining maple vine', 'fan-leaved climber', 'trailing willow vine', 'heart-leaved morning glory', 'star jasmine'] as const;
 export function vineHabit(seed: number) { return Math.abs(seed) % VINE_HABITS.length; }
 
 /** A rooted climbing vine with an asymmetric, tapering canopy rather than a wall panel. */
-export function createFacadeGarden({ width, height, seed, detail='near', spread=false, branchSpacing, stemRadius=.024 }: FacadeGardenOptions) {
+export function createFacadeGarden({ width, height, seed, detail='near', spread=false, branchSpacing, stemRadius=.024, branching=false }: FacadeGardenOptions) {
   const wood: BufferGeometry[] = [], foliage: BufferGeometry[] = [], light: BufferGeometry[] = [], fruit: BufferGeometry[] = [];
   const habit = vineHabit(seed),far=detail==='far';
   const noise = (i: number) => { const value = Math.sin(i * 127.1 + seed * 311.7) * 43758.5453; return value - Math.floor(value); };
@@ -36,25 +36,32 @@ export function createFacadeGarden({ width, height, seed, detail='near', spread=
     t*(height-.10),.015+Math.sin(t*(habit===2?11:8)+seed)*.025*t);
   const leader=(t:number,lane:number)=>{
     const point=trunk(t);
+    if(branching&&lane){
+      const fork=.24+(lane>0?.11:0),u=Math.max(0,(t-fork)/(1-fork));
+      point.x+=lane*width*(u*.27+Math.sin(u*7+seed)*.045*u);point.y-=Math.abs(lane)*height*.09*u;
+    }
     if(spread){point.x+=lane*width*(Math.sin(t*Math.PI*.5)*.29+Math.sin(t*7+seed)*.025*t);point.y*=1-Math.abs(lane)*(.07+noise(lane+701)*.06);}
     return point;
   };
   wood.push(tube(new CatmullRomCurve3(Array.from({length:13},(_,i)=>leader(i/12,0))),stemRadius,18));
-  if(spread)for(const lane of [-1,1])wood.push(tube(new CatmullRomCurve3(Array.from({length:13},(_,i)=>leader(i/12,lane))),.018,14));
+  if(spread||branching)for(const lane of [-1,1]){
+    const start=branching?.24+(lane>0?.11:0):0;
+    wood.push(tube(new CatmullRomCurve3(Array.from({length:13},(_,i)=>leader(start+i/12*(1-start),lane))),Math.min(.018,stemRadius*.66),14));
+  }
   for(let root=0;root<4;root++){
     const a=root*2.399+seed;
     wood.push(tube(new CatmullRomCurve3([new Vector3(Math.cos(a)*rootRadius,0,Math.sin(a)*rootRadius),new Vector3(Math.cos(a)*rootRadius*.3,.06,Math.sin(a)*rootRadius*.3),trunk(.08)]),.013,5));
   }
   const count=spread?Math.max(18,Math.ceil(height/.22)):Math.max(7,Math.ceil(height/(branchSpacing??(habit===0?.22:habit===1?.25:habit===4?.21:.27))));
   for(let branch=0;branch<count;branch++){
-    const t=.08+branch/Math.max(1,count-1)*.84,side=habit===1?(branch%2?1:-1):noise(branch+7)>.45?1:-1,start=leader(t,spread?branch%3-1:0);
+    const t=.08+branch/Math.max(1,count-1)*.84,side=habit===1?(branch%2?1:-1):noise(branch+7)>.45?1:-1,start=leader(t,spread||branching?branch%3-1:0);
     const branchSpread=(habit===1?.34:habit===2?.31:.2)+noise(branch+91)*(habit===2?.26:.30);
     const extension=branchSpread*(1-t*(habit===1?.22:.42));
-    const endX=spread?Math.max(-width*.43,Math.min(width*.43,start.x+side*width*extension*.38)):side*width*extension;
+    const endX=spread||branching?Math.max(-width*.43,Math.min(width*.43,start.x+side*width*extension*(branching?.70:.38))):side*width*extension;
     const end=new Vector3(endX,Math.min(height-.06,Math.max(.06,start.y+(habit===2?-.04:.13)+noise(branch+12)*height*(habit===2?.07:.16))),.10+noise(branch+40)*.10);
     const middle=start.clone().lerp(end,.52).add(new Vector3(side*width*(habit===1?.07:.035),habit===2?-.04:.025+noise(branch+4)*.06,.035));
     const curve=new CatmullRomCurve3([start,middle,end]);wood.push(tube(curve,Math.min(.011,stemRadius*.5),6));
-    const leafCount=(spread?10:habit===2?5:habit===4?7:6)+Math.floor(noise(branch+101)*(habit===1?6:5));
+    const leafCount=(branching?4:spread?10:habit===2?5:habit===4?7:6)+Math.floor(noise(branch+101)*(habit===1?6:5));
     for(let leaf=0;leaf<leafCount;leaf++){
       const index=branch*13+leaf,position=curve.getPoint(.13+leaf/leafCount*.87);
       const size=(habit===1?.11:habit===2?.085:.095)+noise(index+51)*(habit===1?.095:.085);
@@ -76,12 +83,12 @@ export function createFacadeGarden({ width, height, seed, detail='near', spread=
       geometry.rotateZ(turn).rotateY((noise(index+103)-.5)*1.2).rotateX((noise(index+112)-.5)*.7).translate(position.x,position.y,position.z+.028);
       (index%4===0?light:foliage).push(geometry);
       // Raised midribs give the small leaves legible folded surfaces in oblique light.
-      if(!far&&index%5===0){
+      if(!far&&index%7===0){
         const vein=tube(new CatmullRomCurve3([new Vector3(),new Vector3(0,leafSize*.45,leafSize*cup),new Vector3(0,leafSize*.84,leafSize*.03)]),.0022,4);
         vein.rotateZ(turn).rotateY((noise(index+103)-.5)*1.2).rotateX((noise(index+112)-.5)*.7).translate(position.x,position.y,position.z+.030);light.push(vein);
       }
     }
-    if(branch%3===1){
+    if(branch%3===1&&(!far||!branching)){
       const points=Array.from({length:18},(_,i)=>{const t=i/17,a=t*Math.PI*3.6;return end.clone().add(new Vector3(side*(t*.10+Math.sin(a)*.028),t*.10+Math.cos(a)*.026-.026,.02+t*.03));});
       wood.push(tube(new CatmullRomCurve3(points),.004,12));
     }
