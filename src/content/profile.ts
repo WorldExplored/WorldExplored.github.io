@@ -22,20 +22,20 @@ export interface BackgroundMusicTrack { title: string; artist: string; playbackU
 
 export const profile = {
   arcade: {
-    eyebrow: 'Six games. No coins needed.',
-    title: 'Aero Arcade',
-    intro: 'Pick a game.',
+    title: 'Arrow Arcade',
     back: 'All games', play: 'Play', pause: 'Pause', resume: 'Resume', restart: 'New game',
     ready: 'Ready', paused: 'Paused', won: 'You win!', lost: 'Game over',
     pauseHint: 'Resume whenever you’re ready.',
     keyboardHint: 'Focus the game board to use the keyboard. Escape closes the arcade.',
-    you: 'You', opponent: 'Computer', lines: 'Lines', next: 'Next', rotate: 'Rotate', drop: 'Drop', level: 'Level', score: 'Score', lives: 'Lives', attempts: 'Attempts', pairs: 'Pairs', flags: 'Flags left',
+    moves: 'Moves', homes: 'Homes', time: 'Time', tile: 'Tile', blank: 'Empty space', you: 'You', opponent: 'Computer', lines: 'Lines', next: 'Next', rotate: 'Rotate', drop: 'Drop', level: 'Level', score: 'Score', lives: 'Lives', attempts: 'Attempts', pairs: 'Pairs', flags: 'Flags left',
     reveal: 'Reveal', flag: 'Flag', flagMode: 'Choose what a tap does',
     hiddenCell: 'Unopened square', emptyCell: 'Clear water', mine: 'Mine', flagged: 'Flagged square',
     hiddenCard: 'Hidden card', matchedCard: 'Matched', board: 'Game board',
     up: 'Up', down: 'Down', left: 'Left', right: 'Right',
     symbols: ['Sun', 'Wave', 'Leaf', 'Bubble', 'Shell', 'Flower', 'Fish', 'Star'],
     games: {
+      tiles: { name: 'Lagoon Tiles', genre: 'Sliding puzzle', description: 'Slide fifteen tiles into order.', instructions: 'Tap a tile beside the empty space to slide it. Put 1–15 in order, leaving the bottom-right space empty. Arrow keys or WASD move the empty space.' },
+      lily: { name: 'Lily Leap', genre: 'River crossing', description: 'Cross the channels and reach three lily pads.', instructions: 'Use the arrow keys, WASD, or the buttons to hop. Ride the floating gardens, avoid boats, and reach each empty lily pad at the top. You have three lives.' },
       snake: { name: 'Lagoon Snake', genre: 'Snake · collect & grow', description: 'Collect pearls without running into your tail.', instructions: 'Use the arrow keys, WASD, or the direction buttons. Collect pearls; avoid the shore and your own tail.' },
       mines: { name: 'Reef Minesweeper', genre: 'Minesweeper · think ahead', description: 'Find the safe squares. Flag the mines.', instructions: 'Reveal all 30 safe squares. Numbers count neighboring mines. Your first reveal is safe. Right-click to flag, or choose Flag mode before tapping.' },
       breakout: { name: 'Skyline Breakout', genre: 'Breakout · bounce & clear', description: 'Keep the ball bouncing and clear the tiles.', instructions: 'Use left/right arrows, A/D, the buttons, or drag across the board to move the paddle. Clear every tile before you lose three balls.' },
@@ -194,7 +194,7 @@ export const profile = {
     { id: 'history', label: 'History', title: 'History', dock: true },
     { id: 'about', label: 'About', title: 'About', dock: true },
     { id: 'contact', label: 'Contact', title: 'Contact', dock: true },
-    { id: 'arcade', label: 'Arcade', title: 'Aero Arcade', dock: true },
+    { id: 'arcade', label: 'Arcade', title: 'Arrow Arcade', dock: true },
     { id: 'building', label: 'Building something impactful...', title: 'Building something impactful...', dock: false },
   ] as { id: SectionId; label: string; title: string; dock: boolean }[],
   researchLabels: { description: 'Overview', question: 'Question', setup: 'Data and setup', methods: 'Methods', role: 'My contribution', findings: 'Findings', limitations: 'Limitations' },

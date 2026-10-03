@@ -25,6 +25,8 @@ export function buildCityArchitecture(building: Readonly<CityBuilding>, shellAdd
   let add = shellAdd;
   const roomViews: CityRoomView[] = [];
   const foundationPolygons: FloorPolygon[] = [];
+  const occupiedFloors: Array<{ top: number; polygons: FloorPolygon[] }> = [];
+  const floorExclusions = (top: number) => occupiedFloors.filter(floor=>Math.abs(floor.top-top)<.00001).flatMap(floor=>floor.polygons);
   let roomIndex=0;
   const access: { room: string; x: number; back: number; floor: number; height: number }[] = [];
   const fronts: { x: number; z: number; width: number; floor: number; balcony?: boolean }[] = [];
@@ -112,7 +114,9 @@ export function buildCityArchitecture(building: Readonly<CityBuilding>, shellAdd
     const floor = y + .13, ceiling=y+height-.10, wallHeight=height-.10, rear = z-depth/2+.055, front=z+depth/2;
     const opening=Math.min(.74,width-.26), doorHeight=Math.min(1.45,height-.40);
     const innerWidth=width-(glazed?.16:.22);
-    const slabGeometry=floorSlab(roomId,[floorRectangle(x,z+.045,innerWidth,depth-.13)],floor,.13);
+    const footprint=[floorRectangle(x,z+.045,innerWidth,depth-.13)];
+    occupiedFloors.push({top:floor,polygons:footprint});
+    const slabGeometry=floorSlab(roomId,footprint,floor,.13);
     slabGeometry.userData.roomAccess={room:roomId,building:building.id,floor,front:[x,front],rear:[x,rear],opening,height:doorHeight};
     add(slabGeometry,'wood');
     // A structural ceiling exists for every occupied room, including exposed setbacks.
@@ -236,6 +240,7 @@ export function buildCityArchitecture(building: Readonly<CityBuilding>, shellAdd
       const floor=y+.14, roofY=y+pitch-.10, doorHeight=Math.min(1.42,pitch-.35), radiusX=rx-.1,radiusZ=rz-.1;
       const rearCut=-rz+.19;
       const curvedPolygon=floorEllipse(0,0,radiusX,radiusZ,128).map(([px,pz])=>[px,Math.max(pz,rearCut)] as const);
+      occupiedFloors.push({top:floor,polygons:[curvedPolygon]});
       const curvedFloor=floorSlab(roomId,[curvedPolygon],floor,.14);
       curvedFloor.userData.roomAccess={room:roomId,building:building.id,floor,front:[0,radiusZ],rear:[0,-rz+.1],opening:.62,height:doorHeight};
       add(curvedFloor,'wood');
@@ -334,7 +339,7 @@ export function buildCityArchitecture(building: Readonly<CityBuilding>, shellAdd
   } else {
     // Ground lobby is a furnished open-front room; the upper boarding path remains clear.
     room(-.82, .2, 0, 1.25, d - .35, 1.78, 0, true);
-    add(floorSlab('station-lobby-threshold',[floorRectangle(-.82,d/2-.27,1.05,.6)],.33,.33,'threshold'),'porcelain');
+    add(floorSlab('station-lobby-threshold',[floorRectangle(-.82,d/2-.27,1.05,.6)],.33,.33,'threshold',floorExclusions(.33)),'porcelain');
     // Twin platforms leave the guideway and undercarriage a real central slot.
     const platform = floorSlab('station-boarding-platform', [floorRectangle((-w / 2 - 1.12) / 2, 0, w / 2 - 1.12, 1.2), floorRectangle((w / 2 + .58) / 2, 0, w / 2 - .58, d)], 2.32, .18, 'threshold');
     platform.userData.floor.kind = 'platform';
@@ -465,7 +470,7 @@ export function buildCityArchitecture(building: Readonly<CityBuilding>, shellAdd
       const start=Math.max(...fronts.map(front=>front.z-.02)),end=entrance[2]+.12;
       thresholds.push(floorRectangle(0,(start+end)/2,w-.08,end-start));
     }
-    if(thresholds.length)add(floorSlab(`${building.id}-entry-porch`,thresholds,fronts[0].floor,.13,'threshold'),'porcelain');
+    if(thresholds.length)add(floorSlab(`${building.id}-entry-porch`,thresholds,fronts[0].floor,.13,'threshold',floorExclusions(fronts[0].floor)),'porcelain');
   }
   if (access.length) {
     const coreX = 0, coreZ = -d / 2 - .68;
@@ -486,7 +491,7 @@ export function buildCityArchitecture(building: Readonly<CityBuilding>, shellAdd
           if(Math.abs(room.x)>.02)polygons.push(floorRectangle(room.x/2,front+.24,Math.abs(room.x)+.78,.52));
         }
         // One unioned walking surface prevents coincident landings for shared stops.
-        const landing=floorSlab(`${building.id}-lift-landing-${floor}`,polygons,floor,.09,'threshold');
+        const landing=floorSlab(`${building.id}-lift-landing-${floor}`,polygons,floor,.09,'threshold',floorExclusions(floor));
         landing.userData.liftLanding={building:building.id,floor};add(landing,'porcelain');
         const served=access.filter(room=>Math.abs(room.floor-floor)<.00001),front=coreZ+.46;
         const corridorHeight=Math.min(...served.map(room=>room.height));

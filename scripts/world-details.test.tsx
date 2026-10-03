@@ -4,7 +4,7 @@ import { Box3, DoubleSide, InstancedMesh, Matrix4, Mesh, MeshBasicMaterial, Mesh
 import { addGuidewayHardware } from '../src/components/world/CityGuideway';
 import { createCityTransitRoute, CITY_TRACK_Y } from '../src/components/world/city';
 import { FLIGHT_DURATION, FLIGHT_INTERVAL, makeSolarGlider, solarFlightPose } from '../src/components/world/SolarFlyover';
-import { giantGrottoGeometry, makeMythicGrotto, mythicCrabPose } from '../src/components/world/MythicGrotto';
+import { CRAB_CYCLE, crabGroundHeight, giantGrottoGeometry, makeMythicGrotto, mythicCrabPose } from '../src/components/world/MythicGrotto';
 import { MYTHIC_GROTTO, mythicalCaveClearance, mythicalCaveFloor } from '../src/components/world/coastalCaveLayout';
 import { archipelagoGeometry, landDistance, terrainMeshHeight } from '../src/components/world/terrain';
 import { reefSeafloorGeometry } from '../src/components/world/ReefHabitatScene';
@@ -128,18 +128,20 @@ test('the crab burrow cuts a deeper real seafloor and blends into the unchanged 
   for(let z=-19.9;z<-12;z+=.1){const height=marineFloorHeight(-55,z);assert.ok(Math.abs(height-previous)<.14,'entrance blends along a slope rather than a vertical sand wall');previous=height;}
 });
 
-test('the smaller crab steps, rests and articulates its pincers inside the chamber',()=>{
+test('the smaller crab crawls outside, rests, returns, and articulates its pincers',()=>{
   const life=makeMythicGrotto(),snapshots:number[][]=[];
   try {
-    for(const time of [0,4,9,18,32,47,59,74]){
+    for(const time of [0,20,32,48,60,90,110,130]){
       life.update(time);life.root.updateMatrixWorld(true);
       const bounds=new Box3().setFromObject(life.body);
-      assert.ok(bounds.min.y>MYTHIC_GROTTO.floor-.13&&bounds.max.y<MYTHIC_GROTTO.floor+1.2);
+      assert.ok(bounds.max.y<-3.8,'excursion remains well below the water');
       assert.ok(bounds.min.x>MYTHIC_GROTTO.x-2.7&&bounds.max.x<MYTHIC_GROTTO.x+2.7);
       snapshots.push([...life.legs[0].lower.matrix.elements]);
     }
     assert.notDeepEqual(snapshots[0],snapshots[1],'leg joints visibly move during a crawl');
-    assert.equal(mythicCrabPose(25).walking,false);assert.equal(mythicCrabPose(50).walking,true);
+    assert.equal(mythicCrabPose(60).walking,false);assert.equal(mythicCrabPose(35).walking,true);
+    assert.ok(mythicCrabPose(60).z>5.5,'resident leaves the cave on a six-meter excursion');
+    assert.equal(mythicCrabPose(130).advance,0,'returns fully inside');
     const position=life.body.position.clone(),jaw=life.jaws[0].rotation.toArray();life.update(10,true);
     assert.deepEqual(life.body.position,position);assert.deepEqual(life.jaws[0].rotation.toArray(),jaw);
   }finally{life.root.traverse(object=>{if(object instanceof Mesh){object.geometry.dispose();(object.material as MeshStandardMaterial).dispose();}});}
@@ -178,7 +180,7 @@ test('every articulated crab vertex clears the real chamber floor and roof throu
   };
   const vertex=new Vector3(),matrix=new Matrix4();let sampled=0,minFloor=Infinity,minRoof=Infinity;
   try {
-    for(let time=0;time<84;time+=.5){
+    for(let time=0;time<CRAB_CYCLE;time+=.5){
       life.update(time);life.root.updateMatrixWorld(true);
       life.body.traverse(object=>{
         if(!(object instanceof Mesh))return;
@@ -187,16 +189,16 @@ test('every articulated crab vertex clears the real chamber floor and roof throu
           if(object instanceof InstancedMesh){object.getMatrixAt(instance,matrix);matrix.premultiply(object.matrixWorld);}else matrix.copy(object.matrixWorld);
           for(let i=0;i<positions.count;i++){
             vertex.fromBufferAttribute(positions,i).applyMatrix4(matrix);
-            const heights=column(vertex.x,vertex.z),floor=Math.max(...heights.filter(y=>y<MYTHIC_GROTTO.floor+.15)),roof=Math.min(...heights.filter(y=>y>=MYTHIC_GROTTO.floor+.15));
+            const heights=column(vertex.x,vertex.z),ground=crabGroundHeight(vertex.x,vertex.z),floor=Math.max(ground,...heights.filter(y=>y<ground+.20)),roof=Math.min(...heights.filter(y=>y>=ground+.20));
             minFloor=Math.min(minFloor,vertex.y-floor);minRoof=Math.min(minRoof,roof-vertex.y);sampled++;
           }
         }
       });
     }
     assert.ok(sampled>2_500_000,'the audit includes instance transforms and every mesh vertex at each pose');
-    assert.ok(minFloor>.01,'toes clear the actual tunnel floor while planted');
-    assert.ok(minRoof>.6,'carapace, pincers and legs remain inside the physical rock recess');
-    for(const boundary of [0,16,42,62,84]){
+    assert.ok(minFloor>.005,`all articulated vertices clear tunnel and seabed: ${minFloor}`);
+    assert.ok(minRoof>.20,`crab clears the cave ceiling while entering and leaving: ${minRoof}`);
+    for(const boundary of [0,16,48,78,116,CRAB_CYCLE]){
       life.update(boundary-1e-4);const before=life.legs.map(leg=>leg.lower.matrix.elements.slice());
       life.update(boundary+1e-4);life.legs.forEach((leg,i)=>leg.lower.matrix.elements.forEach((value,j)=>assert.ok(Math.abs(value-before[i][j])<.001,'walking blends into rest without a joint snap')));
     }

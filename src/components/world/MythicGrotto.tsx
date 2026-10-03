@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { BufferGeometry, Color, CylinderGeometry, DoubleSide, Float32BufferAttribute, Group, InstancedMesh, Mesh, MeshStandardMaterial, Object3D, Quaternion, SphereGeometry, Vector3 } from 'three';
+import { BufferGeometry, Color, CylinderGeometry, DodecahedronGeometry, DoubleSide, Float32BufferAttribute, Group, InstancedMesh, Mesh, MeshStandardMaterial, Object3D, Quaternion, Raycaster, SphereGeometry, Vector3 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { MYTHIC_GROTTO } from './coastalCaveLayout';
 import { marineFloorHeight } from './reefHabitat';
@@ -95,20 +95,44 @@ function limb(a:number[],b:number[],r1:number,r2:number){
   return geometry;
 }
 
+export const CRAB_CYCLE = 140;
 export function mythicCrabPose(time:number) {
-  const phase=((time%84)+84)%84;
+  const phase=((time%CRAB_CYCLE)+CRAB_CYCLE)%CRAB_CYCLE;
   const ease=(t:number)=>t*t*(3-2*t);
-  const advance=phase<16?ease(phase/16):phase<42?1:phase<62?1-ease((phase-42)/20):0;
-  const walking=phase<16||(phase>=42&&phase<62);
-  const strideAge=phase<16?phase:phase-42,strideDuration=phase<16?16:20;
-  const gait=walking?ease(Math.max(0,Math.min(1,Math.min(strideAge,strideDuration-strideAge)/1.25))):0;
-  return {x:Math.sin(advance*Math.PI)*.22,z:-.62+advance*.76,yaw:Math.sin(advance*Math.PI)*.06,walking,advance,gait};
+  const advance=phase<16?0:phase<48?ease((phase-16)/32):phase<78?1:phase<116?1-ease((phase-78)/38):0;
+  const walking=(phase>=16&&phase<48)||(phase>=78&&phase<116);
+  const age=phase<48?phase-16:phase-78,duration=phase<48?32:38;
+  const gait=walking?ease(Math.max(0,Math.min(1,Math.min(age,duration-age)/1.5))):0;
+  return {x:Math.sin(advance*Math.PI)*.38,z:-.62+advance*6.5,yaw:Math.sin(advance*Math.PI)*.07,walking,advance,gait};
+}
+
+/** The flat tunnel floor gives way to the excavated entrance and measured seabed. */
+export function crabGroundHeight(x:number,z:number) {
+  const floor=marineFloorHeight(x,z);
+  return Math.max(MYTHIC_GROTTO.floor,floor);
 }
 
 export function makeMythicGrotto(){
   const root=new Group();root.name='hidden-titan-crab-grotto';root.position.set(MYTHIC_GROTTO.x,MYTHIC_GROTTO.floor,MYTHIC_GROTTO.z);
   const rock=applySurface(new MeshStandardMaterial({vertexColors:true,roughness:.98,side:DoubleSide}),'mineral');
   const bank=new Mesh(giantGrottoGeometry(),rock);bank.name='sand-buried-angular-grotto';bank.receiveShadow=true;root.add(bank);
+  // Shell grit, fractured stone and small sponges collect in uneven sheltered pockets.
+  const debris:BufferGeometry[]=[],sponges:BufferGeometry[]=[],shells:BufferGeometry[]=[];
+  const ray=new Raycaster(),down=new Vector3(0,-1,0);bank.updateMatrixWorld(true);
+  const random=(i:number)=>{const v=Math.sin(i*177.17+21.8)*43758.5453;return v-Math.floor(v);};
+  for(let i=0;i<73;i++){
+    const side=i%2?1:-1,x=side*(3.28+random(i+3)*2.15),z=-4.5+random(i+45)*8.9;
+    ray.set(new Vector3(x,7,z),down);
+    const hit=ray.intersectObject(bank,false)[0];
+    const y=hit?.point.y??marineFloorHeight(x+MYTHIC_GROTTO.x,z+MYTHIC_GROTTO.z)-MYTHIC_GROTTO.floor;
+    const size=.075+random(i+20)*.24;
+    if(i%7===0)for(let tube=0;tube<3;tube++)sponges.push(new CylinderGeometry(.045,.068,.19+random(i+tube)*.23,6,1,true).rotateZ((random(i+71)-.5)*.45).translate(x+tube*.085,y+.12,z));
+    else if(i%3===0)shells.push(oval(0,0,0,size,.035,size*.68).rotateY(random(i)*3).translate(x,y+.024,z));
+    else debris.push(new DodecahedronGeometry(1,0).scale(size*1.2,size*.5,size).rotateY(random(i+11)*6.28).translate(x,y+.02,z));
+  }
+  for(const [parts,color,name]of [[debris,'#6b8075','grotto-fractured-talus'],[sponges,'#9e986d','grotto-tube-sponges'],[shells,'#c4bba1','grotto-shell-grit']]as const){
+    const mesh=new Mesh(merge(parts),new MeshStandardMaterial({color,roughness:.94}));mesh.name=name;mesh.receiveShadow=true;root.add(mesh);
+  }
   const body=new Group();body.name='ancient-crab';body.scale.setScalar(.58);root.add(body);
   const shellMaterial=new MeshStandardMaterial({color:'#667469',roughness:.86});
   const ivoryMaterial=new MeshStandardMaterial({color:'#b0ae88',roughness:.88});
@@ -148,16 +172,22 @@ export function makeMythicGrotto(){
     ivory.push(oval(x,y,z,.05+(i%3)*.027,.038,.075));
   }
   add(body,shell,shellMaterial,'crab-carapace');add(body,ivory,ivoryMaterial,'crab-shell-encrustations');add(body,dark,darkMaterial,'crab-eyes');
+  const planted=new Vector3();
   const knee=new Vector3(),foot=new Vector3(),direction=new Vector3(),axis=new Vector3(0,1,0);
   const segment=(mesh:Object3D,a:Vector3,b:Vector3,radius:number)=>{
     direction.copy(b).sub(a);mesh.position.copy(a).add(b).multiplyScalar(.5);mesh.scale.set(radius,direction.length(),radius);mesh.quaternion.setFromUnitVectors(axis,direction.normalize());mesh.updateMatrix();
   };
   const update=(time:number,paused=false)=>{
     if(paused)return;
-    const pose=mythicCrabPose(time);body.position.set(pose.x,0,pose.z);body.rotation.set(0,pose.yaw,0);
+    const pose=mythicCrabPose(time),wx=MYTHIC_GROTTO.x+pose.x,wz=MYTHIC_GROTTO.z+pose.z;
+    const center=crabGroundHeight(wx,wz),slope=(crabGroundHeight(wx,wz+1.25)-crabGroundHeight(wx,wz-1.25))/2.5;
+    let bearing=center;
+    for(const x of [-1.9,0,1.9])for(const z of [-1.7,0,1.55])bearing=Math.max(bearing,crabGroundHeight(wx+x,wz+z)-slope*z);
+    body.position.set(pose.x,bearing-MYTHIC_GROTTO.floor+.025,pose.z);body.rotation.set(-Math.atan(slope),pose.yaw,0);root.updateMatrixWorld(true);
     for(const [i,leg]of legs.entries()){
       const phase=time*2.6+leg.index*Math.PI*.72+(leg.side>0?Math.PI:0),step=Math.sin(phase)*pose.gait;
       foot.set(leg.side*(3.75-leg.index*.15),.055+Math.max(0,step)*.18,leg.origin.z+.68+Math.cos(phase)*.19*pose.gait);
+      planted.copy(foot).applyMatrix4(body.matrixWorld);planted.y=crabGroundHeight(planted.x,planted.z)+.055+Math.max(0,step)*.11;foot.copy(body.worldToLocal(planted));
       knee.set(leg.side*(3.25+Math.sin(leg.index)*.28),.87+Math.max(0,step)*.08,leg.origin.z-.35);
       segment(leg.upper,leg.origin,knee,.21);segment(leg.lower,knee,foot,.15);leg.joint.position.copy(knee);leg.joint.updateMatrix();
       upperLegs.setMatrixAt(i,leg.upper.matrix);lowerLegs.setMatrixAt(i,leg.lower.matrix);legJoints.setMatrixAt(i,leg.joint.matrix);
@@ -172,7 +202,8 @@ export function makeMythicGrotto(){
 
 export function MythicGrotto({runtime,paused}:EnvironmentProps){
   const life=useMemo(()=>makeMythicGrotto(),[]);
+  const inspection=useMemo(()=>{if(typeof window==='undefined'||!['localhost','127.0.0.1'].includes(window.location.hostname))return null;const value=new URLSearchParams(window.location.search).get('qaCrabTime');return value!==null&&Number.isFinite(Number(value))?Number(value):null;},[]);
   useEffect(()=>()=>{const materials=new Set<MeshStandardMaterial>();life.root.traverse(object=>{if(object instanceof Mesh){object.geometry.dispose();materials.add(object.material as MeshStandardMaterial);}});materials.forEach(material=>material.dispose());},[life]);
-  useFrame(()=>life.update(runtime.current.activeElapsed,paused));
+  useFrame(()=>life.update(inspection??runtime.current.activeElapsed,inspection===null&&paused));
   return <primitive object={life.root}/>;
 }

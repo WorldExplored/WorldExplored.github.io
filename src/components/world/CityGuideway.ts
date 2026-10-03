@@ -18,7 +18,9 @@ export function addGuidewayHardware(route: CityTransitRoute, add: Add) {
     for (const side of [-1, 1]) {
       add(new BoxGeometry(.024, .19, length / panels - .09).rotateY(yaw).translate(p.x + nx * side * .286, p.y - .23, p.z + nz * side * .286), 'aqua');
       add(new BoxGeometry(.035, .22, .06).rotateY(yaw).translate(p.x + nx * side * .30, p.y - .23, p.z + nz * side * .30), 'metal');
-      add(new BoxGeometry(.027, .026, .55).rotateY(yaw).translate(p.x + nx * side * .305, p.y - .16, p.z + nz * side * .305), 'porcelain');
+      const lens = new BoxGeometry(.027, .055, .72).rotateY(yaw).translate(p.x + nx * side * .305, p.y - .16, p.z + nz * side * .305);
+      lens.userData.guidewayLamp = { u, side, mounting: 'recessed-side-panel' };
+      add(lens, 'porcelain');
     }
   }
   for (let i = 0; i < 32; i++) {

@@ -92,7 +92,12 @@ export function groundRouteAt(x:number,z:number) {
 }
 export function terrainHeight(x:number,z:number) {
   if(landDistance(x,z)<.15)return coastalApronHeight(x,z);
-  return groundRouteAt(x,z).height;
+  const height=groundRouteAt(x,z).height;
+  // The lighthouse has a physical court slab at 2.86, unlike painted ground paths.
+  // Keep the shared terrain lattice below that slab instead of 2mm under its top.
+  const court=Math.min(Math.max(Math.abs(x+75.46)-1,Math.abs(z+34)-.46),Math.max(Math.abs(x+76)-.46,Math.abs(z+34.4025)-.4025));
+  const bearing=1-smooth(.08,.65,court);
+  return height+(Math.min(height,2.825)-height)*bearing;
 }
 export function terrainBaseMeshHeight(x:number,z:number) {
   const step=.4,ix=Math.floor(x/step),iz=Math.floor(z/step),u=x/step-ix,v=z/step-iz;

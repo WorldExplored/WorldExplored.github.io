@@ -2,6 +2,9 @@ import type { CameraPose } from '../../content/world';
 
 /** Deterministic inspection poses used by the local visual-QA capture server. */
 export const QA_VIEWS = Object.freeze({
+  'seagrass-meadow': {position:[-43,9,10],target:[-55,-4,-3]},
+  'manatee-close': {position:[-48,1.6,5],target:[-54,-4.3,-3]},
+  'crab-excursion': {position:[-49,1.4,-6],target:[-55,-5.6,-15]},
   'cave-lighthouse-bank': {position: [-50.524,3,-25.574], target: [-66.649,-1.82,-35.629]},
   'cave-city-bank': {position: [-60.486,3,-49.435], target: [-47.306,-1.82,-63.12]},
   'cave-garden-bank': { position: [-2.047,3,55.089], target: [-3.09,-1.82,36.118] },

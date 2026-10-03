@@ -1,3 +1,4 @@
+import { seagrassMeadowClearance } from './seagrassMeadowLayout';
 import { Color, DoubleSide, Group, InstancedMesh, MeshStandardMaterial, Object3D } from 'three';
 import { createLandscapePlan, distanceToSegment, landDistance, seededRandom } from './terrain';
 import { coastalCaveClearance } from './coastalCaveLayout';
@@ -13,6 +14,7 @@ export function createSeabedMeadowSites(habitat:ReefHabitatPlan=getReefHabitat()
     const key=`${x},${z}`,cell=cells.get(key)??[];cell.push(item);cells.set(key,cell);
   }
   const floorAt=(x:number,z:number)=>{
+    if(seagrassMeadowClearance(x,z,1.2)<=0)return;
     const distance=landDistance(x,z);
     if(distance> -1.9||distance< -20&&!reefHabitatContains(x,z))return undefined;
     const y=marineFloorHeight(x,z)-.03;

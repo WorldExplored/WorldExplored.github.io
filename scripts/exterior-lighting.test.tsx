@@ -60,7 +60,7 @@ test('room bounce is modest pearl diffuse fill and transparent surfaces are excl
     const before = pane.onBeforeCompile; applyBakedRoomLighting(pane, true); assert.equal(pane.onBeforeCompile, before);
     const shader = { uniforms: {}, vertexShader: ShaderLib.standard.vertexShader, fragmentShader: ShaderLib.standard.fragmentShader } as WebGLProgramParametersWithUniforms;
     opaque.onBeforeCompile(shader, {} as never);
-    assert.ok(shader.fragmentShader.includes('vec3(.32,.42,.395)'));
+    assert.ok(shader.fragmentShader.includes('vec3(.62,.72,.67)'));
     assert.equal(opaque.emissive.getHex(), 0);
     const empty = createRoomLighting([]);
     try { empty.update(1, new Vector3(), 1); assert.ok(empty.root.children.filter(child => child instanceof Light).every(light => light.intensity === 0)); }

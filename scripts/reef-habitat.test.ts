@@ -1,3 +1,4 @@
+import { seagrassMeadowClearance } from '../src/components/world/seagrassMeadowLayout';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { InstancedMesh, Mesh, Vector3, MeshStandardMaterial, type WebGLProgramParametersWithUniforms } from 'three';
@@ -294,4 +295,18 @@ test('spatial reef detail follows the camera while paused without removing any c
     habitat.update(81,true,new Vector3(-16,2,-40));
     assert.deepEqual(meshes.map(mesh=>mesh.instanceMatrix.version),matrices,'stationary views do not upload instance matrices');
   }finally{habitat.dispose();}
+});
+
+
+test('city geology breaks the exact oval into unequal outcrop groups and keeps the grazing meadow open',()=>{
+  const plan=getReefHabitat(),city=plan.rocks.filter(rock=>rock.patch>=14&&rock.patch<=16&&rock.radius>2.7);
+  const radii=city.map(rock=>Math.hypot((rock.x+3)/45,(rock.z+78)/26));
+  const mean=radii.reduce((sum,radius)=>sum+radius,0)/radii.length;
+  const deviation=Math.sqrt(radii.reduce((sum,radius)=>sum+(radius-mean)**2,0)/radii.length);
+  assert.ok(city.length>=15);
+  assert.ok(deviation>.07&&Math.max(...radii)-Math.min(...radii)>.25,'outcrops occupy different shelf depths instead of one projected perimeter');
+  const talus=plan.rocks.filter(rock=>rock.patch>=200),depths=talus.map(rock=>-landDistance(rock.x,rock.z));
+  assert.ok(depths.filter(depth=>depth>13).length>45,'small detached minerals extend across open seabed');
+  assert.ok(depths.filter(depth=>depth<8).length>70,'the nearby banks retain loose stones');
+  for(const site of [...plan.rocks,...plan.colonies,...plan.kelp])assert.ok(seagrassMeadowClearance(site.x,site.z,site.radius)>0,'large obstacles stay outside the new grazing meadow');
 });

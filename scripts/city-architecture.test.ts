@@ -487,3 +487,25 @@ test('offset floor beams bear below the slab and shifted split-level floors have
     }finally{city.dispose();}
   }
 });
+
+test('city circulation slabs join occupied floors without duplicate upward faces',()=>{
+  const ray=new Raycaster(),point=new Vector3(),vertex=new Vector3();let probes=0;
+  for(const building of cityBuildings){
+    const item=fixture(building);
+    try{
+      const floors=item.meshes.filter(mesh=>mesh.geometry.userData.floor||mesh.geometry.userData.exteriorSlab);
+      for(const mesh of floors){
+        const geometry=mesh.geometry,p=geometry.attributes.position,n=geometry.attributes.normal,index=geometry.index;
+        for(let i=0;i<(index?.count??p.count);i+=3){
+          const ids=[0,1,2].map(k=>index?index.getX(i+k):i+k);
+          if(ids.some(k=>n.getY(k)<.9))continue;
+          point.set(0,0,0);for(const k of ids)point.add(vertex.fromBufferAttribute(p,k));point.multiplyScalar(1/3);
+          ray.set(point.clone().add(new Vector3(0,.001,0)),new Vector3(0,-1,0));ray.far=.002;
+          const hits=ray.intersectObjects(floors,false).filter(hit=>(hit.face?.normal.y??0)>.9);
+          assert.ok(hits.every(hit=>hit.object===mesh),`${building.id}: a second slab covers ${point.toArray()}`);probes++;
+        }
+      }
+    }finally{item.dispose();}
+  }
+  assert.ok(probes>400);
+});

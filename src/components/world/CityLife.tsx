@@ -16,6 +16,7 @@ import { createTownInteractionState, type TownInteractionState } from './townInt
 import { TownInteractions } from './TownInteractions';
 import { createTownMechanisms } from './TownMechanisms';
 import { createCoastalFerry } from './CoastalFerry';
+import { applyNightSource } from './RoomLighting';
 
 // Route waterline + aft threshold center + half its slab thickness.
 export const DOCK_BOARDING_HEIGHT = .17 + .26 + .055 / 2;
@@ -52,7 +53,7 @@ export function createCityLife(stationRoute: CityTransitRoute) {
     aqua: new MeshPhysicalMaterial({ color: '#3fdee6', roughness: .45, metalness: .25, clearcoat: .12 }),
     glass: new MeshPhysicalMaterial({ color: '#a4f3f4', roughness: .08, metalness: 0, clearcoat: .7, transparent: true, opacity: .28, depthWrite: false, thickness: .06, ior: 1.45 }),
     solar: new MeshPhysicalMaterial({ color: '#17485e', roughness: .5, metalness: .15, clearcoat: .18, envMapIntensity: .15 }),
-    station: new MeshPhysicalMaterial({ color: '#d0fff8', emissive: '#68eeed', emissiveIntensity: 0, roughness: .25, metalness: .02, clearcoat: .9 }),
+    station: applyNightSource(new MeshPhysicalMaterial({ color: '#d0fff8', emissive: '#68eeed', emissiveIntensity: 0, roughness: .25, metalness: .02, clearcoat: .9 }),1.4),
     turbineSteel: new MeshPhysicalMaterial({ color: '#718d91', roughness: .32, metalness: .72, clearcoat: .28 }),
     turbineDark: new MeshPhysicalMaterial({ color: '#263b43', roughness: .42, metalness: .58 }),
   };

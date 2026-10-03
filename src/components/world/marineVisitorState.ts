@@ -9,8 +9,8 @@ export type VisitorKind = 'stonefish' | 'octopus' | 'turtle';
 // Each segment clears the larger octopus's swept arm disc; opposite directions
 // keep the two animals from following one another in lockstep.
 export const OCTOPUS_ROUTE: readonly (readonly [number,number])[] = [
-  [7,-29],[6,-28],[9,-26],[10,-25],[22,-26.5],[29.5,-34],
-  [30,-36.5],[31,-48],[23,-47],[20,-48],[20,-49],[17,-49],
+  [7,-29],[6,-28],[9,-26],[10,-25],[15,-24.75],[22,-26.5],[29.5,-34],
+  [30,-36.5],[31,-48],[26.5,-47.5],[23,-47],[21.75,-47.5],[20,-48],[20,-49],[17,-49],
 ];
 type Blocker={x:number;y:number;z:number;radius:number;height:number};
 const CELL=4;

@@ -22,6 +22,7 @@ export function createFacadeGarden({ width, height, seed, detail='near', spread=
     }
     geometry.computeVertexNormals();return geometry;
   };
+  const stemThickness=stemRadius*(.64+noise(811)*.35);
   const rootRadius=Math.min(.16,width*.22);
   const planter=new CylinderGeometry(rootRadius*.78,rootRadius,.045,7).translate(0,.0225,0);
   planter.userData.facadeGarden={role:'root-mound',seed,floor:0,width,height,spread,habit:VINE_HABITS[habit]};
@@ -43,25 +44,34 @@ export function createFacadeGarden({ width, height, seed, detail='near', spread=
     if(spread){point.x+=lane*width*(Math.sin(t*Math.PI*.5)*.29+Math.sin(t*7+seed)*.025*t);point.y*=1-Math.abs(lane)*(.07+noise(lane+701)*.06);}
     return point;
   };
-  wood.push(tube(new CatmullRomCurve3(Array.from({length:13},(_,i)=>leader(i/12,0))),stemRadius,18));
+  const leaders=new Map<number,{start:number;curve:CatmullRomCurve3}>();
+  const main=new CatmullRomCurve3(Array.from({length:13},(_,i)=>leader(i/12,0)));
+  leaders.set(0,{start:0,curve:main});wood.push(tube(main,stemThickness,18));
   if(spread||branching)for(const lane of [-1,1]){
     const start=branching?.24+(lane>0?.11:0):0;
-    wood.push(tube(new CatmullRomCurve3(Array.from({length:13},(_,i)=>leader(start+i/12*(1-start),lane))),Math.min(.018,stemRadius*.66),14));
+    const points=Array.from({length:13},(_,i)=>leader(start+i/12*(1-start),lane));
+    points[0]=main.getPoint(start);
+    const curve=new CatmullRomCurve3(points);leaders.set(lane,{start,curve});
+    wood.push(tube(curve,Math.min(.018,stemThickness*(.48+noise(lane+419)*.22)),14));
   }
+  const stemAt=(t:number,lane:number)=>{
+    const stem=leaders.get(lane)??leaders.get(0)!;
+    return t<stem.start?main.getPoint(t):stem.curve.getPoint((t-stem.start)/(1-stem.start));
+  };
   for(let root=0;root<4;root++){
     const a=root*2.399+seed;
-    wood.push(tube(new CatmullRomCurve3([new Vector3(Math.cos(a)*rootRadius,0,Math.sin(a)*rootRadius),new Vector3(Math.cos(a)*rootRadius*.3,.06,Math.sin(a)*rootRadius*.3),trunk(.08)]),.013,5));
+    wood.push(tube(new CatmullRomCurve3([new Vector3(Math.cos(a)*rootRadius,0,Math.sin(a)*rootRadius),new Vector3(Math.cos(a)*rootRadius*.3,.06,Math.sin(a)*rootRadius*.3),main.getPoint(.08)]),Math.min(.013,stemThickness*(.48+noise(root+640)*.37)),5));
   }
   const count=spread?Math.max(18,Math.ceil(height/.22)):Math.max(7,Math.ceil(height/(branchSpacing??(habit===0?.22:habit===1?.25:habit===4?.21:.27))));
   for(let branch=0;branch<count;branch++){
-    const t=.08+branch/Math.max(1,count-1)*.84,side=habit===1?(branch%2?1:-1):noise(branch+7)>.45?1:-1,start=leader(t,spread||branching?branch%3-1:0);
+    const t=.08+branch/Math.max(1,count-1)*.84,side=habit===1?(branch%2?1:-1):noise(branch+7)>.45?1:-1,start=stemAt(t,spread||branching?branch%3-1:0);
     const branchSpread=(habit===1?.34:habit===2?.31:.2)+noise(branch+91)*(habit===2?.26:.30);
     const extension=branchSpread*(1-t*(habit===1?.22:.42));
     const endX=spread||branching?Math.max(-width*.43,Math.min(width*.43,start.x+side*width*extension*(branching?.70:.38))):side*width*extension;
     const end=new Vector3(endX,Math.min(height-.06,Math.max(.06,start.y+(habit===2?-.04:.13)+noise(branch+12)*height*(habit===2?.07:.16))),.10+noise(branch+40)*.10);
     const middle=start.clone().lerp(end,.52).add(new Vector3(side*width*(habit===1?.07:.035),habit===2?-.04:.025+noise(branch+4)*.06,.035));
-    const curve=new CatmullRomCurve3([start,middle,end]);wood.push(tube(curve,Math.min(.011,stemRadius*.5),6));
-    const leafCount=(branching?4:spread?10:habit===2?5:habit===4?7:6)+Math.floor(noise(branch+101)*(habit===1?6:5));
+    const curve=new CatmullRomCurve3([start,middle,end]);wood.push(tube(curve,Math.min(.011,stemThickness*(.28+noise(branch+923)*.28)),5));
+    const leafCount=Math.max(3,Math.ceil(((branching?4:spread?10:habit===2?5:habit===4?7:6)+Math.floor(noise(branch+101)*(habit===1?6:5)))*(far?.62:1)));
     for(let leaf=0;leaf<leafCount;leaf++){
       const index=branch*13+leaf,position=curve.getPoint(.13+leaf/leafCount*.87);
       const size=(habit===1?.11:habit===2?.085:.095)+noise(index+51)*(habit===1?.095:.085);
@@ -80,12 +90,14 @@ export function createFacadeGarden({ width, height, seed, detail='near', spread=
       for(let edge=0;edge<outline.length;edge++)indices.push(0,edge+1,(edge+1)%outline.length+1);
       const geometry=new BufferGeometry();geometry.setAttribute('position',new Float32BufferAttribute(vertices,3));geometry.setAttribute('uv',new Float32BufferAttribute([.5,.47,...outline.flatMap(([x,y])=>[x+.5,y])],2));geometry.setIndex(indices);geometry.computeVertexNormals();
       const turn=(noise(index+81)-.5)*3.7;
-      geometry.rotateZ(turn).rotateY((noise(index+103)-.5)*1.2).rotateX((noise(index+112)-.5)*.7).translate(position.x,position.y,position.z+.028);
+      geometry.rotateZ(turn).rotateY((noise(index+103)-.5)*1.2).rotateX((noise(index+112)-.5)*.7).translate(position.x,position.y,position.z);
       (index%4===0?light:foliage).push(geometry);
       // Raised midribs give the small leaves legible folded surfaces in oblique light.
       if(!far&&index%7===0){
-        const vein=tube(new CatmullRomCurve3([new Vector3(),new Vector3(0,leafSize*.45,leafSize*cup),new Vector3(0,leafSize*.84,leafSize*.03)]),.0022,4);
-        vein.rotateZ(turn).rotateY((noise(index+103)-.5)*1.2).rotateX((noise(index+112)-.5)*.7).translate(position.x,position.y,position.z+.030);light.push(vein);
+        const vein=new BufferGeometry();
+        vein.setAttribute('position',new Float32BufferAttribute([-.0018,0,0,.0018,0,0,-.0016,leafSize*.45,leafSize*cup,.0016,leafSize*.45,leafSize*cup,0,leafSize*.84,leafSize*.03],3));
+        vein.setAttribute('uv',new Float32BufferAttribute([0,0,1,0,0,.5,1,.5,.5,1],2));vein.setIndex([0,1,2,1,3,2,2,3,4]);vein.computeVertexNormals();
+        vein.rotateZ(turn).rotateY((noise(index+103)-.5)*1.2).rotateX((noise(index+112)-.5)*.7).translate(position.x,position.y,position.z+.002);light.push(vein);
       }
     }
     if(branch%3===1&&(!far||!branching)){
@@ -95,6 +107,7 @@ export function createFacadeGarden({ width, height, seed, detail='near', spread=
     if(habit===4&&branch%2===0){
       for(let blossom=0;blossom<3;blossom++){
         const center=end.clone().add(new Vector3((blossom-1)*.042,.03*Math.sin(blossom*2.1),.025));
+        wood.push(tube(new CatmullRomCurve3([end,end.clone().lerp(center,.55),center]),.0028,3));
         for(let petal=0;petal<5;petal++){
           const a=petal*Math.PI*2/5,shape=new BufferGeometry();
           shape.setAttribute('position',new Float32BufferAttribute([0,0,0,Math.cos(a-.3)*.045,Math.sin(a-.3)*.045,.012,Math.cos(a)*.063,Math.sin(a)*.063,0,Math.cos(a+.3)*.045,Math.sin(a+.3)*.045,.012],3));
@@ -102,15 +115,34 @@ export function createFacadeGarden({ width, height, seed, detail='near', spread=
         }
       }
     }
-    if(habit!==4&&branch%5===seed%5)for(let grape=0;grape<7;grape++){
-      const row=Math.floor(grape/3),a=grape*2.399,r=.027*(1-row*.22);
-      fruit.push(new SphereGeometry(.030,far?4:5,3).translate(end.x*.85+Math.cos(a)*r,end.y-.04-row*.035,end.z+.03+Math.sin(a)*r));
+    if(habit!==4&&branch%5===seed%5){
+      wood.push(tube(new CatmullRomCurve3([end,end.clone().add(new Vector3(0,-.025,.023)),end.clone().add(new Vector3(0,-.045,.03))]),.0035,3));
+      for(let grape=0;grape<(far?4:7);grape++){
+        const row=Math.floor(grape/3),a=grape*2.399,r=.027*(1-row*.22);
+        fruit.push(new SphereGeometry(.030,far?4:5,3).translate(end.x+Math.cos(a)*r,end.y-.04-row*.035,end.z+.03+Math.sin(a)*r));
+      }
     }
   }
+  for(let patch=0;patch<(far?3:6);patch++){
+    const y=(patch<3?.05+noise(patch+870)*.25:height*(.22+noise(patch+870)*.50)),center=stemAt(y/height,0);
+    const radius=(.035+noise(patch+880)*.07)*Math.min(1,width/.5),parts:number[]=[center.x,y,.004],indices:number[]=[],colors:number[]=[];
+    const color=new Color('#48634a').multiplyScalar(.78+noise(patch+900)*.34);
+    for(let side=0;side<=10;side++){
+      const a=side/10*Math.PI*2,r=radius*(.63+.25*Math.sin(a*3+seed)+.12*Math.cos(a*5-patch));
+      parts.push(center.x+Math.cos(a)*r,Math.max(.005,y+Math.sin(a)*r*1.25),.004);
+      if(side)indices.push(0,side,side+1);
+    }
+    for(let i=0;i<parts.length;i+=3)colors.push(color.r,color.g,color.b);
+    const film=new BufferGeometry();film.setAttribute('position',new Float32BufferAttribute(parts,3));film.setAttribute('color',new Float32BufferAttribute(colors,3));film.setAttribute('uv',new Float32BufferAttribute(parts.flatMap((_,i)=>i%3===0?[0,0]:[]),2));film.setIndex(indices);film.computeVertexNormals();foliage.push(film);
+  }
   const tint=(parts:BufferGeometry[],hex:string)=>{
-    const geometry=combine(parts),color=new Color(hex),values=new Float32Array(geometry.attributes.position.count*3);
-    for(let i=0;i<values.length;i+=3){const variation=.87+noise(Math.floor(i/36))* .24;values[i]=color.r*variation;values[i+1]=color.g*variation;values[i+2]=color.b*variation;}
-    geometry.setAttribute('color',new Float32BufferAttribute(values,3));return geometry;
+    const color=new Color(hex);
+    for(const [part,geometry]of parts.entries())if(!geometry.hasAttribute('color')){
+      const values=new Float32Array(geometry.attributes.position.count*3),variation=.87+noise(part+222)*.24;
+      for(let i=0;i<values.length;i+=3){values[i]=color.r*variation;values[i+1]=color.g*variation;values[i+2]=color.b*variation;}
+      geometry.setAttribute('color',new Float32BufferAttribute(values,3));
+    }
+    return combine(parts);
   };
   return {planter,wood:combine(wood),trellis,foliage:tint(foliage,'#487941'),light:tint(light,'#84a44d'),fruit:tint(fruit,habit===4?['#fff2c6','#d7e7ff','#efb0d4'][Math.abs(seed)%3]:habit===1?'#83914a':'#664568')};
 }

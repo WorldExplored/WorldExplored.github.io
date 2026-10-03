@@ -9,6 +9,7 @@ import { floraGeometry, type FloraKind } from './Flora';
 import { circulationPaths } from './circulation';
 import { distanceToSegment, seededRandom, terrainHeight } from './terrain';
 import { world } from '../../content/world';
+import { applyBakedRoomLighting } from './RoomLighting';
 import { FurnishedInterior, InteriorBuilder, floorRectangle, floorSlab } from './InteriorKit';
 import { architecturalSurface as surface, architecturalBox as box, doorway, guardRail, stairFlight, windowBay, type ShellParts } from './LandmarkShellKit';
 
@@ -268,12 +269,13 @@ export function makeHistoryMuseum() {
 export function HistoryMuseum(props: ModelProps) {
   const material = usePalette(props, 'history');
   const geometry = useResources(makeHistoryMuseum);
+  const [inside] = useState(() => ({ paving:applyBakedRoomLighting(material.paving.clone()), porcelain:applyBakedRoomLighting(material.porcelain.clone()), edge:applyBakedRoomLighting(material.edge.clone()), gold:applyBakedRoomLighting(material.gold.clone()) }));
   const [gardenMaterial] = useState(() => new MeshPhysicalMaterial({ name: 'history-grape-foliage', color: '#ffffff', vertexColors: true, side: DoubleSide, roughness: .93, metalness: 0, envMapIntensity: .12 }));
   const gardenDisposal = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => {
     clearTimeout(gardenDisposal.current);
-    return () => { gardenDisposal.current = setTimeout(() => { gardenMaterial.dispose(); }, 0); };
-  }, [gardenMaterial]);
+    return () => { gardenDisposal.current = setTimeout(() => { gardenMaterial.dispose(); Object.values(inside).forEach(finish=>finish.dispose()); }, 0); };
+  }, [gardenMaterial,inside]);
   return <group dispose={null}>
     <mesh name="history-museum-foundation" geometry={geometry.base} material={material.paving} receiveShadow />
     <mesh name="history-museum-opaque-shell" geometry={geometry.walls} material={material.porcelain} castShadow receiveShadow />
@@ -284,14 +286,14 @@ export function HistoryMuseum(props: ModelProps) {
     <mesh name="history-vault-bearing-ribs" geometry={geometry.ribs} material={material.edge} castShadow />
     <mesh name="history-entry-threshold" geometry={geometry.threshold} material={material.paving} receiveShadow />
     <mesh name="history-supported-entry-canopy" geometry={geometry.canopy} material={material.cyan} castShadow />
-    <mesh name="history-visible-staircase" geometry={geometry.steps} material={material.paving} castShadow receiveShadow />
-    <mesh name="history-gallery-and-stair-rails" geometry={geometry.rails} material={material.edge} castShadow />
-    <mesh name="history-continuous-upper-gallery" geometry={geometry.gallery} material={material.paving} receiveShadow />
-    <mesh name="history-upper-exhibit-plinths" geometry={geometry.cases} material={material.porcelain} castShadow />
+    <mesh name="history-visible-staircase" geometry={geometry.steps} material={inside.paving} castShadow receiveShadow />
+    <mesh name="history-gallery-and-stair-rails" geometry={geometry.rails} material={inside.edge} castShadow />
+    <mesh name="history-continuous-upper-gallery" geometry={geometry.gallery} material={inside.paving} receiveShadow />
+    <mesh name="history-upper-exhibit-plinths" geometry={geometry.cases} material={inside.porcelain} castShadow />
     <mesh name="history-exhibit-vitrines" geometry={geometry.caseGlass} material={material.glass} />
     <mesh name="history-seams-gutters-and-hardware" geometry={geometry.details} material={material.navy} castShadow />
-    <mesh name="history-gallery-artifacts" geometry={geometry.exhibits} material={material.gold} castShadow />
-    <mesh name="history-vitrine-frames" geometry={geometry.exhibitFrames} material={material.edge} />
+    <mesh name="history-gallery-artifacts" geometry={geometry.exhibits} material={inside.gold} castShadow />
+    <mesh name="history-vitrine-frames" geometry={geometry.exhibitFrames} material={inside.edge} />
     <mesh name="history-climbing-side-gardens" geometry={geometry.planting} material={gardenMaterial} castShadow />
     <mesh name="history-attached-garden-trellises" geometry={geometry.plantingWood} material={material.navy} castShadow />
     <mesh name="history-floor-supported-planters" geometry={geometry.plantingBeds} material={material.paving} castShadow receiveShadow />

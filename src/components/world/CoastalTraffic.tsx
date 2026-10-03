@@ -6,8 +6,8 @@ import { Box3, BoxGeometry, BufferGeometry, CylinderGeometry, DoubleSide, Float3
 import { combine, strut } from './BuildingKit';
 import { createVesselState, stepVessel, vesselOccupants, SURVEY_BERTH, SURVEY_DWELL, VISITOR_BERTH, VISITOR_DWELL, writeVesselPose } from './marineTraffic';
 import { harborWaterHeight } from './waterSurface';
-import { seededRandom, terrainMeshHeight } from './terrain';
-import { createDockGrowthGeometry } from './DockEcology';
+import { terrainMeshHeight } from './terrain';
+import { createDockGrowthGeometry, pileColonySamples } from './DockEcology';
 import { CITY_PIER_JUNCTION, VISITOR_PIER_HEAD } from './cityInfrastructure';
 import type { EnvironmentProps } from './Water';
 
@@ -312,18 +312,13 @@ export function createVisitorPier() {
     }
     const mesh=new Mesh(combine(parts),metal);mesh.raycast=()=>{};group.add(mesh);root.add(group);group.visible=false;return {group,mesh};
   });
-  const random=seededRandom(26891);
   const algaeSites:{x:number;y:number;z:number;height:number;width:number;rotation:number;variant:number;seed:number;post:typeof wetPosts[number]}[]=[];
-  for(const post of wetPosts){
-    const lower=Math.max(-2.6,post.bottom+.65),upper=-.26;
-    if(lower>=upper)continue;
-    const rows=Math.max(3,Math.ceil((upper-lower)/(.29+random()*.09))),phase=random()*Math.PI*2,twist=.45+random()*.65;
-    for(let row=0;row<rows;row++)for(let side=0;side<2;side++){
-      if(random()<.08)continue;
-      const y=lower+(upper-lower)*((row+random()*.32)/rows),rotation=phase+side*Math.PI+row*twist+random()*.45;
-      const radius=post.bottomRadius+(post.topRadius-post.bottomRadius)*(y-post.bottom)/(post.top-post.bottom);
+  for(const [index,post]of wetPosts.entries()){
+    const lower=Math.max(-2.6,post.bottom+.65);
+    for(const growth of pileColonySamples(lower,-.25,26891+index*1349,8.4)){
+      const {y,rotation}=growth,radius=post.bottomRadius+(post.topRadius-post.bottomRadius)*(y-post.bottom)/(post.top-post.bottom);
       if(y<=terrainMeshHeight(post.x+Math.sin(rotation)*radius,post.z+Math.cos(rotation)*radius)+.05)continue;
-      algaeSites.push({x:post.x+Math.sin(rotation)*radius,y,z:post.z+Math.cos(rotation)*radius,height:Math.min(.27+random()*.19,(-.25-y)/1.04),width:radius/.12,rotation,variant:Math.floor(random()*3),seed:Math.floor(random()*2147483647),post});
+      algaeSites.push({...growth,height:growth.height/1.04,x:post.x+Math.sin(rotation)*radius,z:post.z+Math.cos(rotation)*radius,width:radius/.12,post});
     }
   }
   const algaeMaterial=new MeshStandardMaterial({vertexColors:true,side:DoubleSide,roughness:.96});

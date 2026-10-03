@@ -7,7 +7,9 @@ export const COASTAL_CAVE_LAYOUT = [
 
 export const MYTHIC_GROTTO = { x: -55, z: -20, floor: -7.3, width: 6.05, depth: 6.34, scale: .72, heightScale: .78 } as const;
 export function mythicalCaveClearance(x:number,z:number,radius=0){
-  return (Math.hypot((x-MYTHIC_GROTTO.x)/6.8,(z-MYTHIC_GROTTO.z+1.8)/6)-1)*6-radius;
+  const bank=(Math.hypot((x-MYTHIC_GROTTO.x)/6.8,(z-MYTHIC_GROTTO.z+1.8)/6)-1)*6;
+  const crawl=Math.hypot(x-MYTHIC_GROTTO.x,z-Math.max(-20,Math.min(-14.1,z)))-2.9;
+  return Math.min(bank,crawl)-radius;
 }
 
 export function caveLocalXZ(site:{x:number;z:number;yaw:number;scale:number},x:number,z:number){

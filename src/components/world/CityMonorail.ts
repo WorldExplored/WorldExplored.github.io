@@ -1,4 +1,4 @@
-import { BoxGeometry, BufferGeometry, CylinderGeometry, Group, Mesh, type MeshPhysicalMaterial } from 'three';
+import { BoxGeometry, BufferGeometry, CylinderGeometry, Group, Mesh, Uint8BufferAttribute, type MeshPhysicalMaterial } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { cityRoundedBox, type CityFinish } from './CityArchitecture';
 
@@ -7,16 +7,25 @@ export function makeCityCarriage(materials: Record<CityFinish, MeshPhysicalMater
   const root = new Group();
   const buckets = new Map<CityFinish, BufferGeometry[]>();
   const collisionBounds: Array<{ min: number[]; max: number[] }> = [];
-  const add = (finish: CityFinish, geometry: BufferGeometry) => {
+  const add = (finish: CityFinish, geometry: BufferGeometry, interior = false, source = false) => {
+    const normals=geometry.getAttribute('normal'),fill=new Uint8Array(normals.count);
+    for(let i=0;i<fill.length;i++)if(interior)fill[i]=255;
+    geometry.setAttribute('aRoomFill',new Uint8BufferAttribute(fill,1,true));
+    if(finish==='porcelain')geometry.setAttribute('aNightSource',new Uint8BufferAttribute(new Uint8Array(normals.count).fill(source?255:0),1,true));
     geometry.computeBoundingBox();
     collisionBounds.push({ min: geometry.boundingBox!.min.toArray(), max: geometry.boundingBox!.max.toArray() });
     const parts = buckets.get(finish) ?? []; parts.push(geometry); buckets.set(finish, parts);
   };
-  const box = (finish: CityFinish, w: number, h: number, d: number, x: number, y: number, z: number) => add(finish, new BoxGeometry(w, h, d).translate(x, y, z));
+  const box = (finish: CityFinish, w: number, h: number, d: number, x: number, y: number, z: number, interior = false, source = false) => add(finish, new BoxGeometry(w, h, d).translate(x, y, z), interior, source);
   // A narrow chassis passes between platforms; the floor lip clears their tops by 2cm.
   add('metal', cityRoundedBox(.54, .1, 1.2, .15).translate(0, .02, 0));
-  add('porcelain', cityRoundedBox(.88, .02, 1.65, .18).translate(0, .14, 0));
+  add('porcelain', cityRoundedBox(.88, .02, 1.65, .18).translate(0, .14, 0), true);
   add('porcelain', cityRoundedBox(.88, .075, 1.65, .18).translate(0, .87, 0));
+  // Flush linear luminaires fasten to the real ceiling; no free-floating bulbs.
+  for(const x of [-.20,.20]){
+    box('metal',.095,.018,1.12,x,.861,0);
+    box('porcelain',.063,.012,1.06,x,.846,0,false,true);
+  }
   add('aqua', cityRoundedBox(.83, .045, 1.59, .16).translate(0, .945, 0));
   for (const side of [-1, 1]) {
     // Actual glazed bays are between independent pillars, sill and roof.
@@ -33,8 +42,8 @@ export function makeCityCarriage(materials: Record<CityFinish, MeshPhysicalMater
     }
     box('metal', .07, .035, .47, side * .445, .14, 0);
     for (const z of [-.42, .42]) {
-      box('wood', .17, .055, .29, side * .265, .26, z);
-      box('fabric', .05, .22, .29, side * .35, .36, z);
+      box('wood', .17, .055, .29, side * .265, .26, z,true);
+      box('fabric', .05, .22, .29, side * .35, .36, z,true);
     }
     // Cab windscreens, reinforced nose and low mounted lamps at both ends.
     box('porcelain', .68, .2, .04, 0, .22, side * .75);
@@ -42,7 +51,7 @@ export function makeCityCarriage(materials: Record<CityFinish, MeshPhysicalMater
     for (const x of [-.33, .33]) box('porcelain', .035, .57, .05, x, .57, side * .745);
     for (const x of [-.245, .245]) {
       box('metal', .115, .075, .035, x, .26, side * .78);
-      box('porcelain', .08, .035, .012, x, .268, side * .801);
+      box('porcelain', .08, .035, .012, x, .268, side * .801,false,true);
     }
     box('metal', .18, .055, .11, 0, .18, side * .79);
   }

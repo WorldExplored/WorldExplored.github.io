@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Vector3,PointLight,SpotLight,Mesh,MeshBasicMaterial,MeshStandardMaterial,Raycaster,DoubleSide,ShaderLib,Color,ShaderMaterial,type BufferGeometry,type WebGLProgramParametersWithUniforms } from 'three';
 import {createElement} from 'react';
+import { addGuidewayHardware } from '../src/components/world/CityGuideway';
+import { createCityTransitRoute } from '../src/components/world/city';
 import {create} from '@react-three/test-renderer';
 import {EcoCity} from '../src/components/world/EcoCity';
 import {makeComputeBuilding,makeComputeInterior} from '../src/components/world/ComputeBuilding';
@@ -17,16 +19,16 @@ import { daylightAt, daylightWeights } from '../src/components/world/weatherStat
 import { createCityLift } from '../src/components/world/CityLift';
 import { world,createSceneRuntime } from '../src/content/world';
 
-test('all front buildings have contained fixtures and night light pools, with one local light',()=>{
+test('all front buildings have contained fixtures and direct diffuse floor fill, with one local light',()=>{
   const lights=createRoomLighting(mainRoomLamps);
   try {
     assert.equal(lights.positions.length,mainRoomLamps.length);
     for(const site of world.landmarks.filter(site=>site.id!=='building'))assert.ok(mainRoomLamps.some(lamp=>Math.hypot(lamp.x-site.position[0],lamp.z-site.position[2])<6),site.id);
     const local=lights.root.getObjectByName('nearest-room-light') as SpotLight;
     lights.update(0,new Vector3(0,2,0),0);assert.equal(local.intensity,0);
-    const pool=lights.root.getObjectByName('interior-floor-light-pools') as Mesh;assert.equal(pool.visible,false);
-    lights.update(1,new Vector3(0,2,0),1);assert.ok(local.intensity>0);assert.equal(pool.visible,true);
-    for(const room of mainRoomLamps)assert.ok(room.ceiling-room.floor>1.6&&room.ceiling-room.floor<6);
+    assert.equal(lights.root.getObjectByName('interior-floor-light-pools'),undefined,'floor lighting adds no near-coplanar transparent overlay');
+    lights.update(1,new Vector3(0,2,0),1);assert.ok(local.intensity>0);
+    for(const room of mainRoomLamps)assert.ok(room.ceiling-room.floor>1.5&&room.ceiling-room.floor<6);
     assert.equal(lights.root.children.filter(item=>item instanceof PointLight).length,0);
     assert.equal(lights.root.children.filter(item=>item instanceof SpotLight).length,1);
     assert.equal(local.castShadow,false);
@@ -161,9 +163,54 @@ test('city screen masks select monitor faces while the other aqua furniture rema
     renderer.scene.instance.traverse(object=>{
       if(!(object instanceof Mesh)||!object.name.startsWith('city-interior-'))return;
       const mask=object.geometry.attributes.aNightSource;
-      if(!object.name.endsWith('-aqua')){assert.equal(mask,undefined);return;}
+      if(!object.name.endsWith('-aqua')){if(mask)assert.ok(Array.from(mask.array).every(value=>value===0),'plain furniture is not a light source');return;}
       for(let i=0;i<mask.count;i++)if(mask.getX(i)>.5)screens++;else other++;
     });
     assert.ok(screens>0&&other>screens,'only discrete screen polygons emit light');
   }finally{await renderer.unmount();}
+});
+
+test('guideway sources follow the entire loop and carriages have mounted ceiling lights with no extra light objects',async()=>{
+  Object.assign(globalThis,{IS_REACT_ACT_ENVIRONMENT:true});
+  const runtime={current:createSceneRuntime()},renderer=await create(createElement(EcoCity,{runtime,quality:'medium',paused:true}));
+  try{
+    const root=renderer.scene.instance,guide=root.getObjectByName('eco-city-transit-porcelain') as Mesh;
+    const positions=guide.geometry.attributes.position,mask=guide.geometry.attributes.aNightSource;
+    const quadrants=new Set<string>();let emitting=0,dark=0;
+    for(let i=0;i<mask.count;i++){
+      if(mask.getX(i)>.5){emitting++;quadrants.add(`${Math.sign(positions.getX(i)+3)},${Math.sign(positions.getZ(i)+78)}`);}
+      else dark++;
+    }
+    assert.equal(quadrants.size,4,'mounted guideway sources reach all sides of the city');assert.ok(emitting>1000&&dark>emitting);
+    for(const name of ['city-monorail-front','city-monorail-rear']){
+      const car=root.getObjectByName(name)!,porcelain=car.getObjectByName('monorail-porcelain') as Mesh;
+      const p=porcelain.geometry.attributes.position,sources=porcelain.geometry.attributes.aNightSource;
+      let ceiling=0,headlamps=0;
+      for(let i=0;i<sources.count;i++)if(sources.getX(i)>.5){if(p.getY(i)>.83&&p.getY(i)<.86)ceiling++;else headlamps++;}
+      assert.ok(ceiling>=48&&headlamps>=48,'each carriage retains physical ceiling lenses and end headlamps');
+      assert.equal(car.children.filter(item=>item instanceof PointLight||item instanceof SpotLight).length,0);
+      const seats=car.getObjectByName('monorail-fabric') as Mesh;assert.ok(Array.from(seats.geometry.attributes.aRoomFill.array).every(v=>v===255));
+      const pane=car.getObjectByName('monorail-window') as Mesh;assert.ok(Array.from(pane.geometry.attributes.aRoomFill.array).every(v=>v===0),'glazing stays non-emissive');
+    }
+  }finally{await renderer.unmount();}
+});
+
+
+test('each guideway lens is fastened to its physical side panel below the running surface',()=>{
+  const route=createCityTransitRoute(),material=new MeshBasicMaterial({side:DoubleSide}),meshes:Mesh[]=[];
+  addGuidewayHardware(route,(geometry)=>meshes.push(new Mesh(geometry,material)));
+  try{
+    const sources=meshes.filter(mesh=>mesh.geometry.userData.guidewayLamp),shell=meshes.filter(mesh=>!mesh.geometry.userData.guidewayLamp);
+    const center=new Vector3(),tangent=new Vector3();
+    for(const source of sources){
+      const {u,side}=source.geometry.userData.guidewayLamp;
+      route.curve.getPointAt(u,center);route.curve.getTangentAt(u,tangent);
+      const normal=new Vector3(tangent.z,0,-tangent.x).multiplyScalar(side);
+      const start=center.clone().addScaledVector(normal,.32);start.y-=.16;
+      const hit=new Raycaster(start,normal.clone().negate(),0,.045).intersectObjects(shell,false)[0];
+      assert.ok(hit&&hit.distance<.045,'the luminous face is attached to a real rail-side service panel');
+      source.geometry.computeBoundingBox();assert.ok(source.geometry.boundingBox!.max.y<center.y-.12,'the lamp clears train wheel travel');
+    }
+    assert.ok(sources.length>200);
+  }finally{material.dispose();meshes.forEach(mesh=>mesh.geometry.dispose());}
 });

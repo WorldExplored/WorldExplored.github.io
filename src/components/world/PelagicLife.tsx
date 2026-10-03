@@ -25,7 +25,7 @@ export function createPelagicLife(){
   const transform=new Object3D(),detail=new Object3D();let quality:QualityTier='high',time=0;
   function write(){
     for(const group of groups){
-      const count=PELAGIC_COUNTS[group.species][quality];
+      const count=Math.min(group.members.length,PELAGIC_COUNTS[group.species][quality]);
       for(let i=0;i<count;i++){
         const fish=group.members[i];transform.position.copy(fish.position);transform.rotation.set(0,fish.heading,fish.pitch,'YXZ');transform.scale.setScalar(fish.size);transform.updateMatrix();group.body.setMatrixAt(i,transform.matrix);
         detail.position.set(group.anatomy.tailX,0,0);detail.rotation.set(0,fish.tail,0);detail.scale.setScalar(1);detail.updateMatrix();detail.matrix.premultiply(transform.matrix);group.tail.setMatrixAt(i,detail.matrix);

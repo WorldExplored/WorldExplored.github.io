@@ -154,7 +154,7 @@ const fragmentShader = /* glsl */ `
     color = mix(color, uFog, haze * .28);
     color = mix(color, uHorizon, smoothstep(450.,850.,length(cameraPosition-vWorld)));
     float viewCosine = clamp(dot(view,n),0.,1.);
-    float absorption = 1. - exp(-depth * .085 / max(.08,viewCosine));
+    float absorption = 1. - exp(-depth * .085 * (1.-meadowClarity(p)*.6) / max(.08,viewCosine));
     float grazingReflection = pow(1. - viewCosine,5.);
     gl_FragColor = vec4(color, clamp(absorption + (1. - absorption) * grazingReflection + foam * .24, .06, .995));
     #include <colorspace_fragment>

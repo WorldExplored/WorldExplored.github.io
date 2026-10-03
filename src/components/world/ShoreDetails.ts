@@ -51,7 +51,14 @@ export function createShoreDetails(plan:LandscapePlan) {
     const material=new MeshStandardMaterial({color,roughness:.98,side:2});const mesh=new InstancedMesh(geometry,material,count);mesh.name=name;mesh.raycast=()=>{};let placed=0;
     for(let attempt=0;attempt<12000&&placed<count;attempt++){
       const regional=coastPatches[placed%coastPatches.length],patch=regional[Math.floor(random()*regional.length)];
-      const a=random()*Math.PI*2,r=Math.pow(random(),.7)*patch.radius*(attempt%7===0?2.1:1),x=patch.x+Math.cos(a)*r,z=patch.z+Math.sin(a)*r,d=landDistance(x,z);if(d<.35||d>2.8||terrainSlope(x,z)>.6)continue;
+      const a=random()*Math.PI*2,r=Math.pow(random(),.7)*patch.radius*(attempt%7===0?2.1:1);
+      let x=patch.x+Math.cos(a)*r,z=patch.z+Math.sin(a)*r;
+      const inland=name!=='beach-small-shells'&&name.startsWith('beach-')&&placed%4===0;
+      if(inland){
+        const island=ISLANDS[[0,1,2,5][Math.floor(placed/4)%4]],radius=Math.sqrt(random())*.94;
+        x=island.x+Math.cos(a)*island.rx*radius;z=island.z+Math.sin(a)*island.rz*radius;
+      }
+      const d=landDistance(x,z);if(d<(inland?3:.35)||!inland&&d>2.8||terrainSlope(x,z)>.6)continue;
       if([...plan.structures,...plan.rocks].some(v=>Math.hypot(x-v.x,z-v.z)<v.radius+.7))continue;
       if(plan.paths.some(p=>p.points.slice(1).some((b,i)=>distanceToSegment(x,z,p.points[i],b)<p.width/2+.7)))continue;
       const mineral=name.startsWith('beach-');
@@ -59,7 +66,7 @@ export function createShoreDetails(plan:LandscapePlan) {
       transform.position.set(x,terrainMeshHeight(x,z)+(name==='beached-driftwood'?.04:.005),z);transform.rotation.set(0,random()*Math.PI*2,0);transform.scale.setScalar(size);transform.updateMatrix();mesh.setMatrixAt(placed,transform.matrix);
       mesh.setColorAt(placed,tint.setHSL(.10+random()*.05,.06+random()*.08,.74+random()*.23));placed++;
     }
-    mesh.count=placed;mesh.computeBoundingSphere();root.add(mesh);
+    mesh.count=placed;mesh.userData.scatter={inlandFraction:name.startsWith('beach-')&&name!=='beach-small-shells'?.25:0};mesh.computeBoundingSphere();root.add(mesh);
   }
   return {root,dispose(){root.children.forEach(child=>{const mesh=child as InstancedMesh;mesh.geometry.dispose();(mesh.material as MeshStandardMaterial).dispose();mesh.dispose();});}};
 }

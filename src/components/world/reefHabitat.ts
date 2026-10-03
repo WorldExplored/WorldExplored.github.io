@@ -1,3 +1,4 @@
+import { seagrassMeadowClearance } from './seagrassMeadowLayout';
 import { coastalCaveClearance } from './coastalCaveLayout';
 import { REEF_BASINS, reefFloorHeight } from './seafloor';
 import { createCityFerryRoute } from './cityInfrastructure';
@@ -121,13 +122,17 @@ export function getReefHabitat(): ReefHabitatPlan {
   ridges.forEach((ridge, patch) => ridge.forEach(([cx, cz], segment) => {
     const random=patch<13?originalRandom:expansionRandom;
     if(patch>=14) {
-      const dx=cx+3,dz=cz+78,ratio=Math.hypot(dx/45,dz/26),outward=Math.max(1,1.40/ratio);
-      cx=-3+dx*outward;cz=-78+dz*outward;
+      // Uneven outcrop groups cross the shelf at different depths; none are
+      // projected onto a single decorative oval around the city.
+      const dx=cx+3,dz=cz+78,ratio=Math.hypot(dx/45,dz/26);
+      const shelf=1.38+.15*Math.sin(segment*1.61+patch*.9)+.12*Math.cos(segment*.57-patch);
+      const outward=Math.max(1,shelf/ratio),drift=Math.sin(segment*.81+patch)*2.6;
+      cx=-3+dx*outward+drift;cz=-78+dz*outward+Math.cos(segment*1.2+patch)*2.1;
     }
     const contains=(x:number,z:number,margin:number)=>reefBasinsContain(x,z,margin,patch<13?REEF_BASINS.slice(0,4):REEF_BASINS);
     const form = (segment + patch) % 4;
     const radius = ([3.2,2.7,3.4,2.7][form] + random() * [1.3,1.1,1.2,1][form]) * (patch < 6 ? 1 : 1.32);
-    if (!contains(cx, cz, radius * .6)) return;
+    if (!contains(cx, cz, radius * .6)||seagrassMeadowClearance(cx,cz,radius)<=0) return;
     const y = reefFloorHeight(cx, cz) - .24;
     const height = Math.min([1.3,2.6,1.0,3.1][form] + random() * [1.0,1.7,.9,1.5][form], -2.85 - y);
     const direction = ridge[Math.min(segment + 1,ridge.length - 1)], previous = ridge[Math.max(0,segment - 1)];
@@ -147,7 +152,7 @@ export function getReefHabitat(): ReefHabitatPlan {
   for(let i=0;i<460;i++)for(let attempt=0;attempt<28;attempt++){
     let x:number,z:number;
     if(i%3===0){
-      const island=ISLANDS[i%ISLANDS.length],a=mineralRandom()*Math.PI*2,edge=islandContour(island,a),offset=4.4+mineralRandom()*3.1;
+      const island=ISLANDS[i%ISLANDS.length],a=mineralRandom()*Math.PI*2,edge=islandContour(island,a),offset=3.5+Math.pow(mineralRandom(),.72)*15;
       x=island.x+Math.cos(a)*(island.rx*edge+offset);z=island.z+Math.sin(a)*(island.rz*edge+offset);
     }else{
       const hosts=i<350?originalHosts:ridgeHosts;const host=hosts[Math.floor(mineralRandom()*hosts.length)],a=mineralRandom()*Math.PI*2,r=host.radius*(.8+mineralRandom()*.9);
@@ -245,7 +250,7 @@ export function getReefHabitat(): ReefHabitatPlan {
   for (const entries of [colonies, plants]) for (let i = entries.length - 1; i > 0; i--) {
     const j = Math.floor(random() * (i + 1)); [entries[i], entries[j]] = [entries[j], entries[i]];
   }
-  const retainedRocks=rocks.filter(site=>coastalCaveClearance(site.x,site.z,site.radius)>0);
+  const retainedRocks=rocks.filter(site=>coastalCaveClearance(site.x,site.z,site.radius)>0&&seagrassMeadowClearance(site.x,site.z,site.radius)>0);
   const retainedPlants=plants.filter(site=>coastalCaveClearance(site.x,site.z,site.radius)>0);
   // A new cave displaces plants rather than erasing a whole canyon-floor meadow.
   // Recruits keep their anatomy and settle on clear sand in the same basin.
@@ -267,8 +272,8 @@ export function getReefHabitat(): ReefHabitatPlan {
       }
     }
   }
-  cached = {colonies:colonies.filter(site=>coastalCaveClearance(site.x,site.z,site.radius)>0&&retainedRocks.some(rock=>Math.abs(reefRockSurfaceHeight(rock,site.x,site.z)-site.y-.055)<.01)),
+  cached = {colonies:colonies.filter(site=>coastalCaveClearance(site.x,site.z,site.radius)>0&&seagrassMeadowClearance(site.x,site.z,site.radius)>0&&retainedRocks.some(rock=>Math.abs(reefRockSurfaceHeight(rock,site.x,site.z)-site.y-.055)<.01)),
     rocks:retainedRocks,
     plants:retainedPlants,
-    kelp:kelp.filter(site=>coastalCaveClearance(site.x,site.z,site.radius)>0)}; return cached;
+    kelp:kelp.filter(site=>coastalCaveClearance(site.x,site.z,site.radius)>0&&seagrassMeadowClearance(site.x,site.z,site.radius)>0)}; return cached;
 }

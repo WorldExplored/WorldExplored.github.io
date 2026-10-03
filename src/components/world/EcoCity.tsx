@@ -60,6 +60,7 @@ function finishSurface(material: MeshPhysicalMaterial, finish: Finish) {
     material.customProgramCacheKey = () => 'city-glazing-weather-v2';
   }
   if(finish!=='window'&&finish!=='glass')applyBakedRoomLighting(material,true);
+  if(finish==='porcelain')applyNightSource(material,1.5,true);
   return material;
 }
 
@@ -110,9 +111,10 @@ function makeStaticCity(route: CityTransitRoute, materials: ReturnType<typeof ma
       else fill[i]=normals.getX(i)*(room.x-positions.getX(i))+normals.getZ(i)*(room.z-positions.getZ(i))>.001?217:0;
     }
     geometry.setAttribute('aRoomFill',new Uint8BufferAttribute(fill,1,true));
+    if(finish==='porcelain')geometry.setAttribute('aNightSource',new Uint8BufferAttribute(new Uint8Array(positions.count).fill(geometry.userData.guidewayLamp?255:0),1,true));
     const plain = geometry.index ? geometry.toNonIndexed() : geometry;
     if (plain !== geometry) geometry.dispose();
-    for (const name of Object.keys(plain.attributes)) if (name !== 'position' && name !== 'normal' && name !== 'uv' && name !== 'aRoomFill' && !(['garden', 'fabric', 'wood'].includes(finish) && name === 'color')) plain.deleteAttribute(name);
+    for (const name of Object.keys(plain.attributes)) if (name !== 'position' && name !== 'normal' && name !== 'uv' && name !== 'aRoomFill' && name !== 'aNightSource' && !(['garden', 'fabric', 'wood'].includes(finish) && name === 'color')) plain.deleteAttribute(name);
     if (!plain.getAttribute('uv')) {
       const p=plain.getAttribute('position'),uv=new Float32Array(p.count*2);
       for(let i=0;i<p.count;i++){uv[i*2]=p.getX(i);uv[i*2+1]=p.getY(i)+p.getZ(i);}
@@ -209,7 +211,7 @@ function constructCityInterior(entry: DeferredCityInterior, materials: ReturnTyp
     const plain=geometry.index?geometry.toNonIndexed():geometry;
     if(plain!==geometry)geometry.dispose();
     const screen = geometry.userData.furniture?.name === 'monitor-screen';
-    if (finish === 'aqua') plain.setAttribute('aNightSource', new Uint8BufferAttribute(new Uint8Array(plain.attributes.position.count).fill(screen ? 255 : 0), 1, true));
+    if (finish === 'aqua' || finish === 'porcelain') plain.setAttribute('aNightSource', new Uint8BufferAttribute(new Uint8Array(plain.attributes.position.count).fill(screen ? 255 : 0), 1, true));
     for(const name of Object.keys(plain.attributes))if(!['position','normal','uv','aNightSource'].includes(name) && !(['garden', 'fabric', 'wood'].includes(finish) && name === 'color'))plain.deleteAttribute(name);
     if(!plain.getAttribute('uv')) {
       const p=plain.getAttribute('position'),uv=new Float32Array(p.count*2);

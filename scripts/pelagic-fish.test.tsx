@@ -6,6 +6,7 @@ import { createPelagicLife } from '../src/components/world/PelagicLife';
 import { createPelagicFish, flyingVertical, FLYING_GRAVITY, PELAGIC_COUNTS, pelagicCoastClearance, pelagicFloor, pelagicLaneClearance, samplePelagicFish, updatePelagicFish } from '../src/components/world/pelagicFishState';
 import { createVesselState, vesselOccupants, vesselPointClearance } from '../src/components/world/marineTraffic';
 import { coastalCaveClearance, MYTHIC_GROTTO } from '../src/components/world/coastalCaveLayout';
+import { getReefHabitat } from '../src/components/world/reefHabitat';
 import { harborWaterHeight } from '../src/components/world/waterSurface';
 
 const kinds=['marlin','flying','lionfish']as const;
@@ -114,4 +115,17 @@ test('new fish use bounded shared batches, persist across tier changes, and free
     assert.ok(triangles<82000,'The full population has a bounded instanced geometry budget.');
     const bounds=new Box3().setFromObject(life.root);assert.ok(Number.isFinite(bounds.min.x));
   }finally{life.dispose();}
+});
+
+
+test('blocked optional hover habitat cannot abort world construction or expose uninitialized instances',()=>{
+  const rock=getReefHabitat().rocks[0],saved={...rock};let life:ReturnType<typeof createPelagicLife>|undefined;
+  try{
+    // Close all hover water with a real collision obstacle, exercising the bounded exhausted-search branch.
+    rock.x=0;rock.z=0;rock.radius=1000;rock.y=0;rock.height=5;
+    life=createPelagicLife();life.update(18);
+    assert.equal(life.states.filter(f=>f.species==='lionfish'||f.species==='cave-silver').length,0);
+    for(const mesh of life.meshes.filter(m=>m.name.startsWith('lionfish-')||m.name.startsWith('cave-silver-')))assert.equal(mesh.count,0);
+    assert.equal(life.states.filter(f=>f.species==='marlin').length,2);
+  }finally{Object.assign(rock,saved);life?.dispose();}
 });

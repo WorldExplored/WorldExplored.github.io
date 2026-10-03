@@ -29,19 +29,30 @@ export function dockEcologyPoles(): DockPole[] {
   return poles;
 }
 
+/** Recruitment follows sheltered wet patches and scattered outliers, never rows or spirals. */
+export function pileColonySamples(bottom:number,top:number,seed:number,density=15.5) {
+  const random=seededRandom(seed),depth=top-bottom,sites:{y:number;height:number;rotation:number;variant:number;seed:number}[]=[];
+  if(depth<.14)return sites;
+  const count=Math.max(9,Math.ceil(depth*density*(.84+random()*.32)));
+  const pockets=Array.from({length:3+Math.floor(random()*3)},()=>({y:.12+random()*.70,angle:random()*Math.PI*2,spread:.12+random()*.25}));
+  for(let i=0;i<count;i++){
+    const pocket=pockets[Math.floor(random()*pockets.length)],clustered=i>2&&random()<.74;
+    const level=i<3?[.025,.43,.84][i]:clustered?Math.max(.02,Math.min(.86,pocket.y+(random()+random()-1)*pocket.spread)):random()*.86;
+    const y=bottom+depth*level,height=Math.min(.15+random()*.25,(top-y)*.98);
+    if(height<.08)continue;
+    const rotation=clustered?pocket.angle+(random()+random()-1)*(1.0+pocket.spread):random()*Math.PI*2;
+    sites.push({y,height,rotation,variant:Math.floor(random()*3),seed:Math.floor(random()*2147483647)});
+  }
+  return sites;
+}
+
 export function createDockWeedSites(poles = dockEcologyPoles()): DockWeedSite[] {
-  const random = seededRandom(71826), sites: DockWeedSite[] = [];
-  // Spiralling holdfasts occupy the full wet length rather than a tiny collar.
-  for (const pole of poles) {
-    const bottom = Math.max(pole.bottom + .10, -2.8), top = -.28;
-    const rows = Math.max(3, Math.ceil((top-bottom)/(.14+random()*.035))),phase=random()*Math.PI*2,twist=.8+random()*1.3;
-    for (let row=0;row<rows;row++) for(let side=0;side<3;side++) {
-      const y = bottom+(top-bottom)*(row+random()*.4)/rows;
-      const height = Math.min(.15+random()*.20,-.15-y);
-      if(height<.10||random()<.12)continue;
-      const rotation = phase+row*twist+side*Math.PI*2/3+random()*.65;
-      sites.push({pole:pole.id,x:pole.x+Math.sin(rotation)*pole.radius,y,
-        z:pole.z+Math.cos(rotation)*pole.radius,height,rotation,variant:Math.floor(random()*3),radius:pole.radius,seed:Math.floor(random()*2147483647)});
+  const sites: DockWeedSite[] = [];
+  for (const [index,pole]of poles.entries()) {
+    const bottom = Math.max(pole.bottom + .10, -2.8);
+    for(const growth of pileColonySamples(bottom,-.15,71826+index*1777)){
+      sites.push({...growth,pole:pole.id,x:pole.x+Math.sin(growth.rotation)*pole.radius,
+        z:pole.z+Math.cos(growth.rotation)*pole.radius,radius:pole.radius});
     }
   }
   return sites;
@@ -53,23 +64,25 @@ export function createDockWeedGeometry(variant: number, seed=variant*139+51) {
   const positions:number[]=[],colors:number[]=[],indices:number[]=[];
   const algae=new Color(['#485e39','#657343','#526441'][variant]).multiplyScalar(.86+random()*.28),shell=new Color(['#aea590','#939684','#bdad8e'][variant]).multiplyScalar(.8+random()*.28);
   const vertex=(x:number,y:number,z:number,color:Color,shade=1)=>{positions.push(x,y,z);colors.push(color.r*shade,color.g*shade,color.b*shade);};
-  // A rough olive film ties the shells to a living patch instead of isolated beads.
-  for(let row=0;row<4;row++)for(let col=0;col<4;col++){
-    const x=(col/3-.5)*.13*(.68+.30*Math.sin(row*2.1+shape*6)),y=row/3;
-    vertex(x,y,.008-x*x/.24,algae,.63+.12*Math.sin(row+col));
-    if(row&&col){const n=row*4+col;indices.push(n,n-4,n-1,n-1,n-4,n-5);}
+  // Ragged wet biofilm grows around shell clusters, with no rectangular decal edge.
+  const rim=12,filmCenterY=.46;
+  for(let side=0;side<rim;side++){
+    const a=side/rim*Math.PI*2-Math.PI/2,rough=.68+random()*.32;
+    vertex(Math.cos(a)*.080*rough,side===0?0:filmCenterY+Math.sin(a)*.44*rough,.004,algae,.65+random()*.20);
   }
-  const fronds=2+Math.floor(random()*4);
+  const center=positions.length/3;vertex(0,filmCenterY,.006,algae,.8);
+  for(let side=0;side<rim;side++)indices.push(center,side,(side+1)%rim);
+  const fronds=1+Math.floor(random()*5);
   for(let frond=0;frond<fronds;frond++){
-    const start=positions.length/3,length=.42+random()*.56,side=(random()-.5)*.11,wave=3+random()*5,curl=.02+random()*.065;
+    const start=positions.length/3,root=.06+random()*.32,length=.24+random()*(.94-root-.24),side=(random()-.5)*.11,wave=3+random()*5,curl=.015+random()*.055;
     for(let row=0;row<=5;row++)for(const rib of [-1,1]){
       const t=row/5,breadth=Math.sin(Math.PI*t)*(variant===1?.034:.006);
       // Narrow filaments cling along the pile, with a small curled free tip.
-      vertex(side+Math.sin(t*wave+frond)*.023*t+frondLean*t+rib*breadth,t*length,.008+Math.pow(t,3)*curl,algae,.75+t*.23);
+      vertex(side+Math.sin(t*wave+frond)*.023*t+frondLean*t+rib*breadth,root+t*length,.008+Math.pow(t,3)*curl,algae,.75+t*.23);
       if(row&&rib===1){const n=start+row*2+1;indices.push(n,n-2,n-1,n-1,n-2,n-3);}
     }
   }
-  const barnacleCount=2+Math.floor(random()*3);
+  const barnacleCount=variant===0?4+Math.floor(random()*5):1+Math.floor(random()*3);
   for(let barnacle=0;barnacle<barnacleCount;barnacle++){
     const start=positions.length/3,cx=(random()-.5)*.115,cy=.10+random()*.78,r=.014+random()*.02,stretch=1.4+random()*1.25,lip=.021+random()*.025;
     for(const [radius,z]of [[r,.002],[r*.72,lip],[r*.30,lip*.72]])for(let side=0;side<7;side++){
@@ -82,7 +95,7 @@ export function createDockWeedGeometry(variant: number, seed=variant*139+51) {
     }
   }
   const mussel=new Color(variant===1?'#425d6d':'#364755'),oyster=new Color('#c0b5a0');
-  const shellCount=2+Math.floor(random()*4);
+  const shellCount=variant===2?4+Math.floor(random()*4):1+Math.floor(random()*3);
   for(let shellIndex=0;shellIndex<shellCount;shellIndex++){
     const start=positions.length/3,cx=(random()-.5)*.11,cy=.12+random()*.74,angleOffset=(random()-.5)*.85;
     const width=.012+random()*.020,height=.055+random()*.09;

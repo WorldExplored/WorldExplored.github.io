@@ -38,6 +38,19 @@ export function coastalRockGeometry(kind: number) {
 }
 export function createCoastalRocks(sites: LandscapeRock[]) {
   const root=new Group();root.name='shoreline-rocks';const material=applySurface(new MeshStandardMaterial({vertexColors:true,roughness:.97,metalness:0}),'mineral');
+  material.onBeforeCompile=shader=>{
+    shader.vertexShader=`varying vec3 rockGrowthPosition;\n${shader.vertexShader}`.replace('#include <begin_vertex>',`#include <begin_vertex>
+      rockGrowthPosition = (instanceMatrix * vec4(position, 1.)).xyz;
+    `);
+    shader.fragmentShader=`varying vec3 rockGrowthPosition;\n${shader.fragmentShader}`.replace('#include <color_fragment>',`#include <color_fragment>
+      float mossPatch = sin(rockGrowthPosition.x * 2.8 + sin(rockGrowthPosition.z * 4.1))
+        + .45 * sin(rockGrowthPosition.z * 7.4 - rockGrowthPosition.y * 5.);
+      float damp = 1. - smoothstep(.45, 1.6, rockGrowthPosition.y);
+      float moss = smoothstep(.45, 1.12, mossPatch) * damp * .62;
+      diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(.50,.76,.39), moss);
+    `);
+  };
+  material.customProgramCacheKey=()=> 'coastal-attached-moss-v1';
   const geometries=ROCK_ARCHETYPES.map((_,i)=>coastalRockGeometry(i)), transform=new Object3D();
   const batches=geometries.map((geometry,kind)=>{
     const entries=sites.filter((_,i)=>i%6===kind);const mesh=new InstancedMesh(geometry,material,entries.length);mesh.name=`coastal-rock-${ROCK_ARCHETYPES[kind]}`;mesh.castShadow=true;mesh.receiveShadow=true;mesh.userData.entries=entries;

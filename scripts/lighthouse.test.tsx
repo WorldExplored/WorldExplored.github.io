@@ -213,3 +213,21 @@ test('one demand frame applies the current weather to the lantern without a stal
     setTimeOverride(12);await act(async()=>{await renderer.advanceFrames(1,1/60);});assert.equal(glow.visible,false);assert.equal(lamp.intensity,0);
   }finally{setTimeOverride(null);setLighthouseMode('auto');await renderer.unmount();}
 });
+
+test('lighthouse landings and court have one exposed walking face at every sampled join',()=>{
+  const access=createLighthouseAccess(),material=new MeshBasicMaterial({side:FrontSide});
+  const meshes=['lighthouse-arrival-deck','lighthouse-graded-treads','lighthouse-upper-court-steps'].map(name=>new Mesh((access.root.getObjectByName(name) as Mesh).geometry,material));
+  const ray=new Raycaster();let samples=0;
+  try{
+    for(const [x0,x1,z0,z1]of [[-69.2,-67,-36.35,-34.57],[-76.39,-73.1,-34.74,-33.4]]){
+      for(let x=x0+.013;x<x1;x+=.061)for(let z=z0+.019;z<z1;z+=.067){
+        ray.set(new Vector3(x,4,z),new Vector3(0,-1,0));
+        const hits=ray.intersectObjects(meshes,false).filter(hit=>(hit.face?.normal.y??0)>.99);
+        if(!hits.length)continue;samples++;
+        assert.equal(hits.filter(hit=>Math.abs(hit.point.y-hits[0].point.y)<.0001).length,1,`Overlapping walking faces at ${x},${z}`);
+        if(x< -75&&hits[0].point.y<2.87)assert.ok(hits[0].point.y-terrainMeshHeight(x,z)>.018,'the real terrain stays below the court finish');
+      }
+    }
+    assert.ok(samples>1000);
+  }finally{access.dispose();material.dispose();}
+});

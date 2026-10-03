@@ -6,9 +6,11 @@ import { BREAKOUT, brickRect, flagMine, hideMemoryMismatch, newBreakout, newMemo
 
 import { PONG, BLOCKS, BLOCK_COLORS, blockCells, blocksGhost, dropBlocks, moveBlocks, newBlocks, newPong, rotateBlocks, stepBlocks, stepPong } from './retroLogic';
 
+import { LILY, LILY_LANES, hopLily, lilyObjects, moveTileBlank, newLily, newTiles, slideTile, stepLily } from './puzzleLogic';
+
 const copy = profile.arcade;
 type GameId = keyof typeof copy.games;
-const gameIds: GameId[] = ['snake', 'mines', 'breakout', 'memory', 'pong', 'blocks'];
+const gameIds: GameId[] = ['snake', 'mines', 'breakout', 'memory', 'pong', 'blocks', 'tiles', 'lily'];
 const directionKeys: Record<string, Direction> = { ArrowUp: 'up', ArrowRight: 'right', ArrowDown: 'down', ArrowLeft: 'left', w: 'up', d: 'right', s: 'down', a: 'left' };
 function gridKeys(event: KeyboardEvent<HTMLDivElement>, columns: number) {
   if (event.altKey || event.ctrlKey || event.metaKey) return;
@@ -251,8 +253,49 @@ function Blocks() {
   </GameShell>;
 }
 
+function Tiles() {
+  const [game, setGame] = useState(newTiles);
+  const { paused, setPaused } = usePause(game.status);
+  const turn = (direction: Direction) => { if (!paused) setGame(current => moveTileBlank(current, direction)); };
+  return <GameShell id="tiles" status={game.status} paused={paused} onPause={() => setPaused(true)} onPlay={() => { setGame(current => ({ ...current, status: 'playing' })); setPaused(false); }} onRestart={() => { setGame(newTiles()); setPaused(false); }}
+    stats={<Stat label={copy.moves} value={game.moves}/>} onKeyDown={event => {
+      const direction = directionKeys[event.key];
+      if (direction && !event.altKey && !event.ctrlKey && !event.metaKey) { event.preventDefault(); event.stopPropagation(); turn(direction); }
+    }}>
+    <div className="arcade-tile-grid" role="group" aria-label={copy.games.tiles.name}>{game.tiles.map((tile, index) => <button key={tile} type="button" className={tile ? 'arcade-number-tile' : 'arcade-blank-tile'} aria-label={tile ? `${copy.tile} ${tile}` : copy.blank} aria-disabled={!tile} onClick={() => setGame(current => slideTile(current, index))} style={{ '--tile-row': Math.floor((tile - 1) / 4), '--tile-col': (tile - 1) % 4 } as React.CSSProperties}><span>{tile || ''}</span>{tile > 0 && <svg viewBox="0 0 60 30" aria-hidden="true"><path d="M0 20 Q15 3 30 18 T60 17 V30 H0Z" fill="currentColor" opacity=".22"/><path d="M0 26 Q17 12 34 25 T60 21" fill="none" stroke="white" opacity=".45"/></svg>}</button>)}</div>
+  </GameShell>;
+}
+function LilyLeap() {
+  const [game, setGame] = useState(newLily);
+  const { paused, setPaused } = usePause(game.status);
+  useEffect(() => {
+    if (paused || game.status !== 'playing') return;
+    let frame = 0, previous = 0;
+    const tick = (time: number) => {
+      if (previous) setGame(current => stepLily(current, (time - previous) / 1000));
+      previous = time; frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [paused, game.status]);
+  const hop = (direction: Direction) => { if (!paused) setGame(current => hopLily(current, direction)); };
+  return <GameShell id="lily" status={game.status} paused={paused} onPause={() => setPaused(true)} onPlay={() => { setGame(current => ({ ...current, status: 'playing' })); setPaused(false); }} onRestart={() => { setGame(newLily()); setPaused(false); }}
+    stats={<><Stat label={copy.homes} value={`${game.homes.length} / 3`}/><Stat label={copy.lives} value={game.lives}/><Stat label={copy.time} value={Math.ceil(game.remaining)}/></>}
+    controls={<Directions turn={hop} disabled={paused || game.status !== 'playing'}/>} onKeyDown={event => {
+      const direction = directionKeys[event.key];
+      if (direction && !event.repeat && !event.altKey && !event.ctrlKey && !event.metaKey) { event.preventDefault(); event.stopPropagation(); hop(direction); }
+    }}>
+    <svg className="arcade-lily-board" viewBox="0 0 450 350" aria-hidden="true">
+      <rect width="450" height="350" fill="#93d6df"/>
+      {[0, 3, 6].map(row => <g key={row}><rect y={row * 50} width="450" height="50" fill={row ? '#aed59b' : '#318b84'}/><path d={`M0 ${row * 50 + 3} H450 M0 ${row * 50 + 47} H450`} stroke="#f1ffe0" strokeWidth="3" opacity=".8"/></g>)}
+      {LILY.homes.map(home => <g key={home} transform={`translate(${(home + .5) * 50} 25)`}><path d="M0 0 L15 -14 A21 21 0 1 0 19 8Z" fill={game.homes.includes(home) ? '#d5eb9a' : '#62b077'} stroke="#f1ffcc" strokeWidth="2"/>{game.homes.includes(home) && <><ellipse rx="9" ry="8" fill="#397639"/><circle cx="-5" cy="-6" r="3" fill="#f4ffcd"/><circle cx="5" cy="-6" r="3" fill="#f4ffcd"/></>}</g>)}
+      {LILY_LANES.map(lane => <g key={lane.row}>{lilyObjects(lane.row, game.time).map((item, i) => <g key={i} transform={`translate(${item.x * 50} ${lane.row * 50 + 25})`}>{item.kind === 'raft' ? <><rect x={-item.length * 25} y="-16" width={item.length * 50} height="32" rx="15" fill="#366f58" stroke="#ddf3c6" strokeWidth="2"/><path d={`M${-item.length * 24} 8 Q0 20 ${item.length * 24} 8`} fill="none" stroke="#7bac83"/>{[-.7, -.2, .35, .8].map((x, j) => <g key={j} transform={`translate(${x * item.length * 23} ${j % 2 ? -5 : 2})`}><ellipse rx="12" ry="7" fill={j % 2 ? '#9dc866' : '#76af74'}/><circle r="3" fill="#f5eac5"/></g>)}</> : <g transform={`scale(${lane.speed > 0 ? 1 : -1} 1)`}><path d={`M${-item.length * 25} -14 H${item.length * 16} Q${item.length * 32} 0 ${item.length * 16} 14 H${-item.length * 25}Z`} fill="#f1fff0" stroke="#327f9b" strokeWidth="2"/><rect x="-18" y="-9" width="25" height="18" rx="5" fill="#2f83a3"/><path d="M-14 -4 H3" stroke="#b0f3ef" strokeWidth="3"/><path d={`M${-item.length * 28} -10 l-8 -3 m8 23 l-8 3`} stroke="#edffff" strokeWidth="3"/></g>}</g>)}</g>)}
+      <g transform={`translate(${game.x * 50} ${game.row * 50 + 25})`}><ellipse cy="3" rx="14" ry="11" fill="#2d6d56" opacity=".2"/><path d="M-7 4 L-13 11 M7 4 L13 11 M-7 -2 L-13 -8 M7 -2 L13 -8" stroke="#2f7142" strokeWidth="5" strokeLinecap="round"/><ellipse rx="10" ry="12" fill="#659c46" stroke="#effc9b" strokeWidth="1.5"/>{[-5,5].map(x => <g key={x}><circle cx={x} cy="-8" r="4" fill="#e4f5b9"/><circle cx={x} cy="-9" r="1.8" fill="#23445a"/></g>)}</g>
+    </svg>
+  </GameShell>;
+}
 function Preview({ id }: { id: GameId }) {
-  return <div className={`arcade-preview arcade-preview-${id}`} aria-hidden="true">{id === 'snake' ? <><i /><i /><i /><i /><i /><b>●</b></> : id === 'mines' ? <>{['', '1', '', '⚑', '', '2', '', '', ''].map((value, i) => <i key={i}>{value}</i>)}</> : id === 'breakout' ? <>{Array.from({ length: 9 }, (_, i) => <i key={i} />)}<b /><em /></> : id === 'pong' ? <><i/><i/><b/></> : id === 'blocks' ? <>{Array.from({ length: 12 }, (_, i) => <i key={i}/>)}</> : <>{['☀', '✦', '✦', '☀'].map((value, i) => <i key={i}>{value}</i>)}</>}</div>;
+  return <div className={`arcade-preview arcade-preview-${id}`} aria-hidden="true">{id === 'tiles' ? <>{[1, 2, 3, 4, 5, 6, 7, 8, ''].map((n, i) => <i key={i}>{n}</i>)}</> : id === 'lily' ? <><i>✿</i><i>❧</i><b>●</b></> : id === 'snake' ? <><i /><i /><i /><i /><i /><b>●</b></> : id === 'mines' ? <>{['', '1', '', '⚑', '', '2', '', '', ''].map((value, i) => <i key={i}>{value}</i>)}</> : id === 'breakout' ? <>{Array.from({ length: 9 }, (_, i) => <i key={i} />)}<b /><em /></> : id === 'pong' ? <><i/><i/><b/></> : id === 'blocks' ? <>{Array.from({ length: 12 }, (_, i) => <i key={i}/>)}</> : <>{['☀', '✦', '✦', '☀'].map((value, i) => <i key={i}>{value}</i>)}</>}</div>;
 }
 export function Arcade() {
   const [selected, setSelected] = useState<GameId | null>(null);
@@ -263,7 +306,7 @@ export function Arcade() {
     if (selected === null && lastSelected.current) libraryRef.current?.querySelector<HTMLButtonElement>(`[data-game="${lastSelected.current}"]`)?.focus();
   }, [selected]);
   return <section className="arcade" aria-label={copy.title}>
-    <div className="arcade-masthead">{!selected && <span>{copy.eyebrow}</span>}{selected && <button type="button" className="arcade-back" onClick={back}>← {copy.back}</button>}</div>
-    {selected === null ? <><p className="arcade-intro">{copy.intro}</p><div className="arcade-library" ref={libraryRef}>{gameIds.map(id => <button type="button" className="arcade-cabinet" data-game={id} key={id} onClick={() => setSelected(id)}><Preview id={id} /><span className="arcade-cabinet-copy"><span className="arcade-genre">{copy.games[id].genre}</span><strong>{copy.games[id].name}</strong><span>{copy.games[id].description}</span><span className="arcade-play-label">{copy.play} <span aria-hidden="true">↗</span></span></span></button>)}</div></> : selected === 'snake' ? <Snake /> : selected === 'mines' ? <Mines /> : selected === 'breakout' ? <Breakout /> : selected === 'memory' ? <Memory /> : selected === 'pong' ? <Pong /> : <Blocks />}
+    {selected && <div className="arcade-masthead"><button type="button" className="arcade-back" onClick={back}>← {copy.back}</button></div>}
+    {selected === null ? <><div className="arcade-library" ref={libraryRef}>{gameIds.map(id => <button type="button" className="arcade-cabinet" data-game={id} key={id} onClick={() => setSelected(id)}><Preview id={id} /><span className="arcade-cabinet-copy"><span className="arcade-genre">{copy.games[id].genre}</span><strong>{copy.games[id].name}</strong><span>{copy.games[id].description}</span><span className="arcade-play-label">{copy.play} <span aria-hidden="true">↗</span></span></span></button>)}</div></> : selected === 'snake' ? <Snake /> : selected === 'mines' ? <Mines /> : selected === 'breakout' ? <Breakout /> : selected === 'memory' ? <Memory /> : selected === 'pong' ? <Pong /> : selected === 'blocks' ? <Blocks /> : selected === 'tiles' ? <Tiles /> : <LilyLeap />}
   </section>;
 }

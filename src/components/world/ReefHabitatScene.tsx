@@ -7,6 +7,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { coastalSandGLSL, createSandMicroNormal } from './coastMaterial';
 import { applySurface, surfaceTexture } from './surfaceMaterials';
 import { createSeabedMeadows } from './SeabedMeadows';
+import { SEAGRASS_MEADOW } from './seagrassMeadowLayout';
 import { createSeaweedGeometry, createForestKelpGeometry } from './Seaweed';
 import { getReefHabitat, reefFloorHeight, reefFloorVertexHeight, reefRockMesh, type ReefObstacle } from './reefHabitat';
 import { landDistance } from './terrain';
@@ -210,12 +211,15 @@ export function createReefHabitat() {
       diffuseColor.rgb *= submergedSand(reefDepth) * sandGrain(sandXZ);
       diffuseColor.rgb *= 1. + (dune*.012 + (fracture-.5)*.08*stone)*coastDetail;
       diffuseColor.rgb = mix(diffuseColor.rgb,vec3(.52,.51,.38)*sandGrain(sandXZ),sandPocket*.22*coastDetail);
+      vec2 meadowOffset=(sandXZ-vec2(${SEAGRASS_MEADOW.x.toFixed(1)},${SEAGRASS_MEADOW.z.toFixed(1)}))/vec2(${SEAGRASS_MEADOW.rx.toFixed(1)},${SEAGRASS_MEADOW.rz.toFixed(1)});
+      float cover=(1.-smoothstep(.68,1.04,length(meadowOffset)+(sandNoise(sandXZ*.4)-.5)*.18))*(.52+.48*sandNoise(sandXZ*.65));
+      diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.16,.28,.13)*sandGrain(sandXZ),cover*.82);
     `).replace('#include <normal_fragment_maps>',ShaderChunk.normal_fragment_maps.replaceAll('texture2D( normalMap, vNormalMapUv ).xyz','mix(texture2D(normalMap, vNormalMapUv).xyz, texture2D(reefRockNormal, vNormalMapUv * .65).xyz, smoothstep(3.1, 5.8, reefDepth)*coastDetail)'))
       .replace('#include <roughnessmap_fragment>',`#include <roughnessmap_fragment>
         roughnessFactor=mix(.97,texture2D(reefRockRoughness,sandXZ*.2).g,coastDetail*.5);
       `);
   };
-  floorMaterial.customProgramCacheKey=()=> 'continuous-apron-sand-rock-v5';materials.push(floorMaterial);
+  floorMaterial.customProgramCacheKey=()=> 'continuous-apron-sand-rock-meadow-v6';materials.push(floorMaterial);
   const floorGeometry=reefSeafloorGeometry();geometries.push(floorGeometry);
   const floor=new Mesh(floorGeometry,floorMaterial);floor.name='continuous-rippled-sand-seafloor';floor.receiveShadow=true;floor.raycast=()=>{};root.add(floor);
   const contact=createReefContactShade([...plan.rocks,...plan.colonies]);geometries.push(contact.geometry);materials.push(contact.material);root.add(contact.mesh);
@@ -245,9 +249,13 @@ export function createReefHabitat() {
       float strata = smoothstep(-.82, -.48, sin(bedding));
       float pores = fract(sin(dot(floor(reefStonePosition.xz * 23. + reefStonePosition.y * 5.), vec2(127.1,311.7))) * 43758.5453);
       diffuseColor.rgb *= .79 + strata * .20 + pores * .035;
+      float algaePatch = sin(reefStonePosition.x * 1.7 + sin(reefStonePosition.z * 2.3))
+        + .45 * sin(reefStonePosition.y * 4. + reefStonePosition.z * 3.7);
+      float algae = smoothstep(.65, 1.18, algaePatch) * .48;
+      diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(.52,.78,.47), algae);
     `);
   };
-  rockMaterial.customProgramCacheKey=()=> 'reef-limestone-bedding-v1';
+  rockMaterial.customProgramCacheKey=()=> 'reef-limestone-bedding-algae-v2';
   for(let form=0;form<4;form++) {
     const data=reefRockMesh(form),geometry=new BufferGeometry();
     geometry.setAttribute('position',new Float32BufferAttribute(data.positions,3));geometry.setIndex(data.indices);

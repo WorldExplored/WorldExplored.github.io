@@ -5,6 +5,8 @@ import { BoxGeometry, BufferGeometry, CurvePath, CylinderGeometry, Float32Buffer
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { distanceToSegment, terrainMeshHeight } from './terrain';
 import { applySurface } from './surfaceMaterials';
+import { floorRectangle, floorSlab } from './InteriorKit';
+import { applyNightSource } from './RoomLighting';
 
 export const LIGHTHOUSE_LANDING = { x: -68, z: -35.5, top: .52, width: 2.05, depth: 2.1 } as const;
 const STAIR_WIDTH = 1.36;
@@ -46,7 +48,7 @@ export function createLighthouseAccess() {
   const root = new Group(); root.name = 'lighthouse-coastal-stairway';
   const deckMaterial = applySurface(new MeshStandardMaterial({ color: '#d5e8df', roughness: .82 }), 'mineral');
   const structure = new MeshStandardMaterial({ color: '#286c80', roughness: .42, metalness: .45 });
-  const light = new MeshStandardMaterial({ color: '#a3f9e9', emissive: '#58dec7', emissiveIntensity: .25 });
+  const light = applyNightSource(new MeshStandardMaterial({ color: '#a3f9e9', emissive: '#58dec7', emissiveIntensity: 0 }),1.2);
   const rubber = new MeshStandardMaterial({ color: '#243d42', roughness: .93 });
   const treads: BufferGeometry[] = [], posts: BufferGeometry[] = [], lights: BufferGeometry[] = [], rails: BufferGeometry[] = [], midrails: BufferGeometry[] = [], stringers: BufferGeometry[] = [], braces: BufferGeometry[] = [], hardware: BufferGeometry[] = [], fenders: BufferGeometry[] = [], deck: BufferGeometry[] = [], piles: BufferGeometry[] = [], court: BufferGeometry[] = [];
   const up = new Vector3(0, 1, 0);
@@ -56,7 +58,7 @@ export function createLighthouseAccess() {
   };
   const board = (a: Vector3, b: Vector3, width: number, height: number, top: number) => {
     const yaw = Math.atan2(b.x - a.x, b.z - a.z), length = Math.hypot(b.x - a.x, b.z - a.z);
-    return new BoxGeometry(width, height, length + .012).rotateY(yaw).translate((a.x + b.x) / 2, top - height / 2, (a.z + b.z) / 2);
+    return new BoxGeometry(width, height, length).rotateY(yaw).translate((a.x + b.x) / 2, top - height / 2, (a.z + b.z) / 2);
   };
   const railLines = lighthouseRailLines();
   const treadPrism = (corners: Vector3[], top: number, bottom: number) => {
@@ -66,7 +68,8 @@ export function createLighthouseAccess() {
     geometry.setIndex([4, 5, 6, 4, 6, 7, 0, 2, 1, 0, 3, 2, 0, 1, 5, 0, 5, 4, 1, 2, 6, 1, 6, 5, 2, 3, 7, 2, 7, 6, 3, 0, 4, 3, 4, 7]);
     const flat = geometry.toNonIndexed(); geometry.dispose(); flat.computeVertexNormals(); return flat;
   };
-  for (let segment = 1; segment < LIGHTHOUSE_ACCESS_POINTS.length; segment++) {
+  // The first level span is unioned with the arrival slab: it needs no second deck.
+  for (let segment = 2; segment < LIGHTHOUSE_ACCESS_POINTS.length; segment++) {
     const a = new Vector3(...LIGHTHOUSE_ACCESS_POINTS[segment - 1]), b = new Vector3(...LIGHTHOUSE_ACCESS_POINTS[segment]);
     const horizontal = Math.hypot(b.x - a.x, b.z - a.z), rise = b.y - a.y;
     const count = rise > 0 ? Math.ceil(rise / .155) : Math.ceil(horizontal / .24);
@@ -98,19 +101,18 @@ export function createLighthouseAccess() {
       }
     }
   }
-  // The open upper rail ends meet a broad court, then the actual lighthouse threshold.
-  for (let segment = 1; segment < LIGHTHOUSE_COURT_POINTS.length; segment++) {
-    const a = new Vector3(...LIGHTHOUSE_COURT_POINTS[segment - 1]), b = new Vector3(...LIGHTHOUSE_COURT_POINTS[segment]);
-    const count = segment === 1 ? 2 : 1;
-    for (let i = 0; i < count; i++) {
-      const start = a.clone().lerp(b, i / count), end = a.clone().lerp(b, (i + 1) / count);
-      court.push(board(start, end, segment === 1 ? 1.36 : .92, .16, end.y));
-    }
-  }
-  // Square corner pads join perpendicular court spans without a triangular hole.
-  for (const point of LIGHTHOUSE_COURT_POINTS.slice(1, -1)) court.push(new BoxGeometry(.92, .16, .92).translate(point[0], point[1] - .08, point[2]));
+  // One union per finished elevation. Shared edges join without overlapping caps.
+  court.push(floorSlab('lighthouse-court-first-step', [floorRectangle(-74.28,-34,.36,1.36)],2.92,.16));
+  court.push(floorSlab('lighthouse-unioned-door-court', [
+    floorRectangle(-74.64,-34,.36,1.36),
+    floorRectangle(-75.46,-34,2,.92),
+    floorRectangle(-76,-34.4025,.92,.805),
+  ],2.86,.16));
   const landing = LIGHTHOUSE_LANDING;
-  for (let board = 0; board < 10; board++) deck.push(new BoxGeometry(landing.width, .18, .202).translate(landing.x, landing.top - .09, landing.z - landing.depth / 2 + .105 + board * .21));
+  deck.push(floorSlab('lighthouse-unioned-water-landing', [
+    floorRectangle(landing.x,landing.z,landing.width,landing.depth),
+    [railLines[0][0],railLines[0][1],railLines[1][1],railLines[1][0]].map(p=>[p.x,p.z] as const),
+  ],landing.top,.18));
   for (const dx of [-.84, .84]) for (const dz of [-.87, .87]) {
     const x = landing.x + dx, z = landing.z + dz, bottom = terrainMeshHeight(x, z) - .25, top = landing.top - .12;
     piles.push(beam(new Vector3(x, bottom, z), new Vector3(x, top, z), .085));

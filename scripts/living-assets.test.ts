@@ -1,7 +1,7 @@
 import { historyHeight } from '../src/components/world/historyDimensions';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Mesh, Vector3, Matrix4, InstancedMesh } from 'three';
+import { Mesh, Vector3, Matrix4, InstancedMesh, Triangle } from 'three';
 import { createCoastalFerry, ferryPontoonGeometry } from '../src/components/world/CoastalFerry';
 import { createCityFerryRoute, FERRY_DWELL, cityFerryDistance } from '../src/components/world/cityInfrastructure';
 import { treeBranches, treeFoliageGeometry, treeWoodGeometry } from '../src/components/world/TreeGeometry';
@@ -123,15 +123,18 @@ test('mineral, shell and wrack patches cover every exposed coast, rooted to the 
   try {
     assert.equal(shore.root.children.length,6);
     for(const object of shore.root.children){
-      const batch=object as InstancedMesh,regions=new Set<string>();
+      const batch=object as InstancedMesh,regions=new Set<string>();let inland=0;
       assert.equal(batch.count,[640,350,290,160,28,115][shore.root.children.indexOf(object)],'inland sampling must not starve a coastal batch');triangles+=batch.count*(batch.geometry.index?.count??batch.geometry.attributes.position.count)/3;
       for(let i=0;i<batch.count;i++){
         batch.getMatrixAt(i,matrix);position.setFromMatrixPosition(matrix);regions.add(islandAt(position.x,position.z).island.id);
-        assert.ok(landDistance(position.x,position.z)>.3499&&landDistance(position.x,position.z)<2.8001);
+        const distance=landDistance(position.x,position.z);assert.ok(distance>.3499);
+        if(distance>2.8001)inland++;
+        if(!batch.userData.scatter?.inlandFraction)assert.ok(distance<2.8001,'shells and wrack remain on the exposed beach');
         const offset=batch.name==='beached-driftwood'?.04:.005;
         assert.ok(Math.abs(position.y-terrainMeshHeight(position.x,position.z)-offset)<.00002);
         for(const path of plan.paths)for(let segment=1;segment<path.points.length;segment++)assert.ok(distanceToSegment(position.x,position.z,path.points[segment-1],path.points[segment])>path.width/2+.6999);
       }
+      if(batch.userData.scatter?.inlandFraction)assert.ok(inland>batch.count*.14&&inland<=batch.count*.25+1,'some small stones scatter inland while at least three quarters remain on the coast');
       for(const coast of ['main','experience-meadow','garden','purdue','beacon','city'])assert.ok(regions.has(coast),`${batch.name} covers ${coast}; the museum now shares the city coast`);
     }
     assert.ok(triangles<100000,`${triangles} strandline triangles`);
@@ -147,4 +150,32 @@ test('town catch basins sit along paved edges with clear spacing and ground cont
     assert.equal(site.y, terrainMeshHeight(site.x, site.z));
     assert.ok(sites.slice(index + 1).every(other => Math.hypot(site.x - other.x, site.z - other.z) > 8));
   }
+});
+
+
+test('vine leaves meet woody shoots and main stem thickness varies between same-species seedlings',()=>{
+  const radii:number[]=[];
+  for(const seed of [3,8,13,18,23]){
+    const garden=createFacadeGarden({width:.8,height:3.1,seed,branching:true}),wood=garden.wood.attributes.position;
+    try{
+      const triangle=new Triangle(),nearest=new Vector3(),root=new Vector3();let checked=0;
+      const first=new Vector3().fromBufferAttribute(wood,0),center=new Vector3(0,0,.015);
+      radii.push(first.distanceTo(center));
+      for(const geometry of [garden.foliage,garden.light]){
+        const uv=geometry.attributes.uv,positions=geometry.attributes.position,seen=new Set<string>();
+        for(let i=0;i<positions.count;i++)if(Math.abs(uv.getX(i)-.5)<1e-6&&uv.getY(i)===0){
+          root.fromBufferAttribute(positions,i);const key=root.toArray().join(',');if(seen.has(key))continue;seen.add(key);
+          if(seen.size%7)continue;
+          let distance=Infinity;
+          for(let n=0;n<wood.count;n+=3){
+            triangle.a.fromBufferAttribute(wood,n);triangle.b.fromBufferAttribute(wood,n+1);triangle.c.fromBufferAttribute(wood,n+2);
+            triangle.closestPointToPoint(root,nearest);distance=Math.min(distance,root.distanceTo(nearest));
+          }
+          assert.ok(distance<.014,`leaf base must intersect a physical shoot, gap ${distance}`);checked++;
+        }
+      }
+      assert.ok(checked>8,'sample actual leaf bases across both foliage finishes');
+    }finally{Object.values(garden).forEach(geometry=>geometry.dispose());}
+  }
+  assert.ok(Math.max(...radii)/Math.min(...radii)>1.25,'seeded vines of one species do not have identical woody stems');
 });

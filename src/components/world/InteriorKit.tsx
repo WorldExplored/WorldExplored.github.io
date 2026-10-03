@@ -28,11 +28,11 @@ function inPolygon(x: number,z: number,polygon: FloorPolygon) {
   return inside;
 }
 /** Trace the union boundary before extrusion, removing overlapping coplanar slabs. */
-export function floorUnion(polygons: readonly FloorPolygon[]): Shape[] {
-  const edges=polygons.flatMap(p=>p.map((a,i)=>({a,b:p[(i+1)%p.length]})));
+export function floorUnion(polygons: readonly FloorPolygon[], exclusions: readonly FloorPolygon[] = []): Shape[] {
+  const edges=[...polygons,...exclusions].flatMap(p=>p.map((a,i)=>({a,b:p[(i+1)%p.length]})));
   const boundary=new Map<string,{a:FloorPoint;b:FloorPoint}>();
   const key=(p:FloorPoint)=>`${Math.round(p[0]*1e7)},${Math.round(p[1]*1e7)}`;
-  const inside=(x:number,z:number)=>polygons.some(p=>inPolygon(x,z,p));
+  const inside=(x:number,z:number)=>polygons.some(p=>inPolygon(x,z,p))&&!exclusions.some(p=>inPolygon(x,z,p));
   for(const edge of edges) {
     const [ax,az]=edge.a,dx=edge.b[0]-ax,dz=edge.b[1]-az,length=Math.hypot(dx,dz),cuts=[0,1];
     for(const other of edges) {
@@ -79,8 +79,8 @@ export function floorUnion(polygons: readonly FloorPolygon[]): Shape[] {
   }
   return shapes;
 }
-export function floorSlab(name: string, polygons: readonly FloorPolygon[], top: number, depth: number, kind: 'floor'|'foundation'|'threshold'|'balcony' = 'floor') {
-  const geometry=new ExtrudeGeometry(floorUnion(polygons),{depth,bevelEnabled:false,curveSegments:1}).rotateX(-Math.PI/2).translate(0,top-depth,0);
+export function floorSlab(name: string, polygons: readonly FloorPolygon[], top: number, depth: number, kind: 'floor'|'foundation'|'threshold'|'balcony' = 'floor', exclusions: readonly FloorPolygon[] = []) {
+  const geometry=new ExtrudeGeometry(floorUnion(polygons,exclusions),{depth,bevelEnabled:false,curveSegments:1}).rotateX(-Math.PI/2).translate(0,top-depth,0);
   geometry.name=name;geometry.userData.floor={name,kind};return geometry;
 }
 

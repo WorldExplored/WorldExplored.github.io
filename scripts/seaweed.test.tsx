@@ -5,7 +5,7 @@ import { InstancedMesh, Mesh, Raycaster, Vector3, MeshStandardMaterial, type Web
 import { createSeaweedGeometry, createSeaweedLayout, SEAWEED_COVES, SEAWEED_REACH, SEAWEED_FORMS, seaweedWaveStress, Seaweed } from '../src/components/world/Seaweed';
 import { createLandscapePlan, distanceToSegment, landDistance, terrainMeshHeight, ISLANDS } from '../src/components/world/terrain';
 import { createSceneRuntime, type QualityTier } from '../src/content/world';
-import { createDockWeedGeometry, createDockWeedSites, dockEcologyPoles } from '../src/components/world/DockEcology';
+import { createDockWeedGeometry, createDockWeedSites, dockEcologyPoles, pileColonySamples } from '../src/components/world/DockEcology';
 import { createCityLife } from '../src/components/world/CityLife';
 import { createCityTransitRoute } from '../src/components/world/city';
 import { coastalCaveClearance } from '../src/components/world/coastalCaveLayout';
@@ -170,4 +170,19 @@ test('dock colonies have seeded shell geometry and different arrangements on eve
     assert.deepEqual(repeated.attributes.position.array,shapes[0].attributes.position.array);repeated.dispose();
     assert.ok(new Set(shapes.map(g=>g.attributes.position.count)).size>4,'colony populations vary as well as their scale');
   }finally{shapes.forEach(geometry=>geometry.dispose());}
+});
+
+
+test('pile recruitment forms unequal sheltered patches with clear gaps instead of repeated spiral rows',()=>{
+  let uneven=0;
+  for(let seed=0;seed<12;seed++){
+    const sites=pileColonySamples(-2.6,-.25,71826+seed*1777),ys=sites.map(site=>site.y).sort((a,b)=>a-b);
+    const gaps=ys.slice(1).map((y,i)=>y-ys[i]).sort((a,b)=>a-b);
+    assert.ok(sites.length>=25&&sites.length<=45);
+    assert.ok(ys.at(-1)!-ys[0]>1.7,'recruits cover the wet shaft');
+    if(gaps[Math.floor(gaps.length*.85)]>gaps[Math.floor(gaps.length*.15)]*6)uneven++;
+    assert.ok(sites.every(site=>site.y+site.height<-.25));
+    assert.deepEqual(sites,pileColonySamples(-2.6,-.25,71826+seed*1777));
+  }
+  assert.ok(uneven>=10,'dense shell pockets alternate with exposed wood on most piles');
 });

@@ -92,10 +92,10 @@ function flightEvent(index:number,cycle:number):FlightEvent {
 }
 function hoverCourse(index:number,caveSchool=false){
   const random=seededRandom(4997+index*881+(caveSchool?8833:0));
-  const anchors=caveSchool?[[MYTHIC_GROTTO.x,MYTHIC_GROTTO.z+6.3]]:[[MYTHIC_GROTTO.x-7,MYTHIC_GROTTO.z+5],[MYTHIC_GROTTO.x+7,MYTHIC_GROTTO.z+6],[14,-43],[-66,-49],[-21,-43],[0,-35]];
-  for(let attempt=0;attempt<200;attempt++){
-    const center=anchors[index%anchors.length],x=center[0]+(random()-.5)*(caveSchool?2:7),z=center[1]+(random()-.5)*(caveSchool?1:6);
-    const rx=caveSchool?3.3:1.0+random()*1.1,rz=caveSchool?1.15:.7+random()*.7,radius=caveSchool?.24:.5;
+  const anchors=caveSchool?[[MYTHIC_GROTTO.x-6,MYTHIC_GROTTO.z+6],[MYTHIC_GROTTO.x+6,MYTHIC_GROTTO.z+7],[MYTHIC_GROTTO.x,MYTHIC_GROTTO.z+10.5]]:[[MYTHIC_GROTTO.x-7,MYTHIC_GROTTO.z+5],[MYTHIC_GROTTO.x+7,MYTHIC_GROTTO.z+6],[14,-43],[-66,-49],[-21,-43],[0,-35]];
+  for(let attempt=0;attempt<360;attempt++){
+    const center=anchors[(index+Math.floor(attempt/120))%anchors.length],x=center[0]+(random()-.5)*(caveSchool?2:7),z=center[1]+(random()-.5)*(caveSchool?1:6);
+    const rx=caveSchool?1.5:1.0+random()*1.1,rz=caveSchool?.85:.7+random()*.7,radius=caveSchool?.24:.5;
     const course=ellipse(x,z,rx,rz);let top=-2.3,valid=true;
     for(const p of course.curve.getSpacedPoints(48)){
       if(pelagicCoastClearance(p.x,p.z)<radius+.8||coastalCaveClearance(p.x,p.z,radius)<.3){valid=false;break;}
@@ -104,12 +104,14 @@ function hoverCourse(index:number,caveSchool=false){
     if(!valid||top>-.95)continue;
     for(const p of course.curve.points)p.y=top;course.curve.updateArcLengths();course.length=course.curve.getLength();return course;
   }
-  throw new Error(`No unobstructed ${caveSchool?'cave shoal':'lionfish'} route ${index}`);
+  // A changed reef may close every candidate. Omit that group rather than crashing the world or placing fish inside rock.
+  return null;
 }
 export function createPelagicFish(){
   const result:PelagicFish[]=[],shoal=hoverCourse(0,true);
   for(const species of Object.keys(PELAGIC_COUNTS)as PelagicSpecies[])for(let index=0;index<PELAGIC_COUNTS[species].high;index++){
     const course=species==='marlin'?marlinFishCourse():species==='flying'?flyingFishCourse():species==='lionfish'?hoverCourse(index):shoal;
+    if(!course)continue;
     const fish:PelagicFish={species,index,size:species==='marlin'?.88+index*.14:species==='flying'?.82+(index%5)*.043:species==='lionfish'?.82+(index%3)*.11:.43+(index%4)*.035,
       position:new Vector3(),heading:0,pitch:0,finSpread:0,tail:0,course,offset:species==='marlin'?course.length*(.32+index*.44):species==='cave-silver'?index*.47:index*2.399,
       speed:species==='marlin'?1.7+index*.15:species==='lionfish'?.16+index*.019:.40,time:0,event:null,phase:'swim',splash:new Vector3(),splashAge:100,contacts:0};
@@ -140,7 +142,7 @@ export function samplePelagicFish(fish:PelagicFish,time:number){
     if(fish.species==='marlin'){
       const lane=pelagicLaneClearance(fish.position.x,fish.position.z);
       // Cruise over the visible shelf, dipping below hull draft through shipping lanes.
-      fish.position.y=-.78-smooth((8-lane)/6)*.85+.03*Math.sin(time*.3+fish.index);fish.tail=Math.sin(time*5.8+fish.index)*.18;
+      fish.position.y=-.78-smooth((8-lane)/6)*.78+.02*Math.sin(time*.3+fish.index);fish.tail=Math.sin(time*5.8+fish.index)*.18;
     }else{
       fish.position.y+=Math.sin(time*.6+fish.index*1.7)*.045;
       fish.tail=Math.sin(time*(fish.species==='lionfish'?3.1:10)+fish.index*2.39)*(fish.species==='lionfish'?.10:.28);
